@@ -46,7 +46,10 @@
   --wob-b: 1.1em 1.35em 1.15em 1.3em;
 
   /* scale unit — refined at runtime by JS */
-  --u: clamp(7px, min(1.35vw, 1.52vh), 17px);
+  --u: clamp(7px, min(1.45vw, 1.65vh), 21px);
+  /* Anything a five-year-old has to hit never goes below this, whatever --u says.
+     Apple's 44pt minimum is written for adult index fingers. */
+  --tap: 64px;
 
   --fs-jp: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4",
            "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
@@ -167,12 +170,17 @@ body::before{
            max(env(safe-area-inset-bottom), calc(var(--u)*1.5))
            max(env(safe-area-inset-left), calc(var(--u)*1));
   display: grid;
+  /* An auto track takes its minimum from the item's min-content width, so one
+     nowrap row (なんばんめ with eight animals) could widen the whole stage past
+     the iPad and take every ancestor's `max-width:100%` with it. */
+  grid-template-columns: minmax(0, 1fr);
   z-index: 1;
 }
 
 .screen{
   grid-area: 1 / 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: calc(var(--u) * .8);
@@ -270,6 +278,8 @@ body::before{
 .playfield{
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
   position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: calc(var(--u)*1);
@@ -1356,3 +1366,13 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   font-weight:800; color:var(--ink);
 }
 #parent .factchip small{ font-weight:500; color:var(--ink-soft); font-size:.72em }
+
+/* ---------- floors for anything a finger has to hit ----------
+   The question is scaled up to fill its box, but the smallest iPad in portrait
+   still has to give a five-year-old something they can actually land on. */
+.choice{ min-width: max(calc(var(--u)*8.4), var(--tap)); min-height: max(calc(var(--u)*6.8), var(--tap)); }
+.cell.tappable{ width: max(calc(var(--u)*4.6), var(--tap)); height: max(calc(var(--u)*4.6), var(--tap)); }
+.tile{ width: max(calc(var(--u)*4.6), var(--tap)); height: max(calc(var(--u)*4.6), var(--tap)); }
+.shapetile{ width: max(calc(var(--u)*7.6), var(--tap)); height: max(calc(var(--u)*7.6), var(--tap)); }
+.qi{ min-width: max(calc(var(--u)*5.4), var(--tap)); min-height: max(calc(var(--u)*5.4), var(--tap)); }
+.btn-round{ width: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); height: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); }

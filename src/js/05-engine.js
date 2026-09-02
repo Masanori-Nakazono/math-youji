@@ -40,6 +40,7 @@ function stickerFor(key){
 
 const Session = (() => {
   let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, moodEl, feedbackEl;
+  let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
   let locked = false, mode = 'level', curGame = null, curLevelIdx = 0;
@@ -105,7 +106,9 @@ const Session = (() => {
       el('div.prompt', null, moodEl,
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn),
       fieldEl, choicesEl);
-    return UI.register('play', node);
+    UI.register('play', node);
+    refit = UI.watchFit(fieldEl);
+    return node;
   }
 
   function setMood(m){
@@ -304,7 +307,7 @@ const Session = (() => {
   /* How hard to look for a better question before settling.
      TRIES builds are cheap (the whole build-storm test does 25 per level), and a
      rejected build dies with its epoch, so nothing it scheduled can survive. */
-  const TRIES = 6, PICKY = 3, DUE_ENOUGH = 0.55;
+  const TRIES = 7, PICKY = 2, DUE_ENOUGH = 0.55;
 
   /** Draw a question, re-rolling to avoid repeating a fact and to favour the ones
       this child owes practice to. The generator is random, so we cannot go back to
@@ -343,6 +346,8 @@ const Session = (() => {
     const step = plan[idx];
     if (mode === 'daily') titleEl.textContent = 'きょうの れんしゅう　' + step.game.name;
     drawQuestion(step);
+    UI.fitPlayfield(fieldEl);     // size this question to the room it has
+    refit();                      // and again next frame, once fonts/SVGs have settled
   }
 
   function onWrong(target){
@@ -414,14 +419,15 @@ const Session = (() => {
 
   function finish(){
     killTimers();
-    Sound.sfx.finish();
-    UI.confetti(60);
     const total = plan.length;
     /* Stars used to be `mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1` — one star was
        guaranteed for finishing, so the unlock gate really only asked whether the
        child had sat through the level. Grade the questions answered right first
        time instead, and let a session score nothing. */
     const stars = starsFor(firstTryRight, total);
+    // a session that did not pass should not get a party; it gets an invitation
+    if (stars >= 1){ Sound.sfx.finish(); UI.confetti(60); }
+    else Sound.sfx.place();
     let newSticker = null;
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;

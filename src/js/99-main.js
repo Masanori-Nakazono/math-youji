@@ -14,7 +14,9 @@
   /* scale unit from the real stage size so the layout is identical on any iPad */
   function resize(){
     const w = window.innerWidth, h = window.innerHeight;
-    const u = clamp(Math.min(w * 0.0135, h * 0.0152), 7, 17).toFixed(2) + 'px';
+    // the base unit sizes the chrome (topbar, prompt, answer buttons); the question
+    // itself is grown to fill its own box afterwards by UI.fitPlayfield
+    const u = clamp(Math.min(w * 0.0145, h * 0.0165), 7, 21).toFixed(2) + 'px';
     if (document.documentElement.style.getPropertyValue('--u') !== u){
       document.documentElement.style.setProperty('--u', u);
     }

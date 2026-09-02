@@ -82,6 +82,82 @@ const UI = (() => {
     return wrap;
   }
 
+  /* ---------- fit the question to the space it was given ----------
+     The whole layout is expressed in --u, and --u came from the viewport's short
+     side, capped at 17px. So a question was always the same small island in the
+     middle of the iPad no matter how much room there was: the ten-frame in
+     「10の おともだち」 covered 3.5% of a 1024x768 screen and 4.5% of a 12.9-inch
+     one — a bigger iPad only bought more margin, and the tracing box, the thing a
+     finger most needs to be large, sat at 345px on a 1024px-wide screen.
+
+     The playfield's box does not depend on its own contents (its siblings are
+     flex:0 0 auto and it has min-height:0), so we can grow --u inside it and
+     stop at the largest value where nothing sticks out. */
+  /* Grow to fill the room, but also shrink a little when a question is naturally
+     too wide (a row of eight animals on a portrait iPad): a row the child has to
+     count is worthless once it scrolls out of sight. */
+  const FIT_MAX = 2.4, FIT_MIN = 0.72;
+
+  function fitsInside(field, kids){
+    const b = field.getBoundingClientRect();
+    const slack = 2;
+    for (let i = 0; i < kids.length; i++){
+      const n = kids[i];
+      const r = n.getBoundingClientRect();
+      if (!r.width && !r.height) continue;              // hidden / zero-sized
+      if (r.left < b.left - slack || r.right > b.right + slack
+       || r.top  < b.top  - slack || r.bottom > b.bottom + slack) return false;
+      /* Staying inside the playfield is not enough: なんばんめ's row of animals
+         scrolls inside its own container, so it can sit within the field and still
+         hide half the animals the child is being asked to count. Only real scroll
+         containers count — plenty of boxes report harmless overflow from borders,
+         shadows and emoji glyphs. */
+      if (n.scrollWidth > n.clientWidth + 4 || n.scrollHeight > n.clientHeight + 4){
+        const ov = getComputedStyle(n);
+        if (ov.overflowX === 'auto' || ov.overflowX === 'scroll'
+         || ov.overflowY === 'auto' || ov.overflowY === 'scroll') return false;
+      }
+    }
+    return true;
+  }
+
+  function fitPlayfield(field){
+    if (!field || !field.isConnected) return;
+    field.style.removeProperty('--u');
+    const box = field.getBoundingClientRect();
+    if (box.width < 60 || box.height < 60) return;      // off-screen or mid-transition
+    const base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--u')) || 12;
+    // the search only changes sizes, never the tree, so collect the nodes once
+    const kids = field.querySelectorAll('*');
+    const at = m => {
+      field.style.setProperty('--u', (base * m).toFixed(2) + 'px');
+      return fitsInside(field, kids);
+    };
+    let lo = FIT_MIN, hi = FIT_MAX;
+    for (let i = 0; i < 6; i++){                        // ~1.5% precision
+      const m = (lo + hi) / 2;
+      if (at(m)) lo = m; else hi = m;
+    }
+    at(lo);
+  }
+
+  /** Re-fit whenever the question's contents change — story scenes, hints and
+      multi-blank questions all add nodes after the first draw. */
+  function watchFit(field){
+    let queued = false;
+    const run = () => { queued = false; fitPlayfield(field); };
+    const ping = () => {
+      if (queued) return;
+      queued = true;
+      (window.requestAnimationFrame || setTimeout)(run, 0);
+    };
+    if (window.MutationObserver){
+      new MutationObserver(ping).observe(field, { childList: true, subtree: true, characterData: true });
+    }
+    window.addEventListener('resize', ping);
+    return ping;
+  }
+
   /* ---------- drag & drop (pointer based, with tap fallback) ---------- */
   function makeDragDrop(opts){
     // opts: { items(), targets(), onDrop(item, target), tapSelect: bool }
@@ -175,5 +251,6 @@ const UI = (() => {
     return { bindItem, bindTarget, clearSel, select, get selected(){ return selected; } };
   }
 
-  return { init, register, show, currentName, confetti, bigMark, stars, makeDragDrop, screens };
+  return { init, register, show, currentName, confetti, bigMark, stars, makeDragDrop, screens,
+           fitPlayfield, watchFit };
 })();

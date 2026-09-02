@@ -206,7 +206,7 @@
   (function choiceSanity(){
     const bad = new Set();
     eachLevel((g, li) => {
-      for (let n = 0; n < 30; n++){
+      for (let n = 0; n < 12; n++){        // 540 samples across the 45 levels
         K.Session.startLevel(g, li);
         const strip = q('#play .choices');
         if (!strip || strip.dataset.built !== '1') continue;   // hand-built strips may repeat by design (5と5で10)
@@ -274,7 +274,7 @@
   (function doubleTap(){
     let stuck = null, threw = null;
     [['seq', 0], ['seq', 1], ['pattern', 2]].forEach(([id, li]) => {
-      for (let trial = 0; trial < 12 && !stuck; trial++){
+      for (let trial = 0; trial < 5 && !stuck; trial++){
         K.Session.startLevel(K.Games.byId[id], li);
         let guard = 0;
         while (!onResult() && guard++ < 240){

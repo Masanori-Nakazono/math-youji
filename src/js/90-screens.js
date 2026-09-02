@@ -179,7 +179,7 @@ const Result = (() => {
               : r.stars === 1 ? 'クリア！'
               : 'おしい！ もう いちど やってみよう';
     inner.append(
-      mascotSVG('cheer', 'cheer'),
+      mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
       UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }),
       el('div.result-sub', { text: `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));

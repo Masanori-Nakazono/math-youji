@@ -64,7 +64,10 @@
   --wob-b: 1.1em 1.35em 1.15em 1.3em;
 
   /* scale unit — refined at runtime by JS */
-  --u: clamp(7px, min(1.35vw, 1.52vh), 17px);
+  --u: clamp(7px, min(1.45vw, 1.65vh), 21px);
+  /* Anything a five-year-old has to hit never goes below this, whatever --u says.
+     Apple's 44pt minimum is written for adult index fingers. */
+  --tap: 64px;
 
   --fs-jp: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4",
            "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
@@ -185,12 +188,17 @@ body::before{
            max(env(safe-area-inset-bottom), calc(var(--u)*1.5))
            max(env(safe-area-inset-left), calc(var(--u)*1));
   display: grid;
+  /* An auto track takes its minimum from the item's min-content width, so one
+     nowrap row (なんばんめ with eight animals) could widen the whole stage past
+     the iPad and take every ancestor's `max-width:100%` with it. */
+  grid-template-columns: minmax(0, 1fr);
   z-index: 1;
 }
 
 .screen{
   grid-area: 1 / 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: calc(var(--u) * .8);
@@ -288,6 +296,8 @@ body::before{
 .playfield{
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
   position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: calc(var(--u)*1);
@@ -1374,6 +1384,16 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   font-weight:800; color:var(--ink);
 }
 #parent .factchip small{ font-weight:500; color:var(--ink-soft); font-size:.72em }
+
+/* ---------- floors for anything a finger has to hit ----------
+   The question is scaled up to fill its box, but the smallest iPad in portrait
+   still has to give a five-year-old something they can actually land on. */
+.choice{ min-width: max(calc(var(--u)*8.4), var(--tap)); min-height: max(calc(var(--u)*6.8), var(--tap)); }
+.cell.tappable{ width: max(calc(var(--u)*4.6), var(--tap)); height: max(calc(var(--u)*4.6), var(--tap)); }
+.tile{ width: max(calc(var(--u)*4.6), var(--tap)); height: max(calc(var(--u)*4.6), var(--tap)); }
+.shapetile{ width: max(calc(var(--u)*7.6), var(--tap)); height: max(calc(var(--u)*7.6), var(--tap)); }
+.qi{ min-width: max(calc(var(--u)*5.4), var(--tap)); min-height: max(calc(var(--u)*5.4), var(--tap)); }
+.btn-round{ width: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); height: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); }
 </style>
 </head>
 <body>
@@ -2175,6 +2195,82 @@ const UI = (() => {
     return wrap;
   }
 
+  /* ---------- fit the question to the space it was given ----------
+     The whole layout is expressed in --u, and --u came from the viewport's short
+     side, capped at 17px. So a question was always the same small island in the
+     middle of the iPad no matter how much room there was: the ten-frame in
+     「10の おともだち」 covered 3.5% of a 1024x768 screen and 4.5% of a 12.9-inch
+     one — a bigger iPad only bought more margin, and the tracing box, the thing a
+     finger most needs to be large, sat at 345px on a 1024px-wide screen.
+
+     The playfield's box does not depend on its own contents (its siblings are
+     flex:0 0 auto and it has min-height:0), so we can grow --u inside it and
+     stop at the largest value where nothing sticks out. */
+  /* Grow to fill the room, but also shrink a little when a question is naturally
+     too wide (a row of eight animals on a portrait iPad): a row the child has to
+     count is worthless once it scrolls out of sight. */
+  const FIT_MAX = 2.4, FIT_MIN = 0.72;
+
+  function fitsInside(field, kids){
+    const b = field.getBoundingClientRect();
+    const slack = 2;
+    for (let i = 0; i < kids.length; i++){
+      const n = kids[i];
+      const r = n.getBoundingClientRect();
+      if (!r.width && !r.height) continue;              // hidden / zero-sized
+      if (r.left < b.left - slack || r.right > b.right + slack
+       || r.top  < b.top  - slack || r.bottom > b.bottom + slack) return false;
+      /* Staying inside the playfield is not enough: なんばんめ's row of animals
+         scrolls inside its own container, so it can sit within the field and still
+         hide half the animals the child is being asked to count. Only real scroll
+         containers count — plenty of boxes report harmless overflow from borders,
+         shadows and emoji glyphs. */
+      if (n.scrollWidth > n.clientWidth + 4 || n.scrollHeight > n.clientHeight + 4){
+        const ov = getComputedStyle(n);
+        if (ov.overflowX === 'auto' || ov.overflowX === 'scroll'
+         || ov.overflowY === 'auto' || ov.overflowY === 'scroll') return false;
+      }
+    }
+    return true;
+  }
+
+  function fitPlayfield(field){
+    if (!field || !field.isConnected) return;
+    field.style.removeProperty('--u');
+    const box = field.getBoundingClientRect();
+    if (box.width < 60 || box.height < 60) return;      // off-screen or mid-transition
+    const base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--u')) || 12;
+    // the search only changes sizes, never the tree, so collect the nodes once
+    const kids = field.querySelectorAll('*');
+    const at = m => {
+      field.style.setProperty('--u', (base * m).toFixed(2) + 'px');
+      return fitsInside(field, kids);
+    };
+    let lo = FIT_MIN, hi = FIT_MAX;
+    for (let i = 0; i < 6; i++){                        // ~1.5% precision
+      const m = (lo + hi) / 2;
+      if (at(m)) lo = m; else hi = m;
+    }
+    at(lo);
+  }
+
+  /** Re-fit whenever the question's contents change — story scenes, hints and
+      multi-blank questions all add nodes after the first draw. */
+  function watchFit(field){
+    let queued = false;
+    const run = () => { queued = false; fitPlayfield(field); };
+    const ping = () => {
+      if (queued) return;
+      queued = true;
+      (window.requestAnimationFrame || setTimeout)(run, 0);
+    };
+    if (window.MutationObserver){
+      new MutationObserver(ping).observe(field, { childList: true, subtree: true, characterData: true });
+    }
+    window.addEventListener('resize', ping);
+    return ping;
+  }
+
   /* ---------- drag & drop (pointer based, with tap fallback) ---------- */
   function makeDragDrop(opts){
     // opts: { items(), targets(), onDrop(item, target), tapSelect: bool }
@@ -2268,7 +2364,8 @@ const UI = (() => {
     return { bindItem, bindTarget, clearSel, select, get selected(){ return selected; } };
   }
 
-  return { init, register, show, currentName, confetti, bigMark, stars, makeDragDrop, screens };
+  return { init, register, show, currentName, confetti, bigMark, stars, makeDragDrop, screens,
+           fitPlayfield, watchFit };
 })();
 
 /* ---- 05-engine.js ---- */
@@ -2314,6 +2411,7 @@ function stickerFor(key){
 
 const Session = (() => {
   let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, moodEl, feedbackEl;
+  let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
   let locked = false, mode = 'level', curGame = null, curLevelIdx = 0;
@@ -2379,7 +2477,9 @@ const Session = (() => {
       el('div.prompt', null, moodEl,
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn),
       fieldEl, choicesEl);
-    return UI.register('play', node);
+    UI.register('play', node);
+    refit = UI.watchFit(fieldEl);
+    return node;
   }
 
   function setMood(m){
@@ -2578,7 +2678,7 @@ const Session = (() => {
   /* How hard to look for a better question before settling.
      TRIES builds are cheap (the whole build-storm test does 25 per level), and a
      rejected build dies with its epoch, so nothing it scheduled can survive. */
-  const TRIES = 6, PICKY = 3, DUE_ENOUGH = 0.55;
+  const TRIES = 7, PICKY = 2, DUE_ENOUGH = 0.55;
 
   /** Draw a question, re-rolling to avoid repeating a fact and to favour the ones
       this child owes practice to. The generator is random, so we cannot go back to
@@ -2617,6 +2717,8 @@ const Session = (() => {
     const step = plan[idx];
     if (mode === 'daily') titleEl.textContent = 'きょうの れんしゅう　' + step.game.name;
     drawQuestion(step);
+    UI.fitPlayfield(fieldEl);     // size this question to the room it has
+    refit();                      // and again next frame, once fonts/SVGs have settled
   }
 
   function onWrong(target){
@@ -2688,14 +2790,15 @@ const Session = (() => {
 
   function finish(){
     killTimers();
-    Sound.sfx.finish();
-    UI.confetti(60);
     const total = plan.length;
     /* Stars used to be `mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1` — one star was
        guaranteed for finishing, so the unlock gate really only asked whether the
        child had sat through the level. Grade the questions answered right first
        time instead, and let a session score nothing. */
     const stars = starsFor(firstTryRight, total);
+    // a session that did not pass should not get a party; it gets an invitation
+    if (stars >= 1){ Sound.sfx.finish(); UI.confetti(60); }
+    else Sound.sfx.place();
     let newSticker = null;
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;
@@ -4611,7 +4714,7 @@ const Result = (() => {
               : r.stars === 1 ? 'クリア！'
               : 'おしい！ もう いちど やってみよう';
     inner.append(
-      mascotSVG('cheer', 'cheer'),
+      mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
       UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }),
       el('div.result-sub', { text: `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
@@ -5115,7 +5218,9 @@ const Parent = (() => {
   /* scale unit from the real stage size so the layout is identical on any iPad */
   function resize(){
     const w = window.innerWidth, h = window.innerHeight;
-    const u = clamp(Math.min(w * 0.0135, h * 0.0152), 7, 17).toFixed(2) + 'px';
+    // the base unit sizes the chrome (topbar, prompt, answer buttons); the question
+    // itself is grown to fill its own box afterwards by UI.fitPlayfield
+    const u = clamp(Math.min(w * 0.0145, h * 0.0165), 7, 21).toFixed(2) + 'px';
     if (document.documentElement.style.getPropertyValue('--u') !== u){
       document.documentElement.style.setProperty('--u', u);
     }
