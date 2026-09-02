@@ -1,0 +1,54 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# a newer push supersedes an in-flight deploy, but never cancels a running one
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rebuild from src/ rather than trusting the committed dist/,
+      # so a forgotten ./build.sh can never ship a stale page
+      - name: Build the single-file app
+        run: ./build.sh
+
+      - name: Fail if the committed dist is out of date
+        run: git diff --exit-code -- dist/ || {
+            echo "::error::dist/ does not match src/. Run ./build.sh and commit the result.";
+            exit 1;
+          }
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp dist/kazu-no-bouken.html _site/index.html
+          cp dist/kazu-no-bouken.html _site/kazu-no-bouken.html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
