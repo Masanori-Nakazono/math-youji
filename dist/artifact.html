@@ -1325,6 +1325,21 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   user-select: text;
 }
 .backupbox:focus-visible{ outline: calc(var(--u)*.24) solid var(--ring); outline-offset: 2px; }
+
+/* ---------- result: the facts that were shaky this session ---------- */
+#result .shaky{
+  display:flex; flex-direction:column; align-items:center; gap:calc(var(--u)*.45);
+  margin-top:calc(var(--u)*1);
+  padding:calc(var(--u)*.7) calc(var(--u)*1.2);
+  background:var(--paper-2); border-radius:var(--wob-b);
+}
+#result .shaky .l{ font-size:calc(var(--u)*1.3); color:var(--ink-soft); font-weight:800 }
+#result .shakylist{ display:flex; flex-wrap:wrap; gap:calc(var(--u)*.45); justify-content:center }
+#result .shakyitem{
+  background:var(--card); border:calc(var(--u)*.16) solid var(--card-edge);
+  border-radius:calc(var(--u)*.8); padding:calc(var(--u)*.3) calc(var(--u)*.8);
+  font-family:var(--fs-num); font-weight:800; font-size:calc(var(--u)*1.7); color:var(--ink);
+}
 </style>
 <div id="stage"></div>
 <div id="fx" aria-hidden="true"></div>
@@ -1632,7 +1647,13 @@ const Store = (() => {
     stars: {},        // "gameId:levelIndex" -> 0..3
     plays: {},        // "gameId:levelIndex" -> attempts
     seen:  {},        // gameId -> total questions answered
-    firstTry: {},     // gameId -> [correctFirstTry, total]
+    firstTry: {},     // gameId -> [correctFirstTry, total] (lifetime)
+    /* Per-game aggregates can only ever say "this game is shaky". These two say
+       *what* is shaky and *when* — which is what lets the app come back to the
+       exact fact the child missed, and lets the parent page name it. */
+    facts: {},        // item key -> [asked, firstTryRight, lastDayNumber]
+    recent: {},       // "gameId:levelIndex" -> last 30 first-try outcomes, "1011…"
+    last:  {},        // "gameId:levelIndex" -> day number last played
     stickers: [],     // earned sticker keys
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
@@ -1665,6 +1686,10 @@ const Store = (() => {
   addEventListener('visibilitychange', () => { if (document.hidden) writeNow(); });
 
   const key = (g, l) => g + ':' + l;
+  /* Whole-day resolution keeps six months of daily use small enough for
+     localStorage, and days are the only unit the scheduling actually needs. */
+  const DAY = 86400000;
+  const dayNo = () => Math.floor(Date.now() / DAY);
   const todayKey = () => {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -1695,6 +1720,21 @@ const Store = (() => {
       const cur = out.firstTry[g];
       if (!cur || (af[g][1] || 0) > (cur[1] || 0)) out.firstTry[g] = af[g].slice();
     }
+    // facts: keep the record that has been practised more; never sum
+    out.facts = Object.assign({}, base.facts || {});
+    const af2 = add.facts || {};
+    for (const k in af2){
+      const cur = out.facts[k];
+      if (!cur || (af2[k][0] || 0) > (cur[0] || 0)) out.facts[k] = af2[k].slice();
+      else if (cur) cur[2] = maxNum(cur[2], af2[k][2]);
+    }
+    // recent / last: follow whichever side actually played that level more
+    out.recent = Object.assign({}, base.recent || {});
+    out.last   = Object.assign({}, base.last || {});
+    for (const k in (add.recent || {})){
+      if ((add.plays && add.plays[k] || 0) > (base.plays && base.plays[k] || 0)) out.recent[k] = add.recent[k];
+    }
+    for (const k in (add.last || {})) out.last[k] = maxNum(out.last[k], add.last[k]);
     out.stickers = Array.from(new Set((base.stickers || []).concat(add.stickers || [])));
     const bp = base.practice || [0, 0], ap = add.practice || [0, 0];
     out.practice = (ap[1] || 0) > (bp[1] || 0) ? ap.slice() : bp.slice();
@@ -1734,10 +1774,21 @@ const Store = (() => {
     totalStars(){ let s = 0; for (const k in mem.stars) s += mem.stars[k]; return s; },
     levelUnlocked(g, l){ return l === 0 || (mem.stars[key(g, l - 1)] || 0) >= 1; },
 
+    /** One question's first-try result, attributed to the level it came from.
+        Recorded per question rather than per level so that a question met inside
+        きょうの れんしゅう counts towards that level's recent form too. */
+    noteOutcome(g, l, ok){
+      const k = key(g, l);
+      mem.recent[k] = ((mem.recent[k] || '') + (ok ? '1' : '0')).slice(-30);
+      mem.last[k] = dayNo();
+      save();
+    },
+
     recordLevel(g, l, stars, right, total){
       const k = key(g, l);
       mem.stars[k] = Math.max(mem.stars[k] || 0, stars);
       mem.plays[k] = (mem.plays[k] || 0) + 1;
+      mem.last[k]  = dayNo();
       mem.seen[g]  = (mem.seen[g] || 0) + total;
       const ft = mem.firstTry[g] || [0, 0];
       mem.firstTry[g] = [ft[0] + right, ft[1] + total];
@@ -1771,6 +1822,50 @@ const Store = (() => {
       const ft = mem.firstTry[g];
       if (!ft || !ft[1]) return null;
       return ft[0] / ft[1];
+    },
+
+    /* ---- item-level memory ---- */
+    noteFact(k, firstTryOk){
+      if (!k) return;
+      const f = mem.facts[k] || (mem.facts[k] = [0, 0, 0]);
+      f[0]++;
+      if (firstTryOk) f[1]++;
+      f[2] = dayNo();
+      save();
+    },
+    fact: k => mem.facts[k] || null,
+    /** How much this fact is owed a turn: 0 (fresh and solid) … ~2 (missed, or long unseen).
+        A fact that has never been asked scores 1, so nothing is starved at the start. */
+    factDue(k){
+      const f = mem.facts[k];
+      if (!f || !f[0]) return 1;
+      const acc = f[1] / f[0];
+      const age = Math.min(30, dayNo() - f[2]);
+      return (1 - acc) * 1.6 + (age / 30) * 0.6 + (f[0] < 3 ? 0.25 : 0);
+    },
+
+    /* ---- recent (windowed) performance ----
+       A lifetime average cannot show that a child recovered, and it cannot show
+       that a child has just started slipping. Both are what a parent needs. */
+    recentAccuracy(g, l){
+      const s = mem.recent[key(g, l)];
+      if (!s) return null;
+      let r = 0;
+      for (let i = 0; i < s.length; i++) if (s[i] === '1') r++;
+      return s.length ? r / s.length : null;
+    },
+    gameRecentAccuracy(g, levels){
+      let r = 0, n = 0;
+      for (let i = 0; i < levels; i++){
+        const s = mem.recent[key(g, i)] || '';
+        for (let j = 0; j < s.length; j++){ n++; if (s[j] === '1') r++; }
+      }
+      return n ? r / n : null;
+    },
+    /** days since this level was last played; large when never played */
+    daysSince(g, l){
+      const d = mem.last[key(g, l)];
+      return d ? Math.max(0, dayNo() - d) : 99;
     },
     addSticker(k){
       if (mem.stickers.indexOf(k) < 0){ mem.stickers.push(k); save(); return true; }
@@ -2175,6 +2270,12 @@ const Session = (() => {
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
   let locked = false, mode = 'level', curGame = null, curLevelIdx = 0;
   let hintBtns = [], hintFn = null, hintShown = false, lastSpeech = '';
+  /* What this question is *about*. Every generator names its item, so the app can
+     avoid asking the same fact twice in one sitting, steer toward the facts this
+     child keeps missing, and tell the parent which ones they are. */
+  let curItem = null, curLabel = null;
+  let usedItems = new Set();      // the shuffle bag for the current session
+  let shaky = [];                 // facts missed this session, for the result screen
 
   /* ---------- timer lifecycle ----------
      Every delayed callback in a question is tied to an epoch. Leaving a question
@@ -2290,24 +2391,51 @@ const Session = (() => {
       return;
     }
     const n = count || 10;
-    plan = [];
-    const byGame = {};
-    shuffle(pool).forEach(p => { (byGame[p.game.id] = byGame[p.game.id] || []).push(p); });
-    const keys = shuffle(Object.keys(byGame));
-    let ki = 0;
-    while (plan.length < n && keys.length){
-      const arr = byGame[keys[ki % keys.length]];
-      if (arr && arr.length) plan.push(arr[ri(0, arr.length - 1)]);
-      ki++;
-      if (ki > n * 6) break;
-    }
-    while (plan.length < n) plan.push(pool[ri(0, pool.length - 1)]);
+    plan = drawDailyPlan(pool, n);
     titleEl.textContent = 'きょうの れんしゅう';
     begin();
   }
 
+  /** How badly this child needs this level today.
+      The old round-robin handed every game the same ~0.66 questions a day whether
+      the child was at 10% or 97%, which made the daily set a sampler rather than
+      practice. This is the same 10 questions, aimed. */
+  function dailyWeight(p){
+    const acc  = Store.recentAccuracy(p.game.id, p.levelIndex);
+    const need = acc == null ? 1 : 1 - acc;                    // 0 solid … 1 struggling
+    const cold = Math.min(1, Store.daysSince(p.game.id, p.levelIndex) / 14);
+    const focus = p.game.focus || 1;                           // curriculum priority
+    const done  = Store.stars(p.game.id, p.levelIndex) >= 3 ? 0.45 : 1;
+    return (0.35 + need * 1.6 + cold * 0.8) * focus * done;
+  }
+
+  function drawDailyPlan(pool, n){
+    const bag = pool.map(p => ({ p, w: dailyWeight(p) }));
+    const out = [], perGame = {}, perLevel = {};
+    // caps keep an aimed set from turning into a single-topic grind, and keep the
+    // ten questions coming from at least four different games
+    const MAX_GAME = 3, MAX_LEVEL = 2;
+    for (let guard = 0; out.length < n && guard < n * 40; guard++){
+      let total = 0;
+      for (const x of bag) total += x.w;
+      if (total <= 0) break;
+      let r = Math.random() * total, hit = null;
+      for (const x of bag){ r -= x.w; if (r <= 0){ hit = x; break; } }
+      if (!hit) break;
+      const gid = hit.p.game.id, lk = gid + ':' + hit.p.levelIndex;
+      if ((perGame[gid] || 0) >= MAX_GAME || (perLevel[lk] || 0) >= MAX_LEVEL){ hit.w = 0; continue; }
+      perGame[gid] = (perGame[gid] || 0) + 1;
+      perLevel[lk] = (perLevel[lk] || 0) + 1;
+      hit.w *= 0.45;                       // taper, so the weakest topic leads without owning the set
+      out.push(hit.p);
+    }
+    while (out.length < n) out.push(pool[ri(0, pool.length - 1)]);
+    return shuffle(out);                   // interleave: the same topic should not run in a block
+  }
+
   function begin(){
     idx = 0; mistakes = 0; firstTryRight = 0;
+    usedItems = new Set(); shaky = [];
     clear(pipsEl);
     plan.forEach(() => pipsEl.append(el('div.pip')));
     UI.show('play');
@@ -2331,6 +2459,14 @@ const Session = (() => {
         Sound.say(lastSpeech, { delay: 220 });
       },
       say(t, o){ if (stale()) return; lastSpeech = t; Sound.say(t, o); },
+      /** Name the fact this question asks. `label` is what the result screen and
+          the parent page will call it. Optional: a game that names nothing simply
+          keeps the old purely-random behaviour. */
+      item(key, label){
+        if (stale() || key == null) return;
+        curItem = a.game.id + ':' + key;
+        curLabel = label || null;
+      },
       onHint(fn){ if (!stale()) hintFn = fn; },
       correct(o){ if (!stale()) onCorrect(o || {}); },
       wrong(target){ if (!stale()) onWrong(target); },
@@ -2375,21 +2511,55 @@ const Session = (() => {
     return a;
   }
 
-  function nextQuestion(){
-    killTimers();
-    locked = false; wrongThisQ = 0; hintBtns = []; hintFn = null; hintShown = false;
+  function resetSurface(){
+    locked = false; hintBtns = []; hintFn = null; hintShown = false;
+    curItem = null; curLabel = null;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built; clearFeedback();
     fieldEl.className = 'playfield';
+  }
+
+  /* How hard to look for a better question before settling.
+     TRIES builds are cheap (the whole build-storm test does 25 per level), and a
+     rejected build dies with its epoch, so nothing it scheduled can survive. */
+  const TRIES = 6, PICKY = 3, DUE_ENOUGH = 0.55;
+
+  /** Draw a question, re-rolling to avoid repeating a fact and to favour the ones
+      this child owes practice to. The generator is random, so we cannot go back to
+      an earlier draw — we accept the one that is on screen when we stop. */
+  function drawQuestion(step){
+    for (let t = 0; t < TRIES; t++){
+      killTimers();
+      resetSurface();
+      try{
+        step.level.make(api());
+      }catch(err){
+        console.error('question build failed', err);
+        promptTxt.textContent = 'よみこみに しっぱいしました';
+        return;
+      }
+      if (!curItem) return;                      // this game does not name its items
+      if (t === TRIES - 1){
+        // the bag is empty (every fact has come up already): start a fresh pass
+        if (usedItems.has(curItem)) usedItems.clear();
+        usedItems.add(curItem);
+        return;
+      }
+      if (usedItems.has(curItem)) continue;
+      if (t >= PICKY || Store.factDue(curItem) >= DUE_ENOUGH){
+        usedItems.add(curItem);
+        return;
+      }
+    }
+  }
+
+  function nextQuestion(){
+    killTimers();
+    wrongThisQ = 0;
     $$('.pip', pipsEl).forEach((p, i) => p.classList.toggle('now', i === idx));
     setMood('idle');
     const step = plan[idx];
     if (mode === 'daily') titleEl.textContent = 'きょうの れんしゅう　' + step.game.name;
-    try{
-      step.level.make(api());
-    }catch(err){
-      console.error('question build failed', err);
-      promptTxt.textContent = 'よみこみに しっぱいしました';
-    }
+    drawQuestion(step);
   }
 
   function onWrong(target){
@@ -2423,7 +2593,15 @@ const Session = (() => {
     if (locked) return;
     locked = true;
     clearFeedback();
-    if (wrongThisQ === 0) firstTryRight++;
+    const clean = wrongThisQ === 0;
+    if (clean) firstTryRight++;
+    Store.noteOutcome(plan[idx].game.id, plan[idx].levelIndex, clean);
+    if (curItem){
+      Store.noteFact(curItem, clean);
+      if (!clean && !shaky.some(x => x.key === curItem)){
+        shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
+      }
+    }
     Sound.sfx.correct();
     setMood('happy');
     const pip = $$('.pip', pipsEl)[idx];
@@ -2462,7 +2640,8 @@ const Session = (() => {
       const key = 'daily:' + Store.todayKey();   // one sticker per calendar day
       if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
     }
-    Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx, sticker: newSticker });
+    Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
+                  sticker: newSticker, shaky: shaky.slice(0, 3) });
   }
 
   return {
@@ -2471,6 +2650,9 @@ const Session = (() => {
       flushTimers,
       get idx(){ return idx; },
       get planLength(){ return plan.length; },
+      get planGames(){ return plan.map(p => p.game.id + ':' + p.levelIndex); },
+      get item(){ return curItem; },
+      get shaky(){ return shaky.slice(); },
       get locked(){ return locked; },
       get mistakes(){ return mistakes; },
       get pending(){ return timers.size; },
@@ -2514,6 +2696,7 @@ function makeCountField(api, count, thing, layout){
 function countQuestion(api, lo, hi, layout){
   const thing = pick(THINGS);
   const count = ri(lo, hi);
+  api.item('count' + (layout === 'line' ? 'L' : 'S') + ':' + count, count + 'こ を かぞえる');
   api.setPrompt(`${thing.n}を ひとつずつ タップして かぞえよう`, `${thing.n}を、ひとつずつ タップして かぞえよう`);
   const objs = makeCountField(api, count, thing, layout);
   let done = 0;
@@ -2542,6 +2725,7 @@ function giveQuestion(api, lo, hi){
   const thing = pick(THINGS);
   const target = ri(lo, hi);
   const total = Math.min(14, target + ri(3, 5));
+  api.item('give:' + target, target + 'こ だけ とりだす');
   api.setPrompt(`${thing.n}を ${numTag(target)}こ とって かごに いれよう`, `${thing.n}を、${koKana(target)} とって、かごに いれよう`);
   const objs = makeCountField(api, total, thing, 'scatter');
   const picked = new Set();
@@ -2603,6 +2787,7 @@ function groupNode(count, thing){
 
 function numToQty(api, lo, hi){        // numeral shown → pick the matching group
   const n = ri(lo, hi), thing = pick(THINGS);
+  api.item('n2q:' + n, 'すうじ ' + n + ' → その かず');
   api.setPrompt(`${thing.e} が ${numTag(n)}こ あるのは どれ？`, `${thing.n}が ${koKana(n)} あるのは どれ`);
   const big = el('div', { style: { fontFamily: 'var(--fs-num)', fontWeight: 800, fontSize: 'calc(var(--u)*11)', lineHeight: 1, color: 'var(--c-red)' }, text: String(n) });
   api.field.append(big);
@@ -2621,6 +2806,7 @@ function numToQty(api, lo, hi){        // numeral shown → pick the matching gr
 
 function qtyToNum(api, lo, hi){        // group shown → pick the numeral
   const n = ri(lo, hi), thing = pick(THINGS);
+  api.item('q2n:' + n, n + 'こ → すうじ ' + n);
   api.setPrompt(`${thing.n}は いくつ？ すうじを えらぼう`, `${thing.n}は いくつ。すうじを えらぼう`);
   const wrap = el('div.row', { style: { maxWidth: 'calc(var(--u)*40)' } });
   for (let i = 0; i < n; i++) wrap.append(el('span.item', { text: thing.e, style: { fontSize: 'calc(var(--u)*4.4)' } }));
@@ -2643,6 +2829,7 @@ function tenFrameNode(count, cols, opts){
 
 function teenQuestion(api){            // 11-20 with a filled ten-frame + loose ones
   const n = ri(11, 20), thing = pick(THINGS);
+  api.item('teen:' + n, n + ' を 10と ' + (n - 10) + ' で みる');
   api.setPrompt('ぜんぶで いくつ？', 'ぜんぶで いくつ');
   const box = el('div.frameset');
   box.append(tenFrameNode(10, 5));
@@ -2670,6 +2857,7 @@ function lineFill(api, lo, hi, gaps){
   const nums = range(lo, hi);
   const inner = nums.slice(1, -1);
   const holes = sample(inner, Math.min(gaps, inner.length)).sort((a, b) => a - b);
+  api.item('fill:' + holes[0], holes[0] + ' が ぬけた ならび');
   const line = el('div.numline');
   const cells = {};
   nums.forEach(v => {
@@ -2722,6 +2910,8 @@ function nextBefore(api, hi){
   if (mode === 'next'){ ans = n + 1; html = `${numTag(n)} の つぎの かずは？`; speech = `${numKana(n)}の つぎの かずは`; }
   else if (mode === 'before'){ ans = n - 1; html = `${numTag(n)} の まえの かずは？`; speech = `${numKana(n)}の まえの かずは`; }
   else { ans = n; html = `${numTag(n - 1)} と ${numTag(n + 1)} の あいだの かずは？`; speech = `${numKana(n-1)}と ${numKana(n+1)}の あいだの かずは`; }
+  api.item('nb:' + mode + ':' + ans,
+    mode === 'next' ? n + ' の つぎ' : mode === 'before' ? n + ' の まえ' : (n - 1) + ' と ' + (n + 1) + ' の あいだ');
   api.setPrompt(html, speech);
   const line = el('div.numline');
   for (let v = Math.max(1, ans - 3); v <= Math.min(hi, ans + 3); v++){
@@ -2736,6 +2926,7 @@ function skipCount(api){
   const start = step === 2 ? pick([2, 4, 6]) : step;
   const seq = [0, 1, 2, 3].map(i => start + i * step);
   const ans = seq[3];
+  api.item('skip' + step + ':' + ans, step + 'ずつ ふえて ' + ans);
   api.setPrompt(`${step}ずつ ふえて いくよ。つぎは？`, `${numKana(step)}ずつ ふえて いくよ。つぎは`);
   const line = el('div.numline');
   seq.forEach((v, i) => line.append(el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) })));
@@ -2759,6 +2950,7 @@ Games.add({
 function traceQuestion(api, digits){
   const d = String(pick(digits));
   const strokes = DIGIT_STROKES[d];
+  api.item('trace:' + d, d + ' の かきかた');
   api.setPrompt(`${numTag(d)} を ゆびで なぞろう`, `${numKana(Number(d))}を ゆびで なぞろう`);
 
   const box = el('div.tracebox');
@@ -2914,6 +3106,9 @@ function platesCompare(api, opts){
   const want = o.least ? 'least' : 'most';
   const counts = o.counts;
   const answer = want === 'most' ? Math.max.apply(null, counts) : Math.min.apply(null, counts);
+  const sorted = counts.slice().sort((x, y) => x - y);
+  api.item('cmp:' + sorted.join('_') + ':' + want,
+    sorted.join(' と ') + ' の ' + (want === 'most' ? 'おおい ほう' : 'すくない ほう'));
   api.setPrompt(want === 'most' ? 'どっちが <b>おおい</b>？' : 'どっちが <b>すくない</b>？',
                 want === 'most' ? 'どっちが おおい' : 'どっちが すくない');
   if (counts.length > 2){
@@ -2976,6 +3171,8 @@ function compareNumerals(api){
   if (a === b) b = a === 20 ? 1 : a + 1;
   const most = chance(.6);
   const ans = most ? Math.max(a, b) : Math.min(a, b);
+  api.item('numcmp:' + Math.min(a, b) + '_' + Math.max(a, b) + ':' + (most ? 'g' : 'l'),
+    'すうじ ' + a + ' と ' + b + ' の くらべ');
   api.setPrompt(most ? 'かずが <b>おおきい</b> のは どっち？' : 'かずが <b>ちいさい</b> のは どっち？',
                 most ? 'かずが おおきいのは どっち' : 'かずが ちいさいのは どっち');
   api.field.append(el('div.hintline', { text: 'すうじで くらべよう' }));
@@ -3000,6 +3197,7 @@ const CRITTERS = ['🐰','🐻','🦊','🐯','🐨','🐸','🐷','🐮','🐼'
 function ordinalRow(api, n, dir, target){
   const critters = sample(CRITTERS, n);
   const label = { front: 'まえ', back: 'うしろ', left: 'ひだり', right: 'みぎ' }[dir];
+  api.item('ord:' + dir + ':' + target, label + 'から ' + target + 'ばんめ');
   api.setPrompt(`${label}から ${numTag(target)}ばんめ の どうぶつを タップ`,
                 `${label}から ${banmeKana(target)}の どうぶつを タップ`);
   const idxWanted = (dir === 'front' || dir === 'left') ? target - 1 : n - target;
@@ -3032,6 +3230,7 @@ function ordinalVsCount(api, n){
   const critters = sample(CRITTERS, n);
   const k = ri(2, Math.min(4, n - 1));
   const countMode = chance(.5);
+  api.item('ovc:' + (countMode ? 'ko' : 'me') + ':' + k, k + (countMode ? 'こ（ぜんぶ）' : 'ばんめ（ひとり）'));
   api.setPrompt(countMode
       ? `まえから ${numTag(k)}<b>こ</b> タップ　（${k}ひき ぜんぶ）`
       : `まえから ${numTag(k)}<b>ばんめ</b> だけ タップ`,
@@ -3075,6 +3274,7 @@ function gridPosition(api, cols, rows){
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push({ r, c });
   const pool = shuffle(CRITTERS.concat(CRITTERS)).slice(0, cols * rows);
   const tr = ri(1, rows), tc = ri(1, cols);
+  api.item('grid:' + tr + '_' + tc, 'うえから ' + tr + '・ひだりから ' + tc);
   api.setPrompt(`うえから ${numTag(tr)}ばんめ、ひだりから ${numTag(tc)}ばんめ は だれ？`,
                 `うえから ${banmeKana(tr)}、ひだりから ${banmeKana(tc)}は だれ`);
   const g = el('div.qgrid', { style: { '--gc': cols } });
@@ -3140,6 +3340,8 @@ function lengthCompare(api, aligned){
   const cap = pick(MEAS_ICONS);
   const longest = chance(.55);
   const ans = longest ? Math.max.apply(null, lens) : Math.min.apply(null, lens);
+  api.item('len:' + (aligned ? 'aligned' : 'ragged') + ':' + (longest ? 'L' : 'S') + ':' + n,
+    (aligned ? 'はしが そろった ' : 'はしが ずれた ') + (longest ? 'いちばん ながい' : 'いちばん みじかい'));
   api.setPrompt(longest ? 'いちばん <b>ながい</b> のは どれ？' : 'いちばん <b>みじかい</b> のは どれ？',
                 longest ? 'いちばん ながいのは どれ' : 'いちばん みじかいのは どれ');
   const wrap = el('div.measure');
@@ -3189,6 +3391,7 @@ function capacityCompare(api){
   }
   const more = chance(.6);
   const ans = more ? Math.max.apply(null, specs.map(s => s.vol)) : Math.min.apply(null, specs.map(s => s.vol));
+  api.item('cap:' + (more ? 'more' : 'less') + ':' + n, 'かさが ' + (more ? 'おおい' : 'すくない') + ' コップ');
   api.setPrompt(more ? 'ジュースが <b>おおい</b> のは どれ？' : 'ジュースが <b>すくない</b> のは どれ？',
                 more ? 'ジュースが おおいのは どれ' : 'ジュースが すくないのは どれ');
   const colors = shuffle(['var(--c-orange)','var(--c-red)','var(--c-purple)']);
@@ -3231,6 +3434,7 @@ function orderBySize(api){
   while (lens.length < n) lens.push(30 + lens.length * 18);
   const asc = chance(.5);
   const wanted = lens.slice().sort((a, b) => asc ? a - b : b - a);
+  api.item('order:' + (asc ? 'asc' : 'desc') + ':' + n, n + 'つを ' + (asc ? 'みじかい' : 'ながい') + ' じゅんに');
   api.setPrompt(asc ? '<b>みじかい</b> じゅんに タップしよう' : '<b>ながい</b> じゅんに タップしよう',
                 asc ? 'みじかい じゅんに タップしよう' : 'ながい じゅんに タップしよう');
   const cap = pick(MEAS_ICONS);
@@ -3313,6 +3517,7 @@ function partFrame(whole, known){
    ============================================================ */
 function decompose(api, whole){
   const known = ri(1, whole - 1), ans = whole - known;
+  api.item('dec:' + whole + '-' + known, whole + ' は ' + known + ' と ' + ans);
   api.setPrompt(`${numTag(whole)} は ${numTag(known)} と いくつ？`,
                 `${numKana(whole)}は ${numKana(known)}と いくつ`);
   const frame = partFrame(whole, known);
@@ -3335,6 +3540,7 @@ function decompose(api, whole){
 
 function compose(api, maxWhole){
   const a = ri(1, maxWhole - 1), b = ri(1, maxWhole - a), ans = a + b;
+  api.item('com:' + a + '+' + b, a + ' と ' + b + ' で ' + ans);
   api.setPrompt(`${numTag(a)} と ${numTag(b)} で いくつ？`,
                 `${numKana(a)}と ${numKana(b)}で いくつ`);
   const slots = a + b > 5 ? 10 : 5;
@@ -3351,7 +3557,7 @@ function compose(api, maxWhole){
 }
 
 Games.add({
-  id: 'bond', name: 'いくつと いくつ', ico: '🧩', world: 'yama', color: 'var(--c-red)',
+  id: 'bond', name: 'いくつと いくつ', ico: '🧩', world: 'yama', color: 'var(--c-red)', focus: 1.7,
   aim: '5や10を<b>2つの数に分けたり、合わせたり</b>する感覚。たし算・ひき算を「数えないで思い出す」ための部品で、くり上がり・くり下がりの計算はこれが土台になります。ここが自動化していると小1は驚くほど楽になります。',
   levels: [
     { t: '5は いくつと いくつ', d: 'ごの ぶんかい', make: api => chance(.25) ? compose(api, 5) : decompose(api, 5) },
@@ -3365,6 +3571,7 @@ Games.add({
    ============================================================ */
 function fillToTen(api){
   const start = ri(2, 8);
+  api.item('fill10:' + start, start + ' から 10 まで あと ' + (10 - start));
   api.setPrompt(`わくが <b>10</b> に なるように タップして たそう`, 'わくが じゅうに なるように、タップして たそう');
   const f = el('div.tenframe', { style: { '--cols': 5 } });
   const cells = [];
@@ -3400,6 +3607,7 @@ function fillToTen(api){
 
 function partnerOfTen(api){
   const a = ri(1, 9), ans = 10 - a;
+  api.item('ten:' + a, a + ' と ' + ans + ' で 10');
   api.setPrompt(`${numTag(a)} と いくつで <b>10</b>？`, `${numKana(a)}と いくつで じゅう`);
   const f = el('div.tenframe', { style: { '--cols': 5 } });
   for (let i = 0; i < 10; i++){
@@ -3420,6 +3628,7 @@ function pairHunt(api){
     if (v !== a && v !== b && others.indexOf(v) < 0) others.push(v);
   }
   const cards = shuffle([a, b].concat(others));
+  api.item('pair:' + Math.min(a, b), Math.min(a, b) + ' と ' + Math.max(a, b) + ' の ペア');
   api.setPrompt('たすと <b>10</b> に なる 2まいを えらぼう', 'たすと じゅうに なる にまいを えらぼう');
   const picked = [];
   const row = api.choices;
@@ -3453,7 +3662,7 @@ function pairHunt(api){
 }
 
 Games.add({
-  id: 'ten', name: '10の おともだち', ico: '🔟', world: 'yama', color: 'var(--c-red)',
+  id: 'ten', name: '10の おともだち', ico: '🔟', world: 'yama', color: 'var(--c-red)', focus: 1.7,
   aim: '<b>合わせて10になる組み合わせ</b>を、考えずに言えるようにする練習。「9+4」を「9+1+3」と処理するくり上がりの計算は、これが即答できるかどうかで速さがまったく変わります。',
   levels: [
     { t: '10まで うめる', d: 'わくを いっぱいに する', make: fillToTen },
@@ -3529,6 +3738,7 @@ function eqNode(a, b, op){
 function addStory(api, max){
   const a = ri(1, max - 1), b = ri(1, max - a), ans = a + b;
   const thing = pick(THINGS);
+  api.item('sum:' + a + '+' + b, a + ' ＋ ' + b);
   api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ やってきたよ`,
                 `${thing.n}が ${tsuKana(a)}。${tsuKana(b)} やってきたよ`);
   storyScene(api, a, b, '+', thing, () => {
@@ -3541,6 +3751,7 @@ function addStory(api, max){
 function subStory(api, max){
   const a = ri(2, max), b = ri(1, a - 1), ans = a - b;
   const thing = pick(THINGS);
+  api.item('rest:' + a + '-' + b, a + ' − ' + b);
   api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ いなくなるよ`,
                 `${thing.n}が ${tsuKana(a)}。${tsuKana(b)} いなくなるよ`);
   storyScene(api, a, b, '-', thing, () => {
@@ -3554,6 +3765,8 @@ function symbolCalc(api, op, max){
   let a, b, ans;
   if (op === '+'){ a = ri(1, max - 1); b = ri(1, max - a); ans = a + b; }
   else { a = ri(2, max); b = ri(1, a); ans = a - b; }
+  api.item((op === '+' ? 'sum:' + a + '+' + b : 'rest:' + a + '-' + b),
+    a + (op === '+' ? ' ＋ ' : ' − ') + b);
   api.setPrompt('しきを みて こたえよう',
     `${numKana(a)} ${op === '+' ? 'たす' : 'ひく'} ${numKana(b)} は`);
   api.field.append(eqNode(a, b, op));
@@ -3576,6 +3789,7 @@ function differenceQ(api, max){
   const a = ri(3, max), b = ri(1, a - 1), ans = a - b;
   const t1 = pick(THINGS); let t2 = pick(THINGS);
   while (t2.e === t1.e) t2 = pick(THINGS);
+  api.item('diff:' + a + '-' + b, a + ' と ' + b + ' の ちがい');
   api.setPrompt(`どちらが <b>いくつ</b> おおい？`, 'どちらが いくつ おおい');
   const board = el('div.measure');
   [[t1, a], [t2, b]].forEach(([t, n]) => {
@@ -3594,7 +3808,7 @@ function differenceQ(api, max){
 }
 
 Games.add({
-  id: 'add', name: 'たしざん', ico: '➕', world: 'yama', color: 'var(--c-red)',
+  id: 'add', name: 'たしざん', ico: '➕', world: 'yama', color: 'var(--c-red)', focus: 1.25,
   aim: '「増えた／合わせた」場面を<b>式に置きかえる</b>力。物語→絵→式の順に抽象度を上げるので、記号だけを丸暗記せずに意味とつながります。',
   levels: [
     { t: '5まで', d: 'おはなしで かんがえる', make: api => addStory(api, 5) },
@@ -3604,7 +3818,7 @@ Games.add({
 });
 
 Games.add({
-  id: 'sub', name: 'ひきざん', ico: '➖', world: 'yama', color: 'var(--c-red)',
+  id: 'sub', name: 'ひきざん', ico: '➖', world: 'yama', color: 'var(--c-red)', focus: 1.25,
   aim: '「のこりはいくつ」（求残）と「どちらがいくつ多い」（求差）の<b>2つの意味</b>にふれます。求差はつまずきやすいので、1対1に並べて余りを見る経験を早めに。',
   levels: [
     { t: '5まで', d: 'いなくなると のこりは', make: api => subStory(api, 5) },
@@ -3648,6 +3862,7 @@ function findAllShapes(api){
     const src = chance(.7) ? KIND_MEMBERS[pick(otherKinds)] : others;
     cells.push({ name: pick(src), hit: false });
   }
+  api.item('find:' + target, KIND_JA[target] + ' を さがす');
   api.setPrompt(`<b>${KIND_JA[target]}</b> を ぜんぶ タップしよう`, `${KIND_JA[target]}を ぜんぶ タップしよう`);
   const grid = el('div.shapegrid');
   const tally = el('div.tally');
@@ -3689,6 +3904,7 @@ const OBJ_SHAPE = [
 
 function objectToShape(api){
   const o = pick(OBJ_SHAPE);
+  api.item('obj:' + o.e, o.e + ' は ' + KIND_JA[o.k]);
   api.setPrompt(`${o.e} と おなじ かたちは どれ？`, 'おなじ かたちは どれ');
   api.field.append(el('div', { style: { fontSize: 'calc(var(--u)*10)', lineHeight: 1 }, text: o.e }));
   const kinds = shuffle(['circle', 'triangle', 'square']);
@@ -3746,6 +3962,7 @@ function signature(pts){
 
 function shapePuzzle(api){
   const pz = pick(PUZZLES);
+  api.item('puz:' + pz.name, pz.name + ' を つくる');
   api.setPrompt(`かたちを はめて <b>${pz.name}</b> を つくろう`, `かたちを はめて ${pz.name}を つくろう`);
   const box = el('div.shapefield');
   const s = svg('svg', { viewBox: '0 0 100 80', preserveAspectRatio: 'xMidYMid meet' });
@@ -3850,6 +4067,8 @@ const COLOR_CATS = {
 function sortGame(api, catset, nBins, byColor){
   const keys = sample(Object.keys(catset), nBins);
   const perBin = nBins === 2 ? 3 : 2;
+  api.item('sort:' + keys.slice().sort().join('_'),
+    keys.map(k => catset[k].lbl).join('・') + ' に わける');
   api.setPrompt(byColor ? 'おなじ いろの ばしょに いれてね' : 'なかまの ばしょに いれてね',
                 byColor ? 'おなじ いろの ばしょに いれてね' : 'なかまの ばしょに いれてね');
   const mark = k => {
@@ -3948,6 +4167,7 @@ function patternQuestion(api, unitKind, blanks){
   const holes = [];
   for (let i = 0; i < blanks; i++) holes.push(total - 1 - i);
   holes.sort((a, b) => a - b);
+  api.item('pat:' + unitKind + ':' + blanks, unitKind + ' の くりかえし');
   api.setPrompt('つづきは どれ？ きまりを みつけよう', 'つづきは どれ。きまりを みつけよう');
   const train = el('div.train');
   const cars = seq.map((t, i) => {
@@ -4007,6 +4227,7 @@ const HOUR_SCENES = { 7: '🌅 あさごはん', 12: '🍛 おひるごはん', 
 function readClock(api, half){
   const h = ri(1, 12);
   const m = half && chance(.5) ? 30 : 0;
+  api.item('read:' + h + ':' + m, h + 'じ' + (m === 30 ? 'はん' : '') + ' を よむ');
   api.setPrompt('なんじ かな？', 'なんじ かな');
   const c = clockSVG(h, m);
   c.style.width = 'calc(var(--u)*22)';
@@ -4035,6 +4256,7 @@ function readClock(api, half){
 
 function pickClock(api, half){
   const h = ri(1, 12), m = half && chance(.5) ? 30 : 0;
+  api.item('pick:' + h + ':' + m, h + 'じ' + (m === 30 ? 'はん' : '') + ' の とけいを えらぶ');
   api.setPrompt(`<b>${h}じ${m === 30 ? 'はん' : ''}</b> の とけいは どれ？`,
                 `${jiKana(h, m === 30)}の とけいは どれ`);
   const opts = [{ h, m }];
@@ -4057,6 +4279,7 @@ function pickClock(api, half){
 
 function setClock(api){
   const target = ri(1, 12);
+  api.item('set:' + target, target + 'じ に はりを あわせる');
   api.setPrompt(`<b>${target}じ</b> に なるように みじかい はりを うごかそう`,
                 `${jiKana(target)}に なるように、みじかい はりを うごかそう`);
   let cur = ri(1, 12);
@@ -4308,6 +4531,14 @@ const Result = (() => {
       UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }),
       el('div.result-sub', { text: `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+    /* Name what went wrong. "62%" tells a child nothing; "3と7" is something they
+       can carry to tomorrow — and it is exactly what the app will bring back. */
+    if (r.shaky && r.shaky.length){
+      const list = el('div.shakylist');
+      r.shaky.forEach(x => list.append(el('span.shakyitem', { text: x.label })));
+      inner.append(el('div.shaky', null,
+        el('div.l', { text: 'つぎは これを もういちど' }), list));
+    }
     if (r.sticker){
       inner.append(el('div.newsticker' + (r.sticker.gold ? '.gold' : ''), null,
         el('div.e', { text: r.sticker.emoji }),

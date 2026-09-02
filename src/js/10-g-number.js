@@ -32,6 +32,7 @@ function makeCountField(api, count, thing, layout){
 function countQuestion(api, lo, hi, layout){
   const thing = pick(THINGS);
   const count = ri(lo, hi);
+  api.item('count' + (layout === 'line' ? 'L' : 'S') + ':' + count, count + 'こ を かぞえる');
   api.setPrompt(`${thing.n}を ひとつずつ タップして かぞえよう`, `${thing.n}を、ひとつずつ タップして かぞえよう`);
   const objs = makeCountField(api, count, thing, layout);
   let done = 0;
@@ -60,6 +61,7 @@ function giveQuestion(api, lo, hi){
   const thing = pick(THINGS);
   const target = ri(lo, hi);
   const total = Math.min(14, target + ri(3, 5));
+  api.item('give:' + target, target + 'こ だけ とりだす');
   api.setPrompt(`${thing.n}を ${numTag(target)}こ とって かごに いれよう`, `${thing.n}を、${koKana(target)} とって、かごに いれよう`);
   const objs = makeCountField(api, total, thing, 'scatter');
   const picked = new Set();
@@ -121,6 +123,7 @@ function groupNode(count, thing){
 
 function numToQty(api, lo, hi){        // numeral shown → pick the matching group
   const n = ri(lo, hi), thing = pick(THINGS);
+  api.item('n2q:' + n, 'すうじ ' + n + ' → その かず');
   api.setPrompt(`${thing.e} が ${numTag(n)}こ あるのは どれ？`, `${thing.n}が ${koKana(n)} あるのは どれ`);
   const big = el('div', { style: { fontFamily: 'var(--fs-num)', fontWeight: 800, fontSize: 'calc(var(--u)*11)', lineHeight: 1, color: 'var(--c-red)' }, text: String(n) });
   api.field.append(big);
@@ -139,6 +142,7 @@ function numToQty(api, lo, hi){        // numeral shown → pick the matching gr
 
 function qtyToNum(api, lo, hi){        // group shown → pick the numeral
   const n = ri(lo, hi), thing = pick(THINGS);
+  api.item('q2n:' + n, n + 'こ → すうじ ' + n);
   api.setPrompt(`${thing.n}は いくつ？ すうじを えらぼう`, `${thing.n}は いくつ。すうじを えらぼう`);
   const wrap = el('div.row', { style: { maxWidth: 'calc(var(--u)*40)' } });
   for (let i = 0; i < n; i++) wrap.append(el('span.item', { text: thing.e, style: { fontSize: 'calc(var(--u)*4.4)' } }));
@@ -161,6 +165,7 @@ function tenFrameNode(count, cols, opts){
 
 function teenQuestion(api){            // 11-20 with a filled ten-frame + loose ones
   const n = ri(11, 20), thing = pick(THINGS);
+  api.item('teen:' + n, n + ' を 10と ' + (n - 10) + ' で みる');
   api.setPrompt('ぜんぶで いくつ？', 'ぜんぶで いくつ');
   const box = el('div.frameset');
   box.append(tenFrameNode(10, 5));
@@ -188,6 +193,7 @@ function lineFill(api, lo, hi, gaps){
   const nums = range(lo, hi);
   const inner = nums.slice(1, -1);
   const holes = sample(inner, Math.min(gaps, inner.length)).sort((a, b) => a - b);
+  api.item('fill:' + holes[0], holes[0] + ' が ぬけた ならび');
   const line = el('div.numline');
   const cells = {};
   nums.forEach(v => {
@@ -240,6 +246,8 @@ function nextBefore(api, hi){
   if (mode === 'next'){ ans = n + 1; html = `${numTag(n)} の つぎの かずは？`; speech = `${numKana(n)}の つぎの かずは`; }
   else if (mode === 'before'){ ans = n - 1; html = `${numTag(n)} の まえの かずは？`; speech = `${numKana(n)}の まえの かずは`; }
   else { ans = n; html = `${numTag(n - 1)} と ${numTag(n + 1)} の あいだの かずは？`; speech = `${numKana(n-1)}と ${numKana(n+1)}の あいだの かずは`; }
+  api.item('nb:' + mode + ':' + ans,
+    mode === 'next' ? n + ' の つぎ' : mode === 'before' ? n + ' の まえ' : (n - 1) + ' と ' + (n + 1) + ' の あいだ');
   api.setPrompt(html, speech);
   const line = el('div.numline');
   for (let v = Math.max(1, ans - 3); v <= Math.min(hi, ans + 3); v++){
@@ -254,6 +262,7 @@ function skipCount(api){
   const start = step === 2 ? pick([2, 4, 6]) : step;
   const seq = [0, 1, 2, 3].map(i => start + i * step);
   const ans = seq[3];
+  api.item('skip' + step + ':' + ans, step + 'ずつ ふえて ' + ans);
   api.setPrompt(`${step}ずつ ふえて いくよ。つぎは？`, `${numKana(step)}ずつ ふえて いくよ。つぎは`);
   const line = el('div.numline');
   seq.forEach((v, i) => line.append(el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) })));
@@ -277,6 +286,7 @@ Games.add({
 function traceQuestion(api, digits){
   const d = String(pick(digits));
   const strokes = DIGIT_STROKES[d];
+  api.item('trace:' + d, d + ' の かきかた');
   api.setPrompt(`${numTag(d)} を ゆびで なぞろう`, `${numKana(Number(d))}を ゆびで なぞろう`);
 
   const box = el('div.tracebox');

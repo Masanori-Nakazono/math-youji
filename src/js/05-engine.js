@@ -44,6 +44,12 @@ const Session = (() => {
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
   let locked = false, mode = 'level', curGame = null, curLevelIdx = 0;
   let hintBtns = [], hintFn = null, hintShown = false, lastSpeech = '';
+  /* What this question is *about*. Every generator names its item, so the app can
+     avoid asking the same fact twice in one sitting, steer toward the facts this
+     child keeps missing, and tell the parent which ones they are. */
+  let curItem = null, curLabel = null;
+  let usedItems = new Set();      // the shuffle bag for the current session
+  let shaky = [];                 // facts missed this session, for the result screen
 
   /* ---------- timer lifecycle ----------
      Every delayed callback in a question is tied to an epoch. Leaving a question
@@ -159,24 +165,51 @@ const Session = (() => {
       return;
     }
     const n = count || 10;
-    plan = [];
-    const byGame = {};
-    shuffle(pool).forEach(p => { (byGame[p.game.id] = byGame[p.game.id] || []).push(p); });
-    const keys = shuffle(Object.keys(byGame));
-    let ki = 0;
-    while (plan.length < n && keys.length){
-      const arr = byGame[keys[ki % keys.length]];
-      if (arr && arr.length) plan.push(arr[ri(0, arr.length - 1)]);
-      ki++;
-      if (ki > n * 6) break;
-    }
-    while (plan.length < n) plan.push(pool[ri(0, pool.length - 1)]);
+    plan = drawDailyPlan(pool, n);
     titleEl.textContent = 'きょうの れんしゅう';
     begin();
   }
 
+  /** How badly this child needs this level today.
+      The old round-robin handed every game the same ~0.66 questions a day whether
+      the child was at 10% or 97%, which made the daily set a sampler rather than
+      practice. This is the same 10 questions, aimed. */
+  function dailyWeight(p){
+    const acc  = Store.recentAccuracy(p.game.id, p.levelIndex);
+    const need = acc == null ? 1 : 1 - acc;                    // 0 solid … 1 struggling
+    const cold = Math.min(1, Store.daysSince(p.game.id, p.levelIndex) / 14);
+    const focus = p.game.focus || 1;                           // curriculum priority
+    const done  = Store.stars(p.game.id, p.levelIndex) >= 3 ? 0.45 : 1;
+    return (0.35 + need * 1.6 + cold * 0.8) * focus * done;
+  }
+
+  function drawDailyPlan(pool, n){
+    const bag = pool.map(p => ({ p, w: dailyWeight(p) }));
+    const out = [], perGame = {}, perLevel = {};
+    // caps keep an aimed set from turning into a single-topic grind, and keep the
+    // ten questions coming from at least four different games
+    const MAX_GAME = 3, MAX_LEVEL = 2;
+    for (let guard = 0; out.length < n && guard < n * 40; guard++){
+      let total = 0;
+      for (const x of bag) total += x.w;
+      if (total <= 0) break;
+      let r = Math.random() * total, hit = null;
+      for (const x of bag){ r -= x.w; if (r <= 0){ hit = x; break; } }
+      if (!hit) break;
+      const gid = hit.p.game.id, lk = gid + ':' + hit.p.levelIndex;
+      if ((perGame[gid] || 0) >= MAX_GAME || (perLevel[lk] || 0) >= MAX_LEVEL){ hit.w = 0; continue; }
+      perGame[gid] = (perGame[gid] || 0) + 1;
+      perLevel[lk] = (perLevel[lk] || 0) + 1;
+      hit.w *= 0.45;                       // taper, so the weakest topic leads without owning the set
+      out.push(hit.p);
+    }
+    while (out.length < n) out.push(pool[ri(0, pool.length - 1)]);
+    return shuffle(out);                   // interleave: the same topic should not run in a block
+  }
+
   function begin(){
     idx = 0; mistakes = 0; firstTryRight = 0;
+    usedItems = new Set(); shaky = [];
     clear(pipsEl);
     plan.forEach(() => pipsEl.append(el('div.pip')));
     UI.show('play');
@@ -200,6 +233,14 @@ const Session = (() => {
         Sound.say(lastSpeech, { delay: 220 });
       },
       say(t, o){ if (stale()) return; lastSpeech = t; Sound.say(t, o); },
+      /** Name the fact this question asks. `label` is what the result screen and
+          the parent page will call it. Optional: a game that names nothing simply
+          keeps the old purely-random behaviour. */
+      item(key, label){
+        if (stale() || key == null) return;
+        curItem = a.game.id + ':' + key;
+        curLabel = label || null;
+      },
       onHint(fn){ if (!stale()) hintFn = fn; },
       correct(o){ if (!stale()) onCorrect(o || {}); },
       wrong(target){ if (!stale()) onWrong(target); },
@@ -244,21 +285,55 @@ const Session = (() => {
     return a;
   }
 
-  function nextQuestion(){
-    killTimers();
-    locked = false; wrongThisQ = 0; hintBtns = []; hintFn = null; hintShown = false;
+  function resetSurface(){
+    locked = false; hintBtns = []; hintFn = null; hintShown = false;
+    curItem = null; curLabel = null;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built; clearFeedback();
     fieldEl.className = 'playfield';
+  }
+
+  /* How hard to look for a better question before settling.
+     TRIES builds are cheap (the whole build-storm test does 25 per level), and a
+     rejected build dies with its epoch, so nothing it scheduled can survive. */
+  const TRIES = 6, PICKY = 3, DUE_ENOUGH = 0.55;
+
+  /** Draw a question, re-rolling to avoid repeating a fact and to favour the ones
+      this child owes practice to. The generator is random, so we cannot go back to
+      an earlier draw — we accept the one that is on screen when we stop. */
+  function drawQuestion(step){
+    for (let t = 0; t < TRIES; t++){
+      killTimers();
+      resetSurface();
+      try{
+        step.level.make(api());
+      }catch(err){
+        console.error('question build failed', err);
+        promptTxt.textContent = 'よみこみに しっぱいしました';
+        return;
+      }
+      if (!curItem) return;                      // this game does not name its items
+      if (t === TRIES - 1){
+        // the bag is empty (every fact has come up already): start a fresh pass
+        if (usedItems.has(curItem)) usedItems.clear();
+        usedItems.add(curItem);
+        return;
+      }
+      if (usedItems.has(curItem)) continue;
+      if (t >= PICKY || Store.factDue(curItem) >= DUE_ENOUGH){
+        usedItems.add(curItem);
+        return;
+      }
+    }
+  }
+
+  function nextQuestion(){
+    killTimers();
+    wrongThisQ = 0;
     $$('.pip', pipsEl).forEach((p, i) => p.classList.toggle('now', i === idx));
     setMood('idle');
     const step = plan[idx];
     if (mode === 'daily') titleEl.textContent = 'きょうの れんしゅう　' + step.game.name;
-    try{
-      step.level.make(api());
-    }catch(err){
-      console.error('question build failed', err);
-      promptTxt.textContent = 'よみこみに しっぱいしました';
-    }
+    drawQuestion(step);
   }
 
   function onWrong(target){
@@ -292,7 +367,15 @@ const Session = (() => {
     if (locked) return;
     locked = true;
     clearFeedback();
-    if (wrongThisQ === 0) firstTryRight++;
+    const clean = wrongThisQ === 0;
+    if (clean) firstTryRight++;
+    Store.noteOutcome(plan[idx].game.id, plan[idx].levelIndex, clean);
+    if (curItem){
+      Store.noteFact(curItem, clean);
+      if (!clean && !shaky.some(x => x.key === curItem)){
+        shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
+      }
+    }
     Sound.sfx.correct();
     setMood('happy');
     const pip = $$('.pip', pipsEl)[idx];
@@ -331,7 +414,8 @@ const Session = (() => {
       const key = 'daily:' + Store.todayKey();   // one sticker per calendar day
       if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
     }
-    Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx, sticker: newSticker });
+    Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
+                  sticker: newSticker, shaky: shaky.slice(0, 3) });
   }
 
   return {
@@ -340,6 +424,9 @@ const Session = (() => {
       flushTimers,
       get idx(){ return idx; },
       get planLength(){ return plan.length; },
+      get planGames(){ return plan.map(p => p.game.id + ':' + p.levelIndex); },
+      get item(){ return curItem; },
+      get shaky(){ return shaky.slice(); },
       get locked(){ return locked; },
       get mistakes(){ return mistakes; },
       get pending(){ return timers.size; },

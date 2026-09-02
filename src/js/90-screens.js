@@ -175,6 +175,14 @@ const Result = (() => {
       UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }),
       el('div.result-sub', { text: `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+    /* Name what went wrong. "62%" tells a child nothing; "3と7" is something they
+       can carry to tomorrow — and it is exactly what the app will bring back. */
+    if (r.shaky && r.shaky.length){
+      const list = el('div.shakylist');
+      r.shaky.forEach(x => list.append(el('span.shakyitem', { text: x.label })));
+      inner.append(el('div.shaky', null,
+        el('div.l', { text: 'つぎは これを もういちど' }), list));
+    }
     if (r.sticker){
       inner.append(el('div.newsticker' + (r.sticker.gold ? '.gold' : ''), null,
         el('div.e', { text: r.sticker.emoji }),

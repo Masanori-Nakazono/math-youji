@@ -1320,3 +1320,18 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   user-select: text;
 }
 .backupbox:focus-visible{ outline: calc(var(--u)*.24) solid var(--ring); outline-offset: 2px; }
+
+/* ---------- result: the facts that were shaky this session ---------- */
+#result .shaky{
+  display:flex; flex-direction:column; align-items:center; gap:calc(var(--u)*.45);
+  margin-top:calc(var(--u)*1);
+  padding:calc(var(--u)*.7) calc(var(--u)*1.2);
+  background:var(--paper-2); border-radius:var(--wob-b);
+}
+#result .shaky .l{ font-size:calc(var(--u)*1.3); color:var(--ink-soft); font-weight:800 }
+#result .shakylist{ display:flex; flex-wrap:wrap; gap:calc(var(--u)*.45); justify-content:center }
+#result .shakyitem{
+  background:var(--card); border:calc(var(--u)*.16) solid var(--card-edge);
+  border-radius:calc(var(--u)*.8); padding:calc(var(--u)*.3) calc(var(--u)*.8);
+  font-family:var(--fs-num); font-weight:800; font-size:calc(var(--u)*1.7); color:var(--ink);
+}

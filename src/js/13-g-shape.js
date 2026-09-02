@@ -32,6 +32,7 @@ function findAllShapes(api){
     const src = chance(.7) ? KIND_MEMBERS[pick(otherKinds)] : others;
     cells.push({ name: pick(src), hit: false });
   }
+  api.item('find:' + target, KIND_JA[target] + ' を さがす');
   api.setPrompt(`<b>${KIND_JA[target]}</b> を ぜんぶ タップしよう`, `${KIND_JA[target]}を ぜんぶ タップしよう`);
   const grid = el('div.shapegrid');
   const tally = el('div.tally');
@@ -73,6 +74,7 @@ const OBJ_SHAPE = [
 
 function objectToShape(api){
   const o = pick(OBJ_SHAPE);
+  api.item('obj:' + o.e, o.e + ' は ' + KIND_JA[o.k]);
   api.setPrompt(`${o.e} と おなじ かたちは どれ？`, 'おなじ かたちは どれ');
   api.field.append(el('div', { style: { fontSize: 'calc(var(--u)*10)', lineHeight: 1 }, text: o.e }));
   const kinds = shuffle(['circle', 'triangle', 'square']);
@@ -130,6 +132,7 @@ function signature(pts){
 
 function shapePuzzle(api){
   const pz = pick(PUZZLES);
+  api.item('puz:' + pz.name, pz.name + ' を つくる');
   api.setPrompt(`かたちを はめて <b>${pz.name}</b> を つくろう`, `かたちを はめて ${pz.name}を つくろう`);
   const box = el('div.shapefield');
   const s = svg('svg', { viewBox: '0 0 100 80', preserveAspectRatio: 'xMidYMid meet' });
@@ -234,6 +237,8 @@ const COLOR_CATS = {
 function sortGame(api, catset, nBins, byColor){
   const keys = sample(Object.keys(catset), nBins);
   const perBin = nBins === 2 ? 3 : 2;
+  api.item('sort:' + keys.slice().sort().join('_'),
+    keys.map(k => catset[k].lbl).join('・') + ' に わける');
   api.setPrompt(byColor ? 'おなじ いろの ばしょに いれてね' : 'なかまの ばしょに いれてね',
                 byColor ? 'おなじ いろの ばしょに いれてね' : 'なかまの ばしょに いれてね');
   const mark = k => {
@@ -332,6 +337,7 @@ function patternQuestion(api, unitKind, blanks){
   const holes = [];
   for (let i = 0; i < blanks; i++) holes.push(total - 1 - i);
   holes.sort((a, b) => a - b);
+  api.item('pat:' + unitKind + ':' + blanks, unitKind + ' の くりかえし');
   api.setPrompt('つづきは どれ？ きまりを みつけよう', 'つづきは どれ。きまりを みつけよう');
   const train = el('div.train');
   const cars = seq.map((t, i) => {
@@ -391,6 +397,7 @@ const HOUR_SCENES = { 7: '🌅 あさごはん', 12: '🍛 おひるごはん', 
 function readClock(api, half){
   const h = ri(1, 12);
   const m = half && chance(.5) ? 30 : 0;
+  api.item('read:' + h + ':' + m, h + 'じ' + (m === 30 ? 'はん' : '') + ' を よむ');
   api.setPrompt('なんじ かな？', 'なんじ かな');
   const c = clockSVG(h, m);
   c.style.width = 'calc(var(--u)*22)';
@@ -419,6 +426,7 @@ function readClock(api, half){
 
 function pickClock(api, half){
   const h = ri(1, 12), m = half && chance(.5) ? 30 : 0;
+  api.item('pick:' + h + ':' + m, h + 'じ' + (m === 30 ? 'はん' : '') + ' の とけいを えらぶ');
   api.setPrompt(`<b>${h}じ${m === 30 ? 'はん' : ''}</b> の とけいは どれ？`,
                 `${jiKana(h, m === 30)}の とけいは どれ`);
   const opts = [{ h, m }];
@@ -441,6 +449,7 @@ function pickClock(api, half){
 
 function setClock(api){
   const target = ri(1, 12);
+  api.item('set:' + target, target + 'じ に はりを あわせる');
   api.setPrompt(`<b>${target}じ</b> に なるように みじかい はりを うごかそう`,
                 `${jiKana(target)}に なるように、みじかい はりを うごかそう`);
   let cur = ri(1, 12);

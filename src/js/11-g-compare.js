@@ -12,6 +12,9 @@ function platesCompare(api, opts){
   const want = o.least ? 'least' : 'most';
   const counts = o.counts;
   const answer = want === 'most' ? Math.max.apply(null, counts) : Math.min.apply(null, counts);
+  const sorted = counts.slice().sort((x, y) => x - y);
+  api.item('cmp:' + sorted.join('_') + ':' + want,
+    sorted.join(' と ') + ' の ' + (want === 'most' ? 'おおい ほう' : 'すくない ほう'));
   api.setPrompt(want === 'most' ? 'どっちが <b>おおい</b>？' : 'どっちが <b>すくない</b>？',
                 want === 'most' ? 'どっちが おおい' : 'どっちが すくない');
   if (counts.length > 2){
@@ -74,6 +77,8 @@ function compareNumerals(api){
   if (a === b) b = a === 20 ? 1 : a + 1;
   const most = chance(.6);
   const ans = most ? Math.max(a, b) : Math.min(a, b);
+  api.item('numcmp:' + Math.min(a, b) + '_' + Math.max(a, b) + ':' + (most ? 'g' : 'l'),
+    'すうじ ' + a + ' と ' + b + ' の くらべ');
   api.setPrompt(most ? 'かずが <b>おおきい</b> のは どっち？' : 'かずが <b>ちいさい</b> のは どっち？',
                 most ? 'かずが おおきいのは どっち' : 'かずが ちいさいのは どっち');
   api.field.append(el('div.hintline', { text: 'すうじで くらべよう' }));
@@ -98,6 +103,7 @@ const CRITTERS = ['🐰','🐻','🦊','🐯','🐨','🐸','🐷','🐮','🐼'
 function ordinalRow(api, n, dir, target){
   const critters = sample(CRITTERS, n);
   const label = { front: 'まえ', back: 'うしろ', left: 'ひだり', right: 'みぎ' }[dir];
+  api.item('ord:' + dir + ':' + target, label + 'から ' + target + 'ばんめ');
   api.setPrompt(`${label}から ${numTag(target)}ばんめ の どうぶつを タップ`,
                 `${label}から ${banmeKana(target)}の どうぶつを タップ`);
   const idxWanted = (dir === 'front' || dir === 'left') ? target - 1 : n - target;
@@ -130,6 +136,7 @@ function ordinalVsCount(api, n){
   const critters = sample(CRITTERS, n);
   const k = ri(2, Math.min(4, n - 1));
   const countMode = chance(.5);
+  api.item('ovc:' + (countMode ? 'ko' : 'me') + ':' + k, k + (countMode ? 'こ（ぜんぶ）' : 'ばんめ（ひとり）'));
   api.setPrompt(countMode
       ? `まえから ${numTag(k)}<b>こ</b> タップ　（${k}ひき ぜんぶ）`
       : `まえから ${numTag(k)}<b>ばんめ</b> だけ タップ`,
@@ -173,6 +180,7 @@ function gridPosition(api, cols, rows){
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push({ r, c });
   const pool = shuffle(CRITTERS.concat(CRITTERS)).slice(0, cols * rows);
   const tr = ri(1, rows), tc = ri(1, cols);
+  api.item('grid:' + tr + '_' + tc, 'うえから ' + tr + '・ひだりから ' + tc);
   api.setPrompt(`うえから ${numTag(tr)}ばんめ、ひだりから ${numTag(tc)}ばんめ は だれ？`,
                 `うえから ${banmeKana(tr)}、ひだりから ${banmeKana(tc)}は だれ`);
   const g = el('div.qgrid', { style: { '--gc': cols } });
@@ -238,6 +246,8 @@ function lengthCompare(api, aligned){
   const cap = pick(MEAS_ICONS);
   const longest = chance(.55);
   const ans = longest ? Math.max.apply(null, lens) : Math.min.apply(null, lens);
+  api.item('len:' + (aligned ? 'aligned' : 'ragged') + ':' + (longest ? 'L' : 'S') + ':' + n,
+    (aligned ? 'はしが そろった ' : 'はしが ずれた ') + (longest ? 'いちばん ながい' : 'いちばん みじかい'));
   api.setPrompt(longest ? 'いちばん <b>ながい</b> のは どれ？' : 'いちばん <b>みじかい</b> のは どれ？',
                 longest ? 'いちばん ながいのは どれ' : 'いちばん みじかいのは どれ');
   const wrap = el('div.measure');
@@ -287,6 +297,7 @@ function capacityCompare(api){
   }
   const more = chance(.6);
   const ans = more ? Math.max.apply(null, specs.map(s => s.vol)) : Math.min.apply(null, specs.map(s => s.vol));
+  api.item('cap:' + (more ? 'more' : 'less') + ':' + n, 'かさが ' + (more ? 'おおい' : 'すくない') + ' コップ');
   api.setPrompt(more ? 'ジュースが <b>おおい</b> のは どれ？' : 'ジュースが <b>すくない</b> のは どれ？',
                 more ? 'ジュースが おおいのは どれ' : 'ジュースが すくないのは どれ');
   const colors = shuffle(['var(--c-orange)','var(--c-red)','var(--c-purple)']);
@@ -329,6 +340,7 @@ function orderBySize(api){
   while (lens.length < n) lens.push(30 + lens.length * 18);
   const asc = chance(.5);
   const wanted = lens.slice().sort((a, b) => asc ? a - b : b - a);
+  api.item('order:' + (asc ? 'asc' : 'desc') + ':' + n, n + 'つを ' + (asc ? 'みじかい' : 'ながい') + ' じゅんに');
   api.setPrompt(asc ? '<b>みじかい</b> じゅんに タップしよう' : '<b>ながい</b> じゅんに タップしよう',
                 asc ? 'みじかい じゅんに タップしよう' : 'ながい じゅんに タップしよう');
   const cap = pick(MEAS_ICONS);

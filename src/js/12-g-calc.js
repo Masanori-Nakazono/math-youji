@@ -33,6 +33,7 @@ function partFrame(whole, known){
    ============================================================ */
 function decompose(api, whole){
   const known = ri(1, whole - 1), ans = whole - known;
+  api.item('dec:' + whole + '-' + known, whole + ' は ' + known + ' と ' + ans);
   api.setPrompt(`${numTag(whole)} は ${numTag(known)} と いくつ？`,
                 `${numKana(whole)}は ${numKana(known)}と いくつ`);
   const frame = partFrame(whole, known);
@@ -55,6 +56,7 @@ function decompose(api, whole){
 
 function compose(api, maxWhole){
   const a = ri(1, maxWhole - 1), b = ri(1, maxWhole - a), ans = a + b;
+  api.item('com:' + a + '+' + b, a + ' と ' + b + ' で ' + ans);
   api.setPrompt(`${numTag(a)} と ${numTag(b)} で いくつ？`,
                 `${numKana(a)}と ${numKana(b)}で いくつ`);
   const slots = a + b > 5 ? 10 : 5;
@@ -71,7 +73,7 @@ function compose(api, maxWhole){
 }
 
 Games.add({
-  id: 'bond', name: 'いくつと いくつ', ico: '🧩', world: 'yama', color: 'var(--c-red)',
+  id: 'bond', name: 'いくつと いくつ', ico: '🧩', world: 'yama', color: 'var(--c-red)', focus: 1.7,
   aim: '5や10を<b>2つの数に分けたり、合わせたり</b>する感覚。たし算・ひき算を「数えないで思い出す」ための部品で、くり上がり・くり下がりの計算はこれが土台になります。ここが自動化していると小1は驚くほど楽になります。',
   levels: [
     { t: '5は いくつと いくつ', d: 'ごの ぶんかい', make: api => chance(.25) ? compose(api, 5) : decompose(api, 5) },
@@ -85,6 +87,7 @@ Games.add({
    ============================================================ */
 function fillToTen(api){
   const start = ri(2, 8);
+  api.item('fill10:' + start, start + ' から 10 まで あと ' + (10 - start));
   api.setPrompt(`わくが <b>10</b> に なるように タップして たそう`, 'わくが じゅうに なるように、タップして たそう');
   const f = el('div.tenframe', { style: { '--cols': 5 } });
   const cells = [];
@@ -120,6 +123,7 @@ function fillToTen(api){
 
 function partnerOfTen(api){
   const a = ri(1, 9), ans = 10 - a;
+  api.item('ten:' + a, a + ' と ' + ans + ' で 10');
   api.setPrompt(`${numTag(a)} と いくつで <b>10</b>？`, `${numKana(a)}と いくつで じゅう`);
   const f = el('div.tenframe', { style: { '--cols': 5 } });
   for (let i = 0; i < 10; i++){
@@ -140,6 +144,7 @@ function pairHunt(api){
     if (v !== a && v !== b && others.indexOf(v) < 0) others.push(v);
   }
   const cards = shuffle([a, b].concat(others));
+  api.item('pair:' + Math.min(a, b), Math.min(a, b) + ' と ' + Math.max(a, b) + ' の ペア');
   api.setPrompt('たすと <b>10</b> に なる 2まいを えらぼう', 'たすと じゅうに なる にまいを えらぼう');
   const picked = [];
   const row = api.choices;
@@ -173,7 +178,7 @@ function pairHunt(api){
 }
 
 Games.add({
-  id: 'ten', name: '10の おともだち', ico: '🔟', world: 'yama', color: 'var(--c-red)',
+  id: 'ten', name: '10の おともだち', ico: '🔟', world: 'yama', color: 'var(--c-red)', focus: 1.7,
   aim: '<b>合わせて10になる組み合わせ</b>を、考えずに言えるようにする練習。「9+4」を「9+1+3」と処理するくり上がりの計算は、これが即答できるかどうかで速さがまったく変わります。',
   levels: [
     { t: '10まで うめる', d: 'わくを いっぱいに する', make: fillToTen },
@@ -249,6 +254,7 @@ function eqNode(a, b, op){
 function addStory(api, max){
   const a = ri(1, max - 1), b = ri(1, max - a), ans = a + b;
   const thing = pick(THINGS);
+  api.item('sum:' + a + '+' + b, a + ' ＋ ' + b);
   api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ やってきたよ`,
                 `${thing.n}が ${tsuKana(a)}。${tsuKana(b)} やってきたよ`);
   storyScene(api, a, b, '+', thing, () => {
@@ -261,6 +267,7 @@ function addStory(api, max){
 function subStory(api, max){
   const a = ri(2, max), b = ri(1, a - 1), ans = a - b;
   const thing = pick(THINGS);
+  api.item('rest:' + a + '-' + b, a + ' − ' + b);
   api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ いなくなるよ`,
                 `${thing.n}が ${tsuKana(a)}。${tsuKana(b)} いなくなるよ`);
   storyScene(api, a, b, '-', thing, () => {
@@ -274,6 +281,8 @@ function symbolCalc(api, op, max){
   let a, b, ans;
   if (op === '+'){ a = ri(1, max - 1); b = ri(1, max - a); ans = a + b; }
   else { a = ri(2, max); b = ri(1, a); ans = a - b; }
+  api.item((op === '+' ? 'sum:' + a + '+' + b : 'rest:' + a + '-' + b),
+    a + (op === '+' ? ' ＋ ' : ' − ') + b);
   api.setPrompt('しきを みて こたえよう',
     `${numKana(a)} ${op === '+' ? 'たす' : 'ひく'} ${numKana(b)} は`);
   api.field.append(eqNode(a, b, op));
@@ -296,6 +305,7 @@ function differenceQ(api, max){
   const a = ri(3, max), b = ri(1, a - 1), ans = a - b;
   const t1 = pick(THINGS); let t2 = pick(THINGS);
   while (t2.e === t1.e) t2 = pick(THINGS);
+  api.item('diff:' + a + '-' + b, a + ' と ' + b + ' の ちがい');
   api.setPrompt(`どちらが <b>いくつ</b> おおい？`, 'どちらが いくつ おおい');
   const board = el('div.measure');
   [[t1, a], [t2, b]].forEach(([t, n]) => {
@@ -314,7 +324,7 @@ function differenceQ(api, max){
 }
 
 Games.add({
-  id: 'add', name: 'たしざん', ico: '➕', world: 'yama', color: 'var(--c-red)',
+  id: 'add', name: 'たしざん', ico: '➕', world: 'yama', color: 'var(--c-red)', focus: 1.25,
   aim: '「増えた／合わせた」場面を<b>式に置きかえる</b>力。物語→絵→式の順に抽象度を上げるので、記号だけを丸暗記せずに意味とつながります。',
   levels: [
     { t: '5まで', d: 'おはなしで かんがえる', make: api => addStory(api, 5) },
@@ -324,7 +334,7 @@ Games.add({
 });
 
 Games.add({
-  id: 'sub', name: 'ひきざん', ico: '➖', world: 'yama', color: 'var(--c-red)',
+  id: 'sub', name: 'ひきざん', ico: '➖', world: 'yama', color: 'var(--c-red)', focus: 1.25,
   aim: '「のこりはいくつ」（求残）と「どちらがいくつ多い」（求差）の<b>2つの意味</b>にふれます。求差はつまずきやすいので、1対1に並べて余りを見る経験を早めに。',
   levels: [
     { t: '5まで', d: 'いなくなると のこりは', make: api => subStory(api, 5) },
