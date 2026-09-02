@@ -38,7 +38,11 @@ jobs:
           cp dist/kazu-no-bouken.html _site/index.html
           cp dist/kazu-no-bouken.html _site/kazu-no-bouken.html
 
+      # enablement lets the workflow turn Pages on itself, so there is no
+      # manual repository setting to remember
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

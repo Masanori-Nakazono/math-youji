@@ -64,9 +64,7 @@ Kyoko などを追加してください。文字だけでも遊べます。
 `main` に push すると `.github/workflows/pages.yml` が走り、`src/` からビルドし直した
 `dist/kazu-no-bouken.html` を `index.html` として GitHub Pages に配置します。
 
-初回だけ手動の設定が必要です：
-リポジトリの **Settings → Pages → Build and deployment → Source** を
-**GitHub Actions** に切り替えてください（Deploy from a branch ではありません）。
+ワークフローが Pages の有効化まで行うので、リポジトリ側の手動設定は不要です。
 
 ワークフローは `./build.sh` を実行したあと `dist/` に差分が出たら失敗します。
 ビルドし忘れたまま古いページが公開されるのを防ぐためです。
