@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>かずのぼうけん — 回帰テスト</title>
+<style>
+  :root{ color-scheme: light dark; --ok:#1a7f4b; --ng:#c0392b; }
+  body{ margin:0; font:15px/1.6 ui-sans-serif, system-ui, sans-serif; background:#faf7f1; color:#25222f; }
+  @media (prefers-color-scheme: dark){ body{ background:#15121f; color:#efe9df } }
+  header{ padding:18px 22px; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  h1{ font-size:18px; margin:0; }
+  #summary{ font-weight:700; font-variant-numeric:tabular-nums; }
+  #summary.ok{ color:var(--ok) } #summary.ng{ color:var(--ng) }
+  button{ font:inherit; padding:6px 14px; border-radius:8px; border:1px solid currentColor; background:transparent; color:inherit; cursor:pointer }
+  ol{ margin:0; padding:0 22px 28px 46px }
+  li{ margin:.3em 0 }
+  li.ok::marker{ color:var(--ok) } li.ng::marker{ color:var(--ng) }
+  li.ng{ color:var(--ng); font-weight:700 }
+  li .detail{ display:block; font-weight:400; opacity:.85; font-size:13px }
+  iframe{ position:fixed; left:-3000px; top:0; width:1180px; height:820px; border:0 }
+</style>
+</head>
+<body>
+<header>
+  <h1>かずのぼうけん — 回帰テスト</h1>
+  <span id="summary">起動中…</span>
+  <button id="again">もう一度</button>
+</header>
+<ol id="list"></ol>
+<iframe id="app" src="../dist/kazu-no-bouken.html"></iframe>
+<script>
+const frame = document.getElementById('app');
+const list = document.getElementById('list');
+const summary = document.getElementById('summary');
+
+async function run(){
+  list.innerHTML = ''; summary.textContent = '実行中…'; summary.className = '';
+  frame.src = '../dist/kazu-no-bouken.html?t=' + Date.now();
+  await new Promise(r => frame.onload = r);
+  const w = frame.contentWindow;
+  if (!w.KazuApp){ summary.textContent = 'アプリを読み込めませんでした'; summary.className = 'ng'; return; }
+  const src = await fetch('regression.js?t=' + Date.now()).then(r => r.text());
+  let out;
+  try{ out = w.eval(src); }
+  catch(e){ summary.textContent = 'テストが例外で停止: ' + e.message; summary.className = 'ng'; return; }
+  out.results.forEach(r => {
+    const li = document.createElement('li');
+    li.className = r.ok ? 'ok' : 'ng';
+    li.textContent = (r.ok ? 'PASS  ' : 'FAIL  ') + r.name;
+    if (r.detail){ const d = document.createElement('span'); d.className = 'detail'; d.textContent = r.detail; li.append(d); }
+    list.append(li);
+  });
+  summary.textContent = out.fail ? (out.fail + ' 件 失敗 / ' + out.results.length + ' 件') : ('全 ' + out.pass + ' 件 パス');
+  summary.className = out.fail ? 'ng' : 'ok';
+}
+document.getElementById('again').onclick = run;
+run();
+</script>
+</body>
+</html>
