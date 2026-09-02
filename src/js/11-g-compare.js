@@ -282,21 +282,54 @@ function vesselSVG(w, h, fill, color){
     svg('rect', { x, y: H - h - 6, width: w, height: h, rx: 4, fill: 'none', stroke: 'var(--ink)', 'stroke-width': 3 }));
 }
 
+/* A shared unit for every glass in the question.
+   The hint tells the child to count squares, so the squares have to be the same
+   size in every glass and on both axes — 任意単位は同じ大きさでそろえる is the whole
+   point of 1年生「かさくらべ」. The old hint derived its spacing from each glass's
+   own width and height (`w / round(w / 13)`), so a wide glass got wide squares and
+   a narrow one got narrow squares: counting them gave a tie or the wrong answer in
+   about 2% of questions (面積 2442 と 3483 が どちらも18マス), and taught an invalid
+   way of comparing in all of them.
+
+   Sizing the water to whole multiples of one unit makes the count exact, so the
+   answer the child reaches by counting is always the answer the question wants. */
+const CAP_UNIT = 12;                    // SVG units, square
+const CAP_COLS = [2, 3, 4];             // water width  = cols * CAP_UNIT
+const CAP_ROWS = [5, 6, 7, 8, 9];       // water height = rows * CAP_UNIT
+const CAP_FALLBACK = [[2, 9], [4, 6], [2, 5]];
+
+function capSpec(cols, rows){
+  return { cols, rows, cells: cols * rows,
+           w: cols * CAP_UNIT + 6,      // vesselSVG insets the water by 3 a side
+           h: rows * CAP_UNIT, fill: 1 };
+}
+
 function capacityCompare(api){
-  // Deliberately decouple "tall" from "much": the taller glass is often the narrower one.
   const n = chance(.5) ? 2 : 3;
-  const specs = [];
-  for (let g = 0; g < 400 && specs.length < n; g++){
-    const w = ri(26, 60), h = ri(52, 112), fill = 1;
-    const vol = (w - 6) * h * fill;   // the drawn water rect, so the answer matches the picture
-    if (specs.every(s => Math.abs(s.vol - vol) / Math.max(s.vol, vol) > 0.18)) specs.push({ w, h, fill, vol });
+  // far enough apart to be a fair question by eye as well as by counting
+  const clearOf = (list, s) => list.every(o =>
+    Math.abs(o.cells - s.cells) / Math.max(o.cells, s.cells) > 0.18);
+
+  let specs = [];
+  for (let attempt = 0; attempt < 60 && !specs.length; attempt++){
+    const trial = [];
+    for (let g = 0; g < 300 && trial.length < n; g++){
+      const s = capSpec(pick(CAP_COLS), pick(CAP_ROWS));
+      if (clearOf(trial, s)) trial.push(s);
+    }
+    if (trial.length < n) continue;
+    // "tall" must not mean "much": keep looking for a set where the tallest glass
+    // is not the fullest one, and only give up on that near the end
+    const tallest = trial.reduce((a, b) => a.rows > b.rows ? a : b);
+    const fullest = trial.reduce((a, b) => a.cells > b.cells ? a : b);
+    if (attempt < 45 && tallest === fullest) continue;
+    specs = trial;
   }
-  while (specs.length < n){
-    const w = 30 + specs.length * 14, h = 100 - specs.length * 22;
-    specs.push({ w, h, fill: 1, vol: (w - 6) * h });
-  }
+  if (specs.length < n) specs = CAP_FALLBACK.slice(0, n).map(([c, r]) => capSpec(c, r));
+
   const more = chance(.6);
-  const ans = more ? Math.max.apply(null, specs.map(s => s.vol)) : Math.min.apply(null, specs.map(s => s.vol));
+  const ans = more ? Math.max.apply(null, specs.map(s => s.cells))
+                   : Math.min.apply(null, specs.map(s => s.cells));
   api.item('cap:' + (more ? 'more' : 'less') + ':' + n, 'かさが ' + (more ? 'おおい' : 'すくない') + ' コップ');
   api.setPrompt(more ? 'ジュースが <b>おおい</b> のは どれ？' : 'ジュースが <b>すくない</b> のは どれ？',
                 more ? 'ジュースが おおいのは どれ' : 'ジュースが すくないのは どれ');
@@ -306,13 +339,13 @@ function capacityCompare(api){
     const v = el('div.vessel', null, vesselSVG(s.w, s.h, s.fill, colors[i % colors.length]));
     tappable(v, () => {
       if (api.locked) return;
-      if (s.vol === ans){ v.classList.add('correct'); api.correct(); }
+      if (s.cells === ans){ v.classList.add('correct'); api.correct(); }
       else { v.classList.add('wrong'); api.later(() => v.classList.remove('wrong'), 460); api.wrong(v); }
     });
     wrap.append(v);
   });
   api.field.append(wrap, el('div.hintline', { text: 'せが たかい ＝ おおい とは かぎらないよ' }));
-  // an arbitrary unit grid: count the squares instead of eyeballing the height
+  // one unit, the same in every glass, dividing the water exactly
   api.onHint(() => {
     $$('.vessel svg', wrap).forEach(sv => {
       const water = sv.querySelectorAll('rect')[1];
@@ -320,13 +353,13 @@ function capacityCompare(api){
       const x = +water.getAttribute('x'), y = +water.getAttribute('y');
       const w = +water.getAttribute('width'), h = +water.getAttribute('height');
       const g = svg('g', { class: 'unitgrid' });
-      for (let gx = x; gx <= x + w + 0.1; gx += w / Math.max(1, Math.round(w / 13)))
+      for (let gx = x; gx <= x + w + 0.1; gx += CAP_UNIT)
         g.append(svg('line', { x1: gx, y1: y, x2: gx, y2: y + h, stroke: 'rgba(255,255,255,.75)', 'stroke-width': 1 }));
-      for (let gy = y; gy <= y + h + 0.1; gy += h / Math.max(1, Math.round(h / 13)))
+      for (let gy = y; gy <= y + h + 0.1; gy += CAP_UNIT)
         g.append(svg('line', { x1: x, y1: gy, x2: x + w, y2: gy, stroke: 'rgba(255,255,255,.75)', 'stroke-width': 1 }));
       sv.append(g);
     });
-    api.field.append(el('div.hintline', { text: 'ますの かずを かぞえて くらべよう' }));
+    api.field.append(el('div.hintline', { text: 'おなじ おおきさの ますが いくつ ぶんか かぞえよう' }));
   });
 }
 

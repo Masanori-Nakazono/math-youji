@@ -122,12 +122,19 @@ function bbox(pts){
   return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
 }
 
+/* Two pieces are the same piece only if they are the same shape in the same
+   orientation. The old signature was 頂点数:幅x高さ, which made ちょうちょ's four
+   right triangles — the same triangle in four different orientations — all read as
+   `3:32x24`, so any tile fitted any hole and the puzzle could be finished without
+   looking at the shapes at all. ロケット's two fins (mirror images) collided the
+   same way. Normalising the corners to the piece's own bounding box keeps genuinely
+   identical pieces interchangeable while telling ◤ from ◥; sorting makes the
+   comparison independent of the order the corners were authored in. */
 function signature(pts){
-  // rough shape signature so identical pieces are interchangeable
-  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-  const w = Math.max.apply(null, xs) - Math.min.apply(null, xs);
-  const h = Math.max.apply(null, ys) - Math.min.apply(null, ys);
-  return pts.length + ':' + Math.round(w) + 'x' + Math.round(h);
+  const b = bbox(pts);
+  return pts.map(p => (Math.round((p[0] - b.x0) * 2) / 2) + ',' + (Math.round((p[1] - b.y0) * 2) / 2))
+            .sort()
+            .join(' ');
 }
 
 function shapePuzzle(api){

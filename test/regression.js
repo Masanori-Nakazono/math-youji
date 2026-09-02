@@ -369,6 +369,56 @@
     K.Store.reset();
   })();
 
+  /* ---------- 16. the かさくらべ hint has to be a valid way to compare ----------
+     It tells the child to count squares. The squares therefore have to be one size
+     across every glass, and they have to divide the juice exactly — otherwise the
+     hint teaches the very mistake 1年生「かさくらべ」 exists to prevent, and roughly
+     2% of the time it points at the wrong glass. */
+  (function capacityHint(){
+    const wrong = [];
+    let seen = 0;
+    for (let i = 0; i < 200 && wrong.length < 3; i++){
+      K.Session.startLevel(K.Games.byId.measure, 1);
+      const svgs = qa('#play .vessel svg');
+      if (svgs.length < 2) continue;                 // that draw was a length question
+      seen++;
+      const glass = svgs.map(sv => {
+        const water = sv.querySelectorAll('rect')[1];
+        const w = +water.getAttribute('width'), h = +water.getAttribute('height');
+        const px = sv.getBoundingClientRect().width / 90;    // viewBox width
+        return { w, h, area: w * h, unitOnScreen: Math.round(12 * px), cells: (w / 12) * (h / 12) };
+      });
+      if (glass.some(g => g.w % 12 || g.h % 12)) wrong.push('the unit does not divide the juice');
+      if (new Set(glass.map(g => g.unitOnScreen)).size > 1) wrong.push('the squares differ between glasses');
+      const cells = glass.map(g => g.cells), areas = glass.map(g => g.area);
+      const cMax = Math.max.apply(null, cells);
+      if (cells.filter(c => c === cMax).length > 1) wrong.push('counting squares gives a tie');
+      if (cells.indexOf(cMax) !== areas.indexOf(Math.max.apply(null, areas))) wrong.push('counting squares gives the wrong glass');
+    }
+    check('counting the squares always reaches the answer the かさくらべ hint promises',
+      seen > 30 && !wrong.length, (seen + ' drawn; ') + wrong.slice(0, 3).join(' | '));
+  })();
+
+  /* ---------- 17. a puzzle piece fits only where it belongs ----------
+     The signature used to be 頂点数:幅x高さ, so ちょうちょ's four right triangles —
+     the same triangle in four orientations — all matched every hole, and the puzzle
+     about seeing shapes could be finished without looking at any. */
+  (function puzzlePieces(){
+    const loose = [];
+    const seen = {};
+    for (let i = 0; i < 120; i++){
+      K.Session.startLevel(K.Games.byId.shape, 2);
+      const name = (q('#play .prompt .txt').textContent.match(/はめて (.+) を/) || [])[1] || '?';
+      const sigs = qa('#play .shapefield polygon').map(p => p.dataset.sig);
+      seen[name] = 1;
+      if (new Set(sigs).size !== sigs.length && !loose.some(x => x.indexOf(name) === 0)){
+        loose.push(name + ': ' + sigs.length + ' pieces, ' + new Set(sigs).size + ' distinct');
+      }
+    }
+    check('every puzzle piece fits only its own hole',
+      Object.keys(seen).length >= 5 && !loose.length, loose.join(' | '));
+  })();
+
   check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
 
   K.Store.reset();
