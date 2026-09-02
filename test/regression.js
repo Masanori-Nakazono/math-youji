@@ -230,6 +230,42 @@
       keys.length + ' slots / ' + K.STICKER_POOL.length + ' emoji / ' + new Set(emo).size + ' unique');
   })();
 
+  /* ---------- 11. records survive leaving this origin ---------- */
+  (function backup(){
+    K.Store.reset();
+    K.Store.recordLevel('bond', 0, 3, 8, 8);
+    K.Store.recordLevel('count', 1, 2, 6, 8);
+    K.Store.addSticker('bond:0');
+    const text = K.Store.exportText();
+    const starsBefore = JSON.stringify(K.Store.data.stars);
+    const seenBefore  = JSON.stringify(K.Store.data.seen);
+
+    // a wiped browser, then a restore
+    K.Store.reset();
+    const r1 = K.Store.importText(text, 'replace');
+    check('a backup restores the records exactly',
+      r1.ok && JSON.stringify(K.Store.data.stars) === starsBefore && K.Store.hasSticker('bond:0'),
+      r1.msg || 'import failed');
+
+    // importing the same file twice must not double any number
+    K.Store.importText(text, 'merge');
+    K.Store.importText(text, 'merge');
+    check('importing the same backup twice does not inflate anything',
+      JSON.stringify(K.Store.data.seen) === seenBefore && JSON.stringify(K.Store.data.stars) === starsBefore,
+      'seen=' + JSON.stringify(K.Store.data.seen));
+
+    // merging keeps the better of the two sides
+    K.Store.recordLevel('bond', 0, 1, 2, 8);          // a worse attempt
+    K.Store.importText(text, 'merge');
+    check('merging keeps the higher star count', K.Store.stars('bond', 0) === 3,
+      'stars=' + K.Store.stars('bond', 0));
+
+    const bad = K.Store.importText('{"nope":1}', 'merge');
+    const junk = K.Store.importText('not json at all', 'merge');
+    check('a wrong file is rejected without destroying the records',
+      !bad.ok && !junk.ok && K.Store.stars('bond', 0) === 3, 'bad=' + bad.ok + ' junk=' + junk.ok);
+  })();
+
   check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
 
   K.Store.reset();

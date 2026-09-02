@@ -52,6 +52,26 @@ iPadOS が保存データを破棄します。
 いずれも初回だけネットワークがあると Google Fonts が読まれます。オフラインでも
 iPad 内蔵のヒラギノ丸ゴにフォールバックするので、見た目が少し変わるだけで全機能が動きます。
 
+## 記録が消えないようにする
+
+学習の記録は **localStorage** に入ります。ここには 2 つの落とし穴があります。
+
+1. **記録は URL（オリジン）ごとに完全に別物です。** GitHub Pages の URL、Artifact の URL、
+   AirDrop で渡したファイル（`file://`）は、同じアプリでも互いの記録を見られません。
+   **使う入り口をひとつに決めてください。**
+2. **ホーム画面に追加していない Safari のタブは、7 日使わないと iPadOS が保存データを
+   破棄します。** ホーム画面のアイコンから起動していれば対象外です。
+
+そのうえで、保護者ページに **書き出し／読み込み** を用意しています。
+
+- **記録を書き出す（ファイル）** … `kazu-no-bouken-YYYYMMDD.json`（数 KB）を保存
+- **コピー** … 同じ内容をクリップボードへ。メモアプリに貼って保管できる
+- **記録を読み込む** … ファイルを選ぶか、枠に貼り付けて復元
+- **読み込み方** … 「合体する」（既定）はいまの記録と読み込んだ記録の良いほうを残す。
+  同じファイルを二度読み込んでも数字は増えません。「おきかえる」は丸ごと差し替え
+
+端末を変えるとき、URL を移すとき、Safari のデータを消す前に書き出しておけば復元できます。
+
 **動作要件**：iPadOS 16.2 以降（`color-mix()` と `:focus-visible` を使っています）。
 それ以前の iPad では図形の輪郭など一部の色が出ません。
 
@@ -133,6 +153,10 @@ python3 -m http.server 8731     # プロジェクト直下で
 | no role=button without keyboard support | 見た目がボタンなら必ずキーボードでも押せる |
 | answer sets have no duplicate labels | 選択肢が破綻しない |
 | every sticker slot has its own emoji | シールが重複しない |
+| a backup restores the records exactly | 書き出した記録が完全に戻る |
+| importing the same backup twice does not inflate | 二重読み込みで数字が増えない |
+| merging keeps the higher star count | 合体しても良いほうが残る |
+| a wrong file is rejected without destroying the records | 誤ったファイルで記録が壊れない |
 
 ## 遊びを増やす
 

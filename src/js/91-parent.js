@@ -5,6 +5,8 @@
 
 const Parent = (() => {
   let gateNode, sheetNode, sheetInner, justReset = false;
+  let persistState = '確認中';
+  let lastBackupMsg = null;   // survives the re-render that a successful import triggers
   let a = 0, b = 0, want = 0;
 
   /* ---- simple adult gate ---- */
@@ -204,6 +206,96 @@ const Parent = (() => {
     return s;
   }
 
+  function backupSection(){
+    const s = el('section');
+    s.append(el('div.eyebrow', { text: 'backup' }), el('h3', { text: '記録の保存とバックアップ' }));
+
+    s.append(el('p', { html:
+      '学習の記録は、<b>いま開いている URL ごとに、この端末のブラウザの中だけ</b>に保存されます。' +
+      'ちがう URL で開くと、同じアプリでも記録は共有されません。' +
+      '端末を変えるとき、Safari の履歴やサイトデータを消すとき、別の URL に引っ越すときは、' +
+      '下のボタンで書き出したファイルを保管しておいてください。' }));
+
+    const rows = el('div', { style: { display: 'grid', gap: 'calc(var(--u)*.3)', margin: 'calc(var(--u)*.8) 0' } });
+    const row = (k, v, warn) => el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 'calc(var(--u)*1)' } },
+      el('span', { text: k }),
+      el('b', { text: v, style: { color: warn ? 'var(--oops)' : 'var(--ink)', textAlign: 'right' } }));
+    rows.append(row('いまの保存先', Store.origin, Store.origin === 'file://'));
+    rows.append(row('保存の可否', Store.persists ? '保存できます' : '保存できません', !Store.persists));
+    rows.append(row('ブラウザが記録を保持する設定', persistState, false));
+    s.append(rows);
+    if (persistState !== '許可されています'){
+      s.append(el('p', { text:
+        'この設定はブラウザが判断するもので、許可されていなくてもすぐ消えるわけではありません。' +
+        'iPad では Safari で開いて 共有 → ホーム画面に追加 し、そのアイコンから起動していれば、' +
+        'しばらく使わなくても記録は保持されます。逆に Safari のタブのまま数日使わないと、' +
+        'iPadOS が自動的に消すことがあります。' }));
+    }
+
+    const status = el('p', { style: { fontWeight: 800, color: lastBackupMsg && lastBackupMsg.ok ? 'var(--good)' : 'var(--oops)' },
+      text: lastBackupMsg ? lastBackupMsg.msg : '' });
+    lastBackupMsg = null;
+    const stamp = () => {
+      const d = new Date();
+      return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+    };
+
+    const dl = el('button.btn', { text: '記録を書き出す（ファイル）', onclick(){
+      try{
+        const blob = new Blob([Store.exportText()], { type: 'application/json' });
+        const a = el('a', { href: URL.createObjectURL(blob), download: 'kazu-no-bouken-' + stamp() + '.json' });
+        document.body.append(a); a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        status.textContent = '書き出しました。ファイルアプリや iCloud Drive に保管してください。';
+      }catch(e){ status.textContent = 'この環境ではファイルに書き出せません。下の「コピー」を使ってください。'; }
+    } });
+
+    const copy = el('button.btn', { text: 'コピー（貼り付けで復元）', onclick(){
+      const text = Store.exportText();
+      const done = () => { status.textContent = 'コピーしました。メモアプリなどに貼り付けて保管してください。'; };
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done, () => { box.value = text; box.select(); status.textContent = '下の枠に出しました。長押しして「コピー」してください。'; });
+      } else { box.value = text; box.select(); status.textContent = '下の枠に出しました。長押しして「コピー」してください。'; }
+    } });
+
+    const file = el('input', { type: 'file', accept: 'application/json,.json', style: { display: 'none' },
+      onchange(e){
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = () => apply(String(r.result));
+        r.readAsText(f);
+        e.target.value = '';
+      } });
+    const pick = el('button.btn', { text: '記録を読み込む（ファイル）', onclick(){ file.click(); } });
+
+    const box = el('textarea.backupbox', { rows: 4, spellcheck: 'false',
+      placeholder: 'ここに、書き出した記録を貼り付けて「貼り付けから読み込む」を押してください' });
+    const paste = el('button.btn', { text: '貼り付けから読み込む', onclick(){
+      if (!box.value.trim()){ status.textContent = '枠が空です。'; return; }
+      apply(box.value);
+    } });
+
+    let mode = 'merge';
+    const modeBtn = el('button.btn', { text: '読み込み方：合体する', onclick(){
+      mode = mode === 'merge' ? 'replace' : 'merge';
+      modeBtn.textContent = '読み込み方：' + (mode === 'merge' ? '合体する' : 'おきかえる');
+    } });
+
+    function apply(text){
+      const r = Store.importText(text, mode);
+      if (r.ok){ lastBackupMsg = r; Home.render(); render(); return; }
+      status.textContent = r.msg;
+      status.style.color = 'var(--oops)';
+    }
+
+    s.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap' } }, dl, copy),
+             el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap', marginTop: 'calc(var(--u)*.6)' } }, pick, paste, modeBtn),
+             file, box, status,
+             el('p', { text: '「合体する」は、いまの記録と読み込んだ記録の良いほうを残します（同じファイルを二度読み込んでも数字は増えません）。「おきかえる」は、いまの記録を捨てて読み込んだ内容にします。' }));
+    return s;
+  }
+
   function render(){
     buildSheet();
     clear(sheetInner);
@@ -218,8 +310,20 @@ const Parent = (() => {
       planSection(),
       textSection('why', '入学前に育てておきたい力', WHY),
       textSection('at home', 'おうちでできること', HOME_TIPS),
+      backupSection(),
       settingsSection(),
       el('div', { style: { height: 'calc(var(--u)*2)' } }));
+  }
+
+  // Safari drops script-writable storage for sites that are not used for a while;
+  // asking for persistence (and adding the app to the Home Screen) prevents that
+  if (navigator.storage && navigator.storage.persisted){
+    navigator.storage.persisted()
+      .then(p => p ? true : (navigator.storage.persist ? navigator.storage.persist() : false))
+      .then(p => { persistState = p ? '許可されています' : '許可されていません'; })
+      .catch(() => { persistState = 'この端末では確認できません'; });
+  } else {
+    persistState = 'この端末では確認できません';
   }
 
   return { open, render };

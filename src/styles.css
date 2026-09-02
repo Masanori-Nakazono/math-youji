@@ -1302,3 +1302,21 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 .levels{ justify-content: safe center; }
 .train{ justify-content: safe center; }
 .queue{ justify-content: safe center; }
+
+/* backup box on the parent page */
+.backupbox{
+  width: 100%;
+  margin-top: calc(var(--u)*.7);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: calc(var(--u)*1.1);
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: calc(var(--u)*.2) solid var(--card-edge);
+  border-radius: calc(var(--u)*.7);
+  padding: calc(var(--u)*.6);
+  resize: vertical;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.backupbox:focus-visible{ outline: calc(var(--u)*.24) solid var(--ring); outline-offset: 2px; }
