@@ -257,6 +257,7 @@ const Session = (() => {
         clear(choicesEl);
         choicesEl.dataset.built = '1';
         hintBtns = [];
+        let settled = false;              // one accepted answer per set of buttons
         values.forEach(v => {
           const val = (v && typeof v === 'object' && 'v' in v) ? v.v : v;
           const b = el('button.choice' + (o.cls ? '.' + o.cls : ''), { type: 'button' });
@@ -266,6 +267,14 @@ const Session = (() => {
           b.addEventListener('click', () => {
             if (locked || stale()) return;
             if (hit){
+              /* A five-year-old taps twice. The picked button was never disabled —
+                 only its neighbours were — so a second tap ran onPick again. In a
+                 question with several blanks that skipped a blank and then threw,
+                 leaving the child on a question they could no longer finish.
+                 `settled` belongs to this set of buttons: the next set (the next
+                 blank) gets a fresh one. */
+              if (settled) return;
+              settled = true;
               b.classList.add('correct');
               $$('.choice', choicesEl).forEach(x => { if (x !== b) x.disabled = true; });
               if (o.onPick && o.onPick(val, b) === false) return;
@@ -371,7 +380,7 @@ const Session = (() => {
     if (clean) firstTryRight++;
     Store.noteOutcome(plan[idx].game.id, plan[idx].levelIndex, clean);
     if (curItem){
-      Store.noteFact(curItem, clean);
+      Store.noteFact(curItem, clean, curLabel);
       if (!clean && !shaky.some(x => x.key === curItem)){
         shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
       }
@@ -395,19 +404,34 @@ const Session = (() => {
     }, o.delay || 950);
   }
 
+  /** 3 = every question right first time, 0 = under half. Levels vary in length,
+      so grade the share, not the count. */
+  function starsFor(right, total){
+    if (!total) return 0;
+    const r = right / total;
+    return r >= 1 ? 3 : r >= 0.75 ? 2 : r >= 0.5 ? 1 : 0;
+  }
+
   function finish(){
     killTimers();
     Sound.sfx.finish();
     UI.confetti(60);
     const total = plan.length;
-    const stars = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
+    /* Stars used to be `mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1` — one star was
+       guaranteed for finishing, so the unlock gate really only asked whether the
+       child had sat through the level. Grade the questions answered right first
+       time instead, and let a session score nothing. */
+    const stars = starsFor(firstTryRight, total);
     let newSticker = null;
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;
       Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
-      if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
-      else if (stars === 3 && Store.addSticker(key + ':g')){
-        newSticker = { emoji: stickerFor(key + ':g'), gold: true };
+      // a sticker means "cleared", so it waits for a pass
+      if (stars >= 1){
+        if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
+        else if (stars === 3 && Store.addSticker(key + ':g')){
+          newSticker = { emoji: stickerFor(key + ':g'), gold: true };
+        }
       }
     } else {
       Store.recordPractice(firstTryRight, total);
@@ -426,6 +450,10 @@ const Session = (() => {
       get planLength(){ return plan.length; },
       get planGames(){ return plan.map(p => p.game.id + ':' + p.levelIndex); },
       get item(){ return curItem; },
+      /** Test seam: finish the current question without using its own input.
+          Lets the suite measure what the engine *draws* for levels it cannot
+          drive by clicking (tracing, dragging, turning the clock hand). */
+      forceCorrect(){ onCorrect({ quiet: true, delay: 0 }); },
       get shaky(){ return shaky.slice(); },
       get locked(){ return locked; },
       get mistakes(){ return mistakes; },

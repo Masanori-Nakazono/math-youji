@@ -1335,3 +1335,24 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   border-radius:calc(var(--u)*.8); padding:calc(var(--u)*.3) calc(var(--u)*.8);
   font-family:var(--fs-num); font-weight:800; font-size:calc(var(--u)*1.7); color:var(--ink);
 }
+
+/* ---------- parent: 今週やること ---------- */
+#parent .todo{
+  display:flex; gap:calc(var(--u)*.7); align-items:flex-start;
+  padding:calc(var(--u)*.7) 0; border-bottom:1px solid var(--card-edge);
+}
+#parent .todo:last-of-type{ border-bottom:0 }
+#parent .todo .mk{
+  flex:0 0 auto; width:calc(var(--u)*1.9); height:calc(var(--u)*1.9);
+  display:grid; place-items:center; border-radius:50%;
+  background:var(--good-soft); color:var(--good); font-weight:800;
+}
+#parent .todo b{ display:block }
+#parent .factchips{ display:flex; flex-wrap:wrap; gap:calc(var(--u)*.4); margin:calc(var(--u)*.5) 0 }
+#parent .factchip{
+  display:inline-flex; flex-direction:column; gap:.1em;
+  background:var(--oops-soft); border-radius:calc(var(--u)*.6);
+  padding:calc(var(--u)*.3) calc(var(--u)*.7);
+  font-weight:800; color:var(--ink);
+}
+#parent .factchip small{ font-weight:500; color:var(--ink-soft); font-size:.72em }

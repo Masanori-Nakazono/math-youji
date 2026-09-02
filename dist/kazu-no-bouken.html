@@ -1353,6 +1353,27 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   border-radius:calc(var(--u)*.8); padding:calc(var(--u)*.3) calc(var(--u)*.8);
   font-family:var(--fs-num); font-weight:800; font-size:calc(var(--u)*1.7); color:var(--ink);
 }
+
+/* ---------- parent: 今週やること ---------- */
+#parent .todo{
+  display:flex; gap:calc(var(--u)*.7); align-items:flex-start;
+  padding:calc(var(--u)*.7) 0; border-bottom:1px solid var(--card-edge);
+}
+#parent .todo:last-of-type{ border-bottom:0 }
+#parent .todo .mk{
+  flex:0 0 auto; width:calc(var(--u)*1.9); height:calc(var(--u)*1.9);
+  display:grid; place-items:center; border-radius:50%;
+  background:var(--good-soft); color:var(--good); font-weight:800;
+}
+#parent .todo b{ display:block }
+#parent .factchips{ display:flex; flex-wrap:wrap; gap:calc(var(--u)*.4); margin:calc(var(--u)*.5) 0 }
+#parent .factchip{
+  display:inline-flex; flex-direction:column; gap:.1em;
+  background:var(--oops-soft); border-radius:calc(var(--u)*.6);
+  padding:calc(var(--u)*.3) calc(var(--u)*.7);
+  font-weight:800; color:var(--ink);
+}
+#parent .factchip small{ font-weight:500; color:var(--ink-soft); font-size:.72em }
 </style>
 </head>
 <body>
@@ -1787,7 +1808,15 @@ const Store = (() => {
       let s = 0; for (let i = 0; i < levels; i++) s += mem.stars[key(g, i)] || 0; return s;
     },
     totalStars(){ let s = 0; for (const k in mem.stars) s += mem.stars[k]; return s; },
-    levelUnlocked(g, l){ return l === 0 || (mem.stars[key(g, l - 1)] || 0) >= 1; },
+    plays: (g, l) => mem.plays[key(g, l)] || 0,
+    /* A pass opens the next level. Three honest attempts also open it: a five-year-old
+       must never end up staring at a padlock they cannot move, and the parent page
+       shows the low score either way. */
+    levelUnlocked(g, l){
+      if (l === 0) return true;
+      const k = key(g, l - 1);
+      return (mem.stars[k] || 0) >= 1 || (mem.plays[k] || 0) >= 3;
+    },
 
     /** One question's first-try result, attributed to the level it came from.
         Recorded per question rather than per level so that a question met inside
@@ -1840,12 +1869,13 @@ const Store = (() => {
     },
 
     /* ---- item-level memory ---- */
-    noteFact(k, firstTryOk){
+    noteFact(k, firstTryOk, label){
       if (!k) return;
       const f = mem.facts[k] || (mem.facts[k] = [0, 0, 0]);
       f[0]++;
       if (firstTryOk) f[1]++;
       f[2] = dayNo();
+      if (label) f[3] = label;      // so the parent page can say「3と7」, not「ten:3」
       save();
     },
     fact: k => mem.facts[k] || null,
@@ -1869,6 +1899,9 @@ const Store = (() => {
       for (let i = 0; i < s.length; i++) if (s[i] === '1') r++;
       return s.length ? r / s.length : null;
     },
+    /** how many outcomes the recent window actually holds — a percentage over one
+        question must never be presented as a judgement about a child */
+    recentCount(g, l){ return (mem.recent[key(g, l)] || '').length; },
     gameRecentAccuracy(g, levels){
       let r = 0, n = 0;
       for (let i = 0; i < levels; i++){
@@ -2498,6 +2531,7 @@ const Session = (() => {
         clear(choicesEl);
         choicesEl.dataset.built = '1';
         hintBtns = [];
+        let settled = false;              // one accepted answer per set of buttons
         values.forEach(v => {
           const val = (v && typeof v === 'object' && 'v' in v) ? v.v : v;
           const b = el('button.choice' + (o.cls ? '.' + o.cls : ''), { type: 'button' });
@@ -2507,6 +2541,14 @@ const Session = (() => {
           b.addEventListener('click', () => {
             if (locked || stale()) return;
             if (hit){
+              /* A five-year-old taps twice. The picked button was never disabled —
+                 only its neighbours were — so a second tap ran onPick again. In a
+                 question with several blanks that skipped a blank and then threw,
+                 leaving the child on a question they could no longer finish.
+                 `settled` belongs to this set of buttons: the next set (the next
+                 blank) gets a fresh one. */
+              if (settled) return;
+              settled = true;
               b.classList.add('correct');
               $$('.choice', choicesEl).forEach(x => { if (x !== b) x.disabled = true; });
               if (o.onPick && o.onPick(val, b) === false) return;
@@ -2612,7 +2654,7 @@ const Session = (() => {
     if (clean) firstTryRight++;
     Store.noteOutcome(plan[idx].game.id, plan[idx].levelIndex, clean);
     if (curItem){
-      Store.noteFact(curItem, clean);
+      Store.noteFact(curItem, clean, curLabel);
       if (!clean && !shaky.some(x => x.key === curItem)){
         shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
       }
@@ -2636,19 +2678,34 @@ const Session = (() => {
     }, o.delay || 950);
   }
 
+  /** 3 = every question right first time, 0 = under half. Levels vary in length,
+      so grade the share, not the count. */
+  function starsFor(right, total){
+    if (!total) return 0;
+    const r = right / total;
+    return r >= 1 ? 3 : r >= 0.75 ? 2 : r >= 0.5 ? 1 : 0;
+  }
+
   function finish(){
     killTimers();
     Sound.sfx.finish();
     UI.confetti(60);
     const total = plan.length;
-    const stars = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
+    /* Stars used to be `mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1` — one star was
+       guaranteed for finishing, so the unlock gate really only asked whether the
+       child had sat through the level. Grade the questions answered right first
+       time instead, and let a session score nothing. */
+    const stars = starsFor(firstTryRight, total);
     let newSticker = null;
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;
       Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
-      if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
-      else if (stars === 3 && Store.addSticker(key + ':g')){
-        newSticker = { emoji: stickerFor(key + ':g'), gold: true };
+      // a sticker means "cleared", so it waits for a pass
+      if (stars >= 1){
+        if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
+        else if (stars === 3 && Store.addSticker(key + ':g')){
+          newSticker = { emoji: stickerFor(key + ':g'), gold: true };
+        }
       }
     } else {
       Store.recordPractice(firstTryRight, total);
@@ -2667,6 +2724,10 @@ const Session = (() => {
       get planLength(){ return plan.length; },
       get planGames(){ return plan.map(p => p.game.id + ':' + p.levelIndex); },
       get item(){ return curItem; },
+      /** Test seam: finish the current question without using its own input.
+          Lets the suite measure what the engine *draws* for levels it cannot
+          drive by clicking (tracing, dragging, turning the clock hand). */
+      forceCorrect(){ onCorrect({ quiet: true, delay: 0 }); },
       get shaky(){ return shaky.slice(); },
       get locked(){ return locked; },
       get mistakes(){ return mistakes; },
@@ -4433,12 +4494,17 @@ const Home = (() => {
   }
 
   function gameCard(g){
-    const done = g.levels.filter((_, i) => Store.stars(g.id, i) > 0).length;
-    const perfect = g.levels.every((_, i) => Store.stars(g.id, i) === 3);
+    /* These used to count "levels with any star at all", so three scraped passes
+       looked exactly like three perfect ones — and did not match the 3/9 the
+       parent page showed for the same child. Same arithmetic on both screens now. */
+    const earned = Store.gameStars(g.id, g.levels.length);
+    const max = g.levels.length * 3;
+    const perfect = earned === max;
+    const done = earned === 0 ? 0 : Math.max(1, Math.round((earned / max) * 3));
     const st = el('div.st');
     for (let i = 0; i < 3; i++) st.append(starSVG(i < done));
     return el('button.gamecard', {
-      type: 'button',
+      type: 'button', title: g.name + '　★ ' + earned + '/' + max,
       onclick(){ Sound.sfx.tap(); Levels.render(g); UI.show('levels'); }
     },
       el('div.ico', { text: perfect ? '👑' : g.ico }),
@@ -4540,7 +4606,10 @@ const Result = (() => {
   function show(r){
     build();
     clear(inner);
-    const msg = r.stars === 3 ? 'パーフェクト！' : r.stars === 2 ? 'よく できました！' : 'さいごまで がんばったね！';
+    const msg = r.stars === 3 ? 'パーフェクト！'
+              : r.stars === 2 ? 'よく できました！'
+              : r.stars === 1 ? 'クリア！'
+              : 'おしい！ もう いちど やってみよう';
     inner.append(
       mascotSVG('cheer', 'cheer'),
       UI.stars(r.stars, true),
@@ -4561,7 +4630,8 @@ const Result = (() => {
     }
     const actions = el('div.result-actions');
     if (r.mode === 'level'){
-      actions.append(el('button.btn', { text: 'もういちど',
+      // when nothing was earned, another go is the obvious next step, not a footnote
+      actions.append(el('button.btn' + (r.stars === 0 ? '.btn-accent.primary' : ''), { text: 'もういちど',
         onclick(){ Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); } }));
       const nxt = r.levelIndex + 1;
       if (nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt)){
@@ -4690,30 +4760,105 @@ const Parent = (() => {
     const t = el('table.skilltable');
     t.append(el('thead', null, el('tr', null,
       el('th', { text: '遊び' }), el('th', { text: '到達' }),
-      el('th', { class: 'n', text: '★' }), el('th', { class: 'n', text: '初回正答率' }), el('th', { class: 'n', text: '問題数' }))));
+      el('th', { class: 'n', text: '★' }),
+      el('th', { class: 'n', text: '直近30問' }), el('th', { class: 'n', text: '通算' }),
+      el('th', { class: 'n', text: '問題数' }))));
     const body = el('tbody');
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
       if (!games.length) return;
-      body.append(el('tr', null, el('td', { colspan: 5, style: { color: w.color, fontWeight: 800, paddingTop: 'calc(var(--u)*.8)' }, text: w.name })));
+      body.append(el('tr', null, el('td', { colspan: 6, style: { color: w.color, fontWeight: 800, paddingTop: 'calc(var(--u)*.8)' }, text: w.name })));
       games.forEach(g => {
         const s = Store.gameStars(g.id, g.levels.length);
         const max = g.levels.length * 3;
-        const acc = Store.accuracy(g.id);
+        const now = Store.gameRecentAccuracy(g.id, g.levels.length);   // the one to act on
+        const acc = Store.accuracy(g.id);                              // lifetime, for context
         const seen = Store.data.seen[g.id] || 0;
         body.append(el('tr', null,
           el('td', { text: g.name }),
           el('td', null, el('div.bar', null, el('i', { style: { width: (max ? (s / max) * 100 : 0) + '%',
-            background: acc != null && acc < .6 ? 'var(--oops)' : 'var(--good)' } }))),
+            background: now != null && now < .6 ? 'var(--oops)' : 'var(--good)' } }))),
           el('td', { class: 'n', text: s + '/' + max }),
-          el('td', { class: 'n', text: pct(acc) }),
+          el('td', { class: 'n', style: { color: now != null && now < .6 ? 'var(--oops)' : null, fontWeight: 800 }, text: pct(now) }),
+          el('td', { class: 'n', style: { color: 'var(--ink-soft)' }, text: pct(acc) }),
           el('td', { class: 'n', text: String(seen) })));
       });
     });
     t.append(body);
     sec.append(el('div', { style: { overflowX: 'auto' } }, t));
     sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
-      text: '初回正答率は「1回目のタップで正解した割合」です。60%を下回っている遊びは、まだその考え方が定着していないサインなので、下のレベルに戻るか、下記の「おうちでできること」を試してみてください。' }));
+      text: 'どちらも「1回目のタップで正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
+    return sec;
+  }
+
+  /* ---- 今週やること ----
+     The dashboard used to be a table plus an essay, and deciding what the child
+     should practise was left entirely to the reader. The app has the data. */
+  function nextUpSection(){
+    const sec = el('section');
+    sec.append(el('div.eyebrow', { text: 'next' }), el('h3', { text: '今週やること' }));
+
+    /* One question answered wrong is not a diagnosis. Nothing is named here until
+       there is a level's worth of evidence behind it. */
+    const ENOUGH = 8;
+    const levels = [];
+    Games.list.forEach(g => g.levels.forEach((lv, i) => {
+      if (!Store.levelUnlocked(g.id, i)) return;
+      const n = Store.recentCount(g.id, i);
+      if (n < ENOUGH) return;
+      levels.push({ g, lv, i, n, acc: Store.recentAccuracy(g.id, i), cold: Store.daysSince(g.id, i) });
+    }));
+
+    if (!levels.length){
+      sec.append(el('p', { text: '判断できるだけの回数がまだありません（1レベル＝8問を、どれか1つ最後まで）。「かずの しま」の《かぞえよう》から始めてください。1日1レベルで十分です。' }));
+      return sec;
+    }
+
+    const focus = levels.slice().sort((a, b) => a.acc - b.acc)[0];
+    const stale = levels.slice()
+      .filter(x => x.acc >= .75 && x.cold >= 7)
+      .sort((a, b) => b.cold - a.cold)[0];
+
+    const line = (mark, head, body2) => el('div.todo', null,
+      el('div.mk', { text: mark }),
+      el('div', null, el('b', { text: head }), el('div', { text: body2 })));
+
+    if (focus.acc < .75){
+      sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
+        '直近' + focus.n + '問の初回正答率 ' + pct(focus.acc) + '。ここを中心に、1日1回。8問を最後までやりきれば十分です。'));
+    } else {
+      sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
+        '直近' + focus.n + '問で ' + pct(focus.acc) + '。いちばん低いところがこれなら、よく仕上がっています。次のレベルに進んで構いません。'));
+    }
+    if (stale && stale !== focus){
+      sec.append(line('○', stale.g.name + '　《' + stale.lv.t + '》',
+        stale.cold + '日ふれていません。できていたことなので、思い出す時間として1回だけ。'));
+    }
+
+    /* the exact facts that are missing — the thing a per-game percentage can never say */
+    const facts = Store.data.facts || {};
+    const weak = [];
+    for (const k in facts){
+      const f = facts[k];
+      // "missed it at least twice", not "missed it once" — one slip is not a gap
+      if (!f || (f[0] - f[1]) < 2) continue;
+      const acc = f[1] / f[0];
+      if (acc >= .6) continue;
+      const gid = k.slice(0, k.indexOf(':'));
+      weak.push({ acc, n: f[0], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid });
+    }
+    weak.sort((a, b) => a.acc - b.acc || b.n - a.n);
+    if (weak.length){
+      sec.append(el('h4', { text: 'つまずいている中身' }));
+      const chips = el('div.factchips');
+      weak.slice(0, 8).forEach(w => chips.append(
+        el('span.factchip', null, el('small', { text: w.game }), w.label)));
+      sec.append(chips);
+      sec.append(el('p', { text: 'ここに出た項目は「きょうの れんしゅう」が自動で多めに出します。声かけに使うなら、答えを教えるより、おはじきやお菓子で同じ数を作ってみせるほうが早いです。' }));
+    } else {
+      sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
+        text: '取りこぼしている項目はいまのところありません。' }));
+    }
     return sec;
   }
 
@@ -4928,6 +5073,7 @@ const Parent = (() => {
         el('h3', { text: 'このアプリがねらっていること' }),
         el('p', { text: '小学校1年生の算数は「数える」「数を分ける・合わせる」「比べる」「形をとらえる」の4つの土台の上に立っています。逆に言えば、入学前にやるべきことは計算の先取りではなく、この土台を手と目と声で確かめておくことです。このアプリは15の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。' }),
         el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると自動でヒントが出て、必ず自分で正解にたどり着いて終われるようにしてあります。' })),
+      nextUpSection(),
       statsSection(),
       progressSection(),
       planSection(),

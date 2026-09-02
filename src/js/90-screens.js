@@ -62,12 +62,17 @@ const Home = (() => {
   }
 
   function gameCard(g){
-    const done = g.levels.filter((_, i) => Store.stars(g.id, i) > 0).length;
-    const perfect = g.levels.every((_, i) => Store.stars(g.id, i) === 3);
+    /* These used to count "levels with any star at all", so three scraped passes
+       looked exactly like three perfect ones — and did not match the 3/9 the
+       parent page showed for the same child. Same arithmetic on both screens now. */
+    const earned = Store.gameStars(g.id, g.levels.length);
+    const max = g.levels.length * 3;
+    const perfect = earned === max;
+    const done = earned === 0 ? 0 : Math.max(1, Math.round((earned / max) * 3));
     const st = el('div.st');
     for (let i = 0; i < 3; i++) st.append(starSVG(i < done));
     return el('button.gamecard', {
-      type: 'button',
+      type: 'button', title: g.name + '　★ ' + earned + '/' + max,
       onclick(){ Sound.sfx.tap(); Levels.render(g); UI.show('levels'); }
     },
       el('div.ico', { text: perfect ? '👑' : g.ico }),
@@ -169,7 +174,10 @@ const Result = (() => {
   function show(r){
     build();
     clear(inner);
-    const msg = r.stars === 3 ? 'パーフェクト！' : r.stars === 2 ? 'よく できました！' : 'さいごまで がんばったね！';
+    const msg = r.stars === 3 ? 'パーフェクト！'
+              : r.stars === 2 ? 'よく できました！'
+              : r.stars === 1 ? 'クリア！'
+              : 'おしい！ もう いちど やってみよう';
     inner.append(
       mascotSVG('cheer', 'cheer'),
       UI.stars(r.stars, true),
@@ -190,7 +198,8 @@ const Result = (() => {
     }
     const actions = el('div.result-actions');
     if (r.mode === 'level'){
-      actions.append(el('button.btn', { text: 'もういちど',
+      // when nothing was earned, another go is the obvious next step, not a footnote
+      actions.append(el('button.btn' + (r.stars === 0 ? '.btn-accent.primary' : ''), { text: 'もういちど',
         onclick(){ Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); } }));
       const nxt = r.levelIndex + 1;
       if (nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt)){

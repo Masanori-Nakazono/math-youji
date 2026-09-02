@@ -67,30 +67,105 @@ const Parent = (() => {
     const t = el('table.skilltable');
     t.append(el('thead', null, el('tr', null,
       el('th', { text: '遊び' }), el('th', { text: '到達' }),
-      el('th', { class: 'n', text: '★' }), el('th', { class: 'n', text: '初回正答率' }), el('th', { class: 'n', text: '問題数' }))));
+      el('th', { class: 'n', text: '★' }),
+      el('th', { class: 'n', text: '直近30問' }), el('th', { class: 'n', text: '通算' }),
+      el('th', { class: 'n', text: '問題数' }))));
     const body = el('tbody');
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
       if (!games.length) return;
-      body.append(el('tr', null, el('td', { colspan: 5, style: { color: w.color, fontWeight: 800, paddingTop: 'calc(var(--u)*.8)' }, text: w.name })));
+      body.append(el('tr', null, el('td', { colspan: 6, style: { color: w.color, fontWeight: 800, paddingTop: 'calc(var(--u)*.8)' }, text: w.name })));
       games.forEach(g => {
         const s = Store.gameStars(g.id, g.levels.length);
         const max = g.levels.length * 3;
-        const acc = Store.accuracy(g.id);
+        const now = Store.gameRecentAccuracy(g.id, g.levels.length);   // the one to act on
+        const acc = Store.accuracy(g.id);                              // lifetime, for context
         const seen = Store.data.seen[g.id] || 0;
         body.append(el('tr', null,
           el('td', { text: g.name }),
           el('td', null, el('div.bar', null, el('i', { style: { width: (max ? (s / max) * 100 : 0) + '%',
-            background: acc != null && acc < .6 ? 'var(--oops)' : 'var(--good)' } }))),
+            background: now != null && now < .6 ? 'var(--oops)' : 'var(--good)' } }))),
           el('td', { class: 'n', text: s + '/' + max }),
-          el('td', { class: 'n', text: pct(acc) }),
+          el('td', { class: 'n', style: { color: now != null && now < .6 ? 'var(--oops)' : null, fontWeight: 800 }, text: pct(now) }),
+          el('td', { class: 'n', style: { color: 'var(--ink-soft)' }, text: pct(acc) }),
           el('td', { class: 'n', text: String(seen) })));
       });
     });
     t.append(body);
     sec.append(el('div', { style: { overflowX: 'auto' } }, t));
     sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
-      text: '初回正答率は「1回目のタップで正解した割合」です。60%を下回っている遊びは、まだその考え方が定着していないサインなので、下のレベルに戻るか、下記の「おうちでできること」を試してみてください。' }));
+      text: 'どちらも「1回目のタップで正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
+    return sec;
+  }
+
+  /* ---- 今週やること ----
+     The dashboard used to be a table plus an essay, and deciding what the child
+     should practise was left entirely to the reader. The app has the data. */
+  function nextUpSection(){
+    const sec = el('section');
+    sec.append(el('div.eyebrow', { text: 'next' }), el('h3', { text: '今週やること' }));
+
+    /* One question answered wrong is not a diagnosis. Nothing is named here until
+       there is a level's worth of evidence behind it. */
+    const ENOUGH = 8;
+    const levels = [];
+    Games.list.forEach(g => g.levels.forEach((lv, i) => {
+      if (!Store.levelUnlocked(g.id, i)) return;
+      const n = Store.recentCount(g.id, i);
+      if (n < ENOUGH) return;
+      levels.push({ g, lv, i, n, acc: Store.recentAccuracy(g.id, i), cold: Store.daysSince(g.id, i) });
+    }));
+
+    if (!levels.length){
+      sec.append(el('p', { text: '判断できるだけの回数がまだありません（1レベル＝8問を、どれか1つ最後まで）。「かずの しま」の《かぞえよう》から始めてください。1日1レベルで十分です。' }));
+      return sec;
+    }
+
+    const focus = levels.slice().sort((a, b) => a.acc - b.acc)[0];
+    const stale = levels.slice()
+      .filter(x => x.acc >= .75 && x.cold >= 7)
+      .sort((a, b) => b.cold - a.cold)[0];
+
+    const line = (mark, head, body2) => el('div.todo', null,
+      el('div.mk', { text: mark }),
+      el('div', null, el('b', { text: head }), el('div', { text: body2 })));
+
+    if (focus.acc < .75){
+      sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
+        '直近' + focus.n + '問の初回正答率 ' + pct(focus.acc) + '。ここを中心に、1日1回。8問を最後までやりきれば十分です。'));
+    } else {
+      sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
+        '直近' + focus.n + '問で ' + pct(focus.acc) + '。いちばん低いところがこれなら、よく仕上がっています。次のレベルに進んで構いません。'));
+    }
+    if (stale && stale !== focus){
+      sec.append(line('○', stale.g.name + '　《' + stale.lv.t + '》',
+        stale.cold + '日ふれていません。できていたことなので、思い出す時間として1回だけ。'));
+    }
+
+    /* the exact facts that are missing — the thing a per-game percentage can never say */
+    const facts = Store.data.facts || {};
+    const weak = [];
+    for (const k in facts){
+      const f = facts[k];
+      // "missed it at least twice", not "missed it once" — one slip is not a gap
+      if (!f || (f[0] - f[1]) < 2) continue;
+      const acc = f[1] / f[0];
+      if (acc >= .6) continue;
+      const gid = k.slice(0, k.indexOf(':'));
+      weak.push({ acc, n: f[0], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid });
+    }
+    weak.sort((a, b) => a.acc - b.acc || b.n - a.n);
+    if (weak.length){
+      sec.append(el('h4', { text: 'つまずいている中身' }));
+      const chips = el('div.factchips');
+      weak.slice(0, 8).forEach(w => chips.append(
+        el('span.factchip', null, el('small', { text: w.game }), w.label)));
+      sec.append(chips);
+      sec.append(el('p', { text: 'ここに出た項目は「きょうの れんしゅう」が自動で多めに出します。声かけに使うなら、答えを教えるより、おはじきやお菓子で同じ数を作ってみせるほうが早いです。' }));
+    } else {
+      sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
+        text: '取りこぼしている項目はいまのところありません。' }));
+    }
     return sec;
   }
 
@@ -305,6 +380,7 @@ const Parent = (() => {
         el('h3', { text: 'このアプリがねらっていること' }),
         el('p', { text: '小学校1年生の算数は「数える」「数を分ける・合わせる」「比べる」「形をとらえる」の4つの土台の上に立っています。逆に言えば、入学前にやるべきことは計算の先取りではなく、この土台を手と目と声で確かめておくことです。このアプリは15の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。' }),
         el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると自動でヒントが出て、必ず自分で正解にたどり着いて終われるようにしてあります。' })),
+      nextUpSection(),
       statsSection(),
       progressSection(),
       planSection(),

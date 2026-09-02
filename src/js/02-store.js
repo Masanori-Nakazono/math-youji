@@ -134,7 +134,15 @@ const Store = (() => {
       let s = 0; for (let i = 0; i < levels; i++) s += mem.stars[key(g, i)] || 0; return s;
     },
     totalStars(){ let s = 0; for (const k in mem.stars) s += mem.stars[k]; return s; },
-    levelUnlocked(g, l){ return l === 0 || (mem.stars[key(g, l - 1)] || 0) >= 1; },
+    plays: (g, l) => mem.plays[key(g, l)] || 0,
+    /* A pass opens the next level. Three honest attempts also open it: a five-year-old
+       must never end up staring at a padlock they cannot move, and the parent page
+       shows the low score either way. */
+    levelUnlocked(g, l){
+      if (l === 0) return true;
+      const k = key(g, l - 1);
+      return (mem.stars[k] || 0) >= 1 || (mem.plays[k] || 0) >= 3;
+    },
 
     /** One question's first-try result, attributed to the level it came from.
         Recorded per question rather than per level so that a question met inside
@@ -187,12 +195,13 @@ const Store = (() => {
     },
 
     /* ---- item-level memory ---- */
-    noteFact(k, firstTryOk){
+    noteFact(k, firstTryOk, label){
       if (!k) return;
       const f = mem.facts[k] || (mem.facts[k] = [0, 0, 0]);
       f[0]++;
       if (firstTryOk) f[1]++;
       f[2] = dayNo();
+      if (label) f[3] = label;      // so the parent page can say「3と7」, not「ten:3」
       save();
     },
     fact: k => mem.facts[k] || null,
@@ -216,6 +225,9 @@ const Store = (() => {
       for (let i = 0; i < s.length; i++) if (s[i] === '1') r++;
       return s.length ? r / s.length : null;
     },
+    /** how many outcomes the recent window actually holds — a percentage over one
+        question must never be presented as a judgement about a child */
+    recentCount(g, l){ return (mem.recent[key(g, l)] || '').length; },
     gameRecentAccuracy(g, levels){
       let r = 0, n = 0;
       for (let i = 0; i < levels; i++){

@@ -266,6 +266,109 @@
       !bad.ok && !junk.ok && K.Store.stars('bond', 0) === 3, 'bad=' + bad.ok + ' junk=' + junk.ok);
   })();
 
+  /* ---------- 12. a second tap on the answer must not answer twice ----------
+     Children double-tap. The picked button was never disabled (only its
+     neighbours were), so a second tap re-ran onPick: in a question with two
+     blanks that skipped a blank and then threw, stranding the child on a
+     question they could no longer finish. */
+  (function doubleTap(){
+    let stuck = null, threw = null;
+    [['seq', 0], ['seq', 1], ['pattern', 2]].forEach(([id, li]) => {
+      for (let trial = 0; trial < 12 && !stuck; trial++){
+        K.Session.startLevel(K.Games.byId[id], li);
+        let guard = 0;
+        while (!onResult() && guard++ < 240){
+          const btns = qa('#play .choices .choice').filter(b => !b.disabled);
+          for (const b of btns){
+            b.click(); b.click(); b.click();       // one child, three taps
+            if (b.classList.contains('correct')) break;
+          }
+          try{ S.flushTimers(); }catch(e){ threw = threw || e.message; }
+        }
+        if (!onResult()) stuck = id + '/L' + li;
+      }
+    });
+    check('tapping the correct answer twice cannot skip a blank or strand the question',
+      !stuck && !threw, (stuck ? 'stuck at ' + stuck : '') + (threw ? ' threw: ' + threw : ''));
+  })();
+
+  /* ---------- 13. a level session covers distinct facts ----------
+     Before the shuffle bag these levels drew independently every question, so
+     「10の おともだち L2」 averaged 5.7 distinct facts out of its 9 and finished
+     without ever asking three of them. Floors below sit well above that. */
+  (function coverage(){
+    const worst = [];
+    // [game, level, questions, floor for the mean number of distinct facts]
+    [['ten', 1, 7.5], ['clock', 0, 7.5], ['bond', 0, 6.5], ['trace', 0, 3]].forEach(([id, li, floor]) => {
+      const g = K.Games.byId[id], per = g.levels[li].n || 8;
+      let total = 0;
+      const RUNS = 10;
+      for (let r = 0; r < RUNS; r++){
+        K.Store.reset();
+        const seen = [];
+        K.Session.startLevel(g, li);
+        for (let i = 0; i < per && !onResult(); i++){
+          seen.push(S.item);
+          S.forceCorrect();        // drive every level the same way, clickable or not
+          S.flushTimers();
+        }
+        total += new Set(seen.filter(Boolean)).size;
+      }
+      const mean = total / RUNS;
+      if (mean < floor) worst.push(id + '/L' + li + ' ' + mean.toFixed(1) + ' < ' + floor);
+    });
+    K.Store.reset();
+    check('one session works through the fact set instead of redrawing at random',
+      !worst.length, worst.join(' | '));
+  })();
+
+  /* ---------- 14. stars grade the pass, and the gate is real but escapable ---------- */
+  (function gate(){
+    K.Store.reset();
+    // a session where nothing is answered right first time
+    K.Store.recordLevel('ten', 1, 0, 1, 8);
+    check('a session under half right earns no star and does not open the next level',
+      K.Store.stars('ten', 1) === 0 && !K.Store.levelUnlocked('ten', 2),
+      'stars=' + K.Store.stars('ten', 1) + ' unlocked=' + K.Store.levelUnlocked('ten', 2));
+
+    K.Store.recordLevel('ten', 1, 0, 1, 8);
+    K.Store.recordLevel('ten', 1, 0, 1, 8);
+    check('three honest attempts open the next level anyway, so nobody is stuck',
+      K.Store.levelUnlocked('ten', 2), 'plays=' + K.Store.plays('ten', 1));
+
+    K.Store.reset();
+    K.Store.recordLevel('bond', 0, 2, 6, 8);
+    check('a clear pass opens the next level', K.Store.levelUnlocked('bond', 1) && K.Store.stars('bond', 0) === 2,
+      'stars=' + K.Store.stars('bond', 0));
+  })();
+
+  /* ---------- 15. きょうの れんしゅう aims at what the child is missing ---------- */
+  (function aimed(){
+    K.Store.reset();
+    const today = Math.floor(Date.now() / 86400000);
+    K.Games.list.forEach(g => g.levels.forEach((lv, i) => {
+      K.Store.data.stars[g.id + ':' + i] = 2;
+      K.Store.data.recent[g.id + ':' + i] = '1'.repeat(28) + '01';   // solid
+      K.Store.data.last[g.id + ':' + i] = today;
+    }));
+    ['bond', 'ten'].forEach(id => [0, 1, 2].forEach(i => {
+      K.Store.data.recent[id + ':' + i] = '1'.repeat(7) + '0'.repeat(23);   // struggling
+    }));
+    const tally = {};
+    const DAYS = 120;
+    for (let d = 0; d < DAYS; d++){
+      K.Session.startDaily(10);
+      S.planGames.forEach(k => { const g = k.split(':')[0]; tally[g] = (tally[g] || 0) + 1; });
+    }
+    const weak = ((tally.bond || 0) + (tally.ten || 0)) / DAYS;
+    const others = K.Games.list.filter(g => g.id !== 'bond' && g.id !== 'ten');
+    const everyoneAppears = others.every(g => (tally[g.id] || 0) > 0);
+    check('the daily set aims at the weak topics without abandoning the rest',
+      weak >= 2.5 && everyoneAppears,
+      'weak=' + weak.toFixed(2) + '/day, all others present=' + everyoneAppears);
+    K.Store.reset();
+  })();
+
   check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
 
   K.Store.reset();
