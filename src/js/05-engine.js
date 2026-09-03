@@ -44,7 +44,7 @@ const Session = (() => {
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
   let locked = false, mode = 'level', curGame = null, curLevelIdx = 0;
-  let hintBtns = [], hintFn = null, hintShown = false, lastSpeech = '';
+  let hintBtns = [], hintFn = null, hintExtras = [], hintShown = false, lastSpeech = '';
   /* What this question is *about*. Every generator names its item, so the app can
      avoid asking the same fact twice in one sitting, steer toward the facts this
      child keeps missing, and tell the parent which ones they are. */
@@ -251,6 +251,60 @@ const Session = (() => {
       later(fn, ms){ return later(fn, ms); },
       get locked(){ return locked; },
 
+      /** A fixed 0–10 keypad.
+
+          Picking the answer out of three options is recognition; the goal these
+          levels are named for ("考えずに言える") is retrieval, and the two are not
+          the same skill. Eleven keys that never change position ask the child to
+          produce the number instead of discriminating between three candidates —
+          and drop what guessing alone is worth from 33% to 9%.
+
+          Facing eleven blank keys with no idea is discouraging, so the keypad
+          registers its own hint: after two wrong answers it dims everything more
+          than two away, leaving a handful to think between. */
+      buildPad(answer, opts){
+        if (stale()) return choicesEl;
+        const o = opts || {};
+        const lo = o.lo == null ? 0 : o.lo, hi = o.hi == null ? 10 : o.hi;
+        clear(choicesEl);
+        choicesEl.classList.add('pad');
+        choicesEl.dataset.built = '1';
+        /* No hintBtns: the engine's fallback dims one more wrong answer on every
+           mistake, and stacked on the narrowing below that left just two keys —
+           a coin flip, which is the opposite of what the keypad is for. The
+           narrowing is the visible response to a second wrong answer. */
+        hintBtns = [];
+        const keys = [];
+        let settled = false;
+        for (let v = lo; v <= hi; v++){
+          const b = el('button.choice.padkey', { type: 'button', text: String(v) });
+          const val = v;
+          b.addEventListener('click', () => {
+            if (locked || stale()) return;
+            if (val === answer){
+              if (settled) return;
+              settled = true;
+              b.classList.add('correct');
+              keys.forEach(x => { if (x !== b) x.disabled = true; });
+              if (o.onPick && o.onPick(val, b) === false) return;
+              a.correct(o.correctOpts);
+            } else {
+              b.classList.add('wrong', 'tried');
+              later(() => b.classList.remove('wrong'), 460);
+              a.wrong(b);
+            }
+          });
+          keys.push(b);
+          choicesEl.append(b);
+        }
+        hintExtras.push(() => {
+          keys.forEach(b => {
+            if (Math.abs(Number(b.textContent) - answer) > 2) b.classList.add('dim');
+          });
+        });
+        return choicesEl;
+      },
+
       /** Big tappable answer buttons.
           opts.onPick(value, button) runs on a correct pick; returning false keeps
           the question open (used by questions that ask for several answers). */
@@ -298,9 +352,11 @@ const Session = (() => {
   }
 
   function resetSurface(){
-    locked = false; hintBtns = []; hintFn = null; hintShown = false;
+    locked = false; hintBtns = []; hintFn = null; hintExtras = []; hintShown = false;
     curItem = null; curLabel = null;
-    clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built; clearFeedback();
+    clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
+    choicesEl.classList.remove('pad');
+    clearFeedback();
     fieldEl.className = 'playfield';
   }
 
@@ -371,6 +427,7 @@ const Session = (() => {
         showFeedback('hint', 'ヒントを だすね');
         Sound.say('ヒントを だすね', { delay: 260 });
         if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
+        hintExtras.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
       }
       const live = hintBtns.filter(b => !b.classList.contains('dim'));
       if (live.length > 1) live[ri(0, live.length - 1)].classList.add('dim');

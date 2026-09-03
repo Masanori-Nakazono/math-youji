@@ -537,6 +537,38 @@
       !bad.length, bad.slice(0, 4).join(' | '));
   })();
 
+  /* ---------- 20. the top calc levels ask for the answer, not a choice ----------
+     Picking one of three is recognition; 「考えずに言える」 is retrieval, and only the
+     second is what makes a carry sum fast. These levels put up a fixed 0–10 keypad,
+     which also drops what guessing alone is worth from 33% to 9%. */
+  (function keypad(){
+    const bad = [];
+    [['bond', 2], ['ten', 1], ['add', 2], ['sub', 2]].forEach(([id, li]) => {
+      let sawPad = 0;
+      for (let t = 0; t < 8; t++){
+        K.Session.startLevel(K.Games.byId[id], li);
+        const keys = qa('#play .choices .padkey');
+        if (!keys.length) continue;
+        sawPad++;
+        const labels = keys.map(k => k.textContent);
+        if (labels.join(',') !== '0,1,2,3,4,5,6,7,8,9,10'){
+          bad.push(id + '/L' + (li+1) + ' keypad is ' + labels.join(','));
+          break;
+        }
+        if (t === 0){
+          // two wrong answers must narrow it to something thinkable, not to a coin flip
+          const wrong = keys.filter(k => !k.classList.contains('correct'));
+          wrong[0].click(); wrong[0].click();
+          const live = qa('#play .padkey').filter(k => !k.classList.contains('dim'));
+          if (live.length < 3) bad.push(id + '/L' + (li+1) + ' hint left only ' + live.length + ' keys');
+        }
+      }
+      if (!sawPad) bad.push(id + '/L' + (li+1) + ' never showed a keypad');
+    });
+    check('the top けいさんの やま levels answer on a 0–10 keypad, not three choices',
+      !bad.length, bad.slice(0, 3).join(' | '));
+  })();
+
   function finish(){
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();

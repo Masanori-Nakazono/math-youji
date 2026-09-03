@@ -1406,3 +1406,24 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 #parent .aimrow > div > b:first-child{ display:block; margin-bottom:calc(var(--u)*.15) }
 #parent .aimrow > div > div{ color:var(--ink-soft) }
 #parent .aimnote b, #parent .aimrow > div > div b{ color:var(--ink); font-weight:800 }
+
+/* ---------- number keypad ----------
+   A fixed 0–10 row, in the same place every time: the child learns where the
+   numbers live, so answering stays about the arithmetic. */
+.choices.pad{ gap: calc(var(--u)*.7); }
+/* eleven keys fit one row in landscape; where they cannot, break 6 + 5 rather
+   than letting a lone "10" wrap onto a line of its own */
+@media (max-width: 900px){
+  .choices.pad{
+    display: grid; grid-template-columns: repeat(6, auto);
+    justify-content: center; justify-items: center;
+  }
+}
+.choice.padkey{
+  /* the keypad is now the way the answer is given, so it gets real estate:
+     eleven of these still fit one row in landscape, and wrap to two in portrait */
+  min-width: max(calc(var(--u)*5.6), var(--tap));
+  min-height: max(calc(var(--u)*6), var(--tap));
+  font-size: calc(var(--u)*3.2);
+  padding: calc(var(--u)*.4) calc(var(--u)*.5);
+}

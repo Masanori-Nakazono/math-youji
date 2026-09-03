@@ -31,7 +31,7 @@ function partFrame(whole, known){
 /* ============================================================
    8. いくつと いくつ — number bonds (decompose & compose)
    ============================================================ */
-function decompose(api, whole){
+function decompose(api, whole, pad){
   const known = ri(1, whole - 1), ans = whole - known;
   api.item('dec:' + whole + '-' + known, whole + ' は ' + known + ' と ' + ans);
   api.setPrompt(`${numTag(whole)} は ${numTag(known)} と いくつ？`,
@@ -39,7 +39,7 @@ function decompose(api, whole){
   const frame = partFrame(whole, known);
   const bond = bondNode(whole, known, null);
   api.field.append(el('div.frameset', null, frame), bond);
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, whole))), ans, {
+  const showParts = {
     correctOpts: { delay: 1500 },
     onPick(){
       // show the two parts making the whole (scoped to this question's own nodes)
@@ -51,10 +51,12 @@ function decompose(api, whole){
       }
       $('.part.unknown', bond).textContent = String(ans);
     }
-  });
+  };
+  if (pad) api.buildPad(ans, showParts);
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, whole))), ans, showParts);
 }
 
-function compose(api, maxWhole){
+function compose(api, maxWhole, pad){
   const a = ri(1, maxWhole - 1), b = ri(1, maxWhole - a), ans = a + b;
   api.item('com:' + a + '+' + b, a + ' と ' + b + ' で ' + ans);
   api.setPrompt(`${numTag(a)} と ${numTag(b)} で いくつ？`,
@@ -69,7 +71,8 @@ function compose(api, maxWhole){
   }
   api.field.append(el('div.frameset', null, f),
     el('div.eq', null, String(a), el('span.op', { text: 'と' }), String(b), el('span.op', { text: 'で' }), el('span.box', { text: '?' })));
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans);
+  if (pad) api.buildPad(ans);
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans);
 }
 
 Games.add({
@@ -78,7 +81,8 @@ Games.add({
   levels: [
     { t: '5は いくつと いくつ', d: 'ごの ぶんかい', make: api => chance(.25) ? compose(api, 5) : decompose(api, 5) },
     { t: '6〜9', d: 'すこし おおきい かず', make: api => chance(.3) ? compose(api, ri(6, 9)) : decompose(api, ri(6, 9)) },
-    { t: '10は いくつと いくつ', d: 'じゅうの ぶんかい', make: api => chance(.25) ? compose(api, 10) : decompose(api, 10) }
+    // the top level asks the child to produce the number, not pick it out of three
+    { t: '10は いくつと いくつ', d: 'すうじを じぶんで えらぶ', make: api => chance(.25) ? compose(api, 10, true) : decompose(api, 10, true) }
   ]
 });
 
@@ -121,7 +125,7 @@ function fillToTen(api){
   api.onHint(() => { readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; });
 }
 
-function partnerOfTen(api){
+function partnerOfTen(api, pad){
   const a = ri(1, 9), ans = 10 - a;
   api.item('ten:' + a, a + ' と ' + ans + ' で 10');
   api.setPrompt(`${numTag(a)} と いくつで <b>10</b>？`, `${numKana(a)}と いくつで じゅう`);
@@ -133,7 +137,8 @@ function partnerOfTen(api){
   }
   api.field.append(el('div.frameset', null, f),
     el('div.eq', null, String(a), el('span.op', { text: 'と' }), el('span.box', { text: '?' }), el('span.op', { text: 'で' }), '10'));
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans);
+  if (pad) api.buildPad(ans);
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans);
 }
 
 function pairHunt(api){
@@ -182,7 +187,7 @@ Games.add({
   aim: '<b>合わせて10になる組み合わせ</b>を、考えずに言えるようにする練習。「9+4」を「9+1+3」と処理するくり上がりの計算は、これが即答できるかどうかで速さがまったく変わります。',
   levels: [
     { t: '10まで うめる', d: 'わくを いっぱいに する', make: fillToTen },
-    { t: '◯と いくつで10', d: 'あと いくつ？', make: partnerOfTen },
+    { t: '◯と いくつで10', d: 'あと いくつ？ じぶんで こたえる', make: api => partnerOfTen(api, true) },
     { t: 'ペアを さがす', d: '2まいで 10を つくる', make: pairHunt }
   ]
 });
@@ -277,7 +282,7 @@ function subStory(api, max){
   });
 }
 
-function symbolCalc(api, op, max){
+function symbolCalc(api, op, max, pad){
   let a, b, ans;
   if (op === '+'){ a = ri(1, max - 1); b = ri(1, max - a); ans = a + b; }
   else { a = ri(2, max); b = ri(1, a); ans = a - b; }
@@ -286,7 +291,8 @@ function symbolCalc(api, op, max){
   api.setPrompt('しきを みて こたえよう',
     `${numKana(a)} ${op === '+' ? 'たす' : 'ひく'} ${numKana(b)} は`);
   api.field.append(eqNode(a, b, op));
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 0, max + 2, 2))), ans);
+  if (pad) api.buildPad(ans);
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 0, max + 2, 2))), ans);
   api.onHint(() => {
     if ($('.tenframe', api.field)) return;
     const f = el('div.tenframe', { style: { '--cols': 5 } });
@@ -301,7 +307,7 @@ function symbolCalc(api, op, max){
   });
 }
 
-function differenceQ(api, max){
+function differenceQ(api, max, pad){
   const a = ri(3, max), b = ri(1, a - 1), ans = a - b;
   const t1 = pick(THINGS); let t2 = pick(THINGS);
   while (t2.e === t1.e) t2 = pick(THINGS);
@@ -316,7 +322,8 @@ function differenceQ(api, max){
     board.append(row);
   });
   api.field.append(board, eqNode(a, b, '-'));
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans);
+  if (pad) api.buildPad(ans);
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans);
   api.onHint(() => {
     if ($('.hintline', api.field)) return;
     api.field.append(el('div.hintline', { text: 'うえと したを 1つずつ ペアに して、あまりを かぞえよう' }));
@@ -329,7 +336,7 @@ Games.add({
   levels: [
     { t: '5まで', d: 'おはなしで かんがえる', make: api => addStory(api, 5) },
     { t: '10まで', d: 'すこし おおきい かず', make: api => addStory(api, 10) },
-    { t: 'しきだけで', d: 'えが なくても できる', make: api => symbolCalc(api, '+', 10) }
+    { t: 'しきだけで', d: 'えが なくても できる', make: api => symbolCalc(api, '+', 10, true) }
   ]
 });
 
@@ -339,6 +346,6 @@ Games.add({
   levels: [
     { t: '5まで', d: 'いなくなると のこりは', make: api => subStory(api, 5) },
     { t: '10まで', d: 'すこし おおきい かず', make: api => subStory(api, 10) },
-    { t: 'ちがいは いくつ', d: 'くらべて ひきざん', make: api => chance(.5) ? differenceQ(api, 10) : symbolCalc(api, '-', 10) }
+    { t: 'ちがいは いくつ', d: 'くらべて ひきざん', make: api => chance(.5) ? differenceQ(api, 10, true) : symbolCalc(api, '-', 10, true) }
   ]
 });
