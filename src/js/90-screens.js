@@ -38,7 +38,7 @@ const Title = (() => {
 
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
-  let node, worldsEl, starEl, dailyEl, shelfEl;
+  let node, worldsEl, starEl, dailyEl, focusEl, shelfEl;
 
   function build(){
     if (node) return node;
@@ -55,9 +55,13 @@ const Home = (() => {
           onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } }, '📖'),
         el('button.btn.btn-round', { 'aria-label': 'おうちのかたへ', title: 'おうちのかたへ',
           onclick(){ Sound.sfx.tap(); Parent.open(); } }, '👤')));
+    /* きょうの れんしゅう reviews everything the child has unlocked, which means a
+       single weak fact comes round about once a fortnight. This is the aimed set:
+       three or four facts, ten questions, each fact several times. */
+    focusEl = el('button.daily.focusset', { type: 'button', hidden: true });
     shelfEl = el('button.shelf', { type: 'button',
       onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
-    node.append(dailyEl, worldsEl, shelfEl);
+    node.append(dailyEl, focusEl, worldsEl, shelfEl);
     return UI.register('home', node);
   }
 
@@ -94,6 +98,20 @@ const Home = (() => {
           ? `きょうは ${n}もん がんばったね　･　${streak}にち れんぞく`
           : 'ぜんぶの あそびから 10もん でるよ' })),
       el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: n >= 10 ? '🎉' : '▶' }));
+
+    const weak = Store.weakFacts(4);
+    focusEl.hidden = weak.length < 2;      // one wobbly fact is not a practice set
+    if (!focusEl.hidden){
+      clear(focusEl);
+      focusEl.append(
+        mascotSVG('soft', 'talk'),
+        el('div.grow', null,
+          el('div.t', { text: 'にがて あつめ' }),
+          el('div.s', { text: weak.slice(0, 2).map(w => w.label).join('　･　')
+                              + (weak.length > 2 ? '　ほか' : '') })),
+        el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: '▶' }));
+      focusEl.onclick = () => { Sound.sfx.tap(); Session.startFocus(weak.map(w => w.key), { n: 10 }); };
+    }
 
     const got = Store.data.stickers;
     clear(shelfEl);
@@ -190,12 +208,25 @@ const Result = (() => {
       el('div.result-msg', { text: msg }),
       el('div.result-sub', { text: `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
     /* Name what went wrong. "62%" tells a child nothing; "3と7" is something they
-       can carry to tomorrow — and it is exactly what the app will bring back. */
+       can carry to tomorrow — and it is exactly what the app will bring back.
+
+       The names are also the way back to them. This screen used to list the facts
+       and then offer「つぎの レベルへ」as the only bright button: it named the gap
+       and walked the child straight past it. */
+    const shakyKeys = (r.shaky || []).map(x => x.key).filter(k => Store.factOrigin(k));
+    const aimed = r.mode === 'focus' ? (r.focusKeys || []) : shakyKeys;
+    const runFocus = () => { Sound.sfx.tap(); Session.startFocus(aimed, { n: 10 }); };
     if (r.shaky && r.shaky.length){
       const list = el('div.shakylist');
-      r.shaky.forEach(x => list.append(el('span.shakyitem', { text: x.label })));
+      r.shaky.forEach(x => {
+        const usable = aimed.indexOf(x.key) >= 0 || (r.mode !== 'focus' && shakyKeys.indexOf(x.key) >= 0);
+        list.append(usable
+          ? el('button.shakyitem', { type: 'button', text: x.label, onclick: runFocus })
+          : el('span.shakyitem', { text: x.label }));
+      });
       inner.append(el('div.shaky', null,
-        el('div.l', { text: 'つぎは これを もういちど' }), list));
+        el('div.l', { text: aimed.length ? 'つぎは これを もういちど（タップで れんしゅう）'
+                                         : 'つぎは これを もういちど' }), list));
     }
     if (r.sticker){
       inner.append(el('div.newsticker' + (r.sticker.gold ? '.gold' : ''), null,
@@ -203,20 +234,28 @@ const Result = (() => {
         el('div.l', { text: r.sticker.gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' })));
     }
     const actions = el('div.result-actions');
+    // practising the facts that just went wrong outranks anything else on offer
+    const lead = aimed.length > 0;
+    if (r.mode === 'focus'){
+      actions.append(el('button.btn.btn-accent.primary', { text: 'もういちど', onclick: runFocus }));
+    } else if (lead){
+      actions.append(el('button.btn.btn-accent.primary', { text: 'にがてを れんしゅう', onclick: runFocus }));
+    }
     if (r.mode === 'level'){
       // when nothing was earned, another go is the obvious next step, not a footnote
-      actions.append(el('button.btn' + (r.stars === 0 ? '.btn-accent.primary' : ''), { text: 'もういちど',
+      actions.append(el('button.btn' + (r.stars === 0 && !lead ? '.btn-accent.primary' : ''), { text: 'もういちど',
         onclick(){ Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); } }));
       const nxt = r.levelIndex + 1;
       if (nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt)){
-        actions.append(el('button.btn.btn-accent.primary', { text: 'つぎの レベルへ',
+        actions.append(el('button.btn' + (lead ? '' : '.btn-accent.primary'), { text: 'つぎの レベルへ',
           onclick(){ Sound.sfx.tap(); Session.startLevel(r.game, nxt); } }));
       }
-    } else {
+    } else if (r.mode === 'daily'){
       actions.append(el('button.btn', { text: 'もういちど', onclick(){ Sound.sfx.tap(); Session.startDaily(10); } }));
     }
-    actions.append(el('button.btn' + (r.mode === 'level' ? '' : '.btn-accent'), { text: 'あそびを えらぶ',
-      onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
+    actions.append(el('button.btn' + (r.mode === 'level' || lead || r.mode === 'focus' ? '' : '.btn-accent'),
+      { text: 'あそびを えらぶ',
+        onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
     inner.append(actions);
     UI.show('result', { replace: true });
     Sound.say(spoken, { delay: 700 });
@@ -255,7 +294,7 @@ const Book = (() => {
       grid.append(el('div.sticker' + (has ? (s.gold ? '.got.gold' : '.got') : ''),
         { text: has ? stickerFor(s.key) : '･' }));
     });
-    Store.data.stickers.filter(k => k.indexOf('daily:') === 0).forEach(k => {
+    Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0).forEach(k => {
       got++;
       grid.append(el('div.sticker.got.gold', { text: stickerFor(k) }));
     });

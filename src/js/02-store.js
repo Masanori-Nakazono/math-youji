@@ -13,7 +13,7 @@ const Store = (() => {
     /* Per-game aggregates can only ever say "this game is shaky". These two say
        *what* is shaky and *when* — which is what lets the app come back to the
        exact fact the child missed, and lets the parent page name it. */
-    facts: {},        // item key -> [asked, firstTryRight, lastDayNumber]
+    facts: {},        // item key -> [asked, firstTryRight, lastDayNumber, label, "gameId:levelIndex"]
     recent: {},       // "gameId:levelIndex" -> last 30 first-try outcomes, "1011…"
     last:  {},        // "gameId:levelIndex" -> day number last played
     stickers: [],     // earned sticker keys
@@ -88,7 +88,10 @@ const Store = (() => {
     for (const k in af2){
       const cur = out.facts[k];
       if (!cur || (af2[k][0] || 0) > (cur[0] || 0)) out.facts[k] = af2[k].slice();
-      else if (cur) cur[2] = maxNum(cur[2], af2[k][2]);
+      else if (cur){
+        cur[2] = maxNum(cur[2], af2[k][2]);
+        if (!cur[4] && af2[k][4]) cur[4] = af2[k][4];   // keep whichever side knows where to ask it
+      }
     }
     // recent / last: follow whichever side actually played that level more
     out.recent = Object.assign({}, base.recent || {});
@@ -119,6 +122,33 @@ const Store = (() => {
     const after = Object.keys(mem.stars || {}).length;
     return { ok: true, msg: `読み込みました（★のついたレベル ${before} → ${after}、シール ${mem.stickers.length} 枚）`,
              savedAt: parsed.savedAt || null };
+  }
+
+  /** How much this fact is owed a turn: 0 (fresh and solid) … ~2 (missed, or long unseen).
+      A fact that has never been asked scores 1, so nothing is starved at the start. */
+  function dueOf(k){
+    const f = mem.facts[k];
+    if (!f || !f[0]) return 1;
+    const acc = f[1] / f[0];
+    const age = Math.min(30, dayNo() - f[2]);
+    return (1 - acc) * 1.6 + (age / 30) * 0.6 + (f[0] < 3 ? 0.25 : 0);
+  }
+
+  /** The facts this child keeps missing, worst first.
+      Only facts they have actually met and actually got wrong: 集中練習 is practice,
+      not first contact, and one slip is not a gap. */
+  function weakFacts(limit){
+    const out = [];
+    for (const k in mem.facts){
+      const f = mem.facts[k];
+      if (!f || !f[0] || !f[4]) continue;        // never asked, or nowhere to ask it again
+      const missed = f[0] - f[1];
+      if (missed < 1) continue;
+      if (f[1] / f[0] >= 0.8 && missed < 2) continue;   // one slip on an otherwise solid fact
+      out.push({ key: k, label: f[3] || k, at: f[4], due: dueOf(k), missed });
+    }
+    out.sort((a, b) => b.due - a.due || b.missed - a.missed);
+    return limit ? out.slice(0, limit) : out;
   }
 
   return {
@@ -173,6 +203,13 @@ const Store = (() => {
       p[0] += right; p[1] += total;
       save();
     },
+    /* 集中練習 counts towards today's total, but not towards the「きょうの れんしゅう」
+       accuracy the parent page reports — that number names one specific set. */
+    recordFocus(right, total){
+      const t = todayKey();
+      mem.daily[t] = (mem.daily[t] || 0) + total;
+      save();
+    },
     practiceAccuracy(){
       const p = mem.practice;
       return (p && p[1]) ? p[0] / p[1] : null;
@@ -195,25 +232,23 @@ const Store = (() => {
     },
 
     /* ---- item-level memory ---- */
-    noteFact(k, firstTryOk, label){
+    noteFact(k, firstTryOk, label, from){
       if (!k) return;
       const f = mem.facts[k] || (mem.facts[k] = [0, 0, 0]);
       f[0]++;
       if (firstTryOk) f[1]++;
       f[2] = dayNo();
       if (label) f[3] = label;      // so the parent page can say「3と7」, not「ten:3」
+      /* Where this fact can be asked again. Without it the app can name a weak fact
+         and still have no way to bring it back: the item key says which game, never
+         which level. */
+      if (from) f[4] = from;
       save();
     },
     fact: k => mem.facts[k] || null,
-    /** How much this fact is owed a turn: 0 (fresh and solid) … ~2 (missed, or long unseen).
-        A fact that has never been asked scores 1, so nothing is starved at the start. */
-    factDue(k){
-      const f = mem.facts[k];
-      if (!f || !f[0]) return 1;
-      const acc = f[1] / f[0];
-      const age = Math.min(30, dayNo() - f[2]);
-      return (1 - acc) * 1.6 + (age / 30) * 0.6 + (f[0] < 3 ? 0.25 : 0);
-    },
+    factOrigin(k){ const f = mem.facts[k]; return f && f[4] || null; },
+    factDue: dueOf,
+    weakFacts,
 
     /* ---- recent (windowed) performance ----
        A lifetime average cannot show that a child recovered, and it cannot show

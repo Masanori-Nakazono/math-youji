@@ -369,6 +369,91 @@
     K.Store.reset();
   })();
 
+  /* ---------- 15b. にがて あつめ actually concentrates on the weak facts ----------
+     きょうの れんしゅう is a review instrument: measured over three weeks it gives one
+     particular make-ten fact about a turn a fortnight, and leaves two or three of the
+     nine untouched. Nothing in the app could ask the same fact twice in one sitting,
+     because the shuffle bag that stops a level repeating itself also stops it
+     concentrating. This set is the other half of that pair. */
+  (function focusSet(){
+    K.Store.reset();
+    const weak = ['ten:ten:3', 'ten:ten:6', 'ten:ten:9'];
+    weak.forEach(k => { for (let i = 0; i < 4; i++) K.Store.noteFact(k, false, k, 'ten:1'); });
+    // a fact they are solid on must not be dragged into the practice set
+    for (let i = 0; i < 4; i++) K.Store.noteFact('ten:ten:5', true, '5 と 5 で 10', 'ten:1');
+    K.Store.recordLevel('ten', 0, 3, 8, 8);                    // so ten L2 is open
+
+    const picked = K.Store.weakFacts(4).map(w => w.key);
+    const onlyWeak = picked.length === 3 && picked.every(k => weak.indexOf(k) >= 0);
+
+    K.Session.startFocus(picked, { n: 10 });
+    const mode = S.mode;
+    const counts = {};
+    for (let i = 0; i < 10 && !onResult(); i++){
+      if (S.item) counts[S.item] = (counts[S.item] || 0) + 1;
+      S.forceCorrect(); S.flushTimers();
+    }
+    const reps = weak.map(k => counts[k] || 0);
+    const least = Math.min.apply(null, reps);
+    check('にがて あつめ meets every weak fact several times in one sitting',
+      onlyWeak && mode === 'focus' && least >= 3,
+      'picked=' + picked.join(',') + ' reps=' + reps.join('/'));
+
+    // an old record from before origins were kept has nowhere to be asked again
+    K.Store.reset();
+    K.Store.noteFact('ten:ten:2', false, '2 と 8 で 10');
+    check('a fact with nowhere to be asked again is never offered as practice',
+      K.Store.weakFacts().length === 0, JSON.stringify(K.Store.weakFacts()));
+
+    // and aiming at nothing must never leave the child on an empty plan
+    K.Store.recordLevel('count', 0, 3, 8, 8);
+    K.Session.startFocus(['ten:ten:2'], { n: 10 });
+    check('an aimed set with nothing to aim at falls back to きょうの れんしゅう',
+      S.mode === 'daily' && S.planLength === 10, 'mode=' + S.mode + ' n=' + S.planLength);
+    K.Store.reset();
+  })();
+
+  /* ---------- 15c. the result screen offers the way back to what went wrong ----------
+     It used to name the shaky facts and then put「つぎの レベルへ」as the only bright
+     button: the diagnosis was printed and then walked past. */
+  (function resultActs(){
+    K.Store.reset();
+    for (let i = 0; i < 3; i++) K.Store.noteFact('ten:ten:3', false, '3 と 7 で 10', 'ten:1');
+    K.Store.recordLevel('ten', 0, 3, 8, 8);
+    K.Result.show({ stars: 1, right: 5, total: 8, mode: 'level', game: K.Games.byId.ten,
+                    levelIndex: 1, sticker: null, focusKeys: [],
+                    shaky: [{ key: 'ten:ten:3', label: '3 と 7 で 10' }] });
+    const chip = q('#result button.shakyitem');
+    const acts = qa('#result .result-actions .btn').map(b => b.textContent);
+    check('the facts the result names can be practised straight from it',
+      !!chip && acts[0] === 'にがてを れんしゅう',
+      'chip=' + !!chip + ' actions=' + acts.join(' / '));
+    K.Store.reset();
+  })();
+
+  /* ---------- 15d. day one starts where the roadmap says it starts ----------
+     Every level scores the same on need and staleness before the child has met any
+     of them, so `focus` was the only thing separating them — which put いくつと
+     いくつ, the hardest thing in the app, in front of a child who could not yet
+     count to ten. The README's roadmap existed only as prose on the parent page. */
+  (function dayOne(){
+    K.Store.reset();
+    const tally = {};
+    const DAYS = 60;
+    for (let d = 0; d < DAYS; d++){
+      K.Session.startDaily(10);
+      S.planGames.forEach(k => {
+        const w = (K.Games.byId[k.split(':')[0]] || {}).world;
+        tally[w] = (tally[w] || 0) + 1;
+      });
+    }
+    const shima = (tally.shima || 0) / DAYS, yama = (tally.yama || 0) / DAYS;
+    check('a child with no record yet starts in かずの しま, not on the hardest thing in the app',
+      shima > yama * 1.5 && yama > 0.4,
+      'shima=' + shima.toFixed(2) + '/day, yama=' + yama.toFixed(2) + '/day');
+    K.Store.reset();
+  })();
+
   /* ---------- 16. the かさくらべ hint has to be a valid way to compare ----------
      It tells the child to count squares. The squares therefore have to be one size
      across every glass, and they have to divide the juice exactly — otherwise the

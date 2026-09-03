@@ -49,6 +49,7 @@ const Session = (() => {
      avoid asking the same fact twice in one sitting, steer toward the facts this
      child keeps missing, and tell the parent which ones they are. */
   let curItem = null, curLabel = null;
+  let focusKeys = [];             // the facts a 集中練習 session is aimed at
   let usedItems = new Set();      // the shuffle bag for the current session
   let shaky = [];                 // facts missed this session, for the result screen
 
@@ -135,8 +136,8 @@ const Session = (() => {
     killTimers();
     Sound.hush();
     Sound.sfx.tap();
-    if (mode === 'daily') Home.render(); else Levels.render(curGame);
-    UI.show(mode === 'daily' ? 'home' : 'levels', { replace: true });
+    if (mode === 'level') Levels.render(curGame); else Home.render();
+    UI.show(mode === 'level' ? 'levels' : 'home', { replace: true });
   }
 
   /* ---------- public entry points ---------- */
@@ -173,17 +174,68 @@ const Session = (() => {
     begin();
   }
 
+  /* Three or four facts, ten questions: enough for each of them to come round
+     several times in one sitting. More than four and it is another sampler. */
+  const MAX_FOCUS_FACTS = 4;
+
+  /** Practise the handful of facts this child keeps missing, several times each.
+
+      きょうの れんしゅう is a *review* instrument: ten questions spread over every
+      unlocked level. Measured over three weeks, that gives one particular fact
+      —「4と6で10」— about one turn a fortnight, and leaves two or three of the nine
+      make-ten facts untouched entirely. Nothing in the app could ask the same fact
+      twice in one sitting, because the shuffle bag that stops a level repeating
+      itself also stops it concentrating. This is the other half of the pair: the
+      bag is drawn from the weak set instead of from the level. */
+  function startFocus(keys, opts){
+    build();
+    killTimers();
+    const o = opts || {};
+    const want = [];
+    (keys || []).forEach(k => {
+      if (want.length >= MAX_FOCUS_FACTS || want.some(x => x.want === k)) return;
+      const at = Store.factOrigin(k);
+      if (!at) return;                                   // never met: nowhere to ask it
+      const cut = at.lastIndexOf(':');
+      const g = Games.byId[at.slice(0, cut)], li = Number(at.slice(cut + 1));
+      if (!g || !g.levels[li] || !Store.levelUnlocked(g.id, li)) return;
+      want.push({ game: g, level: g.levels[li], levelIndex: li, want: k });
+    });
+    if (!want.length){ startDaily(10); return; }         // nothing to aim at yet
+    mode = 'focus'; curGame = null;
+    focusKeys = want.map(x => x.want);
+    plan = [];
+    /* Round-robin, not shuffled. A B C A B C spaces each fact out inside the
+       sitting, which is what retrieval practice wants; massing them back to back
+       would let the child copy the last answer instead of retrieving it. */
+    const n = o.n || 10;
+    for (let i = 0; i < n; i++) plan.push(want[i % want.length]);
+    titleEl.textContent = 'にがて あつめ';
+    begin();
+  }
+
   /** How badly this child needs this level today.
       The old round-robin handed every game the same ~0.66 questions a day whether
       the child was at 10% or 97%, which made the daily set a sampler rather than
       practice. This is the same 10 questions, aimed. */
+  /* Where a child with no record yet should start. The README's roadmap says the
+     first two months belong to かずの しま; until this, the roadmap existed only as
+     prose on the parent page. */
+  const STARTER_WORLD = { shima: 1.7, umi: 0.85, yama: 0.5, mori: 0.7 };
+
   function dailyWeight(p){
     const acc  = Store.recentAccuracy(p.game.id, p.levelIndex);
+    const seen = Store.recentCount(p.game.id, p.levelIndex);
     const need = acc == null ? 1 : 1 - acc;                    // 0 solid … 1 struggling
     const cold = Math.min(1, Store.daysSince(p.game.id, p.levelIndex) / 14);
-    const focus = p.game.focus || 1;                           // curriculum priority
+    /* On day one every level scores the same on need (1) and cold (1), so `focus`
+       was the only thing separating them — which put いくつと いくつ, the hardest
+       thing in the app, in front of a child who could not yet count to ten. Ramp
+       the priority in with the evidence that earns it. */
+    const focus = 1 + ((p.game.focus || 1) - 1) * Math.min(1, seen / 8);
     const done  = Store.stars(p.game.id, p.levelIndex) >= 3 ? 0.45 : 1;
-    return (0.35 + need * 1.6 + cold * 0.8) * focus * done;
+    const start = seen ? 1 : (STARTER_WORLD[p.game.world] || 0.8);
+    return (0.35 + need * 1.6 + cold * 0.8) * focus * done * start;
   }
 
   function drawDailyPlan(pool, n){
@@ -212,6 +264,7 @@ const Session = (() => {
 
   function begin(){
     idx = 0; mistakes = 0; firstTryRight = 0;
+    if (mode !== 'focus') focusKeys = [];
     usedItems = new Set(); shaky = [];
     clear(pipsEl);
     plan.forEach(() => pipsEl.append(el('div.pip')));
@@ -243,6 +296,18 @@ const Session = (() => {
         if (stale() || key == null) return;
         curItem = a.game.id + ':' + key;
         curLabel = label || null;
+      },
+      /** In a 集中練習 session, the fact this question is supposed to ask (the part
+          of the item key after the game id), or null in a normal session.
+
+          A generator that reads this hits the requested fact on its first build.
+          One that ignores it still works: the engine re-rolls it and settles for
+          the same level, which is the right topic if not the exact fact. */
+      get want(){
+        const w = plan[idx] && plan[idx].want;
+        if (!w) return null;
+        const p = a.game.id + ':';
+        return w.indexOf(p) === 0 ? w.slice(p.length) : null;
       },
       onHint(fn){ if (!stale()) hintFn = fn; },
       correct(o){ if (!stale()) onCorrect(o || {}); },
@@ -364,12 +429,17 @@ const Session = (() => {
      TRIES builds are cheap (the whole build-storm test does 25 per level), and a
      rejected build dies with its epoch, so nothing it scheduled can survive. */
   const TRIES = 7, PICKY = 2, DUE_ENOUGH = 0.55;
+  /* A generator that ignores api.want has to be re-rolled onto the fact. Levels
+     name between five and forty-five facts, so this lands most of the time and
+     falls back to the same level when it does not. */
+  const FOCUS_TRIES = 24;
 
   /** Draw a question, re-rolling to avoid repeating a fact and to favour the ones
       this child owes practice to. The generator is random, so we cannot go back to
       an earlier draw — we accept the one that is on screen when we stop. */
   function drawQuestion(step){
-    for (let t = 0; t < TRIES; t++){
+    const tries = step.want ? FOCUS_TRIES : TRIES;
+    for (let t = 0; t < tries; t++){
       killTimers();
       resetSurface();
       try{
@@ -380,7 +450,13 @@ const Session = (() => {
         return;
       }
       if (!curItem) return;                      // this game does not name its items
-      if (t === TRIES - 1){
+      if (step.want){
+        // the shuffle bag is deliberately out of the way here: repeating the fact
+        // inside one sitting is the entire point of a 集中練習 session
+        if (curItem === step.want || t === tries - 1) return;
+        continue;
+      }
+      if (t === tries - 1){
         // the bag is empty (every fact has come up already): start a fresh pass
         if (usedItems.has(curItem)) usedItems.clear();
         usedItems.add(curItem);
@@ -400,7 +476,9 @@ const Session = (() => {
     $$('.pip', pipsEl).forEach((p, i) => p.classList.toggle('now', i === idx));
     setMood('idle');
     const step = plan[idx];
-    if (mode === 'daily') titleEl.textContent = 'きょうの れんしゅう　' + step.game.name;
+    if (mode !== 'level'){
+      titleEl.textContent = (mode === 'daily' ? 'きょうの れんしゅう' : 'にがて あつめ') + '　' + step.game.name;
+    }
     drawQuestion(step);
     UI.fitPlayfield(fieldEl);     // size this question to the room it has
     refit();                      // and again next frame, once fonts/SVGs have settled
@@ -442,7 +520,7 @@ const Session = (() => {
     if (clean) firstTryRight++;
     Store.noteOutcome(plan[idx].game.id, plan[idx].levelIndex, clean);
     if (curItem){
-      Store.noteFact(curItem, clean, curLabel);
+      Store.noteFact(curItem, clean, curLabel, plan[idx].game.id + ':' + plan[idx].levelIndex);
       if (!clean && !shaky.some(x => x.key === curItem)){
         shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
       }
@@ -497,16 +575,18 @@ const Session = (() => {
         }
       }
     } else {
-      Store.recordPractice(firstTryRight, total);
-      const key = 'daily:' + Store.todayKey();   // one sticker per calendar day
+      if (mode === 'daily') Store.recordPractice(firstTryRight, total);
+      else Store.recordFocus(firstTryRight, total);
+      // one sticker per calendar day, per set
+      const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
       if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
     }
     Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
-                  sticker: newSticker, shaky: shaky.slice(0, 3) });
+                  sticker: newSticker, shaky: shaky.slice(0, 3), focusKeys: focusKeys.slice() });
   }
 
   return {
-    startLevel, startDaily, build,
+    startLevel, startDaily, startFocus, build,
     _test: {
       flushTimers,
       get idx(){ return idx; },
@@ -521,7 +601,8 @@ const Session = (() => {
       get locked(){ return locked; },
       get mistakes(){ return mistakes; },
       get pending(){ return timers.size; },
-      get mode(){ return mode; }
+      get mode(){ return mode; },
+      get planItems(){ return plan.map(p => p.want || null); }
     }
   };
 })();

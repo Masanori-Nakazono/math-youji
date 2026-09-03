@@ -1361,6 +1361,27 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   font-family:var(--fs-num); font-weight:800; font-size:calc(var(--u)*1.7); color:var(--ink);
 }
 
+/* The named facts are the way back to them, so they have to look pressable and
+   be big enough for a five-year-old to hit. */
+#result button.shakyitem{
+  appearance: none; cursor: pointer;
+  padding: calc(var(--u)*.5) calc(var(--u)*.95);
+  transition: transform .12s cubic-bezier(.2,.9,.3,1.4), box-shadow .12s;
+  box-shadow: var(--shadow-sm);
+}
+#result button.shakyitem:active{ transform: translateY(.14em); box-shadow: none; }
+#result button.shakyitem:focus-visible{ outline: calc(var(--u)*.24) solid var(--ring); outline-offset: 2px; }
+
+/* ---------- home: the aimed practice set ----------
+   A quieter second door than きょうの れんしゅう: the daily habit stays the loud
+   one, and this appears only when there is actually something to aim at. */
+.daily.focusset{
+  background: linear-gradient(105deg, var(--card), color-mix(in srgb, var(--c-blue) 15%, var(--card)));
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--c-blue) 55%, var(--ink) 20%);
+}
+.daily.focusset .s{ color: var(--ink-soft); opacity: 1; }
+
 /* ---------- parent: 今週やること ---------- */
 #parent .todo{
   display:flex; gap:calc(var(--u)*.7); align-items:flex-start;

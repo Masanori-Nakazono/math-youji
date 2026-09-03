@@ -3,6 +3,15 @@
    =========================================================== */
 'use strict';
 
+/** In a 集中練習 session the engine names the exact fact this question should ask.
+    These generators read it, so a fact the child keeps missing can come round
+    several times in one sitting; きょうの れんしゅう on its own gives one particular
+    fact about a turn a fortnight. Returns the numbers in the key, or null. */
+function wanted(api, re){
+  const m = api.want && re.exec(api.want);
+  return m ? m.slice(1).map(Number) : null;
+}
+
 /* ---------- shared: bond diagram ---------- */
 function bondNode(whole, known, unknownLabel){
   const legs = svg('svg', { viewBox: '0 0 100 20', class: 'legs' },
@@ -32,7 +41,10 @@ function partFrame(whole, known){
    8. いくつと いくつ — number bonds (decompose & compose)
    ============================================================ */
 function decompose(api, whole, pad){
-  const known = ri(1, whole - 1), ans = whole - known;
+  const w = wanted(api, /^dec:(\d+)-(\d+)$/);
+  const aim = w && w[0] >= 2 && w[1] >= 1 && w[1] < w[0];
+  if (aim) whole = w[0];
+  const known = aim ? w[1] : ri(1, whole - 1), ans = whole - known;
   api.item('dec:' + whole + '-' + known, whole + ' は ' + known + ' と ' + ans);
   api.setPrompt(`${numTag(whole)} は ${numTag(known)} と いくつ？`,
                 `${numKana(whole)}は、${numKana(known)}といくつ？`);
@@ -57,7 +69,10 @@ function decompose(api, whole, pad){
 }
 
 function compose(api, maxWhole, pad){
-  const a = ri(1, maxWhole - 1), b = ri(1, maxWhole - a), ans = a + b;
+  const w = wanted(api, /^com:(\d+)\+(\d+)$/);
+  const aim = w && w[0] >= 1 && w[1] >= 1 && w[0] + w[1] <= maxWhole;
+  const a = aim ? w[0] : ri(1, maxWhole - 1);
+  const b = aim ? w[1] : ri(1, maxWhole - a), ans = a + b;
   api.item('com:' + a + '+' + b, a + ' と ' + b + ' で ' + ans);
   api.setPrompt(`${numTag(a)} と ${numTag(b)} で いくつ？`,
                 `${numKana(a)}と${numKana(b)}で、いくつ？`);
@@ -90,7 +105,8 @@ Games.add({
    9. １０の おともだち — make ten
    ============================================================ */
 function fillToTen(api){
-  const start = ri(2, 8);
+  const w = wanted(api, /^fill10:(\d+)$/);
+  const start = (w && w[0] >= 2 && w[0] <= 8) ? w[0] : ri(2, 8);
   api.item('fill10:' + start, start + ' から 10 まで あと ' + (10 - start));
   api.setPrompt(`わくが <b>10</b> に なるように タップして たそう`, '枠が10になるように、タップして足そう。');
   const f = el('div.tenframe', { style: { '--cols': 5 } });
@@ -126,7 +142,8 @@ function fillToTen(api){
 }
 
 function partnerOfTen(api, pad){
-  const a = ri(1, 9), ans = 10 - a;
+  const w = wanted(api, /^ten:(\d+)$/);
+  const a = (w && w[0] >= 1 && w[0] <= 9) ? w[0] : ri(1, 9), ans = 10 - a;
   api.item('ten:' + a, a + ' と ' + ans + ' で 10');
   api.setPrompt(`${numTag(a)} と いくつで <b>10</b>？`, `${numKana(a)}といくつで、10？`);
   const f = el('div.tenframe', { style: { '--cols': 5 } });
@@ -142,7 +159,8 @@ function partnerOfTen(api, pad){
 }
 
 function pairHunt(api){
-  const a = ri(1, 9), b = 10 - a;
+  const w = wanted(api, /^pair:(\d+)$/);
+  const a = (w && w[0] >= 1 && w[0] <= 9) ? w[0] : ri(1, 9), b = 10 - a;
   const others = [];
   while (others.length < 3){
     const v = ri(1, 9);
@@ -257,7 +275,10 @@ function eqNode(a, b, op){
 }
 
 function addStory(api, max){
-  const a = ri(1, max - 1), b = ri(1, max - a), ans = a + b;
+  const w = wanted(api, /^sum:(\d+)\+(\d+)$/);
+  const aim = w && w[0] >= 1 && w[1] >= 1 && w[0] + w[1] <= max;
+  const a = aim ? w[0] : ri(1, max - 1);
+  const b = aim ? w[1] : ri(1, max - a), ans = a + b;
   const thing = pick(THINGS);
   api.item('sum:' + a + '+' + b, a + ' ＋ ' + b);
   api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ やってきたよ`,
@@ -270,7 +291,10 @@ function addStory(api, max){
 }
 
 function subStory(api, max){
-  const a = ri(2, max), b = ri(1, a - 1), ans = a - b;
+  const w = wanted(api, /^rest:(\d+)-(\d+)$/);
+  const aim = w && w[0] >= 2 && w[0] <= max && w[1] >= 1 && w[1] < w[0];
+  const a = aim ? w[0] : ri(2, max);
+  const b = aim ? w[1] : ri(1, a - 1), ans = a - b;
   const thing = pick(THINGS);
   api.item('rest:' + a + '-' + b, a + ' − ' + b);
   api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ いなくなるよ`,
@@ -284,7 +308,12 @@ function subStory(api, max){
 
 function symbolCalc(api, op, max, pad){
   let a, b, ans;
-  if (op === '+'){ a = ri(1, max - 1); b = ri(1, max - a); ans = a + b; }
+  const w = wanted(api, op === '+' ? /^sum:(\d+)\+(\d+)$/ : /^rest:(\d+)-(\d+)$/);
+  const aim = op === '+'
+    ? (w && w[0] >= 1 && w[1] >= 1 && w[0] + w[1] <= max)
+    : (w && w[0] >= 2 && w[0] <= max && w[1] >= 1 && w[1] <= w[0]);
+  if (aim){ a = w[0]; b = w[1]; ans = op === '+' ? a + b : a - b; }
+  else if (op === '+'){ a = ri(1, max - 1); b = ri(1, max - a); ans = a + b; }
   else { a = ri(2, max); b = ri(1, a); ans = a - b; }
   api.item((op === '+' ? 'sum:' + a + '+' + b : 'rest:' + a + '-' + b),
     a + (op === '+' ? ' ＋ ' : ' − ') + b);
@@ -308,7 +337,10 @@ function symbolCalc(api, op, max, pad){
 }
 
 function differenceQ(api, max, pad){
-  const a = ri(3, max), b = ri(1, a - 1), ans = a - b;
+  const w = wanted(api, /^diff:(\d+)-(\d+)$/);
+  const aim = w && w[0] >= 3 && w[0] <= max && w[1] >= 1 && w[1] < w[0];
+  const a = aim ? w[0] : ri(3, max);
+  const b = aim ? w[1] : ri(1, a - 1), ans = a - b;
   const t1 = pick(THINGS); let t2 = pick(THINGS);
   while (t2.e === t1.e) t2 = pick(THINGS);
   api.item('diff:' + a + '-' + b, a + ' と ' + b + ' の ちがい');
