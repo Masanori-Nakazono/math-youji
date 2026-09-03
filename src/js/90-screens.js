@@ -20,7 +20,7 @@ const Title = (() => {
       onclick(){
         Sound.unlock();
         Sound.sfx.unlockSfx();
-        Sound.say('かずの ぼうけんへ ようこそ', { delay: 260 });
+        Sound.say('数の冒険へ、ようこそ！', { delay: 260 });
         Home.render();
         UI.show('home', { replace: true });
       }
@@ -148,7 +148,7 @@ const Levels = (() => {
         type: 'button', style: { '--lc': g.color },
         onclick(){
           Sound.sfx.tap();
-          if (!unlocked){ Sound.say('まえの レベルを クリアすると あそべるよ', { delay: 120 }); return; }
+          if (!unlocked){ Sound.say('前のレベルをクリアすると、遊べるよ。', { delay: 120 }); return; }
           Session.startLevel(g, i);
         }
       },
@@ -178,6 +178,12 @@ const Result = (() => {
               : r.stars === 2 ? 'よく できました！'
               : r.stars === 1 ? 'クリア！'
               : 'おしい！ もう いちど やってみよう';
+    // the children read `msg`, so it stays hiragana; the voice gets kanji, which
+    // is what lets a Japanese engine phrase it instead of droning it out
+    const spoken = r.stars === 3 ? 'パーフェクト！'
+                 : r.stars === 2 ? 'よくできました！'
+                 : r.stars === 1 ? 'クリア！'
+                 : '惜しい！もう一度やってみよう。';
     inner.append(
       mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
       UI.stars(r.stars, true),
@@ -213,7 +219,7 @@ const Result = (() => {
       onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
     inner.append(actions);
     UI.show('result', { replace: true });
-    Sound.say(msg, { delay: 700 });
+    Sound.say(spoken, { delay: 700 });
     for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
   return { show, build };

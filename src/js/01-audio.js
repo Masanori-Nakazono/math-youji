@@ -7,7 +7,8 @@
 const Sound = (() => {
   let ctx = null, master = null;
   let sfxOn = true, voiceOn = true;
-  let jaVoice = null, voicesReady = false;
+  let jaVoice = null, jaVoices = [], voicesReady = false;
+  let prefVoice = null;
 
   function ensure(){
     if (ctx) return ctx;
@@ -83,20 +84,59 @@ const Sound = (() => {
     swoosh()   { noiseBurst(.18, .1); }
   };
 
-  /* ---------- speech ---------- */
+  /* ---------- speech ----------
+     How natural this sounds is decided by which voice the device has installed,
+     not by anything we do here: the bundled "compact" Kyoko is the flat, robotic
+     one, while the enhanced / premium download (設定 → アクセシビリティ →
+     読み上げコンテンツ → 声) and the Siri voices sound like a person reading.
+     So rank the candidates instead of taking the first ja voice, and let the
+     parent page override the pick for the device actually in their hands. */
+  const VOICE_RANK = [
+    [/siri/i,                                     60],
+    [/premium|プレミアム/i,                        50],
+    [/enhanced|拡張|高品質/i,                       40],
+    // Apple's current voice family (Ventura / iOS 16 onward) shares the engine
+    // behind Siri, so it phrases a sentence instead of reciting it — it beats the
+    // old compact Kyoko even though Kyoko is the name everyone recognises.
+    [/^(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/i, 30],
+    [/^(sandy|flo)\b/i,                            4],  // warmest of that family for a 5-year-old
+    [/neural|natural|wavenet|google|microsoft/i,   25],
+    [/kyoko|o-?ren|nanami|ayumi|haruka|mizuki/i,   10],
+    [/otoya|hattori|ichiro|keita/i,                 5]
+  ];
+  function voiceScore(v){
+    const n = (v.name || '') + ' ' + (v.voiceURI || '');
+    let s = v.localService ? 8 : 0;   // offline-first, but never over a much better voice
+    for (const [re, w] of VOICE_RANK) if (re.test(n)) s += w;
+    return s;
+  }
+
   function loadVoices(){
     if (!window.speechSynthesis) return;
     const vs = speechSynthesis.getVoices();
     if (!vs || !vs.length) return;
     voicesReady = true;
-    const ja = vs.filter(v => /^ja(-|_|$)/i.test(v.lang || ''));
-    jaVoice = ja.find(v => /kyoko|o-ren|otoya|hattori/i.test(v.name))
-           || ja.find(v => v.localService)
-           || ja[0] || null;
+    jaVoices = vs.filter(v => /^ja(-|_|$)/i.test(v.lang || ''))
+                 .sort((a, b) => voiceScore(b) - voiceScore(a));
+    jaVoice = (prefVoice && jaVoices.find(v => v.voiceURI === prefVoice || v.name === prefVoice))
+           || jaVoices[0] || null;
   }
   if (window.speechSynthesis){
     loadVoices();
     speechSynthesis.addEventListener('voiceschanged', loadVoices);
+  }
+
+  /* Japanese TTS decides its phrasing and pitch accent by parsing the sentence,
+     and a space inside a sentence breaks that parse — the reason the same line
+     can come out either flat or lively. The prompts are written with kanji and
+     punctuation for the engine's benefit; this strips any stray spacing left
+     between Japanese characters. */
+  const JA = /[\u3000-\u30FF\u3400-\u9FFF\uFF00-\uFF9F]/;
+  function forSpeech(text){
+    return String(text)
+      .replace(/[ \u3000]+/g, ' ')
+      .replace(/(.) (?=(.))/g, (m, a, b) => JA.test(a) && JA.test(b) ? a : m)
+      .trim();
   }
 
   let speakTimer = null;
@@ -108,11 +148,13 @@ const Sound = (() => {
       try{
         if (!voicesReady) loadVoices();
         speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(String(text));
+        const u = new SpeechSynthesisUtterance(forSpeech(text));
         u.lang  = 'ja-JP';
         if (jaVoice) u.voice = jaVoice;
-        u.rate   = o.rate   == null ? 0.92 : o.rate;
-        u.pitch  = o.pitch  == null ? 1.15 : o.pitch;
+        // 1.0 is the voice's own recorded prosody; pushing rate or pitch away
+        // from it is what made this sound synthetic. Only nudge, never shove.
+        u.rate   = o.rate   == null ? 0.95 : o.rate;
+        u.pitch  = o.pitch  == null ? 1 : o.pitch;
         u.volume = o.volume == null ? 1 : o.volume;
         speechSynthesis.speak(u);
       }catch(e){}
@@ -129,6 +171,10 @@ const Sound = (() => {
     sfx: S, unlock, say, hush,
     get sfxOn(){ return sfxOn; },  set sfxOn(v){ sfxOn = !!v; },
     get voiceOn(){ return voiceOn; }, set voiceOn(v){ voiceOn = !!v; if (!v) hush(); },
-    get hasVoice(){ return !!jaVoice; }
+    get hasVoice(){ return !!jaVoice; },
+    /** The parent page lists these so a device with a better voice installed can use it. */
+    get voices(){ if (!voicesReady) loadVoices(); return jaVoices.slice(); },
+    get voiceId(){ return jaVoice ? jaVoice.voiceURI : null; },
+    set voiceId(id){ prefVoice = id || null; loadVoices(); }
   };
 })();

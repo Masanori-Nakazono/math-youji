@@ -262,6 +262,48 @@ const Parent = (() => {
     return s;
   }
 
+  /** Which Japanese voice reads the questions.
+      The voice bundled with a device is the “compact” one — flat and robotic.
+      The enhanced / premium download is a different recording of the same name,
+      so we cannot tell them apart from here: the honest fix is to list what the
+      device actually has, let a parent hear each one, and remember the choice. */
+  function voiceRow(){
+    const wrap = el('div', { style: { marginTop: 'calc(var(--u)*.7)' } });
+    const list = Sound.voices;
+    if (!list.length){
+      wrap.append(el('p', { style: { color: 'var(--oops-ink)' },
+        text: '※ この端末で日本語の読み上げ音声が見つかりませんでした。iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 日本語 で音声を追加すると、問題文が音声で読まれます。文字だけでも遊べます。' }));
+      // Safari fills the voice list asynchronously, so an empty list here often
+      // just means "not yet" — swap the warning for the picker when it arrives.
+      if (window.speechSynthesis){
+        speechSynthesis.addEventListener('voiceschanged', function again(){
+          if (!Sound.voices.length) return;
+          speechSynthesis.removeEventListener('voiceschanged', again);
+          wrap.replaceWith(voiceRow());
+        });
+      }
+      return wrap;
+    }
+    const sel = el('select.btn', { style: { maxWidth: '100%' } });
+    list.forEach(v => {
+      const o = el('option', { value: v.voiceURI, text: v.name });
+      if (v.voiceURI === Sound.voiceId) o.selected = true;
+      sel.append(o);
+    });
+    const apply = () => {
+      Sound.voiceId = sel.value;
+      Store.setPref('voiceId', sel.value);
+      Sound.say('こんにちは。今日も一緒に、数を数えよう！', { delay: 60 });
+    };
+    sel.addEventListener('change', apply);
+    const test = el('button.btn', { text: '試しに聴く', onclick: apply });
+    wrap.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap', alignItems: 'center' } },
+      el('span', { text: '読み上げの声：' }), sel, test));
+    wrap.append(el('p', { style: { marginTop: 'calc(var(--u)*.4)' },
+      text: '※ 機械的な声に聞こえるときは、iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 日本語 で「高品質」または「プレミアム」の音声をダウンロードしてください（無料・オフラインで使えます）。同じ名前のまま、声だけが自然になります。' }));
+    return wrap;
+  }
+
   function settingsSection(){
     const s = el('section');
     s.append(el('div.eyebrow', { text: 'settings' }), el('h3', { text: '設定' }));
@@ -278,10 +320,7 @@ const Parent = (() => {
       toggle('効果音', () => Sound.sfxOn, v => { Sound.sfxOn = v; Store.setPref('sfx', v); }),
       toggle('読み上げ', () => Sound.voiceOn, v => { Sound.voiceOn = v; Store.setPref('voice', v); }));
     s.append(row);
-    if (!Sound.hasVoice){
-      s.append(el('p', { style: { color: 'var(--oops-ink)' },
-        text: '※ この端末で日本語の読み上げ音声が見つかりませんでした。iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 で日本語（Kyoko など）を追加すると、問題文が音声で読まれます。文字だけでも遊べます。' }));
-    }
+    s.append(voiceRow());
     const reset = el('button.btn', { text: justReset ? '消しました' : '記録をすべて消す',
       style: { borderColor: 'var(--oops)', color: 'var(--oops-ink)' } });
     justReset = false;

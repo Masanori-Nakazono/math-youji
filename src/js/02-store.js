@@ -20,7 +20,7 @@ const Store = (() => {
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
     name: '',
-    sfx: true, voice: true,
+    sfx: true, voice: true, voiceId: null,
     createdAt: Date.now()
   });
 

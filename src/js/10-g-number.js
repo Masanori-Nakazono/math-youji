@@ -33,7 +33,7 @@ function countQuestion(api, lo, hi, layout){
   const thing = pick(THINGS);
   const count = ri(lo, hi);
   api.item('count' + (layout === 'line' ? 'L' : 'S') + ':' + count, count + 'こ を かぞえる');
-  api.setPrompt(`${thing.n}を ひとつずつ タップして かぞえよう`, `${thing.n}を、ひとつずつ タップして かぞえよう`);
+  api.setPrompt(`${thing.n}を ひとつずつ タップして かぞえよう`, `${thing.n}を、ひとつずつタップして数えよう。`);
   const objs = makeCountField(api, count, thing, layout);
   let done = 0;
   const tap = (o) => {
@@ -42,7 +42,7 @@ function countQuestion(api, lo, hi, layout){
     o.classList.add('counted');
     o.append(el('span.tag', { text: String(done) }));
     Sound.sfx.count(done - 1);
-    Sound.say(numKana(done), { delay: 0, rate: 1.2 });
+    Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done === count) api.later(ask, 620);
   };
   objs.forEach(o => {
@@ -50,7 +50,7 @@ function countQuestion(api, lo, hi, layout){
   });
 
   function ask(){
-    api.setPrompt(`${thing.n}は ぜんぶで いくつ？`, `${thing.n}は、ぜんぶで いくつ`);
+    api.setPrompt(`${thing.n}は ぜんぶで いくつ？`, `${thing.n}は、全部でいくつ？`);
     const n = hi <= 5 ? 3 : 4;
     const vals = shuffle([count].concat(distractors(count, n - 1, 1, Math.max(hi + 2, 6))));
     api.buildChoices(vals, count);
@@ -62,7 +62,7 @@ function giveQuestion(api, lo, hi){
   const target = ri(lo, hi);
   const total = Math.min(14, target + ri(3, 5));
   api.item('give:' + target, target + 'こ だけ とりだす');
-  api.setPrompt(`${thing.n}を ${numTag(target)}こ とって かごに いれよう`, `${thing.n}を、${koKana(target)} とって、かごに いれよう`);
+  api.setPrompt(`${thing.n}を ${numTag(target)}こ とって かごに いれよう`, `${thing.n}を${koKana(target)}、とって、かごに入れよう。`);
   const objs = makeCountField(api, total, thing, 'scatter');
   const picked = new Set();
   const basketCount = el('div.n', { text: '0' });
@@ -82,7 +82,7 @@ function giveQuestion(api, lo, hi){
     if (api.locked) return;
     const i = o.dataset.i;
     if (picked.has(i)){ picked.delete(i); o.classList.remove('picked'); Sound.sfx.tap(); }
-    else { picked.add(i); o.classList.add('picked'); Sound.sfx.count(picked.size - 1); Sound.say(numKana(picked.size), { delay: 0, rate: 1.2 }); }
+    else { picked.add(i); o.classList.add('picked'); Sound.sfx.count(picked.size - 1); Sound.say(numKana(picked.size), { delay: 0, rate: 1.08 }); }
     refresh();
   }));
   doneBtn.addEventListener('click', () => {
@@ -90,7 +90,7 @@ function giveQuestion(api, lo, hi){
     if (picked.size === target){ doneBtn.classList.add('choice', 'correct'); api.correct(); }
     else {
       api.wrong(doneBtn);
-      Sound.say(picked.size > target ? 'ちょっと おおいみたい' : 'ちょっと たりないみたい', { delay: 300 });
+      Sound.say(picked.size > target ? 'ちょっと多いみたい。' : 'ちょっと足りないみたい。', { delay: 300 });
     }
   });
   api.onHint(() => {
@@ -124,7 +124,7 @@ function groupNode(count, thing){
 function numToQty(api, lo, hi){        // numeral shown → pick the matching group
   const n = ri(lo, hi), thing = pick(THINGS);
   api.item('n2q:' + n, 'すうじ ' + n + ' → その かず');
-  api.setPrompt(`${thing.e} が ${numTag(n)}こ あるのは どれ？`, `${thing.n}が ${koKana(n)} あるのは どれ`);
+  api.setPrompt(`${thing.e} が ${numTag(n)}こ あるのは どれ？`, `${thing.n}が${koKana(n)}、あるのは、どれ？`);
   const big = el('div', { style: { fontFamily: 'var(--fs-num)', fontWeight: 800, fontSize: 'calc(var(--u)*11)', lineHeight: 1, color: 'var(--c-red)' }, text: String(n) });
   api.field.append(big);
   const opts = shuffle([n].concat(distractors(n, 2, Math.max(1, lo - 1), Math.min(12, hi + 2), 2)));
@@ -143,7 +143,7 @@ function numToQty(api, lo, hi){        // numeral shown → pick the matching gr
 function qtyToNum(api, lo, hi){        // group shown → pick the numeral
   const n = ri(lo, hi), thing = pick(THINGS);
   api.item('q2n:' + n, n + 'こ → すうじ ' + n);
-  api.setPrompt(`${thing.n}は いくつ？ すうじを えらぼう`, `${thing.n}は いくつ。すうじを えらぼう`);
+  api.setPrompt(`${thing.n}は いくつ？ すうじを えらぼう`, `${thing.n}はいくつ？数字を選ぼう。`);
   const wrap = el('div.row', { style: { maxWidth: 'calc(var(--u)*40)' } });
   for (let i = 0; i < n; i++) wrap.append(el('span.item', { text: thing.e, style: { fontSize: 'calc(var(--u)*4.4)' } }));
   api.field.append(wrap);
@@ -166,7 +166,7 @@ function tenFrameNode(count, cols, opts){
 function teenQuestion(api){            // 11-20 with a filled ten-frame + loose ones
   const n = ri(11, 20), thing = pick(THINGS);
   api.item('teen:' + n, n + ' を 10と ' + (n - 10) + ' で みる');
-  api.setPrompt('ぜんぶで いくつ？', 'ぜんぶで いくつ');
+  api.setPrompt('ぜんぶで いくつ？', '全部でいくつ？');
   const box = el('div.frameset');
   box.append(tenFrameNode(10, 5));
   const rest = el('div.row', { style: { maxWidth: 'calc(var(--u)*22)' } });
@@ -209,7 +209,7 @@ function lineFill(api, lo, hi, gaps){
     nums.forEach(v => cells[v].classList.remove('now'));
     const target = holes[qi];
     cells[target].classList.add('now');
-    api.setPrompt('ひかって いる ところに はいる かずは？', 'ひかって いる ところに はいる かずは');
+    api.setPrompt('ひかって いる ところに はいる かずは？', '光っているところに入る数は？');
 
     // A distractor must never be another hole's answer — that answer is also
     // "correct" on the number line, and marking it wrong is simply unfair.
@@ -243,9 +243,9 @@ function nextBefore(api, hi){
   const mode = pick(['next', 'before', 'between']);
   const n = ri(2, hi - 1);
   let ans, html, speech;
-  if (mode === 'next'){ ans = n + 1; html = `${numTag(n)} の つぎの かずは？`; speech = `${numKana(n)}の つぎの かずは`; }
-  else if (mode === 'before'){ ans = n - 1; html = `${numTag(n)} の まえの かずは？`; speech = `${numKana(n)}の まえの かずは`; }
-  else { ans = n; html = `${numTag(n - 1)} と ${numTag(n + 1)} の あいだの かずは？`; speech = `${numKana(n-1)}と ${numKana(n+1)}の あいだの かずは`; }
+  if (mode === 'next'){ ans = n + 1; html = `${numTag(n)} の つぎの かずは？`; speech = `${numKana(n)}の次の数は？`; }
+  else if (mode === 'before'){ ans = n - 1; html = `${numTag(n)} の まえの かずは？`; speech = `${numKana(n)}の前の数は？`; }
+  else { ans = n; html = `${numTag(n - 1)} と ${numTag(n + 1)} の あいだの かずは？`; speech = `${numKana(n-1)}と${numKana(n+1)}の間の数は？`; }
   api.item('nb:' + mode + ':' + ans,
     mode === 'next' ? n + ' の つぎ' : mode === 'before' ? n + ' の まえ' : (n - 1) + ' と ' + (n + 1) + ' の あいだ');
   api.setPrompt(html, speech);
@@ -263,7 +263,7 @@ function skipCount(api){
   const seq = [0, 1, 2, 3].map(i => start + i * step);
   const ans = seq[3];
   api.item('skip' + step + ':' + ans, step + 'ずつ ふえて ' + ans);
-  api.setPrompt(`${step}ずつ ふえて いくよ。つぎは？`, `${numKana(step)}ずつ ふえて いくよ。つぎは`);
+  api.setPrompt(`${step}ずつ ふえて いくよ。つぎは？`, `${numKana(step)}ずつ増えていくよ。次は？`);
   const line = el('div.numline');
   seq.forEach((v, i) => line.append(el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) })));
   api.field.append(line);
@@ -287,7 +287,7 @@ function traceQuestion(api, digits){
   const d = String(pick(digits));
   const strokes = DIGIT_STROKES[d];
   api.item('trace:' + d, d + ' の かきかた');
-  api.setPrompt(`${numTag(d)} を ゆびで なぞろう`, `${numKana(Number(d))}を ゆびで なぞろう`);
+  api.setPrompt(`${numTag(d)} を ゆびで なぞろう`, `${numKana(Number(d))}を指でなぞろう。`);
 
   const box = el('div.tracebox');
   const s = svg('svg', { viewBox: '0 0 100 140', preserveAspectRatio: 'xMidYMid meet' });
@@ -313,7 +313,7 @@ function traceQuestion(api, digits){
       if (si >= strokes.length) return;
       nudged = true;
       showGuide();
-      Sound.say('あかい てんから なぞって みよう', { delay: 100 });
+      Sound.say('赤い点から、なぞってみよう。', { delay: 100 });
     }, 9000);
   }
   function showGuide(){
@@ -399,7 +399,7 @@ function traceQuestion(api, digits){
     } else {
       startMark();
       armIdle();
-      Sound.say('つぎの せんも なぞってね', { delay: 150 });
+      Sound.say('次の線も、なぞってね。', { delay: 150 });
     }
   }
   function onUp(){ drawing = false; }

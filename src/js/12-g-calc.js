@@ -35,7 +35,7 @@ function decompose(api, whole, pad){
   const known = ri(1, whole - 1), ans = whole - known;
   api.item('dec:' + whole + '-' + known, whole + ' は ' + known + ' と ' + ans);
   api.setPrompt(`${numTag(whole)} は ${numTag(known)} と いくつ？`,
-                `${numKana(whole)}は ${numKana(known)}と いくつ`);
+                `${numKana(whole)}は、${numKana(known)}といくつ？`);
   const frame = partFrame(whole, known);
   const bond = bondNode(whole, known, null);
   api.field.append(el('div.frameset', null, frame), bond);
@@ -60,7 +60,7 @@ function compose(api, maxWhole, pad){
   const a = ri(1, maxWhole - 1), b = ri(1, maxWhole - a), ans = a + b;
   api.item('com:' + a + '+' + b, a + ' と ' + b + ' で ' + ans);
   api.setPrompt(`${numTag(a)} と ${numTag(b)} で いくつ？`,
-                `${numKana(a)}と ${numKana(b)}で いくつ`);
+                `${numKana(a)}と${numKana(b)}で、いくつ？`);
   const slots = a + b > 5 ? 10 : 5;
   const f = el('div.tenframe', { style: { '--cols': 5 } });
   for (let i = 0; i < slots; i++){
@@ -92,7 +92,7 @@ Games.add({
 function fillToTen(api){
   const start = ri(2, 8);
   api.item('fill10:' + start, start + ' から 10 まで あと ' + (10 - start));
-  api.setPrompt(`わくが <b>10</b> に なるように タップして たそう`, 'わくが じゅうに なるように、タップして たそう');
+  api.setPrompt(`わくが <b>10</b> に なるように タップして たそう`, '枠が10になるように、タップして足そう。');
   const f = el('div.tenframe', { style: { '--cols': 5 } });
   const cells = [];
   for (let i = 0; i < 10; i++){
@@ -109,12 +109,12 @@ function fillToTen(api){
       cell.append(el('div.dot.b'));
       count++;
       Sound.sfx.count(count - 1);
-      Sound.say(numKana(count), { delay: 0, rate: 1.2 });
+      Sound.say(numKana(count), { delay: 0, rate: 1.08 });
       readout.textContent = 'いま ' + count + 'こ';
       if (count === 10){
         api.later(() => {
           api.setPrompt(`${numTag(start)} と ${numTag(10 - start)} で <b>10</b>！`,
-                        `${numKana(start)}と ${numKana(10 - start)}で じゅう`);
+                        `${numKana(start)}と${numKana(10 - start)}で、10！`);
           api.correct({ quiet: true, delay: 1400 });
           UI.bigMark('◯');
         }, 300);
@@ -128,7 +128,7 @@ function fillToTen(api){
 function partnerOfTen(api, pad){
   const a = ri(1, 9), ans = 10 - a;
   api.item('ten:' + a, a + ' と ' + ans + ' で 10');
-  api.setPrompt(`${numTag(a)} と いくつで <b>10</b>？`, `${numKana(a)}と いくつで じゅう`);
+  api.setPrompt(`${numTag(a)} と いくつで <b>10</b>？`, `${numKana(a)}といくつで、10？`);
   const f = el('div.tenframe', { style: { '--cols': 5 } });
   for (let i = 0; i < 10; i++){
     const cell = el('div.cell' + (i >= a ? '.hole' : ''));
@@ -150,7 +150,7 @@ function pairHunt(api){
   }
   const cards = shuffle([a, b].concat(others));
   api.item('pair:' + Math.min(a, b), Math.min(a, b) + ' と ' + Math.max(a, b) + ' の ペア');
-  api.setPrompt('たすと <b>10</b> に なる 2まいを えらぼう', 'たすと じゅうに なる にまいを えらぼう');
+  api.setPrompt('たすと <b>10</b> に なる 2まいを えらぼう', '足すと10になる2枚を選ぼう。');
   const picked = [];
   const row = api.choices;
   cards.forEach(v => {
@@ -168,7 +168,7 @@ function pairHunt(api){
         else {
           picked.forEach(p => { p.classList.add('wrong'); p.style.borderColor = ''; api.later(() => p.classList.remove('wrong'), 460); });
           api.wrong();
-          Sound.say(`あわせて ${numKana(sum)}に なったよ`, { delay: 320 });
+          Sound.say(`合わせて${numKana(sum)}になったよ。`, { delay: 320 });
           picked.length = 0;
         }
       }
@@ -261,9 +261,9 @@ function addStory(api, max){
   const thing = pick(THINGS);
   api.item('sum:' + a + '+' + b, a + ' ＋ ' + b);
   api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ やってきたよ`,
-                `${thing.n}が ${tsuKana(a)}。${tsuKana(b)} やってきたよ`);
+                `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、やってきたよ。`);
   storyScene(api, a, b, '+', thing, () => {
-    api.setPrompt('ぜんぶで いくつ？', 'ぜんぶで いくつ');
+    api.setPrompt('ぜんぶで いくつ？', '全部でいくつ？');
     api.field.append(eqNode(a, b, '+'));
     api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, max + 2, 2))), ans);
   });
@@ -274,9 +274,9 @@ function subStory(api, max){
   const thing = pick(THINGS);
   api.item('rest:' + a + '-' + b, a + ' − ' + b);
   api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ いなくなるよ`,
-                `${thing.n}が ${tsuKana(a)}。${tsuKana(b)} いなくなるよ`);
+                `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、いなくなるよ。`);
   storyScene(api, a, b, '-', thing, () => {
-    api.setPrompt('のこりは いくつ？', 'のこりは いくつ');
+    api.setPrompt('のこりは いくつ？', '残りは、いくつ？');
     api.field.append(eqNode(a, b, '-'));
     api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans);
   });
@@ -289,7 +289,7 @@ function symbolCalc(api, op, max, pad){
   api.item((op === '+' ? 'sum:' + a + '+' + b : 'rest:' + a + '-' + b),
     a + (op === '+' ? ' ＋ ' : ' − ') + b);
   api.setPrompt('しきを みて こたえよう',
-    `${numKana(a)} ${op === '+' ? 'たす' : 'ひく'} ${numKana(b)} は`);
+    `${numKana(a)}、${op === '+' ? 'たす' : 'ひく'}、${numKana(b)}は？`);
   api.field.append(eqNode(a, b, op));
   if (pad) api.buildPad(ans);
   else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 0, max + 2, 2))), ans);
@@ -312,7 +312,7 @@ function differenceQ(api, max, pad){
   const t1 = pick(THINGS); let t2 = pick(THINGS);
   while (t2.e === t1.e) t2 = pick(THINGS);
   api.item('diff:' + a + '-' + b, a + ' と ' + b + ' の ちがい');
-  api.setPrompt(`どちらが <b>いくつ</b> おおい？`, 'どちらが いくつ おおい');
+  api.setPrompt(`どちらが <b>いくつ</b> おおい？`, 'どちらが、いくつ多い？');
   const board = el('div.measure');
   [[t1, a], [t2, b]].forEach(([t, n]) => {
     const row = el('div.mrow', { style: { cursor: 'default' } }, el('div.cap', { text: t.e }));

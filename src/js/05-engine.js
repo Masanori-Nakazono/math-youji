@@ -418,14 +418,14 @@ const Session = (() => {
     }
     if (wrongThisQ === 1){
       showFeedback('oops', 'もういちど やってみよう');
-      Sound.say('おしいね。もういちど やってみよう', { delay: 260 });
+      Sound.say('惜しいね。もう一度やってみよう。', { delay: 260 });
     } else if (wrongThisQ >= 2){
       // The game's own hint is preferred, but the choice-dimming fallback runs too:
       // a hint that only speaks would leave a muted device with no feedback at all.
       if (!hintShown){
         hintShown = true;
         showFeedback('hint', 'ヒントを だすね');
-        Sound.say('ヒントを だすね', { delay: 260 });
+        Sound.say('ヒントを出すね。', { delay: 260 });
         if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
         hintExtras.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
       }
@@ -454,8 +454,8 @@ const Session = (() => {
     if (!o.quiet){
       UI.bigMark('◯');
       const praise = wrongThisQ === 0
-        ? pick(['やったね', 'せいかい', 'すごい', 'じょうずだね', 'ばっちり', 'その ちょうし'])
-        : pick(['できたね', 'よく がんばったね', 'そのとおり']);
+        ? pick(['やったね！', '正解！', 'すごい！', '上手だね！', 'ばっちり！', 'その調子！'])
+        : pick(['できたね！', 'よく頑張ったね！', 'その通り！']);
       Sound.say(praise, { delay: 320 });
     }
     if ((idx + 1) % 4 === 0) UI.confetti(22);

@@ -1601,7 +1601,8 @@ function lineup(n, y){
 const Sound = (() => {
   let ctx = null, master = null;
   let sfxOn = true, voiceOn = true;
-  let jaVoice = null, voicesReady = false;
+  let jaVoice = null, jaVoices = [], voicesReady = false;
+  let prefVoice = null;
 
   function ensure(){
     if (ctx) return ctx;
@@ -1677,20 +1678,59 @@ const Sound = (() => {
     swoosh()   { noiseBurst(.18, .1); }
   };
 
-  /* ---------- speech ---------- */
+  /* ---------- speech ----------
+     How natural this sounds is decided by which voice the device has installed,
+     not by anything we do here: the bundled "compact" Kyoko is the flat, robotic
+     one, while the enhanced / premium download (設定 → アクセシビリティ →
+     読み上げコンテンツ → 声) and the Siri voices sound like a person reading.
+     So rank the candidates instead of taking the first ja voice, and let the
+     parent page override the pick for the device actually in their hands. */
+  const VOICE_RANK = [
+    [/siri/i,                                     60],
+    [/premium|プレミアム/i,                        50],
+    [/enhanced|拡張|高品質/i,                       40],
+    // Apple's current voice family (Ventura / iOS 16 onward) shares the engine
+    // behind Siri, so it phrases a sentence instead of reciting it — it beats the
+    // old compact Kyoko even though Kyoko is the name everyone recognises.
+    [/^(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/i, 30],
+    [/^(sandy|flo)\b/i,                            4],  // warmest of that family for a 5-year-old
+    [/neural|natural|wavenet|google|microsoft/i,   25],
+    [/kyoko|o-?ren|nanami|ayumi|haruka|mizuki/i,   10],
+    [/otoya|hattori|ichiro|keita/i,                 5]
+  ];
+  function voiceScore(v){
+    const n = (v.name || '') + ' ' + (v.voiceURI || '');
+    let s = v.localService ? 8 : 0;   // offline-first, but never over a much better voice
+    for (const [re, w] of VOICE_RANK) if (re.test(n)) s += w;
+    return s;
+  }
+
   function loadVoices(){
     if (!window.speechSynthesis) return;
     const vs = speechSynthesis.getVoices();
     if (!vs || !vs.length) return;
     voicesReady = true;
-    const ja = vs.filter(v => /^ja(-|_|$)/i.test(v.lang || ''));
-    jaVoice = ja.find(v => /kyoko|o-ren|otoya|hattori/i.test(v.name))
-           || ja.find(v => v.localService)
-           || ja[0] || null;
+    jaVoices = vs.filter(v => /^ja(-|_|$)/i.test(v.lang || ''))
+                 .sort((a, b) => voiceScore(b) - voiceScore(a));
+    jaVoice = (prefVoice && jaVoices.find(v => v.voiceURI === prefVoice || v.name === prefVoice))
+           || jaVoices[0] || null;
   }
   if (window.speechSynthesis){
     loadVoices();
     speechSynthesis.addEventListener('voiceschanged', loadVoices);
+  }
+
+  /* Japanese TTS decides its phrasing and pitch accent by parsing the sentence,
+     and a space inside a sentence breaks that parse — the reason the same line
+     can come out either flat or lively. The prompts are written with kanji and
+     punctuation for the engine's benefit; this strips any stray spacing left
+     between Japanese characters. */
+  const JA = /[\u3000-\u30FF\u3400-\u9FFF\uFF00-\uFF9F]/;
+  function forSpeech(text){
+    return String(text)
+      .replace(/[ \u3000]+/g, ' ')
+      .replace(/(.) (?=(.))/g, (m, a, b) => JA.test(a) && JA.test(b) ? a : m)
+      .trim();
   }
 
   let speakTimer = null;
@@ -1702,11 +1742,13 @@ const Sound = (() => {
       try{
         if (!voicesReady) loadVoices();
         speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(String(text));
+        const u = new SpeechSynthesisUtterance(forSpeech(text));
         u.lang  = 'ja-JP';
         if (jaVoice) u.voice = jaVoice;
-        u.rate   = o.rate   == null ? 0.92 : o.rate;
-        u.pitch  = o.pitch  == null ? 1.15 : o.pitch;
+        // 1.0 is the voice's own recorded prosody; pushing rate or pitch away
+        // from it is what made this sound synthetic. Only nudge, never shove.
+        u.rate   = o.rate   == null ? 0.95 : o.rate;
+        u.pitch  = o.pitch  == null ? 1 : o.pitch;
         u.volume = o.volume == null ? 1 : o.volume;
         speechSynthesis.speak(u);
       }catch(e){}
@@ -1723,7 +1765,11 @@ const Sound = (() => {
     sfx: S, unlock, say, hush,
     get sfxOn(){ return sfxOn; },  set sfxOn(v){ sfxOn = !!v; },
     get voiceOn(){ return voiceOn; }, set voiceOn(v){ voiceOn = !!v; if (!v) hush(); },
-    get hasVoice(){ return !!jaVoice; }
+    get hasVoice(){ return !!jaVoice; },
+    /** The parent page lists these so a device with a better voice installed can use it. */
+    get voices(){ if (!voicesReady) loadVoices(); return jaVoices.slice(); },
+    get voiceId(){ return jaVoice ? jaVoice.voiceURI : null; },
+    set voiceId(id){ prefVoice = id || null; loadVoices(); }
   };
 })();
 
@@ -1750,7 +1796,7 @@ const Store = (() => {
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
     name: '',
-    sfx: true, voice: true,
+    sfx: true, voice: true, voiceId: null,
     createdAt: Date.now()
   });
 
@@ -2825,14 +2871,14 @@ const Session = (() => {
     }
     if (wrongThisQ === 1){
       showFeedback('oops', 'もういちど やってみよう');
-      Sound.say('おしいね。もういちど やってみよう', { delay: 260 });
+      Sound.say('惜しいね。もう一度やってみよう。', { delay: 260 });
     } else if (wrongThisQ >= 2){
       // The game's own hint is preferred, but the choice-dimming fallback runs too:
       // a hint that only speaks would leave a muted device with no feedback at all.
       if (!hintShown){
         hintShown = true;
         showFeedback('hint', 'ヒントを だすね');
-        Sound.say('ヒントを だすね', { delay: 260 });
+        Sound.say('ヒントを出すね。', { delay: 260 });
         if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
         hintExtras.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
       }
@@ -2861,8 +2907,8 @@ const Session = (() => {
     if (!o.quiet){
       UI.bigMark('◯');
       const praise = wrongThisQ === 0
-        ? pick(['やったね', 'せいかい', 'すごい', 'じょうずだね', 'ばっちり', 'その ちょうし'])
-        : pick(['できたね', 'よく がんばったね', 'そのとおり']);
+        ? pick(['やったね！', '正解！', 'すごい！', '上手だね！', 'ばっちり！', 'その調子！'])
+        : pick(['できたね！', 'よく頑張ったね！', 'その通り！']);
       Sound.say(praise, { delay: 320 });
     }
     if ((idx + 1) % 4 === 0) UI.confetti(22);
@@ -2969,7 +3015,7 @@ function countQuestion(api, lo, hi, layout){
   const thing = pick(THINGS);
   const count = ri(lo, hi);
   api.item('count' + (layout === 'line' ? 'L' : 'S') + ':' + count, count + 'こ を かぞえる');
-  api.setPrompt(`${thing.n}を ひとつずつ タップして かぞえよう`, `${thing.n}を、ひとつずつ タップして かぞえよう`);
+  api.setPrompt(`${thing.n}を ひとつずつ タップして かぞえよう`, `${thing.n}を、ひとつずつタップして数えよう。`);
   const objs = makeCountField(api, count, thing, layout);
   let done = 0;
   const tap = (o) => {
@@ -2978,7 +3024,7 @@ function countQuestion(api, lo, hi, layout){
     o.classList.add('counted');
     o.append(el('span.tag', { text: String(done) }));
     Sound.sfx.count(done - 1);
-    Sound.say(numKana(done), { delay: 0, rate: 1.2 });
+    Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done === count) api.later(ask, 620);
   };
   objs.forEach(o => {
@@ -2986,7 +3032,7 @@ function countQuestion(api, lo, hi, layout){
   });
 
   function ask(){
-    api.setPrompt(`${thing.n}は ぜんぶで いくつ？`, `${thing.n}は、ぜんぶで いくつ`);
+    api.setPrompt(`${thing.n}は ぜんぶで いくつ？`, `${thing.n}は、全部でいくつ？`);
     const n = hi <= 5 ? 3 : 4;
     const vals = shuffle([count].concat(distractors(count, n - 1, 1, Math.max(hi + 2, 6))));
     api.buildChoices(vals, count);
@@ -2998,7 +3044,7 @@ function giveQuestion(api, lo, hi){
   const target = ri(lo, hi);
   const total = Math.min(14, target + ri(3, 5));
   api.item('give:' + target, target + 'こ だけ とりだす');
-  api.setPrompt(`${thing.n}を ${numTag(target)}こ とって かごに いれよう`, `${thing.n}を、${koKana(target)} とって、かごに いれよう`);
+  api.setPrompt(`${thing.n}を ${numTag(target)}こ とって かごに いれよう`, `${thing.n}を${koKana(target)}、とって、かごに入れよう。`);
   const objs = makeCountField(api, total, thing, 'scatter');
   const picked = new Set();
   const basketCount = el('div.n', { text: '0' });
@@ -3018,7 +3064,7 @@ function giveQuestion(api, lo, hi){
     if (api.locked) return;
     const i = o.dataset.i;
     if (picked.has(i)){ picked.delete(i); o.classList.remove('picked'); Sound.sfx.tap(); }
-    else { picked.add(i); o.classList.add('picked'); Sound.sfx.count(picked.size - 1); Sound.say(numKana(picked.size), { delay: 0, rate: 1.2 }); }
+    else { picked.add(i); o.classList.add('picked'); Sound.sfx.count(picked.size - 1); Sound.say(numKana(picked.size), { delay: 0, rate: 1.08 }); }
     refresh();
   }));
   doneBtn.addEventListener('click', () => {
@@ -3026,7 +3072,7 @@ function giveQuestion(api, lo, hi){
     if (picked.size === target){ doneBtn.classList.add('choice', 'correct'); api.correct(); }
     else {
       api.wrong(doneBtn);
-      Sound.say(picked.size > target ? 'ちょっと おおいみたい' : 'ちょっと たりないみたい', { delay: 300 });
+      Sound.say(picked.size > target ? 'ちょっと多いみたい。' : 'ちょっと足りないみたい。', { delay: 300 });
     }
   });
   api.onHint(() => {
@@ -3060,7 +3106,7 @@ function groupNode(count, thing){
 function numToQty(api, lo, hi){        // numeral shown → pick the matching group
   const n = ri(lo, hi), thing = pick(THINGS);
   api.item('n2q:' + n, 'すうじ ' + n + ' → その かず');
-  api.setPrompt(`${thing.e} が ${numTag(n)}こ あるのは どれ？`, `${thing.n}が ${koKana(n)} あるのは どれ`);
+  api.setPrompt(`${thing.e} が ${numTag(n)}こ あるのは どれ？`, `${thing.n}が${koKana(n)}、あるのは、どれ？`);
   const big = el('div', { style: { fontFamily: 'var(--fs-num)', fontWeight: 800, fontSize: 'calc(var(--u)*11)', lineHeight: 1, color: 'var(--c-red)' }, text: String(n) });
   api.field.append(big);
   const opts = shuffle([n].concat(distractors(n, 2, Math.max(1, lo - 1), Math.min(12, hi + 2), 2)));
@@ -3079,7 +3125,7 @@ function numToQty(api, lo, hi){        // numeral shown → pick the matching gr
 function qtyToNum(api, lo, hi){        // group shown → pick the numeral
   const n = ri(lo, hi), thing = pick(THINGS);
   api.item('q2n:' + n, n + 'こ → すうじ ' + n);
-  api.setPrompt(`${thing.n}は いくつ？ すうじを えらぼう`, `${thing.n}は いくつ。すうじを えらぼう`);
+  api.setPrompt(`${thing.n}は いくつ？ すうじを えらぼう`, `${thing.n}はいくつ？数字を選ぼう。`);
   const wrap = el('div.row', { style: { maxWidth: 'calc(var(--u)*40)' } });
   for (let i = 0; i < n; i++) wrap.append(el('span.item', { text: thing.e, style: { fontSize: 'calc(var(--u)*4.4)' } }));
   api.field.append(wrap);
@@ -3102,7 +3148,7 @@ function tenFrameNode(count, cols, opts){
 function teenQuestion(api){            // 11-20 with a filled ten-frame + loose ones
   const n = ri(11, 20), thing = pick(THINGS);
   api.item('teen:' + n, n + ' を 10と ' + (n - 10) + ' で みる');
-  api.setPrompt('ぜんぶで いくつ？', 'ぜんぶで いくつ');
+  api.setPrompt('ぜんぶで いくつ？', '全部でいくつ？');
   const box = el('div.frameset');
   box.append(tenFrameNode(10, 5));
   const rest = el('div.row', { style: { maxWidth: 'calc(var(--u)*22)' } });
@@ -3145,7 +3191,7 @@ function lineFill(api, lo, hi, gaps){
     nums.forEach(v => cells[v].classList.remove('now'));
     const target = holes[qi];
     cells[target].classList.add('now');
-    api.setPrompt('ひかって いる ところに はいる かずは？', 'ひかって いる ところに はいる かずは');
+    api.setPrompt('ひかって いる ところに はいる かずは？', '光っているところに入る数は？');
 
     // A distractor must never be another hole's answer — that answer is also
     // "correct" on the number line, and marking it wrong is simply unfair.
@@ -3179,9 +3225,9 @@ function nextBefore(api, hi){
   const mode = pick(['next', 'before', 'between']);
   const n = ri(2, hi - 1);
   let ans, html, speech;
-  if (mode === 'next'){ ans = n + 1; html = `${numTag(n)} の つぎの かずは？`; speech = `${numKana(n)}の つぎの かずは`; }
-  else if (mode === 'before'){ ans = n - 1; html = `${numTag(n)} の まえの かずは？`; speech = `${numKana(n)}の まえの かずは`; }
-  else { ans = n; html = `${numTag(n - 1)} と ${numTag(n + 1)} の あいだの かずは？`; speech = `${numKana(n-1)}と ${numKana(n+1)}の あいだの かずは`; }
+  if (mode === 'next'){ ans = n + 1; html = `${numTag(n)} の つぎの かずは？`; speech = `${numKana(n)}の次の数は？`; }
+  else if (mode === 'before'){ ans = n - 1; html = `${numTag(n)} の まえの かずは？`; speech = `${numKana(n)}の前の数は？`; }
+  else { ans = n; html = `${numTag(n - 1)} と ${numTag(n + 1)} の あいだの かずは？`; speech = `${numKana(n-1)}と${numKana(n+1)}の間の数は？`; }
   api.item('nb:' + mode + ':' + ans,
     mode === 'next' ? n + ' の つぎ' : mode === 'before' ? n + ' の まえ' : (n - 1) + ' と ' + (n + 1) + ' の あいだ');
   api.setPrompt(html, speech);
@@ -3199,7 +3245,7 @@ function skipCount(api){
   const seq = [0, 1, 2, 3].map(i => start + i * step);
   const ans = seq[3];
   api.item('skip' + step + ':' + ans, step + 'ずつ ふえて ' + ans);
-  api.setPrompt(`${step}ずつ ふえて いくよ。つぎは？`, `${numKana(step)}ずつ ふえて いくよ。つぎは`);
+  api.setPrompt(`${step}ずつ ふえて いくよ。つぎは？`, `${numKana(step)}ずつ増えていくよ。次は？`);
   const line = el('div.numline');
   seq.forEach((v, i) => line.append(el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) })));
   api.field.append(line);
@@ -3223,7 +3269,7 @@ function traceQuestion(api, digits){
   const d = String(pick(digits));
   const strokes = DIGIT_STROKES[d];
   api.item('trace:' + d, d + ' の かきかた');
-  api.setPrompt(`${numTag(d)} を ゆびで なぞろう`, `${numKana(Number(d))}を ゆびで なぞろう`);
+  api.setPrompt(`${numTag(d)} を ゆびで なぞろう`, `${numKana(Number(d))}を指でなぞろう。`);
 
   const box = el('div.tracebox');
   const s = svg('svg', { viewBox: '0 0 100 140', preserveAspectRatio: 'xMidYMid meet' });
@@ -3249,7 +3295,7 @@ function traceQuestion(api, digits){
       if (si >= strokes.length) return;
       nudged = true;
       showGuide();
-      Sound.say('あかい てんから なぞって みよう', { delay: 100 });
+      Sound.say('赤い点から、なぞってみよう。', { delay: 100 });
     }, 9000);
   }
   function showGuide(){
@@ -3335,7 +3381,7 @@ function traceQuestion(api, digits){
     } else {
       startMark();
       armIdle();
-      Sound.say('つぎの せんも なぞってね', { delay: 150 });
+      Sound.say('次の線も、なぞってね。', { delay: 150 });
     }
   }
   function onUp(){ drawing = false; }
@@ -3382,10 +3428,10 @@ function platesCompare(api, opts){
   api.item('cmp:' + sorted.join('_') + ':' + want,
     sorted.join(' と ') + ' の ' + (want === 'most' ? 'おおい ほう' : 'すくない ほう'));
   api.setPrompt(want === 'most' ? 'どっちが <b>おおい</b>？' : 'どっちが <b>すくない</b>？',
-                want === 'most' ? 'どっちが おおい' : 'どっちが すくない');
+                want === 'most' ? 'どっちが多い？' : 'どっちが少ない？');
   if (counts.length > 2){
     api.setPrompt(want === 'most' ? 'いちばん <b>おおい</b> のは どれ？' : 'いちばん <b>すくない</b> のは どれ？',
-                  want === 'most' ? 'いちばん おおいのは どれ' : 'いちばん すくないのは どれ');
+                  want === 'most' ? '一番多いのは、どれ？' : '一番少ないのは、どれ？');
   }
   const wrap = el('div.row', { style: { gap: 'calc(var(--u)*1.4)' } });
   const order = shuffle(counts.map((c, i) => ({ c, i })));
@@ -3446,7 +3492,7 @@ function compareNumerals(api){
   api.item('numcmp:' + Math.min(a, b) + '_' + Math.max(a, b) + ':' + (most ? 'g' : 'l'),
     'すうじ ' + a + ' と ' + b + ' の くらべ');
   api.setPrompt(most ? 'かずが <b>おおきい</b> のは どっち？' : 'かずが <b>ちいさい</b> のは どっち？',
-                most ? 'かずが おおきいのは どっち' : 'かずが ちいさいのは どっち');
+                most ? '数が大きいのは、どっち？' : '数が小さいのは、どっち？');
   api.field.append(el('div.hintline', { text: 'すうじで くらべよう' }));
   api.buildChoices(shuffle([a, b]), ans);
 }
@@ -3471,7 +3517,7 @@ function ordinalRow(api, n, dir, target){
   const label = { front: 'まえ', back: 'うしろ', left: 'ひだり', right: 'みぎ' }[dir];
   api.item('ord:' + dir + ':' + target, label + 'から ' + target + 'ばんめ');
   api.setPrompt(`${label}から ${numTag(target)}ばんめ の どうぶつを タップ`,
-                `${label}から ${banmeKana(target)}の どうぶつを タップ`);
+                `${label}から${banmeKana(target)}の動物をタップ。`);
   const idxWanted = (dir === 'front' || dir === 'left') ? target - 1 : n - target;
   const q = el('div.queue');
   critters.forEach((c, i) => {
@@ -3506,7 +3552,7 @@ function ordinalVsCount(api, n){
   api.setPrompt(countMode
       ? `まえから ${numTag(k)}<b>こ</b> タップ　（${k}ひき ぜんぶ）`
       : `まえから ${numTag(k)}<b>ばんめ</b> だけ タップ`,
-    countMode ? `まえから ${koKana(k)} タップしてね` : `まえから ${banmeKana(k)}だけ タップしてね`);
+    countMode ? `前から${koKana(k)}、タップしてね。` : `前から${banmeKana(k)}だけタップしてね。`);
   const q = el('div.queue');
   const marked = new Set();
   critters.forEach((c, i) => {
@@ -3548,7 +3594,7 @@ function gridPosition(api, cols, rows){
   const tr = ri(1, rows), tc = ri(1, cols);
   api.item('grid:' + tr + '_' + tc, 'うえから ' + tr + '・ひだりから ' + tc);
   api.setPrompt(`うえから ${numTag(tr)}ばんめ、ひだりから ${numTag(tc)}ばんめ は だれ？`,
-                `うえから ${banmeKana(tr)}、ひだりから ${banmeKana(tc)}は だれ`);
+                `上から${banmeKana(tr)}、左から${banmeKana(tc)}は、だれ？`);
   const g = el('div.qgrid', { style: { '--gc': cols } });
   cells.forEach((cell, i) => {
     const item = el('div.qi', { text: pool[i] });
@@ -3615,7 +3661,7 @@ function lengthCompare(api, aligned){
   api.item('len:' + (aligned ? 'aligned' : 'ragged') + ':' + (longest ? 'L' : 'S') + ':' + n,
     (aligned ? 'はしが そろった ' : 'はしが ずれた ') + (longest ? 'いちばん ながい' : 'いちばん みじかい'));
   api.setPrompt(longest ? 'いちばん <b>ながい</b> のは どれ？' : 'いちばん <b>みじかい</b> のは どれ？',
-                longest ? 'いちばん ながいのは どれ' : 'いちばん みじかいのは どれ');
+                longest ? '一番長いのは、どれ？' : '一番短いのは、どれ？');
   const wrap = el('div.measure');
   const colors = shuffle(['var(--c-red)','var(--c-blue)','var(--c-green)','var(--c-purple)']);
   lens.forEach((L, i) => {
@@ -3698,7 +3744,7 @@ function capacityCompare(api){
                    : Math.min.apply(null, specs.map(s => s.cells));
   api.item('cap:' + (more ? 'more' : 'less') + ':' + n, 'かさが ' + (more ? 'おおい' : 'すくない') + ' コップ');
   api.setPrompt(more ? 'ジュースが <b>おおい</b> のは どれ？' : 'ジュースが <b>すくない</b> のは どれ？',
-                more ? 'ジュースが おおいのは どれ' : 'ジュースが すくないのは どれ');
+                more ? 'ジュースが多いのは、どれ？' : 'ジュースが少ないのは、どれ？');
   const colors = shuffle(['var(--c-orange)','var(--c-red)','var(--c-purple)']);
   const wrap = el('div.vessels');
   shuffle(specs).forEach((s, i) => {
@@ -3741,7 +3787,7 @@ function orderBySize(api){
   const wanted = lens.slice().sort((a, b) => asc ? a - b : b - a);
   api.item('order:' + (asc ? 'asc' : 'desc') + ':' + n, n + 'つを ' + (asc ? 'みじかい' : 'ながい') + ' じゅんに');
   api.setPrompt(asc ? '<b>みじかい</b> じゅんに タップしよう' : '<b>ながい</b> じゅんに タップしよう',
-                asc ? 'みじかい じゅんに タップしよう' : 'ながい じゅんに タップしよう');
+                asc ? '短い順にタップしよう。' : '長い順にタップしよう。');
   const cap = pick(MEAS_ICONS);
   const colors = shuffle(['var(--c-red)','var(--c-blue)','var(--c-green)','var(--c-purple)']);
   const wrap = el('div.measure');
@@ -3824,7 +3870,7 @@ function decompose(api, whole, pad){
   const known = ri(1, whole - 1), ans = whole - known;
   api.item('dec:' + whole + '-' + known, whole + ' は ' + known + ' と ' + ans);
   api.setPrompt(`${numTag(whole)} は ${numTag(known)} と いくつ？`,
-                `${numKana(whole)}は ${numKana(known)}と いくつ`);
+                `${numKana(whole)}は、${numKana(known)}といくつ？`);
   const frame = partFrame(whole, known);
   const bond = bondNode(whole, known, null);
   api.field.append(el('div.frameset', null, frame), bond);
@@ -3849,7 +3895,7 @@ function compose(api, maxWhole, pad){
   const a = ri(1, maxWhole - 1), b = ri(1, maxWhole - a), ans = a + b;
   api.item('com:' + a + '+' + b, a + ' と ' + b + ' で ' + ans);
   api.setPrompt(`${numTag(a)} と ${numTag(b)} で いくつ？`,
-                `${numKana(a)}と ${numKana(b)}で いくつ`);
+                `${numKana(a)}と${numKana(b)}で、いくつ？`);
   const slots = a + b > 5 ? 10 : 5;
   const f = el('div.tenframe', { style: { '--cols': 5 } });
   for (let i = 0; i < slots; i++){
@@ -3881,7 +3927,7 @@ Games.add({
 function fillToTen(api){
   const start = ri(2, 8);
   api.item('fill10:' + start, start + ' から 10 まで あと ' + (10 - start));
-  api.setPrompt(`わくが <b>10</b> に なるように タップして たそう`, 'わくが じゅうに なるように、タップして たそう');
+  api.setPrompt(`わくが <b>10</b> に なるように タップして たそう`, '枠が10になるように、タップして足そう。');
   const f = el('div.tenframe', { style: { '--cols': 5 } });
   const cells = [];
   for (let i = 0; i < 10; i++){
@@ -3898,12 +3944,12 @@ function fillToTen(api){
       cell.append(el('div.dot.b'));
       count++;
       Sound.sfx.count(count - 1);
-      Sound.say(numKana(count), { delay: 0, rate: 1.2 });
+      Sound.say(numKana(count), { delay: 0, rate: 1.08 });
       readout.textContent = 'いま ' + count + 'こ';
       if (count === 10){
         api.later(() => {
           api.setPrompt(`${numTag(start)} と ${numTag(10 - start)} で <b>10</b>！`,
-                        `${numKana(start)}と ${numKana(10 - start)}で じゅう`);
+                        `${numKana(start)}と${numKana(10 - start)}で、10！`);
           api.correct({ quiet: true, delay: 1400 });
           UI.bigMark('◯');
         }, 300);
@@ -3917,7 +3963,7 @@ function fillToTen(api){
 function partnerOfTen(api, pad){
   const a = ri(1, 9), ans = 10 - a;
   api.item('ten:' + a, a + ' と ' + ans + ' で 10');
-  api.setPrompt(`${numTag(a)} と いくつで <b>10</b>？`, `${numKana(a)}と いくつで じゅう`);
+  api.setPrompt(`${numTag(a)} と いくつで <b>10</b>？`, `${numKana(a)}といくつで、10？`);
   const f = el('div.tenframe', { style: { '--cols': 5 } });
   for (let i = 0; i < 10; i++){
     const cell = el('div.cell' + (i >= a ? '.hole' : ''));
@@ -3939,7 +3985,7 @@ function pairHunt(api){
   }
   const cards = shuffle([a, b].concat(others));
   api.item('pair:' + Math.min(a, b), Math.min(a, b) + ' と ' + Math.max(a, b) + ' の ペア');
-  api.setPrompt('たすと <b>10</b> に なる 2まいを えらぼう', 'たすと じゅうに なる にまいを えらぼう');
+  api.setPrompt('たすと <b>10</b> に なる 2まいを えらぼう', '足すと10になる2枚を選ぼう。');
   const picked = [];
   const row = api.choices;
   cards.forEach(v => {
@@ -3957,7 +4003,7 @@ function pairHunt(api){
         else {
           picked.forEach(p => { p.classList.add('wrong'); p.style.borderColor = ''; api.later(() => p.classList.remove('wrong'), 460); });
           api.wrong();
-          Sound.say(`あわせて ${numKana(sum)}に なったよ`, { delay: 320 });
+          Sound.say(`合わせて${numKana(sum)}になったよ。`, { delay: 320 });
           picked.length = 0;
         }
       }
@@ -4050,9 +4096,9 @@ function addStory(api, max){
   const thing = pick(THINGS);
   api.item('sum:' + a + '+' + b, a + ' ＋ ' + b);
   api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ やってきたよ`,
-                `${thing.n}が ${tsuKana(a)}。${tsuKana(b)} やってきたよ`);
+                `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、やってきたよ。`);
   storyScene(api, a, b, '+', thing, () => {
-    api.setPrompt('ぜんぶで いくつ？', 'ぜんぶで いくつ');
+    api.setPrompt('ぜんぶで いくつ？', '全部でいくつ？');
     api.field.append(eqNode(a, b, '+'));
     api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, max + 2, 2))), ans);
   });
@@ -4063,9 +4109,9 @@ function subStory(api, max){
   const thing = pick(THINGS);
   api.item('rest:' + a + '-' + b, a + ' − ' + b);
   api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ いなくなるよ`,
-                `${thing.n}が ${tsuKana(a)}。${tsuKana(b)} いなくなるよ`);
+                `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、いなくなるよ。`);
   storyScene(api, a, b, '-', thing, () => {
-    api.setPrompt('のこりは いくつ？', 'のこりは いくつ');
+    api.setPrompt('のこりは いくつ？', '残りは、いくつ？');
     api.field.append(eqNode(a, b, '-'));
     api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans);
   });
@@ -4078,7 +4124,7 @@ function symbolCalc(api, op, max, pad){
   api.item((op === '+' ? 'sum:' + a + '+' + b : 'rest:' + a + '-' + b),
     a + (op === '+' ? ' ＋ ' : ' − ') + b);
   api.setPrompt('しきを みて こたえよう',
-    `${numKana(a)} ${op === '+' ? 'たす' : 'ひく'} ${numKana(b)} は`);
+    `${numKana(a)}、${op === '+' ? 'たす' : 'ひく'}、${numKana(b)}は？`);
   api.field.append(eqNode(a, b, op));
   if (pad) api.buildPad(ans);
   else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 0, max + 2, 2))), ans);
@@ -4101,7 +4147,7 @@ function differenceQ(api, max, pad){
   const t1 = pick(THINGS); let t2 = pick(THINGS);
   while (t2.e === t1.e) t2 = pick(THINGS);
   api.item('diff:' + a + '-' + b, a + ' と ' + b + ' の ちがい');
-  api.setPrompt(`どちらが <b>いくつ</b> おおい？`, 'どちらが いくつ おおい');
+  api.setPrompt(`どちらが <b>いくつ</b> おおい？`, 'どちらが、いくつ多い？');
   const board = el('div.measure');
   [[t1, a], [t2, b]].forEach(([t, n]) => {
     const row = el('div.mrow', { style: { cursor: 'default' } }, el('div.cap', { text: t.e }));
@@ -4175,7 +4221,7 @@ function findAllShapes(api){
     cells.push({ name: pick(src), hit: false });
   }
   api.item('find:' + target, KIND_JA[target] + ' を さがす');
-  api.setPrompt(`<b>${KIND_JA[target]}</b> を ぜんぶ タップしよう`, `${KIND_JA[target]}を ぜんぶ タップしよう`);
+  api.setPrompt(`<b>${KIND_JA[target]}</b> を ぜんぶ タップしよう`, `${KIND_JA[target]}を全部タップしよう。`);
   const grid = el('div.shapegrid');
   const tally = el('div.tally');
   const drawTally = () => {
@@ -4217,7 +4263,7 @@ const OBJ_SHAPE = [
 function objectToShape(api){
   const o = pick(OBJ_SHAPE);
   api.item('obj:' + o.e, o.e + ' は ' + KIND_JA[o.k]);
-  api.setPrompt(`${o.e} と おなじ かたちは どれ？`, 'おなじ かたちは どれ');
+  api.setPrompt(`${o.e} と おなじ かたちは どれ？`, '同じ形は、どれ？');
   api.field.append(el('div', { style: { fontSize: 'calc(var(--u)*10)', lineHeight: 1 }, text: o.e }));
   const kinds = shuffle(['circle', 'triangle', 'square']);
   api.buildChoices(kinds, o.k, {
@@ -4282,7 +4328,7 @@ function signature(pts){
 function shapePuzzle(api){
   const pz = pick(PUZZLES);
   api.item('puz:' + pz.name, pz.name + ' を つくる');
-  api.setPrompt(`かたちを はめて <b>${pz.name}</b> を つくろう`, `かたちを はめて ${pz.name}を つくろう`);
+  api.setPrompt(`かたちを はめて <b>${pz.name}</b> を つくろう`, `形をはめて、${pz.name}を作ろう。`);
   const box = el('div.shapefield');
   const s = svg('svg', { viewBox: '0 0 100 80', preserveAspectRatio: 'xMidYMid meet' });
   box.append(s);
@@ -4389,7 +4435,7 @@ function sortGame(api, catset, nBins, byColor){
   api.item('sort:' + keys.slice().sort().join('_'),
     keys.map(k => catset[k].lbl).join('・') + ' に わける');
   api.setPrompt(byColor ? 'おなじ いろの ばしょに いれてね' : 'なかまの ばしょに いれてね',
-                byColor ? 'おなじ いろの ばしょに いれてね' : 'なかまの ばしょに いれてね');
+                byColor ? '同じ色の場所に入れてね。' : '仲間の場所に入れてね。');
   const mark = k => {
     const c = catset[k];
     if (!byColor) return el('span', { text: c.e });
@@ -4487,7 +4533,7 @@ function patternQuestion(api, unitKind, blanks){
   for (let i = 0; i < blanks; i++) holes.push(total - 1 - i);
   holes.sort((a, b) => a - b);
   api.item('pat:' + unitKind + ':' + blanks, unitKind + ' の くりかえし');
-  api.setPrompt('つづきは どれ？ きまりを みつけよう', 'つづきは どれ。きまりを みつけよう');
+  api.setPrompt('つづきは どれ？ きまりを みつけよう', '続きは、どれ？きまりを見つけよう。');
   const train = el('div.train');
   const cars = seq.map((t, i) => {
     const isHole = holes.indexOf(i) >= 0;
@@ -4547,7 +4593,7 @@ function readClock(api, half){
   const h = ri(1, 12);
   const m = half && chance(.5) ? 30 : 0;
   api.item('read:' + h + ':' + m, h + 'じ' + (m === 30 ? 'はん' : '') + ' を よむ');
-  api.setPrompt('なんじ かな？', 'なんじ かな');
+  api.setPrompt('なんじ かな？', '何時かな？');
   const c = clockSVG(h, m);
   c.style.width = 'calc(var(--u)*22)';
   c.style.height = 'calc(var(--u)*22)';
@@ -4577,7 +4623,7 @@ function pickClock(api, half){
   const h = ri(1, 12), m = half && chance(.5) ? 30 : 0;
   api.item('pick:' + h + ':' + m, h + 'じ' + (m === 30 ? 'はん' : '') + ' の とけいを えらぶ');
   api.setPrompt(`<b>${h}じ${m === 30 ? 'はん' : ''}</b> の とけいは どれ？`,
-                `${jiKana(h, m === 30)}の とけいは どれ`);
+                `${jiKana(h, m === 30)}の時計は、どれ？`);
   const opts = [{ h, m }];
   let guard = 0;
   while (opts.length < 3 && guard++ < 60){
@@ -4600,7 +4646,7 @@ function setClock(api){
   const target = ri(1, 12);
   api.item('set:' + target, target + 'じ に はりを あわせる');
   api.setPrompt(`<b>${target}じ</b> に なるように みじかい はりを うごかそう`,
-                `${jiKana(target)}に なるように、みじかい はりを うごかそう`);
+                `${jiKana(target)}になるように、短い針を動かそう。`);
   let cur = ri(1, 12);
   for (let g = 0; g < 100 && cur === target; g++) cur = ri(1, 12);
   if (cur === target) cur = target === 12 ? 1 : target + 1;
@@ -4695,7 +4741,7 @@ const Title = (() => {
       onclick(){
         Sound.unlock();
         Sound.sfx.unlockSfx();
-        Sound.say('かずの ぼうけんへ ようこそ', { delay: 260 });
+        Sound.say('数の冒険へ、ようこそ！', { delay: 260 });
         Home.render();
         UI.show('home', { replace: true });
       }
@@ -4823,7 +4869,7 @@ const Levels = (() => {
         type: 'button', style: { '--lc': g.color },
         onclick(){
           Sound.sfx.tap();
-          if (!unlocked){ Sound.say('まえの レベルを クリアすると あそべるよ', { delay: 120 }); return; }
+          if (!unlocked){ Sound.say('前のレベルをクリアすると、遊べるよ。', { delay: 120 }); return; }
           Session.startLevel(g, i);
         }
       },
@@ -4853,6 +4899,12 @@ const Result = (() => {
               : r.stars === 2 ? 'よく できました！'
               : r.stars === 1 ? 'クリア！'
               : 'おしい！ もう いちど やってみよう';
+    // the children read `msg`, so it stays hiragana; the voice gets kanji, which
+    // is what lets a Japanese engine phrase it instead of droning it out
+    const spoken = r.stars === 3 ? 'パーフェクト！'
+                 : r.stars === 2 ? 'よくできました！'
+                 : r.stars === 1 ? 'クリア！'
+                 : '惜しい！もう一度やってみよう。';
     inner.append(
       mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
       UI.stars(r.stars, true),
@@ -4888,7 +4940,7 @@ const Result = (() => {
       onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
     inner.append(actions);
     UI.show('result', { replace: true });
-    Sound.say(msg, { delay: 700 });
+    Sound.say(spoken, { delay: 700 });
     for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
   return { show, build };
@@ -5198,6 +5250,48 @@ const Parent = (() => {
     return s;
   }
 
+  /** Which Japanese voice reads the questions.
+      The voice bundled with a device is the “compact” one — flat and robotic.
+      The enhanced / premium download is a different recording of the same name,
+      so we cannot tell them apart from here: the honest fix is to list what the
+      device actually has, let a parent hear each one, and remember the choice. */
+  function voiceRow(){
+    const wrap = el('div', { style: { marginTop: 'calc(var(--u)*.7)' } });
+    const list = Sound.voices;
+    if (!list.length){
+      wrap.append(el('p', { style: { color: 'var(--oops-ink)' },
+        text: '※ この端末で日本語の読み上げ音声が見つかりませんでした。iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 日本語 で音声を追加すると、問題文が音声で読まれます。文字だけでも遊べます。' }));
+      // Safari fills the voice list asynchronously, so an empty list here often
+      // just means "not yet" — swap the warning for the picker when it arrives.
+      if (window.speechSynthesis){
+        speechSynthesis.addEventListener('voiceschanged', function again(){
+          if (!Sound.voices.length) return;
+          speechSynthesis.removeEventListener('voiceschanged', again);
+          wrap.replaceWith(voiceRow());
+        });
+      }
+      return wrap;
+    }
+    const sel = el('select.btn', { style: { maxWidth: '100%' } });
+    list.forEach(v => {
+      const o = el('option', { value: v.voiceURI, text: v.name });
+      if (v.voiceURI === Sound.voiceId) o.selected = true;
+      sel.append(o);
+    });
+    const apply = () => {
+      Sound.voiceId = sel.value;
+      Store.setPref('voiceId', sel.value);
+      Sound.say('こんにちは。今日も一緒に、数を数えよう！', { delay: 60 });
+    };
+    sel.addEventListener('change', apply);
+    const test = el('button.btn', { text: '試しに聴く', onclick: apply });
+    wrap.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap', alignItems: 'center' } },
+      el('span', { text: '読み上げの声：' }), sel, test));
+    wrap.append(el('p', { style: { marginTop: 'calc(var(--u)*.4)' },
+      text: '※ 機械的な声に聞こえるときは、iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 日本語 で「高品質」または「プレミアム」の音声をダウンロードしてください（無料・オフラインで使えます）。同じ名前のまま、声だけが自然になります。' }));
+    return wrap;
+  }
+
   function settingsSection(){
     const s = el('section');
     s.append(el('div.eyebrow', { text: 'settings' }), el('h3', { text: '設定' }));
@@ -5214,10 +5308,7 @@ const Parent = (() => {
       toggle('効果音', () => Sound.sfxOn, v => { Sound.sfxOn = v; Store.setPref('sfx', v); }),
       toggle('読み上げ', () => Sound.voiceOn, v => { Sound.voiceOn = v; Store.setPref('voice', v); }));
     s.append(row);
-    if (!Sound.hasVoice){
-      s.append(el('p', { style: { color: 'var(--oops-ink)' },
-        text: '※ この端末で日本語の読み上げ音声が見つかりませんでした。iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 で日本語（Kyoko など）を追加すると、問題文が音声で読まれます。文字だけでも遊べます。' }));
-    }
+    s.append(voiceRow());
     const reset = el('button.btn', { text: justReset ? '消しました' : '記録をすべて消す',
       style: { borderColor: 'var(--oops)', color: 'var(--oops-ink)' } });
     justReset = false;
@@ -5405,6 +5496,7 @@ const Parent = (() => {
   UI.init();
   Sound.sfxOn   = Store.data.sfx   !== false;
   Sound.voiceOn = Store.data.voice !== false;
+  if (Store.data.voiceId) Sound.voiceId = Store.data.voiceId;
 
   Title.build();
   Home.build();

@@ -16,10 +16,10 @@ function platesCompare(api, opts){
   api.item('cmp:' + sorted.join('_') + ':' + want,
     sorted.join(' と ') + ' の ' + (want === 'most' ? 'おおい ほう' : 'すくない ほう'));
   api.setPrompt(want === 'most' ? 'どっちが <b>おおい</b>？' : 'どっちが <b>すくない</b>？',
-                want === 'most' ? 'どっちが おおい' : 'どっちが すくない');
+                want === 'most' ? 'どっちが多い？' : 'どっちが少ない？');
   if (counts.length > 2){
     api.setPrompt(want === 'most' ? 'いちばん <b>おおい</b> のは どれ？' : 'いちばん <b>すくない</b> のは どれ？',
-                  want === 'most' ? 'いちばん おおいのは どれ' : 'いちばん すくないのは どれ');
+                  want === 'most' ? '一番多いのは、どれ？' : '一番少ないのは、どれ？');
   }
   const wrap = el('div.row', { style: { gap: 'calc(var(--u)*1.4)' } });
   const order = shuffle(counts.map((c, i) => ({ c, i })));
@@ -80,7 +80,7 @@ function compareNumerals(api){
   api.item('numcmp:' + Math.min(a, b) + '_' + Math.max(a, b) + ':' + (most ? 'g' : 'l'),
     'すうじ ' + a + ' と ' + b + ' の くらべ');
   api.setPrompt(most ? 'かずが <b>おおきい</b> のは どっち？' : 'かずが <b>ちいさい</b> のは どっち？',
-                most ? 'かずが おおきいのは どっち' : 'かずが ちいさいのは どっち');
+                most ? '数が大きいのは、どっち？' : '数が小さいのは、どっち？');
   api.field.append(el('div.hintline', { text: 'すうじで くらべよう' }));
   api.buildChoices(shuffle([a, b]), ans);
 }
@@ -105,7 +105,7 @@ function ordinalRow(api, n, dir, target){
   const label = { front: 'まえ', back: 'うしろ', left: 'ひだり', right: 'みぎ' }[dir];
   api.item('ord:' + dir + ':' + target, label + 'から ' + target + 'ばんめ');
   api.setPrompt(`${label}から ${numTag(target)}ばんめ の どうぶつを タップ`,
-                `${label}から ${banmeKana(target)}の どうぶつを タップ`);
+                `${label}から${banmeKana(target)}の動物をタップ。`);
   const idxWanted = (dir === 'front' || dir === 'left') ? target - 1 : n - target;
   const q = el('div.queue');
   critters.forEach((c, i) => {
@@ -140,7 +140,7 @@ function ordinalVsCount(api, n){
   api.setPrompt(countMode
       ? `まえから ${numTag(k)}<b>こ</b> タップ　（${k}ひき ぜんぶ）`
       : `まえから ${numTag(k)}<b>ばんめ</b> だけ タップ`,
-    countMode ? `まえから ${koKana(k)} タップしてね` : `まえから ${banmeKana(k)}だけ タップしてね`);
+    countMode ? `前から${koKana(k)}、タップしてね。` : `前から${banmeKana(k)}だけタップしてね。`);
   const q = el('div.queue');
   const marked = new Set();
   critters.forEach((c, i) => {
@@ -182,7 +182,7 @@ function gridPosition(api, cols, rows){
   const tr = ri(1, rows), tc = ri(1, cols);
   api.item('grid:' + tr + '_' + tc, 'うえから ' + tr + '・ひだりから ' + tc);
   api.setPrompt(`うえから ${numTag(tr)}ばんめ、ひだりから ${numTag(tc)}ばんめ は だれ？`,
-                `うえから ${banmeKana(tr)}、ひだりから ${banmeKana(tc)}は だれ`);
+                `上から${banmeKana(tr)}、左から${banmeKana(tc)}は、だれ？`);
   const g = el('div.qgrid', { style: { '--gc': cols } });
   cells.forEach((cell, i) => {
     const item = el('div.qi', { text: pool[i] });
@@ -249,7 +249,7 @@ function lengthCompare(api, aligned){
   api.item('len:' + (aligned ? 'aligned' : 'ragged') + ':' + (longest ? 'L' : 'S') + ':' + n,
     (aligned ? 'はしが そろった ' : 'はしが ずれた ') + (longest ? 'いちばん ながい' : 'いちばん みじかい'));
   api.setPrompt(longest ? 'いちばん <b>ながい</b> のは どれ？' : 'いちばん <b>みじかい</b> のは どれ？',
-                longest ? 'いちばん ながいのは どれ' : 'いちばん みじかいのは どれ');
+                longest ? '一番長いのは、どれ？' : '一番短いのは、どれ？');
   const wrap = el('div.measure');
   const colors = shuffle(['var(--c-red)','var(--c-blue)','var(--c-green)','var(--c-purple)']);
   lens.forEach((L, i) => {
@@ -332,7 +332,7 @@ function capacityCompare(api){
                    : Math.min.apply(null, specs.map(s => s.cells));
   api.item('cap:' + (more ? 'more' : 'less') + ':' + n, 'かさが ' + (more ? 'おおい' : 'すくない') + ' コップ');
   api.setPrompt(more ? 'ジュースが <b>おおい</b> のは どれ？' : 'ジュースが <b>すくない</b> のは どれ？',
-                more ? 'ジュースが おおいのは どれ' : 'ジュースが すくないのは どれ');
+                more ? 'ジュースが多いのは、どれ？' : 'ジュースが少ないのは、どれ？');
   const colors = shuffle(['var(--c-orange)','var(--c-red)','var(--c-purple)']);
   const wrap = el('div.vessels');
   shuffle(specs).forEach((s, i) => {
@@ -375,7 +375,7 @@ function orderBySize(api){
   const wanted = lens.slice().sort((a, b) => asc ? a - b : b - a);
   api.item('order:' + (asc ? 'asc' : 'desc') + ':' + n, n + 'つを ' + (asc ? 'みじかい' : 'ながい') + ' じゅんに');
   api.setPrompt(asc ? '<b>みじかい</b> じゅんに タップしよう' : '<b>ながい</b> じゅんに タップしよう',
-                asc ? 'みじかい じゅんに タップしよう' : 'ながい じゅんに タップしよう');
+                asc ? '短い順にタップしよう。' : '長い順にタップしよう。');
   const cap = pick(MEAS_ICONS);
   const colors = shuffle(['var(--c-red)','var(--c-blue)','var(--c-green)','var(--c-purple)']);
   const wrap = el('div.measure');

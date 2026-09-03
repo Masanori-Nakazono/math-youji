@@ -34,6 +34,7 @@
   UI.init();
   Sound.sfxOn   = Store.data.sfx   !== false;
   Sound.voiceOn = Store.data.voice !== false;
+  if (Store.data.voiceId) Sound.voiceId = Store.data.voiceId;
 
   Title.build();
   Home.build();
