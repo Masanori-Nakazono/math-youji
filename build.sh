@@ -49,8 +49,12 @@ fi
 <meta name="apple-mobile-web-app-title" content="かずのぼうけん">
 <meta name="theme-color" content="#FBF4E9">
 <meta name="description" content="小学校入学前の算数の土台を、タップして遊びながら身につけるアプリ。">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23FBF4E9'/%3E%3Ctext x='50' y='72' font-size='62' text-anchor='middle'%3E%F0%9F%94%A2%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
 HEAD
+  # iOS ignores an SVG apple-touch-icon, so the real PNG goes in as a data URI:
+  # the AirDropped single file then has a proper icon with nothing to fetch.
+  printf '<link rel="apple-touch-icon" href="data:image/png;base64,%s">\n' \
+    "$(base64 < src/icon-180.png | tr -d '\n')"
   cat src/head.html
   echo '<style>html,body{margin:0;padding:0}img{max-width:100%}[hidden]{display:none!important}</style>'
   echo '<style>'; cat src/styles.css; echo '</style>'
@@ -61,6 +65,15 @@ HEAD
   echo '</body></html>'
 } > dist/kazu-no-bouken.html
 
-printf 'built:\n  dist/artifact.html          %s\n  dist/kazu-no-bouken.html    %s\n' \
+# ---- 3. the extras a hosted copy needs: installable, and openable with no network
+sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi; }
+# stamping the cache name with the build makes a deploy replace the old cache
+VERSION="$(sha dist/kazu-no-bouken.html | cut -c1-12)"
+sed "s/__VERSION__/$VERSION/" src/sw.js > dist/sw.js
+cp src/manifest.webmanifest dist/manifest.webmanifest
+cp src/icon-180.png src/icon-192.png src/icon-512.png dist/
+
+printf 'built:\n  dist/artifact.html          %s\n  dist/kazu-no-bouken.html    %s\n  dist/sw.js                  cache %s\n  dist/manifest.webmanifest + icon-180/192/512.png\n' \
   "$(wc -c < dist/artifact.html | tr -d ' ') bytes" \
-  "$(wc -c < dist/kazu-no-bouken.html | tr -d ' ') bytes"
+  "$(wc -c < dist/kazu-no-bouken.html | tr -d ' ') bytes" \
+  "$VERSION"

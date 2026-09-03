@@ -42,7 +42,8 @@ async function run(){
   if (!w.KazuApp){ summary.textContent = 'アプリを読み込めませんでした'; summary.className = 'ng'; return; }
   const src = await fetch('regression.js?t=' + Date.now()).then(r => r.text());
   let out;
-  try{ out = w.eval(src); }
+  // the suite is synchronous apart from the offline check, so it may hand back a promise
+  try{ out = await w.eval(src); }
   catch(e){ summary.textContent = 'テストが例外で停止: ' + e.message; summary.className = 'ng'; return; }
   out.results.forEach(r => {
     const li = document.createElement('li');

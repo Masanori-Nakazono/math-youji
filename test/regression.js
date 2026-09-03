@@ -419,8 +419,75 @@
       Object.keys(seen).length >= 5 && !loose.length, loose.join(' | '));
   })();
 
-  check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
+  /* ---------- 18. the app still opens with no network ----------
+     The route the README recommends is ホーム画面に追加 from GitHub Pages, and
+     without a service worker that cannot open offline at all — iOS just falls back
+     to the HTTP cache and lets it go stale. This drives sw.js's own handlers,
+     because a page cannot register a worker for a scope it does not control. */
+  async function serviceWorkerOffline(){
+    if (typeof caches === 'undefined'){
+      check('the app still opens with no network', false,
+        'this run has no CacheStorage — serve the tests over http://127.0.0.1, not file://');
+      return;
+    }
+    const src = await fetch('sw.js?t=' + Date.now()).then(r => r.ok ? r.text() : null).catch(() => null);
+    if (!src){ check('the app still opens with no network', false, 'dist/sw.js is missing — run ./build.sh'); return; }
 
-  K.Store.reset();
-  return { pass: results.filter(r => r.ok).length, fail: results.filter(r => !r.ok).length, results };
+    const H = {};
+    let skipped = false, claimed = false;
+    const fakeSelf = { addEventListener: (k, f) => { H[k] = f; }, skipWaiting(){ skipped = true; },
+                       clients: { claim: async () => { claimed = true; } } };
+    let offline = false;
+    const netFetch = r => offline ? Promise.reject(new TypeError('offline')) : fetch(r);
+    new Function('self', 'caches', 'fetch', 'Request', 'Response', 'location', src)
+      (fakeSelf, caches, netFetch, Request, Response, location);
+
+    const problems = [];
+    try{
+      const w = []; await H.install({ waitUntil: p => w.push(p) }); await Promise.all(w);
+      if (!skipped) problems.push('install did not take over');
+      const name = (await caches.keys()).find(k => k.indexOf('kazu-no-bouken-') === 0);
+      if (!name) problems.push('nothing was cached');
+
+      // a previous deploy's cache has to go, or the child is stuck on an old build
+      await caches.open('kazu-no-bouken-A-PREVIOUS-BUILD');
+      const w2 = []; await H.activate({ waitUntil: p => w2.push(p) }); await Promise.all(w2);
+      if (!claimed) problems.push('activate did not claim the page');
+      const left = await caches.keys();
+      if (left.length !== 1) problems.push('old caches survived: ' + left.join(','));
+
+      /* Now the path a child actually takes: the app has been opened once, so the
+         worker has seen and kept it. (Asking for './' instead would only prove the
+         precache, and under the test server './' is a directory listing rather
+         than the app it is on a real deploy.) */
+      const appUrl = location.href.split('?')[0];
+      let warm = null;
+      await H.fetch({ request: new Request(appUrl), respondWith: p => { warm = p; } });
+      await warm;
+      await new Promise(r => setTimeout(r, 400));      // let the background write land
+
+      offline = true;
+      let served = null;
+      await H.fetch({ request: new Request(appUrl), respondWith: p => { served = p; } });
+      const res = served && await served;
+      if (!res || res.status !== 200) problems.push('offline request was not answered');
+      else {
+        const html = await res.text();
+        if (html.indexOf('KazuApp') < 0) problems.push('what came back offline was not the app');
+      }
+    }catch(e){ problems.push('threw: ' + e.message); }
+    for (const k of await caches.keys()) await caches.delete(k);      // leave nothing behind
+    check('the app still opens with no network', !problems.length, problems.join(' | '));
+  }
+
+  function finish(){
+    check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
+    K.Store.reset();
+    return { pass: results.filter(r => r.ok).length, fail: results.filter(r => !r.ok).length, results };
+  }
+
+  // the only asynchronous check in the suite; everything above is synchronous
+  return serviceWorkerOffline()
+    .catch(e => check('the app still opens with no network', false, String(e && e.message || e)))
+    .then(finish);
 })();

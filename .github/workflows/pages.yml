@@ -37,6 +37,10 @@ jobs:
           mkdir -p _site
           cp dist/kazu-no-bouken.html _site/index.html
           cp dist/kazu-no-bouken.html _site/kazu-no-bouken.html
+          # the service worker has to sit at the site root to claim the whole scope,
+          # and without these the installed app cannot open offline
+          cp dist/sw.js dist/manifest.webmanifest _site/
+          cp dist/icon-180.png dist/icon-192.png dist/icon-512.png _site/
 
       # enablement lets the workflow turn Pages on itself, so there is no
       # manual repository setting to remember

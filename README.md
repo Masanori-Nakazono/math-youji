@@ -82,8 +82,16 @@ Store はそれぞれについて〈出題数・一発正解数・最終出題�
 使ってください。ホーム画面に追加していない Safari のタブも、7 日間使わないと
 iPadOS が保存データを破棄します。
 
-いずれも初回だけネットワークがあると Google Fonts が読まれます。オフラインでも
-iPad 内蔵のヒラギノ丸ゴにフォールバックするので、見た目が少し変わるだけで全機能が動きます。
+**オフラインで動きます。** 公開したページ（GitHub Pages など）から一度開けば、
+Service Worker がアプリ本体・アイコン・フォントをキャッシュするので、
+以後は機内モードでも起動します。新しくデプロイした版は、次に起動したときに
+自動で入れ替わります（表示は先にキャッシュから出るので、待たされません）。
+AirDrop したファイルを直接開く場合は、そもそも通信しないので最初から
+オフラインで動きます。フォントだけは iPad 内蔵のヒラギノ丸ゴにフォールバックし、
+見た目が少し変わります。
+
+Service Worker を登録しておくと、iPadOS がこのサイトを「インストール済み」として
+扱うため、記録（localStorage）を勝手に捨てられにくくなる副作用もあります。
 
 ## 記録が消えないようにする
 
@@ -117,6 +125,9 @@ Kyoko などを追加してください。文字だけでも遊べます。
 `main` に push すると `.github/workflows/pages.yml` が走り、`src/` からビルドし直した
 `dist/kazu-no-bouken.html` を `index.html` として GitHub Pages に配置します。
 
+同時に `sw.js` / `manifest.webmanifest` / `icon-180,192,512.png` もサイト直下に
+置きます。Service Worker はサイトのルートに無いと配下すべてを受け持てません。
+
 ワークフローが Pages の有効化まで行うので、リポジトリ側の手動設定は不要です。
 
 ワークフローは `./build.sh` を実行したあと `dist/` に差分が出たら失敗します。
@@ -129,6 +140,11 @@ src/
   head.html      <title> と Google Fonts の読み込み
   body.html      #stage と #fx だけの器
   styles.css     デザイントークン（画用紙とクレヨン）と全画面分のスタイル
+  icon-180.png   ホーム画面アイコン（iOS は SVG のタッチアイコンを受け付けない）
+  icon-192.png   manifest 用
+  icon-512.png   manifest 用
+  manifest.webmanifest
+  sw.js          オフライン用の Service Worker（__VERSION__ はビルドが埋める）
   js/
     00-util.js       DOM ビルダー、乱数、日本語の数の読み
     01-audio.js      WebAudio による効果音の合成 と 音声読み上げ
@@ -153,10 +169,22 @@ src/
 新しいファイルを置けば自動で入るので、リストを更新し忘れる事故は起きません。
 
 生成物：
-- `dist/kazu-no-bouken.html` — 単独で開ける完全な HTML（iPad 用はこちら）
+- `dist/kazu-no-bouken.html` — 単独で開ける完全な HTML（iPad 用はこちら）。
+  アイコンは PNG の data URI として埋め込まれるので、この1ファイルだけで完結します
 - `dist/artifact.html` — Artifact として公開する用（doctype/head/body は外側が用意する）
+- `dist/sw.js` — キャッシュ名にビルドのハッシュが入るので、デプロイすると古い
+  キャッシュが破棄されます
+- `dist/manifest.webmanifest`、`dist/icon-*.png`
 
 ビルドは `node --check` で構文検査をしてから出力します。
+
+アイコンはマスコットと同じ形状データから描き起こしたものです。マスコットを
+変えたときだけ手で作り直してください（PNG はコミット済みなので、ビルドと CI に
+Python は要りません）。
+
+```bash
+python3 tools/make-icons.py    # 要 Pillow
+```
 
 ## テスト
 
@@ -196,6 +224,9 @@ python3 -m http.server 8731     # プロジェクト直下で
 | importing the same backup twice does not inflate | 二重読み込みで数字が増えない |
 | merging keeps the higher star count | 合体しても良いほうが残る |
 | a wrong file is rejected without destroying the records | 誤ったファイルで記録が壊れない |
+| counting the squares reaches the answer the かさくらべ hint promises | ヒントが誤った比べ方を教えない |
+| every puzzle piece fits only its own hole | ピースの向きを見ないと解けない |
+| the app still opens with no network | オフラインで起動する／古いキャッシュが残らない |
 
 ## 遊びを増やす
 

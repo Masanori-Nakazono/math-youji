@@ -5276,6 +5276,19 @@ const Parent = (() => {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) Sound.hush(); else resize();
   });
+
+  /* Offline. The app is one self-contained file, so caching it is a few lines —
+     and without them the route the README recommends (ホーム画面に追加 from GitHub
+     Pages) cannot open with no network, which is exactly when an iPad gets handed
+     to a child in a car. Only the hosted build ships a manifest, so use that as
+     the signal: the AirDropped file:// copy and the Artifact build skip this. */
+  if ('serviceWorker' in navigator
+      && /^https?:$/.test(location.protocol)
+      && document.querySelector('link[rel="manifest"]')){
+    // not deferred to 'load': that waits on the Google Fonts stylesheet, which is
+    // exactly the request that stalls on the flaky connection we want to survive
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
 })();
 
 /* Expose the internals for debugging / automated checks. */
