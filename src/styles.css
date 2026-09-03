@@ -1376,3 +1376,18 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 .shapetile{ width: max(calc(var(--u)*7.6), var(--tap)); height: max(calc(var(--u)*7.6), var(--tap)); }
 .qi{ min-width: max(calc(var(--u)*5.4), var(--tap)); min-height: max(calc(var(--u)*5.4), var(--tap)); }
 .btn-round{ width: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); height: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); }
+
+/* ---------- parent: what each game is for ---------- */
+#parent .aimnote{
+  margin-top:calc(var(--u)*.6); padding:calc(var(--u)*.6) calc(var(--u)*.9);
+  background:var(--paper-2); border-radius:calc(var(--u)*.7);
+  border-left:calc(var(--u)*.3) solid var(--card-edge);
+  color:var(--ink-soft);
+}
+#parent .aimlist{ display:grid; gap:calc(var(--u)*.7); margin:calc(var(--u)*.5) 0 calc(var(--u)*1) }
+#parent .aimrow{ display:flex; gap:calc(var(--u)*.7); align-items:flex-start }
+#parent .aimrow .ico{ flex:0 0 auto; font-size:calc(var(--u)*1.9); line-height:1.2 }
+/* only the game's name is a block; the <b> inside the copy itself stays inline */
+#parent .aimrow > div > b:first-child{ display:block; margin-bottom:calc(var(--u)*.15) }
+#parent .aimrow > div > div{ color:var(--ink-soft) }
+#parent .aimnote b, #parent .aimrow > div > div b{ color:var(--ink); font-weight:800 }

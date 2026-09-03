@@ -1381,6 +1381,21 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 .shapetile{ width: max(calc(var(--u)*7.6), var(--tap)); height: max(calc(var(--u)*7.6), var(--tap)); }
 .qi{ min-width: max(calc(var(--u)*5.4), var(--tap)); min-height: max(calc(var(--u)*5.4), var(--tap)); }
 .btn-round{ width: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); height: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); }
+
+/* ---------- parent: what each game is for ---------- */
+#parent .aimnote{
+  margin-top:calc(var(--u)*.6); padding:calc(var(--u)*.6) calc(var(--u)*.9);
+  background:var(--paper-2); border-radius:calc(var(--u)*.7);
+  border-left:calc(var(--u)*.3) solid var(--card-edge);
+  color:var(--ink-soft);
+}
+#parent .aimlist{ display:grid; gap:calc(var(--u)*.7); margin:calc(var(--u)*.5) 0 calc(var(--u)*1) }
+#parent .aimrow{ display:flex; gap:calc(var(--u)*.7); align-items:flex-start }
+#parent .aimrow .ico{ flex:0 0 auto; font-size:calc(var(--u)*1.9); line-height:1.2 }
+/* only the game's name is a block; the <b> inside the copy itself stays inline */
+#parent .aimrow > div > b:first-child{ display:block; margin-bottom:calc(var(--u)*.15) }
+#parent .aimrow > div > div{ color:var(--ink-soft) }
+#parent .aimnote b, #parent .aimrow > div > div b{ color:var(--ink); font-weight:800 }
 </style>
 <div id="stage"></div>
 <div id="fx" aria-hidden="true"></div>
@@ -4958,6 +4973,8 @@ const Parent = (() => {
       sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
         '直近' + focus.n + '問で ' + pct(focus.acc) + '。いちばん低いところがこれなら、よく仕上がっています。次のレベルに進んで構いません。'));
     }
+    // what that game is actually for — the one place a parent is most likely to read it
+    if (focus.g.aim) sec.append(el('div.aimnote', { html: focus.g.aim }));
     if (stale && stale !== focus){
       sec.append(line('○', stale.g.name + '　《' + stale.lv.t + '》',
         stale.cold + '日ふれていません。できていたことなので、思い出す時間として1回だけ。'));
@@ -4987,6 +5004,30 @@ const Parent = (() => {
       sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
         text: '取りこぼしている項目はいまのところありません。' }));
     }
+    return sec;
+  }
+
+  /* ---- なぜこの遊びなのか ----
+     Every game carries an `aim`: a short piece on the thing it is for. All fifteen
+     were written, the README says they appear here, and nothing ever rendered
+     them — a page of reasoning that no parent could reach. */
+  function aimsSection(){
+    const sec = el('section');
+    sec.append(el('div.eyebrow', { text: 'why each game' }),
+      el('h3', { text: 'それぞれの遊びで つく ちから' }),
+      el('p', { text: '「うちの子はこれをやって何が身につくのか」への答えです。上の表で数字が低い遊びがあったら、まずここを読んでから、下の「おうちでできること」を試してみてください。' }));
+    WORLDS.forEach(w => {
+      const games = Games.list.filter(g => g.world === w.id && g.aim);
+      if (!games.length) return;
+      sec.append(el('h4', { text: w.name, style: { color: w.color } }));
+      const list = el('div.aimlist');
+      games.forEach(g => list.append(el('div.aimrow', null,
+        el('div.ico', { text: g.ico }),
+        el('div', null,
+          el('b', { text: g.name }),
+          el('div', { html: g.aim })))));
+      sec.append(list);
+    });
     return sec;
   }
 
@@ -5204,6 +5245,7 @@ const Parent = (() => {
       nextUpSection(),
       statsSection(),
       progressSection(),
+      aimsSection(),
       planSection(),
       textSection('why', '入学前に育てておきたい力', WHY),
       textSection('at home', 'おうちでできること', HOME_TIPS),

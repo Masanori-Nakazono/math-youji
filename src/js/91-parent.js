@@ -137,6 +137,8 @@ const Parent = (() => {
       sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
         '直近' + focus.n + '問で ' + pct(focus.acc) + '。いちばん低いところがこれなら、よく仕上がっています。次のレベルに進んで構いません。'));
     }
+    // what that game is actually for — the one place a parent is most likely to read it
+    if (focus.g.aim) sec.append(el('div.aimnote', { html: focus.g.aim }));
     if (stale && stale !== focus){
       sec.append(line('○', stale.g.name + '　《' + stale.lv.t + '》',
         stale.cold + '日ふれていません。できていたことなので、思い出す時間として1回だけ。'));
@@ -166,6 +168,30 @@ const Parent = (() => {
       sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
         text: '取りこぼしている項目はいまのところありません。' }));
     }
+    return sec;
+  }
+
+  /* ---- なぜこの遊びなのか ----
+     Every game carries an `aim`: a short piece on the thing it is for. All fifteen
+     were written, the README says they appear here, and nothing ever rendered
+     them — a page of reasoning that no parent could reach. */
+  function aimsSection(){
+    const sec = el('section');
+    sec.append(el('div.eyebrow', { text: 'why each game' }),
+      el('h3', { text: 'それぞれの遊びで つく ちから' }),
+      el('p', { text: '「うちの子はこれをやって何が身につくのか」への答えです。上の表で数字が低い遊びがあったら、まずここを読んでから、下の「おうちでできること」を試してみてください。' }));
+    WORLDS.forEach(w => {
+      const games = Games.list.filter(g => g.world === w.id && g.aim);
+      if (!games.length) return;
+      sec.append(el('h4', { text: w.name, style: { color: w.color } }));
+      const list = el('div.aimlist');
+      games.forEach(g => list.append(el('div.aimrow', null,
+        el('div.ico', { text: g.ico }),
+        el('div', null,
+          el('b', { text: g.name }),
+          el('div', { html: g.aim })))));
+      sec.append(list);
+    });
     return sec;
   }
 
@@ -383,6 +409,7 @@ const Parent = (() => {
       nextUpSection(),
       statsSection(),
       progressSection(),
+      aimsSection(),
       planSection(),
       textSection('why', '入学前に育てておきたい力', WHY),
       textSection('at home', 'おうちでできること', HOME_TIPS),
