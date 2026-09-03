@@ -654,6 +654,73 @@
       !bad.length, bad.slice(0, 3).join(' | '));
   })();
 
+  /* ---------- 21. the retrieval levels stop handing over the answer ----------
+     The keypad took guessing out of these levels, but the picture stayed: 「2と いくつで
+     10？」 above two blue dots and eight empty cells is solved by counting the cells.
+     Both strategies score a clean answer, and only retrieval makes a carry sum fast.
+     The picture now comes back on a wrong answer and on a right one — where it
+     confirms what the child said instead of telling them. */
+  (function noCountablePicture(){
+    const bad = [];
+    [['bond', 2], ['ten', 1]].forEach(([id, li]) => {
+      let drew = 0, hinted = 0;
+      for (let t = 0; t < 10; t++){
+        K.Session.startLevel(K.Games.byId[id], li);
+        if (!qa('#play .choices .padkey').length) continue;   // that draw was not a keypad question
+        drew++;
+        if (qa('#play .playfield .tenframe').length){
+          bad.push(id + '/L' + (li + 1) + ' shows the frame before the child answers');
+          break;
+        }
+        const wrong = qa('#play .padkey').filter(k => !k.classList.contains('correct'));
+        wrong[0].click(); wrong[0].click();                   // two misses: bring the picture back
+        if (qa('#play .playfield .tenframe').length) hinted++;
+      }
+      if (!drew) bad.push(id + '/L' + (li + 1) + ' never drew a keypad question');
+      else if (!hinted) bad.push(id + '/L' + (li + 1) + ' hint never brings the frame back');
+    });
+    check('the retrieval levels do not leave the answer countable on screen',
+      !bad.length, bad.slice(0, 3).join(' | '));
+  })();
+
+  /* ---------- 22. right-but-slow is not the same as known ----------
+     Nothing was ever timed, so a child who counted eight empty cells for nine
+     seconds and a child who remembered both scored「1回目で正解」and the app could
+     not tell them apart — on the very levels whose stated goal is 考えずに言える. */
+  (function speed(){
+    K.Store.reset();
+    K.Session.startLevel(K.Games.byId.ten, 1);
+    const beforeAnswer = S.responseMs;
+    const keys = qa('#play .padkey');
+    if (keys.length) keys[0].click();
+    check('the app measures how long an answer took',
+      beforeAnswer === null && typeof S.responseMs === 'number' && S.responseMs >= 0,
+      'before=' + beforeAnswer + ' after=' + S.responseMs);
+
+    K.Store.reset();
+    for (let i = 0; i < 4; i++) K.Store.noteFact('ten:ten:4', true, '4 と 6 で 10', 'ten:1', 11000);
+    for (let i = 0; i < 4; i++) K.Store.noteFact('ten:ten:2', true, '2 と 8 で 10', 'ten:1', 1200);
+    K.Store.recordLevel('ten', 0, 3, 8, 8);
+    const weak = K.Store.weakFacts().map(w => w.key);
+    const slowDue = K.Store.factDue('ten:ten:4'), fastDue = K.Store.factDue('ten:ten:2');
+    check('a fact answered right every time but slowly still counts as unfinished',
+      weak.length === 1 && weak[0] === 'ten:ten:4' && slowDue > fastDue,
+      'weak=[' + weak.join(',') + '] due ' + slowDue.toFixed(2) + ' vs ' + fastDue.toFixed(2));
+
+    // a wrong answer times a guess, not a retrieval, so it is never recorded as one
+    K.Store.reset();
+    K.Store.noteFact('ten:ten:7', false, '7 と 3 で 10', 'ten:1', null);
+    check('a wrong answer is not timed', K.Store.factSpeed('ten:ten:7') === null,
+      'ms=' + K.Store.factSpeed('ten:ten:7'));
+
+    K.Parent.render();
+    const heads = qa('#parent thead th').map(h => h.textContent);
+    check('the parent page reports speed alongside accuracy',
+      heads.indexOf('こたえるまで') > 0 && heads.indexOf('こたえるまで') > heads.indexOf('直近30問'),
+      heads.join(' / '));
+    K.Store.reset();
+  })();
+
   function finish(){
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();

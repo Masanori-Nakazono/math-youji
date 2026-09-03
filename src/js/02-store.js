@@ -3,6 +3,12 @@
    =========================================================== */
 'use strict';
 
+/* What「考えずに言える」means in milliseconds for the number facts in けいさんの やま.
+   Under FAST the answer arrived; over SLOW it was worked out — almost always by
+   counting. Between the two it is on its way. These are deliberately generous:
+   the point is to tell retrieval from counting, not to run a race. */
+const FLUENT_FAST_MS = 3000, FLUENT_SLOW_MS = 9000;
+
 const Store = (() => {
   const KEY = 'kazu-no-bouken.v1';
   const blank = () => ({
@@ -13,9 +19,10 @@ const Store = (() => {
     /* Per-game aggregates can only ever say "this game is shaky". These two say
        *what* is shaky and *when* — which is what lets the app come back to the
        exact fact the child missed, and lets the parent page name it. */
-    facts: {},        // item key -> [asked, firstTryRight, lastDayNumber, label, "gameId:levelIndex"]
+    facts: {},        // item key -> [asked, firstTryRight, lastDayNumber, label, "gameId:levelIndex", typicalMs]
     recent: {},       // "gameId:levelIndex" -> last 30 first-try outcomes, "1011…"
     last:  {},        // "gameId:levelIndex" -> day number last played
+    swift: {},        // "gameId:levelIndex" -> 1 when cleared without counting
     stickers: [],     // earned sticker keys
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
@@ -70,7 +77,7 @@ const Store = (() => {
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
   function mergeInto(base, add){
     const out = Object.assign(blank(), base);
-    ['stars', 'plays', 'seen', 'daily'].forEach(k => {
+    ['stars', 'plays', 'seen', 'daily', 'swift'].forEach(k => {
       const src = add[k] || {};
       out[k] = Object.assign({}, base[k] || {});
       // max, never sum: importing the same backup twice must not inflate anything
@@ -131,7 +138,11 @@ const Store = (() => {
     if (!f || !f[0]) return 1;
     const acc = f[1] / f[0];
     const age = Math.min(30, dayNo() - f[2]);
-    return (1 - acc) * 1.6 + (age / 30) * 0.6 + (f[0] < 3 ? 0.25 : 0);
+    /* Right but slow is not the same as known. Right-first-time cannot tell a child
+       who remembers「10は4と6」from one who counted the six empty cells for nine
+       seconds, and only the first of those makes a carry sum fast. */
+    const slow = f[5] ? clamp((f[5] - FLUENT_FAST_MS) / (FLUENT_SLOW_MS - FLUENT_FAST_MS), 0, 1) : 0;
+    return (1 - acc) * 1.6 + (age / 30) * 0.6 + (f[0] < 3 ? 0.25 : 0) + slow * 0.5;
   }
 
   /** The facts this child keeps missing, worst first.
@@ -143,9 +154,11 @@ const Store = (() => {
       const f = mem.facts[k];
       if (!f || !f[0] || !f[4]) continue;        // never asked, or nowhere to ask it again
       const missed = f[0] - f[1];
-      if (missed < 1) continue;
-      if (f[1] / f[0] >= 0.8 && missed < 2) continue;   // one slip on an otherwise solid fact
-      out.push({ key: k, label: f[3] || k, at: f[4], due: dueOf(k), missed });
+      // right every time but still being counted out: the case a percentage cannot show
+      const slow = f[5] >= FLUENT_SLOW_MS;
+      if (missed < 1 && !slow) continue;
+      if (!slow && f[1] / f[0] >= 0.8 && missed < 2) continue;   // one slip on a solid fact
+      out.push({ key: k, label: f[3] || k, at: f[4], due: dueOf(k), missed, ms: f[5] || null, slow });
     }
     out.sort((a, b) => b.due - a.due || b.missed - a.missed);
     return limit ? out.slice(0, limit) : out;
@@ -232,7 +245,7 @@ const Store = (() => {
     },
 
     /* ---- item-level memory ---- */
-    noteFact(k, firstTryOk, label, from){
+    noteFact(k, firstTryOk, label, from, ms){
       if (!k) return;
       const f = mem.facts[k] || (mem.facts[k] = [0, 0, 0]);
       f[0]++;
@@ -243,10 +256,35 @@ const Store = (() => {
          and still have no way to bring it back: the item key says which game, never
          which level. */
       if (from) f[4] = from;
+      /* How long the answer took, kept only where speed is the goal and only for
+         clean answers — a wrong answer times a guess. A single interrupted question
+         (the iPad put down mid-problem) is clamped rather than dropped, so it cannot
+         decide the average on its own. */
+      if (ms > 0){
+        const capped = Math.min(ms, 20000);
+        f[5] = f[5] ? Math.round(f[5] * 0.65 + capped * 0.35) : capped;
+      }
       save();
     },
     fact: k => mem.facts[k] || null,
     factOrigin(k){ const f = mem.facts[k]; return f && f[4] || null; },
+    factSpeed(k){ const f = mem.facts[k]; return f && f[5] || null; },
+    /** Typical time to answer this game's facts, in ms — null until something has
+        been timed. Median across facts, so one bad question does not move it. */
+    gameSpeed(g){
+      const xs = [];
+      for (const k in mem.facts){
+        if (k.indexOf(g + ':') !== 0) continue;
+        const f = mem.facts[k];
+        if (f && f[5]) xs.push(f[5]);
+      }
+      if (!xs.length) return null;
+      xs.sort((a, b) => a - b);
+      return xs[Math.floor(xs.length / 2)];
+    },
+    /** Cleared with every answer right first time *and* without counting. */
+    recordSwift(g, l){ mem.swift[key(g, l)] = 1; save(); },
+    isSwift: (g, l) => !!mem.swift[key(g, l)],
     factDue: dueOf,
     weakFacts,
 

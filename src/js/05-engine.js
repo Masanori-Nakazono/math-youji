@@ -50,6 +50,16 @@ const Session = (() => {
      child keeps missing, and tell the parent which ones they are. */
   let curItem = null, curLabel = null;
   let focusKeys = [];             // the facts a 集中練習 session is aimed at
+  /* ---------- how long the answer took ----------
+     けいさんの やま is named for「考えずに言える」— an answer that arrives rather than
+     one that is worked out. Right-first-time cannot tell those apart: a child who
+     counts eight empty cells for nine seconds and a child who remembers both score a
+     clean answer, and only the second makes a carry sum fast. So time the first
+     response, and only where speed is actually the goal (`game.fluent`). */
+  let askedAt = 0, respondedMs = null, swiftCount = 0;
+  function markResponse(){
+    if (respondedMs == null && askedAt) respondedMs = Math.round(performance.now() - askedAt);
+  }
   let usedItems = new Set();      // the shuffle bag for the current session
   let shaky = [];                 // facts missed this session, for the result screen
 
@@ -263,7 +273,7 @@ const Session = (() => {
   }
 
   function begin(){
-    idx = 0; mistakes = 0; firstTryRight = 0;
+    idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0;
     if (mode !== 'focus') focusKeys = [];
     usedItems = new Set(); shaky = [];
     clear(pipsEl);
@@ -332,6 +342,7 @@ const Session = (() => {
         const o = opts || {};
         const lo = o.lo == null ? 0 : o.lo, hi = o.hi == null ? 10 : o.hi;
         clear(choicesEl);
+        askedAt = performance.now();     // a story animation is not thinking time
         choicesEl.classList.add('pad');
         choicesEl.dataset.built = '1';
         /* No hintBtns: the engine's fallback dims one more wrong answer on every
@@ -346,6 +357,7 @@ const Session = (() => {
           const val = v;
           b.addEventListener('click', () => {
             if (locked || stale()) return;
+            markResponse();
             if (val === answer){
               if (settled) return;
               settled = true;
@@ -377,6 +389,7 @@ const Session = (() => {
         if (stale()) return choicesEl;
         const o = opts || {};
         clear(choicesEl);
+        askedAt = performance.now();
         choicesEl.dataset.built = '1';
         hintBtns = [];
         let settled = false;              // one accepted answer per set of buttons
@@ -388,6 +401,7 @@ const Session = (() => {
           const hit = o.match ? o.match(val, answer) : val === answer;
           b.addEventListener('click', () => {
             if (locked || stale()) return;
+            markResponse();
             if (hit){
               /* A five-year-old taps twice. The picked button was never disabled —
                  only its neighbours were — so a second tap ran onPick again. In a
@@ -418,6 +432,7 @@ const Session = (() => {
 
   function resetSurface(){
     locked = false; hintBtns = []; hintFn = null; hintExtras = []; hintShown = false;
+    askedAt = 0; respondedMs = null;
     curItem = null; curLabel = null;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
     choicesEl.classList.remove('pad');
@@ -480,12 +495,16 @@ const Session = (() => {
       titleEl.textContent = (mode === 'daily' ? 'きょうの れんしゅう' : 'にがて あつめ') + '　' + step.game.name;
     }
     drawQuestion(step);
+    // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
+    // call buildChoices, so start their clock here
+    if (!askedAt) askedAt = performance.now();
     UI.fitPlayfield(fieldEl);     // size this question to the room it has
     refit();                      // and again next frame, once fonts/SVGs have settled
   }
 
   function onWrong(target){
     if (locked) return;
+    markResponse();
     wrongThisQ++;
     mistakes++;
     Sound.sfx.wrong();
@@ -515,12 +534,16 @@ const Session = (() => {
   function onCorrect(o){
     if (locked) return;
     locked = true;
+    markResponse();
     clearFeedback();
     const clean = wrongThisQ === 0;
     if (clean) firstTryRight++;
-    Store.noteOutcome(plan[idx].game.id, plan[idx].levelIndex, clean);
+    const g = plan[idx].game;
+    const timed = g.fluent && clean ? respondedMs : null;
+    if (timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
+    Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
     if (curItem){
-      Store.noteFact(curItem, clean, curLabel, plan[idx].game.id + ':' + plan[idx].levelIndex);
+      Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed);
       if (!clean && !shaky.some(x => x.key === curItem)){
         shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
       }
@@ -560,6 +583,12 @@ const Session = (() => {
        child had sat through the level. Grade the questions answered right first
        time instead, and let a session score nothing. */
     const stars = starsFor(firstTryRight, total);
+    /* ★★★ says every answer was right first time. This says they arrived — which is
+       the thing these levels are actually for, and the thing three stars could not
+       distinguish from nine seconds of counting. Only on the games where speed is
+       the stated goal, and never on きょうの れんしゅう, which mixes them all. */
+    const swift = stars === 3 && total > 0 && mode !== 'daily'
+                  && plan.every(p => p.game.fluent) && swiftCount / total >= 0.75;
     // a session that did not pass should not get a party; it gets an invitation
     if (stars >= 1){ Sound.sfx.finish(); UI.confetti(60); }
     else Sound.sfx.place();
@@ -567,6 +596,7 @@ const Session = (() => {
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;
       Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
+      if (swift) Store.recordSwift(curGame.id, curLevelIdx);
       // a sticker means "cleared", so it waits for a pass
       if (stars >= 1){
         if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
@@ -582,7 +612,7 @@ const Session = (() => {
       if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
     }
     Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
-                  sticker: newSticker, shaky: shaky.slice(0, 3), focusKeys: focusKeys.slice() });
+                  sticker: newSticker, shaky: shaky.slice(0, 3), focusKeys: focusKeys.slice(), swift });
   }
 
   return {
@@ -602,6 +632,7 @@ const Session = (() => {
       get mistakes(){ return mistakes; },
       get pending(){ return timers.size; },
       get mode(){ return mode; },
+      get responseMs(){ return respondedMs; },
       get planItems(){ return plan.map(p => p.want || null); }
     }
   };

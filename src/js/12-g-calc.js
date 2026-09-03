@@ -49,11 +49,21 @@ function decompose(api, whole, pad){
   api.setPrompt(`${numTag(whole)} は ${numTag(known)} と いくつ？`,
                 `${numKana(whole)}は、${numKana(known)}といくつ？`);
   const frame = partFrame(whole, known);
+  const frameset = el('div.frameset', null, frame);
   const bond = bondNode(whole, known, null);
-  api.field.append(el('div.frameset', null, frame), bond);
+  /* At the top level the picture *is* the answer: 「10は4といくつ」 with a ten-frame
+     on screen is solved by counting the six empty cells, not by remembering that
+     10 is 4 and 6. The keypad took guessing out of this level; leaving the frame up
+     left counting in, which is the strategy the level exists to replace. So the
+     frame comes back the moment the child answers — and earlier if they get stuck —
+     where it confirms what they said instead of telling them. */
+  if (!pad) api.field.append(frameset);
+  api.field.append(bond);
+  const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
   const showParts = {
     correctOpts: { delay: 1500 },
     onPick(){
+      showFrame();
       // show the two parts making the whole (scoped to this question's own nodes)
       const cells = $$('.cell', frame);
       for (let i = known; i < whole; i++){
@@ -66,6 +76,7 @@ function decompose(api, whole, pad){
   };
   if (pad) api.buildPad(ans, showParts);
   else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, whole))), ans, showParts);
+  if (pad) api.onHint(showFrame);
 }
 
 function compose(api, maxWhole, pad){
@@ -84,14 +95,21 @@ function compose(api, maxWhole, pad){
     else if (i < a + b) cell.append(el('div.dot.b'));
     f.append(cell);
   }
-  api.field.append(el('div.frameset', null, f),
+  const frameset = el('div.frameset', null, f);
+  if (!pad) api.field.append(frameset);          // countable at the top level: see decompose
+  api.field.append(
     el('div.eq', null, String(a), el('span.op', { text: 'と' }), String(b), el('span.op', { text: 'で' }), el('span.box', { text: '?' })));
-  if (pad) api.buildPad(ans);
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans);
+  const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
+  if (pad){
+    api.buildPad(ans, { correctOpts: { delay: 1200 }, onPick(){ showFrame(); } });
+    api.onHint(showFrame);
+  } else {
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans);
+  }
 }
 
 Games.add({
-  id: 'bond', name: 'いくつと いくつ', ico: '🧩', world: 'yama', color: 'var(--c-red)', focus: 1.7,
+  id: 'bond', name: 'いくつと いくつ', ico: '🧩', world: 'yama', color: 'var(--c-red)', focus: 1.7, fluent: true,
   aim: '5や10を<b>2つの数に分けたり、合わせたり</b>する感覚。たし算・ひき算を「数えないで思い出す」ための部品で、くり上がり・くり下がりの計算はこれが土台になります。ここが自動化していると小1は驚くほど楽になります。',
   levels: [
     { t: '5は いくつと いくつ', d: 'ごの ぶんかい', make: api => chance(.25) ? compose(api, 5) : decompose(api, 5) },
@@ -147,15 +165,36 @@ function partnerOfTen(api, pad){
   api.item('ten:' + a, a + ' と ' + ans + ' で 10');
   api.setPrompt(`${numTag(a)} と いくつで <b>10</b>？`, `${numKana(a)}といくつで、10？`);
   const f = el('div.tenframe', { style: { '--cols': 5 } });
+  const cells = [];
   for (let i = 0; i < 10; i++){
     const cell = el('div.cell' + (i >= a ? '.hole' : ''));
     if (i < a) cell.append(el('div.dot'));
-    f.append(cell);
+    cells.push(cell); f.append(cell);
   }
-  api.field.append(el('div.frameset', null, f),
+  /* Same reason as いくつと いくつ L3: 「2と いくつで 10？」 above two blue dots and
+     eight empty cells is a counting question wearing a retrieval question's clothes.
+     The equation stays — that is the question; the frame is the answer. */
+  const frameset = el('div.frameset', null, f);
+  if (!pad) api.field.append(frameset);
+  api.field.append(
     el('div.eq', null, String(a), el('span.op', { text: 'と' }), el('span.box', { text: '?' }), el('span.op', { text: 'で' }), '10'));
-  if (pad) api.buildPad(ans);
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans);
+  const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
+  if (pad){
+    api.buildPad(ans, {
+      correctOpts: { delay: 1500 },
+      onPick(){
+        showFrame();
+        for (let i = a; i < 10; i++){
+          api.later(() => {
+            if (!cells[i].firstChild){ cells[i].classList.remove('hole'); cells[i].append(el('div.dot.b')); Sound.sfx.place(); }
+          }, (i - a) * 150 + 200);
+        }
+      }
+    });
+    api.onHint(showFrame);
+  } else {
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans);
+  }
 }
 
 function pairHunt(api){
@@ -201,7 +240,7 @@ function pairHunt(api){
 }
 
 Games.add({
-  id: 'ten', name: '10の おともだち', ico: '🔟', world: 'yama', color: 'var(--c-red)', focus: 1.7,
+  id: 'ten', name: '10の おともだち', ico: '🔟', world: 'yama', color: 'var(--c-red)', focus: 1.7, fluent: true,
   aim: '<b>合わせて10になる組み合わせ</b>を、考えずに言えるようにする練習。「9+4」を「9+1+3」と処理するくり上がりの計算は、これが即答できるかどうかで速さがまったく変わります。',
   levels: [
     { t: '10まで うめる', d: 'わくを いっぱいに する', make: fillToTen },
@@ -363,7 +402,7 @@ function differenceQ(api, max, pad){
 }
 
 Games.add({
-  id: 'add', name: 'たしざん', ico: '➕', world: 'yama', color: 'var(--c-red)', focus: 1.25,
+  id: 'add', name: 'たしざん', ico: '➕', world: 'yama', color: 'var(--c-red)', focus: 1.25, fluent: true,
   aim: '「増えた／合わせた」場面を<b>式に置きかえる</b>力。物語→絵→式の順に抽象度を上げるので、記号だけを丸暗記せずに意味とつながります。',
   levels: [
     { t: '5まで', d: 'おはなしで かんがえる', make: api => addStory(api, 5) },
@@ -373,7 +412,7 @@ Games.add({
 });
 
 Games.add({
-  id: 'sub', name: 'ひきざん', ico: '➖', world: 'yama', color: 'var(--c-red)', focus: 1.25,
+  id: 'sub', name: 'ひきざん', ico: '➖', world: 'yama', color: 'var(--c-red)', focus: 1.25, fluent: true,
   aim: '「のこりはいくつ」（求残）と「どちらがいくつ多い」（求差）の<b>2つの意味</b>にふれます。求差はつまずきやすいので、1対1に並べて余りを見る経験を早めに。',
   levels: [
     { t: '5まで', d: 'いなくなると のこりは', make: api => subStory(api, 5) },

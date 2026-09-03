@@ -172,6 +172,8 @@ const Levels = (() => {
       },
         el('div.num', { text: unlocked ? String(i + 1) : '🔒' }),
         el('div.body', null, el('div.t', { text: lv.t }), el('div.d', { text: lv.d })),
+        // ★★★ is "all right first time"; this is "and without counting"
+        Store.isSwift(g.id, i) ? el('span.swiftmark', { title: 'すぐ こたえられた', text: '⚡️' }) : null,
         UI.stars(stars));
       listEl.append(card);
     });
@@ -198,15 +200,23 @@ const Result = (() => {
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
-    const spoken = r.stars === 3 ? 'パーフェクト！'
+    const spoken = (r.swift ? 'パーフェクト！すぐ答えられたね！'
+                 : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
                  : r.stars === 1 ? 'クリア！'
-                 : '惜しい！もう一度やってみよう。';
+                 : '惜しい！もう一度やってみよう。');
     inner.append(
       mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
       UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }),
       el('div.result-sub', { text: `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+    /* The thing ★★★ could never say. These levels are for an answer that arrives,
+       and a child who counted their way to every right answer used to get exactly
+       the same three stars as one who remembered. */
+    if (r.swift){
+      inner.append(el('div.swift', null,
+        el('span.mk', { text: '⚡️' }), 'かぞえないで こたえられたね！'));
+    }
     /* Name what went wrong. "62%" tells a child nothing; "3と7" is something they
        can carry to tomorrow — and it is exactly what the app will bring back.
 

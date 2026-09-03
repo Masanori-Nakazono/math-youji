@@ -1377,6 +1377,24 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 #result button.shakyitem:active{ transform: translateY(.14em); box-shadow: none; }
 #result button.shakyitem:focus-visible{ outline: calc(var(--u)*.24) solid var(--ring); outline-offset: 2px; }
 
+/* ---------- 「かぞえないで こたえられた」 ----------
+   ★★★ says every answer was right first time. This says they arrived rather than
+   being worked out, which is what these levels are actually for. */
+#result .swift{
+  display:flex; align-items:center; justify-content:center; gap:calc(var(--u)*.5);
+  margin-top:calc(var(--u)*.8);
+  padding:calc(var(--u)*.45) calc(var(--u)*1.2);
+  background:color-mix(in srgb, var(--star) 26%, var(--card));
+  border:calc(var(--u)*.16) solid var(--star-edge);
+  border-radius:var(--wob-b);
+  font-weight:800; font-size:calc(var(--u)*1.6); color:var(--ink);
+}
+#result .swift .mk{ font-size:calc(var(--u)*2) }
+.levelcard .swiftmark{
+  flex:0 0 auto; font-size:calc(var(--u)*1.7); line-height:1;
+  filter:drop-shadow(0 0 calc(var(--u)*.3) color-mix(in srgb, var(--star) 70%, transparent));
+}
+
 /* ---------- home: the aimed practice set ----------
    A quieter second door than きょうの れんしゅう: the daily habit stays the loud
    one, and this appears only when there is actually something to aim at. */
@@ -1407,6 +1425,9 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   font-weight:800; color:var(--ink);
 }
 #parent .factchip small{ font-weight:500; color:var(--ink-soft); font-size:.72em }
+/* right every time, and still counted out — a different thing from a wrong answer,
+   so it must not wear the same colour as one */
+#parent .factchip.slow{ background:color-mix(in srgb, var(--c-yellow) 32%, var(--card)); }
 
 /* ---------- floors for anything a finger has to hit ----------
    The question is scaled up to fill its box, but the smallest iPad in portrait
@@ -1800,6 +1821,12 @@ const Sound = (() => {
    =========================================================== */
 'use strict';
 
+/* What「考えずに言える」means in milliseconds for the number facts in けいさんの やま.
+   Under FAST the answer arrived; over SLOW it was worked out — almost always by
+   counting. Between the two it is on its way. These are deliberately generous:
+   the point is to tell retrieval from counting, not to run a race. */
+const FLUENT_FAST_MS = 3000, FLUENT_SLOW_MS = 9000;
+
 const Store = (() => {
   const KEY = 'kazu-no-bouken.v1';
   const blank = () => ({
@@ -1810,9 +1837,10 @@ const Store = (() => {
     /* Per-game aggregates can only ever say "this game is shaky". These two say
        *what* is shaky and *when* — which is what lets the app come back to the
        exact fact the child missed, and lets the parent page name it. */
-    facts: {},        // item key -> [asked, firstTryRight, lastDayNumber, label, "gameId:levelIndex"]
+    facts: {},        // item key -> [asked, firstTryRight, lastDayNumber, label, "gameId:levelIndex", typicalMs]
     recent: {},       // "gameId:levelIndex" -> last 30 first-try outcomes, "1011…"
     last:  {},        // "gameId:levelIndex" -> day number last played
+    swift: {},        // "gameId:levelIndex" -> 1 when cleared without counting
     stickers: [],     // earned sticker keys
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
@@ -1867,7 +1895,7 @@ const Store = (() => {
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
   function mergeInto(base, add){
     const out = Object.assign(blank(), base);
-    ['stars', 'plays', 'seen', 'daily'].forEach(k => {
+    ['stars', 'plays', 'seen', 'daily', 'swift'].forEach(k => {
       const src = add[k] || {};
       out[k] = Object.assign({}, base[k] || {});
       // max, never sum: importing the same backup twice must not inflate anything
@@ -1928,7 +1956,11 @@ const Store = (() => {
     if (!f || !f[0]) return 1;
     const acc = f[1] / f[0];
     const age = Math.min(30, dayNo() - f[2]);
-    return (1 - acc) * 1.6 + (age / 30) * 0.6 + (f[0] < 3 ? 0.25 : 0);
+    /* Right but slow is not the same as known. Right-first-time cannot tell a child
+       who remembers「10は4と6」from one who counted the six empty cells for nine
+       seconds, and only the first of those makes a carry sum fast. */
+    const slow = f[5] ? clamp((f[5] - FLUENT_FAST_MS) / (FLUENT_SLOW_MS - FLUENT_FAST_MS), 0, 1) : 0;
+    return (1 - acc) * 1.6 + (age / 30) * 0.6 + (f[0] < 3 ? 0.25 : 0) + slow * 0.5;
   }
 
   /** The facts this child keeps missing, worst first.
@@ -1940,9 +1972,11 @@ const Store = (() => {
       const f = mem.facts[k];
       if (!f || !f[0] || !f[4]) continue;        // never asked, or nowhere to ask it again
       const missed = f[0] - f[1];
-      if (missed < 1) continue;
-      if (f[1] / f[0] >= 0.8 && missed < 2) continue;   // one slip on an otherwise solid fact
-      out.push({ key: k, label: f[3] || k, at: f[4], due: dueOf(k), missed });
+      // right every time but still being counted out: the case a percentage cannot show
+      const slow = f[5] >= FLUENT_SLOW_MS;
+      if (missed < 1 && !slow) continue;
+      if (!slow && f[1] / f[0] >= 0.8 && missed < 2) continue;   // one slip on a solid fact
+      out.push({ key: k, label: f[3] || k, at: f[4], due: dueOf(k), missed, ms: f[5] || null, slow });
     }
     out.sort((a, b) => b.due - a.due || b.missed - a.missed);
     return limit ? out.slice(0, limit) : out;
@@ -2029,7 +2063,7 @@ const Store = (() => {
     },
 
     /* ---- item-level memory ---- */
-    noteFact(k, firstTryOk, label, from){
+    noteFact(k, firstTryOk, label, from, ms){
       if (!k) return;
       const f = mem.facts[k] || (mem.facts[k] = [0, 0, 0]);
       f[0]++;
@@ -2040,10 +2074,35 @@ const Store = (() => {
          and still have no way to bring it back: the item key says which game, never
          which level. */
       if (from) f[4] = from;
+      /* How long the answer took, kept only where speed is the goal and only for
+         clean answers — a wrong answer times a guess. A single interrupted question
+         (the iPad put down mid-problem) is clamped rather than dropped, so it cannot
+         decide the average on its own. */
+      if (ms > 0){
+        const capped = Math.min(ms, 20000);
+        f[5] = f[5] ? Math.round(f[5] * 0.65 + capped * 0.35) : capped;
+      }
       save();
     },
     fact: k => mem.facts[k] || null,
     factOrigin(k){ const f = mem.facts[k]; return f && f[4] || null; },
+    factSpeed(k){ const f = mem.facts[k]; return f && f[5] || null; },
+    /** Typical time to answer this game's facts, in ms — null until something has
+        been timed. Median across facts, so one bad question does not move it. */
+    gameSpeed(g){
+      const xs = [];
+      for (const k in mem.facts){
+        if (k.indexOf(g + ':') !== 0) continue;
+        const f = mem.facts[k];
+        if (f && f[5]) xs.push(f[5]);
+      }
+      if (!xs.length) return null;
+      xs.sort((a, b) => a - b);
+      return xs[Math.floor(xs.length / 2)];
+    },
+    /** Cleared with every answer right first time *and* without counting. */
+    recordSwift(g, l){ mem.swift[key(g, l)] = 1; save(); },
+    isSwift: (g, l) => !!mem.swift[key(g, l)],
     factDue: dueOf,
     weakFacts,
 
@@ -2559,6 +2618,16 @@ const Session = (() => {
      child keeps missing, and tell the parent which ones they are. */
   let curItem = null, curLabel = null;
   let focusKeys = [];             // the facts a 集中練習 session is aimed at
+  /* ---------- how long the answer took ----------
+     けいさんの やま is named for「考えずに言える」— an answer that arrives rather than
+     one that is worked out. Right-first-time cannot tell those apart: a child who
+     counts eight empty cells for nine seconds and a child who remembers both score a
+     clean answer, and only the second makes a carry sum fast. So time the first
+     response, and only where speed is actually the goal (`game.fluent`). */
+  let askedAt = 0, respondedMs = null, swiftCount = 0;
+  function markResponse(){
+    if (respondedMs == null && askedAt) respondedMs = Math.round(performance.now() - askedAt);
+  }
   let usedItems = new Set();      // the shuffle bag for the current session
   let shaky = [];                 // facts missed this session, for the result screen
 
@@ -2772,7 +2841,7 @@ const Session = (() => {
   }
 
   function begin(){
-    idx = 0; mistakes = 0; firstTryRight = 0;
+    idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0;
     if (mode !== 'focus') focusKeys = [];
     usedItems = new Set(); shaky = [];
     clear(pipsEl);
@@ -2841,6 +2910,7 @@ const Session = (() => {
         const o = opts || {};
         const lo = o.lo == null ? 0 : o.lo, hi = o.hi == null ? 10 : o.hi;
         clear(choicesEl);
+        askedAt = performance.now();     // a story animation is not thinking time
         choicesEl.classList.add('pad');
         choicesEl.dataset.built = '1';
         /* No hintBtns: the engine's fallback dims one more wrong answer on every
@@ -2855,6 +2925,7 @@ const Session = (() => {
           const val = v;
           b.addEventListener('click', () => {
             if (locked || stale()) return;
+            markResponse();
             if (val === answer){
               if (settled) return;
               settled = true;
@@ -2886,6 +2957,7 @@ const Session = (() => {
         if (stale()) return choicesEl;
         const o = opts || {};
         clear(choicesEl);
+        askedAt = performance.now();
         choicesEl.dataset.built = '1';
         hintBtns = [];
         let settled = false;              // one accepted answer per set of buttons
@@ -2897,6 +2969,7 @@ const Session = (() => {
           const hit = o.match ? o.match(val, answer) : val === answer;
           b.addEventListener('click', () => {
             if (locked || stale()) return;
+            markResponse();
             if (hit){
               /* A five-year-old taps twice. The picked button was never disabled —
                  only its neighbours were — so a second tap ran onPick again. In a
@@ -2927,6 +3000,7 @@ const Session = (() => {
 
   function resetSurface(){
     locked = false; hintBtns = []; hintFn = null; hintExtras = []; hintShown = false;
+    askedAt = 0; respondedMs = null;
     curItem = null; curLabel = null;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
     choicesEl.classList.remove('pad');
@@ -2989,12 +3063,16 @@ const Session = (() => {
       titleEl.textContent = (mode === 'daily' ? 'きょうの れんしゅう' : 'にがて あつめ') + '　' + step.game.name;
     }
     drawQuestion(step);
+    // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
+    // call buildChoices, so start their clock here
+    if (!askedAt) askedAt = performance.now();
     UI.fitPlayfield(fieldEl);     // size this question to the room it has
     refit();                      // and again next frame, once fonts/SVGs have settled
   }
 
   function onWrong(target){
     if (locked) return;
+    markResponse();
     wrongThisQ++;
     mistakes++;
     Sound.sfx.wrong();
@@ -3024,12 +3102,16 @@ const Session = (() => {
   function onCorrect(o){
     if (locked) return;
     locked = true;
+    markResponse();
     clearFeedback();
     const clean = wrongThisQ === 0;
     if (clean) firstTryRight++;
-    Store.noteOutcome(plan[idx].game.id, plan[idx].levelIndex, clean);
+    const g = plan[idx].game;
+    const timed = g.fluent && clean ? respondedMs : null;
+    if (timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
+    Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
     if (curItem){
-      Store.noteFact(curItem, clean, curLabel, plan[idx].game.id + ':' + plan[idx].levelIndex);
+      Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed);
       if (!clean && !shaky.some(x => x.key === curItem)){
         shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
       }
@@ -3069,6 +3151,12 @@ const Session = (() => {
        child had sat through the level. Grade the questions answered right first
        time instead, and let a session score nothing. */
     const stars = starsFor(firstTryRight, total);
+    /* ★★★ says every answer was right first time. This says they arrived — which is
+       the thing these levels are actually for, and the thing three stars could not
+       distinguish from nine seconds of counting. Only on the games where speed is
+       the stated goal, and never on きょうの れんしゅう, which mixes them all. */
+    const swift = stars === 3 && total > 0 && mode !== 'daily'
+                  && plan.every(p => p.game.fluent) && swiftCount / total >= 0.75;
     // a session that did not pass should not get a party; it gets an invitation
     if (stars >= 1){ Sound.sfx.finish(); UI.confetti(60); }
     else Sound.sfx.place();
@@ -3076,6 +3164,7 @@ const Session = (() => {
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;
       Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
+      if (swift) Store.recordSwift(curGame.id, curLevelIdx);
       // a sticker means "cleared", so it waits for a pass
       if (stars >= 1){
         if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
@@ -3091,7 +3180,7 @@ const Session = (() => {
       if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
     }
     Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
-                  sticker: newSticker, shaky: shaky.slice(0, 3), focusKeys: focusKeys.slice() });
+                  sticker: newSticker, shaky: shaky.slice(0, 3), focusKeys: focusKeys.slice(), swift });
   }
 
   return {
@@ -3111,6 +3200,7 @@ const Session = (() => {
       get mistakes(){ return mistakes; },
       get pending(){ return timers.size; },
       get mode(){ return mode; },
+      get responseMs(){ return respondedMs; },
       get planItems(){ return plan.map(p => p.want || null); }
     }
   };
@@ -4021,11 +4111,21 @@ function decompose(api, whole, pad){
   api.setPrompt(`${numTag(whole)} は ${numTag(known)} と いくつ？`,
                 `${numKana(whole)}は、${numKana(known)}といくつ？`);
   const frame = partFrame(whole, known);
+  const frameset = el('div.frameset', null, frame);
   const bond = bondNode(whole, known, null);
-  api.field.append(el('div.frameset', null, frame), bond);
+  /* At the top level the picture *is* the answer: 「10は4といくつ」 with a ten-frame
+     on screen is solved by counting the six empty cells, not by remembering that
+     10 is 4 and 6. The keypad took guessing out of this level; leaving the frame up
+     left counting in, which is the strategy the level exists to replace. So the
+     frame comes back the moment the child answers — and earlier if they get stuck —
+     where it confirms what they said instead of telling them. */
+  if (!pad) api.field.append(frameset);
+  api.field.append(bond);
+  const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
   const showParts = {
     correctOpts: { delay: 1500 },
     onPick(){
+      showFrame();
       // show the two parts making the whole (scoped to this question's own nodes)
       const cells = $$('.cell', frame);
       for (let i = known; i < whole; i++){
@@ -4038,6 +4138,7 @@ function decompose(api, whole, pad){
   };
   if (pad) api.buildPad(ans, showParts);
   else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, whole))), ans, showParts);
+  if (pad) api.onHint(showFrame);
 }
 
 function compose(api, maxWhole, pad){
@@ -4056,14 +4157,21 @@ function compose(api, maxWhole, pad){
     else if (i < a + b) cell.append(el('div.dot.b'));
     f.append(cell);
   }
-  api.field.append(el('div.frameset', null, f),
+  const frameset = el('div.frameset', null, f);
+  if (!pad) api.field.append(frameset);          // countable at the top level: see decompose
+  api.field.append(
     el('div.eq', null, String(a), el('span.op', { text: 'と' }), String(b), el('span.op', { text: 'で' }), el('span.box', { text: '?' })));
-  if (pad) api.buildPad(ans);
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans);
+  const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
+  if (pad){
+    api.buildPad(ans, { correctOpts: { delay: 1200 }, onPick(){ showFrame(); } });
+    api.onHint(showFrame);
+  } else {
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans);
+  }
 }
 
 Games.add({
-  id: 'bond', name: 'いくつと いくつ', ico: '🧩', world: 'yama', color: 'var(--c-red)', focus: 1.7,
+  id: 'bond', name: 'いくつと いくつ', ico: '🧩', world: 'yama', color: 'var(--c-red)', focus: 1.7, fluent: true,
   aim: '5や10を<b>2つの数に分けたり、合わせたり</b>する感覚。たし算・ひき算を「数えないで思い出す」ための部品で、くり上がり・くり下がりの計算はこれが土台になります。ここが自動化していると小1は驚くほど楽になります。',
   levels: [
     { t: '5は いくつと いくつ', d: 'ごの ぶんかい', make: api => chance(.25) ? compose(api, 5) : decompose(api, 5) },
@@ -4119,15 +4227,36 @@ function partnerOfTen(api, pad){
   api.item('ten:' + a, a + ' と ' + ans + ' で 10');
   api.setPrompt(`${numTag(a)} と いくつで <b>10</b>？`, `${numKana(a)}といくつで、10？`);
   const f = el('div.tenframe', { style: { '--cols': 5 } });
+  const cells = [];
   for (let i = 0; i < 10; i++){
     const cell = el('div.cell' + (i >= a ? '.hole' : ''));
     if (i < a) cell.append(el('div.dot'));
-    f.append(cell);
+    cells.push(cell); f.append(cell);
   }
-  api.field.append(el('div.frameset', null, f),
+  /* Same reason as いくつと いくつ L3: 「2と いくつで 10？」 above two blue dots and
+     eight empty cells is a counting question wearing a retrieval question's clothes.
+     The equation stays — that is the question; the frame is the answer. */
+  const frameset = el('div.frameset', null, f);
+  if (!pad) api.field.append(frameset);
+  api.field.append(
     el('div.eq', null, String(a), el('span.op', { text: 'と' }), el('span.box', { text: '?' }), el('span.op', { text: 'で' }), '10'));
-  if (pad) api.buildPad(ans);
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans);
+  const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
+  if (pad){
+    api.buildPad(ans, {
+      correctOpts: { delay: 1500 },
+      onPick(){
+        showFrame();
+        for (let i = a; i < 10; i++){
+          api.later(() => {
+            if (!cells[i].firstChild){ cells[i].classList.remove('hole'); cells[i].append(el('div.dot.b')); Sound.sfx.place(); }
+          }, (i - a) * 150 + 200);
+        }
+      }
+    });
+    api.onHint(showFrame);
+  } else {
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans);
+  }
 }
 
 function pairHunt(api){
@@ -4173,7 +4302,7 @@ function pairHunt(api){
 }
 
 Games.add({
-  id: 'ten', name: '10の おともだち', ico: '🔟', world: 'yama', color: 'var(--c-red)', focus: 1.7,
+  id: 'ten', name: '10の おともだち', ico: '🔟', world: 'yama', color: 'var(--c-red)', focus: 1.7, fluent: true,
   aim: '<b>合わせて10になる組み合わせ</b>を、考えずに言えるようにする練習。「9+4」を「9+1+3」と処理するくり上がりの計算は、これが即答できるかどうかで速さがまったく変わります。',
   levels: [
     { t: '10まで うめる', d: 'わくを いっぱいに する', make: fillToTen },
@@ -4335,7 +4464,7 @@ function differenceQ(api, max, pad){
 }
 
 Games.add({
-  id: 'add', name: 'たしざん', ico: '➕', world: 'yama', color: 'var(--c-red)', focus: 1.25,
+  id: 'add', name: 'たしざん', ico: '➕', world: 'yama', color: 'var(--c-red)', focus: 1.25, fluent: true,
   aim: '「増えた／合わせた」場面を<b>式に置きかえる</b>力。物語→絵→式の順に抽象度を上げるので、記号だけを丸暗記せずに意味とつながります。',
   levels: [
     { t: '5まで', d: 'おはなしで かんがえる', make: api => addStory(api, 5) },
@@ -4345,7 +4474,7 @@ Games.add({
 });
 
 Games.add({
-  id: 'sub', name: 'ひきざん', ico: '➖', world: 'yama', color: 'var(--c-red)', focus: 1.25,
+  id: 'sub', name: 'ひきざん', ico: '➖', world: 'yama', color: 'var(--c-red)', focus: 1.25, fluent: true,
   aim: '「のこりはいくつ」（求残）と「どちらがいくつ多い」（求差）の<b>2つの意味</b>にふれます。求差はつまずきやすいので、1対1に並べて余りを見る経験を早めに。',
   levels: [
     { t: '5まで', d: 'いなくなると のこりは', make: api => subStory(api, 5) },
@@ -5062,6 +5191,8 @@ const Levels = (() => {
       },
         el('div.num', { text: unlocked ? String(i + 1) : '🔒' }),
         el('div.body', null, el('div.t', { text: lv.t }), el('div.d', { text: lv.d })),
+        // ★★★ is "all right first time"; this is "and without counting"
+        Store.isSwift(g.id, i) ? el('span.swiftmark', { title: 'すぐ こたえられた', text: '⚡️' }) : null,
         UI.stars(stars));
       listEl.append(card);
     });
@@ -5088,15 +5219,23 @@ const Result = (() => {
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
-    const spoken = r.stars === 3 ? 'パーフェクト！'
+    const spoken = (r.swift ? 'パーフェクト！すぐ答えられたね！'
+                 : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
                  : r.stars === 1 ? 'クリア！'
-                 : '惜しい！もう一度やってみよう。';
+                 : '惜しい！もう一度やってみよう。');
     inner.append(
       mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
       UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }),
       el('div.result-sub', { text: `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+    /* The thing ★★★ could never say. These levels are for an answer that arrives,
+       and a child who counted their way to every right answer used to get exactly
+       the same three stars as one who remembered. */
+    if (r.swift){
+      inner.append(el('div.swift', null,
+        el('span.mk', { text: '⚡️' }), 'かぞえないで こたえられたね！'));
+    }
     /* Name what went wrong. "62%" tells a child nothing; "3と7" is something they
        can carry to tomorrow — and it is exactly what the app will bring back.
 
@@ -5256,6 +5395,7 @@ const Parent = (() => {
   }
 
   const pct = v => v == null ? '—' : Math.round(v * 100) + '%';
+  const secs = ms => ms == null ? '—' : (ms / 1000).toFixed(1) + '秒';
 
   function progressSection(){
     const sec = el('section');
@@ -5264,25 +5404,36 @@ const Parent = (() => {
     t.append(el('thead', null, el('tr', null,
       el('th', { text: '遊び' }), el('th', { text: '到達' }),
       el('th', { class: 'n', text: '★' }),
-      el('th', { class: 'n', text: '直近30問' }), el('th', { class: 'n', text: '通算' }),
+      el('th', { class: 'n', text: '直近30問' }),
+      el('th', { class: 'n', text: 'こたえるまで' }),
+      el('th', { class: 'n', text: '通算' }),
       el('th', { class: 'n', text: '問題数' }))));
     const body = el('tbody');
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
       if (!games.length) return;
-      body.append(el('tr', null, el('td', { colspan: 6, style: { color: w.color, fontWeight: 800, paddingTop: 'calc(var(--u)*.8)' }, text: w.name })));
+      body.append(el('tr', null, el('td', { colspan: 7, style: { color: w.color, fontWeight: 800, paddingTop: 'calc(var(--u)*.8)' }, text: w.name })));
       games.forEach(g => {
         const s = Store.gameStars(g.id, g.levels.length);
         const max = g.levels.length * 3;
         const now = Store.gameRecentAccuracy(g.id, g.levels.length);   // the one to act on
         const acc = Store.accuracy(g.id);                              // lifetime, for context
         const seen = Store.data.seen[g.id] || 0;
+        /* The second axis. 「1回目で正解」cannot separate a child who remembers
+           「10は4と6」from one who counted the six empty cells for nine seconds —
+           and only the first of those is what くり上がり needs. */
+        const ms = g.fluent ? Store.gameSpeed(g.id) : null;
+        const slowNow = ms != null && ms >= FLUENT_SLOW_MS;
+        const fastNow = ms != null && ms <= FLUENT_FAST_MS;
         body.append(el('tr', null,
           el('td', { text: g.name }),
           el('td', null, el('div.bar', null, el('i', { style: { width: (max ? (s / max) * 100 : 0) + '%',
             background: now != null && now < .6 ? 'var(--oops)' : 'var(--good)' } }))),
           el('td', { class: 'n', text: s + '/' + max }),
           el('td', { class: 'n', style: { color: now != null && now < .6 ? 'var(--oops-ink)' : null, fontWeight: 800 }, text: pct(now) }),
+          el('td', { class: 'n', style: { color: slowNow ? 'var(--oops-ink)' : fastNow ? 'var(--good-ink)' : 'var(--ink-soft)',
+                                          fontWeight: slowNow || fastNow ? 800 : 500 },
+                     text: g.fluent ? secs(ms) : '—' }),
           el('td', { class: 'n', style: { color: 'var(--ink-soft)' }, text: pct(acc) }),
           el('td', { class: 'n', text: String(seen) })));
       });
@@ -5290,7 +5441,9 @@ const Parent = (() => {
     t.append(body);
     sec.append(el('div', { style: { overflowX: 'auto' } }, t));
     sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
-      text: 'どちらも「1回目のタップで正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
+      text: '「直近30問」「通算」はどちらも「1回目のタップで正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
+    sec.append(el('p', {
+      text: '「こたえるまで」は、けいさんの やま の4つの遊びだけに出ます。問題が出てから最初に答えるまでの時間で、正解だったときだけ記録しています。3.0秒までなら緑（思い出している）、9.0秒を超えると赤（数えて出している）。正答率だけを見ていると「できている」と「数えればできる」が同じ数字になりますが、くり上がりの計算で効くのは前者だけです。ここが赤い遊びは、正答率が高くても、まだ仕上がっていません。' }));
     return sec;
   }
 
@@ -5363,6 +5516,27 @@ const Parent = (() => {
     } else {
       sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
         text: '取りこぼしている項目はいまのところありません。' }));
+    }
+
+    /* Right every time, and still counted out. Invisible to every number on this
+       page until answers were timed, and the single most useful thing to work on
+       once the accuracy is already there. */
+    const slowOnes = [];
+    for (const k in facts){
+      const f = facts[k];
+      if (!f || !f[0] || !f[5] || f[5] < FLUENT_SLOW_MS) continue;
+      if (f[1] / f[0] < .6) continue;                 // already named above
+      const gid = k.slice(0, k.indexOf(':'));
+      slowOnes.push({ ms: f[5], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid });
+    }
+    slowOnes.sort((a, b) => b.ms - a.ms);
+    if (slowOnes.length){
+      sec.append(el('h4', { text: 'できるけれど、数えている' }));
+      const chips = el('div.factchips');
+      slowOnes.slice(0, 8).forEach(w => chips.append(
+        el('span.factchip.slow', null, el('small', { text: w.game + '　' + secs(w.ms) }), w.label)));
+      sec.append(chips);
+      sec.append(el('p', { text: '正解はしていますが、答えが出るまでに時間がかかっています。指を折る、枠のマスを数える、というやり方で合わせている状態です。まちがいではないので放っておかれがちですが、くり上がりのたし算は「9+4 を 9+1+3 にする」途中でこの答えを即座に使うので、ここが遅いとその先が進みません。「にがて あつめ」はこれらも拾います。家では、答えを急がせるより、おはじきを5と5、6と4 のように置いて見せて「かたまりで見る」経験を足すほうが早いです。' }));
     }
     return sec;
   }

@@ -60,6 +60,7 @@ const Parent = (() => {
   }
 
   const pct = v => v == null ? '—' : Math.round(v * 100) + '%';
+  const secs = ms => ms == null ? '—' : (ms / 1000).toFixed(1) + '秒';
 
   function progressSection(){
     const sec = el('section');
@@ -68,25 +69,36 @@ const Parent = (() => {
     t.append(el('thead', null, el('tr', null,
       el('th', { text: '遊び' }), el('th', { text: '到達' }),
       el('th', { class: 'n', text: '★' }),
-      el('th', { class: 'n', text: '直近30問' }), el('th', { class: 'n', text: '通算' }),
+      el('th', { class: 'n', text: '直近30問' }),
+      el('th', { class: 'n', text: 'こたえるまで' }),
+      el('th', { class: 'n', text: '通算' }),
       el('th', { class: 'n', text: '問題数' }))));
     const body = el('tbody');
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
       if (!games.length) return;
-      body.append(el('tr', null, el('td', { colspan: 6, style: { color: w.color, fontWeight: 800, paddingTop: 'calc(var(--u)*.8)' }, text: w.name })));
+      body.append(el('tr', null, el('td', { colspan: 7, style: { color: w.color, fontWeight: 800, paddingTop: 'calc(var(--u)*.8)' }, text: w.name })));
       games.forEach(g => {
         const s = Store.gameStars(g.id, g.levels.length);
         const max = g.levels.length * 3;
         const now = Store.gameRecentAccuracy(g.id, g.levels.length);   // the one to act on
         const acc = Store.accuracy(g.id);                              // lifetime, for context
         const seen = Store.data.seen[g.id] || 0;
+        /* The second axis. 「1回目で正解」cannot separate a child who remembers
+           「10は4と6」from one who counted the six empty cells for nine seconds —
+           and only the first of those is what くり上がり needs. */
+        const ms = g.fluent ? Store.gameSpeed(g.id) : null;
+        const slowNow = ms != null && ms >= FLUENT_SLOW_MS;
+        const fastNow = ms != null && ms <= FLUENT_FAST_MS;
         body.append(el('tr', null,
           el('td', { text: g.name }),
           el('td', null, el('div.bar', null, el('i', { style: { width: (max ? (s / max) * 100 : 0) + '%',
             background: now != null && now < .6 ? 'var(--oops)' : 'var(--good)' } }))),
           el('td', { class: 'n', text: s + '/' + max }),
           el('td', { class: 'n', style: { color: now != null && now < .6 ? 'var(--oops-ink)' : null, fontWeight: 800 }, text: pct(now) }),
+          el('td', { class: 'n', style: { color: slowNow ? 'var(--oops-ink)' : fastNow ? 'var(--good-ink)' : 'var(--ink-soft)',
+                                          fontWeight: slowNow || fastNow ? 800 : 500 },
+                     text: g.fluent ? secs(ms) : '—' }),
           el('td', { class: 'n', style: { color: 'var(--ink-soft)' }, text: pct(acc) }),
           el('td', { class: 'n', text: String(seen) })));
       });
@@ -94,7 +106,9 @@ const Parent = (() => {
     t.append(body);
     sec.append(el('div', { style: { overflowX: 'auto' } }, t));
     sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
-      text: 'どちらも「1回目のタップで正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
+      text: '「直近30問」「通算」はどちらも「1回目のタップで正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
+    sec.append(el('p', {
+      text: '「こたえるまで」は、けいさんの やま の4つの遊びだけに出ます。問題が出てから最初に答えるまでの時間で、正解だったときだけ記録しています。3.0秒までなら緑（思い出している）、9.0秒を超えると赤（数えて出している）。正答率だけを見ていると「できている」と「数えればできる」が同じ数字になりますが、くり上がりの計算で効くのは前者だけです。ここが赤い遊びは、正答率が高くても、まだ仕上がっていません。' }));
     return sec;
   }
 
@@ -167,6 +181,27 @@ const Parent = (() => {
     } else {
       sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
         text: '取りこぼしている項目はいまのところありません。' }));
+    }
+
+    /* Right every time, and still counted out. Invisible to every number on this
+       page until answers were timed, and the single most useful thing to work on
+       once the accuracy is already there. */
+    const slowOnes = [];
+    for (const k in facts){
+      const f = facts[k];
+      if (!f || !f[0] || !f[5] || f[5] < FLUENT_SLOW_MS) continue;
+      if (f[1] / f[0] < .6) continue;                 // already named above
+      const gid = k.slice(0, k.indexOf(':'));
+      slowOnes.push({ ms: f[5], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid });
+    }
+    slowOnes.sort((a, b) => b.ms - a.ms);
+    if (slowOnes.length){
+      sec.append(el('h4', { text: 'できるけれど、数えている' }));
+      const chips = el('div.factchips');
+      slowOnes.slice(0, 8).forEach(w => chips.append(
+        el('span.factchip.slow', null, el('small', { text: w.game + '　' + secs(w.ms) }), w.label)));
+      sec.append(chips);
+      sec.append(el('p', { text: '正解はしていますが、答えが出るまでに時間がかかっています。指を折る、枠のマスを数える、というやり方で合わせている状態です。まちがいではないので放っておかれがちですが、くり上がりのたし算は「9+4 を 9+1+3 にする」途中でこの答えを即座に使うので、ここが遅いとその先が進みません。「にがて あつめ」はこれらも拾います。家では、答えを急がせるより、おはじきを5と5、6と4 のように置いて見せて「かたまりで見る」経験を足すほうが早いです。' }));
     }
     return sec;
   }

@@ -1372,6 +1372,24 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 #result button.shakyitem:active{ transform: translateY(.14em); box-shadow: none; }
 #result button.shakyitem:focus-visible{ outline: calc(var(--u)*.24) solid var(--ring); outline-offset: 2px; }
 
+/* ---------- 「かぞえないで こたえられた」 ----------
+   ★★★ says every answer was right first time. This says they arrived rather than
+   being worked out, which is what these levels are actually for. */
+#result .swift{
+  display:flex; align-items:center; justify-content:center; gap:calc(var(--u)*.5);
+  margin-top:calc(var(--u)*.8);
+  padding:calc(var(--u)*.45) calc(var(--u)*1.2);
+  background:color-mix(in srgb, var(--star) 26%, var(--card));
+  border:calc(var(--u)*.16) solid var(--star-edge);
+  border-radius:var(--wob-b);
+  font-weight:800; font-size:calc(var(--u)*1.6); color:var(--ink);
+}
+#result .swift .mk{ font-size:calc(var(--u)*2) }
+.levelcard .swiftmark{
+  flex:0 0 auto; font-size:calc(var(--u)*1.7); line-height:1;
+  filter:drop-shadow(0 0 calc(var(--u)*.3) color-mix(in srgb, var(--star) 70%, transparent));
+}
+
 /* ---------- home: the aimed practice set ----------
    A quieter second door than きょうの れんしゅう: the daily habit stays the loud
    one, and this appears only when there is actually something to aim at. */
@@ -1402,6 +1420,9 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   font-weight:800; color:var(--ink);
 }
 #parent .factchip small{ font-weight:500; color:var(--ink-soft); font-size:.72em }
+/* right every time, and still counted out — a different thing from a wrong answer,
+   so it must not wear the same colour as one */
+#parent .factchip.slow{ background:color-mix(in srgb, var(--c-yellow) 32%, var(--card)); }
 
 /* ---------- floors for anything a finger has to hit ----------
    The question is scaled up to fill its box, but the smallest iPad in portrait
