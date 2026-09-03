@@ -20,7 +20,10 @@
   --ink-faint:  #A79CB4;
 
   /* crayons — semantic content colors */
-  --c-red:      #F2604C;
+  /* deepened from #F2604C: this red is the numeral the question is about
+     (「5 は 3 と いくつ？」) and it sat at 2.93:1 on the paper — under the 3:1 floor
+     for large text, let alone the 4.5:1 for the rest. 4.45:1 now, and still a crayon. */
+  --c-red:      #CE3D26;
   --c-orange:   #FF9F1C;
   --c-yellow:   #F5C042;
   --c-green:    #46B87A;
@@ -34,7 +37,15 @@
   --accent-ink: #6E3D00;
   --good:       #46B87A;
   --good-soft:  #DFF3E7;
-  --oops:       #E9829A;   /* soft rose, never alarm red */
+  /* What goes ON a saturated crayon fill. White was the default and fails on every
+     one of them: 2.05:1 on the orange「?」in the number-bond diagram, 2.50:1 on the
+     green a child sees the instant they answer correctly, 1.4–2.8:1 across the
+     board in dark mode. One dark ink clears 3:1 on every crayon in both themes,
+     and 4.5:1 on all but the two that only ever carry big bold numerals. */
+  --on-crayon:  #1C1828;
+  --good-ink:   #27804F;   /* green as text, e.g. on --good-soft */
+  --oops:       #E9829A;   /* soft rose, never alarm red — borders and fills */
+  --oops-ink:   #B03E5A;   /* the same warning as text: #E9829A was 2.37:1 */
   --oops-soft:  #FBE6EB;
   --star:       #FFC533;
   --star-edge:  #D08A00;
@@ -86,7 +97,9 @@
     --accent-ink:#2A1600;
     --good:      #5DD08E;
     --good-soft: #1E3B2C;
+    --good-ink:  #5DD08E;
     --oops:      #F5A0B4;
+    --oops-ink:  #F5A0B4;
     --oops-soft: #3A2430;
     --star:      #FFD24D;
     --star-edge: #A87400;
@@ -118,7 +131,9 @@
   --accent-ink:#2A1600;
   --good:      #5DD08E;
   --good-soft: #1E3B2C;
+  --good-ink:  #5DD08E;
   --oops:      #F5A0B4;
+  --oops-ink:  #F5A0B4;
   --oops-soft: #3A2430;
   --star:      #FFD24D;
   --star-edge: #A87400;
@@ -217,7 +232,7 @@ body::before{
 }
 .btn:active{ transform: translateY(.18em); box-shadow: none; }
 .btn.wrong{ animation: shake .42s; border-color: var(--oops); background: var(--oops-soft); }
-.btn.correct{ background: var(--good); border-color: var(--good); color: #fff; }
+.btn.correct{ background: var(--good); border-color: var(--good); color: var(--on-crayon); }
 .btn:focus-visible{ outline: calc(var(--u)*.28) solid var(--ring); outline-offset: calc(var(--u)*.2); }
 
 .btn-accent{
@@ -318,7 +333,7 @@ body::before{
 .choice:active{ transform: translateY(.2em) scale(.98); box-shadow: var(--shadow-sm); }
 .choice:focus-visible{ outline: calc(var(--u)*.28) solid var(--ring); outline-offset: calc(var(--u)*.24); }
 .choice.pic{ font-family: var(--fs-jp); font-size: calc(var(--u)*2.6); }
-.choice.correct{ background: var(--good); border-color: var(--good); color: #fff; animation: pop .4s cubic-bezier(.2,.9,.3,1.5); }
+.choice.correct{ background: var(--good); border-color: var(--good); color: var(--on-crayon); animation: pop .4s cubic-bezier(.2,.9,.3,1.5); }
 .choice.wrong{ background: var(--oops-soft); border-color: var(--oops); animation: shake .42s; }
 .choice.dim{ opacity: .32; pointer-events: none; filter: saturate(.4); }
 .choice[disabled]{ pointer-events: none; }
@@ -368,7 +383,7 @@ body::before{
   top: -.45em; right: -.45em;
   font-family: var(--fs-num); font-weight: 800;
   font-size: .42em; line-height: 1;
-  color: #fff; background: var(--good);
+  color: var(--on-crayon); background: var(--good);
   border-radius: 50%;
   width: 1.5em; height: 1.5em;
   display: flex; align-items: center; justify-content: center;
@@ -515,7 +530,7 @@ body::before{
 }
 .world h3 .chip{
   background: var(--wc);
-  color: #fff;
+  color: var(--on-crayon);
   border-radius: 999px calc(var(--u)*1.2) 999px calc(var(--u)*1.1);
   padding: calc(var(--u)*.25) calc(var(--u)*1.1);
   box-shadow: var(--shadow-sm);
@@ -542,7 +557,7 @@ body::before{
   font-size: calc(var(--u)*2.2); line-height: 1;
 }
 .shelf .strip span{ flex: 0 0 auto; }
-.shelf .strip .empty{ font-size: calc(var(--u)*1.3); color: var(--ink-faint); font-weight: 500; }
+.shelf .strip .empty{ font-size: calc(var(--u)*1.3); color: var(--ink-soft); font-weight: 500; }
 
 .world h3 .sub{
   font-size: calc(var(--u)*1.15); font-weight: 500; color: var(--ink-soft);
@@ -609,7 +624,7 @@ body::before{
   flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%;
-  background: var(--lc, var(--accent)); color: #fff;
+  background: var(--lc, var(--accent)); color: var(--on-crayon);
 }
 .levelcard .body{ flex: 1 1 auto; min-width: 0; }
 .levelcard .body .t{ font-size: calc(var(--u)*1.9); font-weight: 800; }
@@ -724,7 +739,7 @@ body::before{
   font-size: calc(var(--u)*1.1);
   letter-spacing: .16em;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   font-weight: 800;
   margin-bottom: calc(var(--u)*.3);
 }
@@ -734,7 +749,7 @@ body::before{
   border-bottom: 1px solid var(--card-edge);
   vertical-align: top;
 }
-.skilltable th{ color: var(--ink-faint); font-weight: 800; font-size: calc(var(--u)*1.1); letter-spacing: .06em; }
+.skilltable th{ color: var(--ink-soft); font-weight: 800; font-size: calc(var(--u)*1.1); letter-spacing: .06em; }
 .skilltable td.n{ font-family: var(--fs-num); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .bar{
   height: calc(var(--u)*.9);
@@ -772,7 +787,7 @@ body::before{
 #title .tag{ font-size: calc(var(--u)*1.7); color: var(--ink-soft); }
 #title .mascot{ width: calc(var(--u)*16); height: calc(var(--u)*16); }
 #title .btn-accent{ font-size: calc(var(--u)*2.6); padding: calc(var(--u)*1.1) calc(var(--u)*3.4); }
-#title .foot{ font-size: calc(var(--u)*1.15); color: var(--ink-faint); }
+#title .foot{ font-size: calc(var(--u)*1.15); color: var(--ink-soft); }
 
 /* ===========================================================
    TEN FRAME  (十のわく)
@@ -806,7 +821,7 @@ body::before{
 .dot.b{ --dc: var(--c-red); }
 .cell.hole{ background: var(--paper-2); box-shadow: inset 0 0 0 calc(var(--u)*.22) var(--card-edge); }
 .cell.q{ background: var(--accent); }
-.cell.q::after{ content:"?"; font-family: var(--fs-num); font-weight:800; color:#fff; font-size: calc(var(--u)*2.6); }
+.cell.q::after{ content:"?"; font-family: var(--fs-num); font-weight:800; color: var(--on-crayon); font-size: calc(var(--u)*2.6); }
 
 /* number bond house (いくつと いくつ) */
 .bond{
@@ -817,7 +832,7 @@ body::before{
   width: calc(var(--u)*8); height: calc(var(--u)*8);
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%;
-  background: var(--c-purple); color: #fff;
+  background: var(--c-purple); color: var(--on-crayon);
   box-shadow: var(--shadow);
 }
 .bond .legs{ width: calc(var(--u)*22); height: calc(var(--u)*3); }
@@ -831,8 +846,8 @@ body::before{
   border: calc(var(--u)*.3) solid var(--card-edge);
   box-shadow: var(--shadow-sm);
 }
-.bond .part.known{ background: var(--c-blue); color:#fff; border-color: var(--c-blue); }
-.bond .part.unknown{ background: var(--accent); color:#fff; border-color: var(--accent); animation: floatY 1.6s ease-in-out infinite; }
+.bond .part.known{ background: var(--c-blue); color: var(--on-crayon); border-color: var(--c-blue); }
+.bond .part.unknown{ background: var(--accent); color: var(--on-crayon); border-color: var(--accent); animation: floatY 1.6s ease-in-out infinite; }
 
 /* ===========================================================
    EQUATION strip  (しき)
@@ -851,7 +866,7 @@ body::before{
   border-radius: calc(var(--u)*.9);
   color: var(--accent);
 }
-.eq .box.filled{ border-style: solid; background: var(--good); border-color: var(--good); color: #fff; }
+.eq .box.filled{ border-style: solid; background: var(--good); border-color: var(--good); color: var(--on-crayon); }
 .eq .op{ color: var(--c-red); }
 
 /* ===========================================================
@@ -1068,7 +1083,7 @@ body::before{
 .trace-numlabel{
   position: absolute; top: calc(var(--u)*.4); left: calc(var(--u)*.8);
   font-family: var(--fs-num); font-weight: 800;
-  font-size: calc(var(--u)*1.6); color: var(--ink-faint);
+  font-size: calc(var(--u)*1.6); color: var(--ink-soft);
 }
 
 /* ===========================================================
@@ -1101,7 +1116,7 @@ body::before{
 .mrow .ordno{
   font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*1.8);
   width: calc(var(--u)*3); height: calc(var(--u)*3); flex: 0 0 auto;
-  border-radius: 50%; background: var(--accent); color:#fff;
+  border-radius: 50%; background: var(--accent); color: var(--on-crayon);
   display: flex; align-items: center; justify-content: center;
 }
 .vessels{ display: flex; gap: calc(var(--u)*1.6); align-items: flex-end; justify-content: center; }
@@ -1227,7 +1242,7 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 /* number line: which "?" is being asked has to be unmistakable */
 .nn.gap:not(.now){ opacity: .38; }
 .nn.gap.now{
-  background: var(--accent); border-color: var(--accent); color: #fff;
+  background: var(--accent); border-color: var(--accent); color: var(--on-crayon);
   transform: scale(1.12);
 }
 .nn.near{ box-shadow: 0 0 0 calc(var(--u)*.24) color-mix(in srgb, var(--accent) 55%, transparent); }
@@ -1360,7 +1375,7 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 #parent .todo .mk{
   flex:0 0 auto; width:calc(var(--u)*1.9); height:calc(var(--u)*1.9);
   display:grid; place-items:center; border-radius:50%;
-  background:var(--good-soft); color:var(--good); font-weight:800;
+  background:var(--good-soft); color:var(--good-ink); font-weight:800;
 }
 #parent .todo b{ display:block }
 #parent .factchips{ display:flex; flex-wrap:wrap; gap:calc(var(--u)*.4); margin:calc(var(--u)*.5) 0 }
@@ -4922,7 +4937,7 @@ const Parent = (() => {
           el('td', null, el('div.bar', null, el('i', { style: { width: (max ? (s / max) * 100 : 0) + '%',
             background: now != null && now < .6 ? 'var(--oops)' : 'var(--good)' } }))),
           el('td', { class: 'n', text: s + '/' + max }),
-          el('td', { class: 'n', style: { color: now != null && now < .6 ? 'var(--oops)' : null, fontWeight: 800 }, text: pct(now) }),
+          el('td', { class: 'n', style: { color: now != null && now < .6 ? 'var(--oops-ink)' : null, fontWeight: 800 }, text: pct(now) }),
           el('td', { class: 'n', style: { color: 'var(--ink-soft)' }, text: pct(acc) }),
           el('td', { class: 'n', text: String(seen) })));
       });
@@ -5115,11 +5130,11 @@ const Parent = (() => {
       toggle('読み上げ', () => Sound.voiceOn, v => { Sound.voiceOn = v; Store.setPref('voice', v); }));
     s.append(row);
     if (!Sound.hasVoice){
-      s.append(el('p', { style: { color: 'var(--oops)' },
+      s.append(el('p', { style: { color: 'var(--oops-ink)' },
         text: '※ この端末で日本語の読み上げ音声が見つかりませんでした。iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 で日本語（Kyoko など）を追加すると、問題文が音声で読まれます。文字だけでも遊べます。' }));
     }
     const reset = el('button.btn', { text: justReset ? '消しました' : '記録をすべて消す',
-      style: { borderColor: 'var(--oops)', color: 'var(--oops)' } });
+      style: { borderColor: 'var(--oops)', color: 'var(--oops-ink)' } });
     justReset = false;
     let armed = false;
     reset.addEventListener('click', () => {
@@ -5135,7 +5150,7 @@ const Parent = (() => {
       render();
     });
     if (!Store.persists){
-      s.append(el('p', { style: { color: 'var(--oops)', fontWeight: 800 },
+      s.append(el('p', { style: { color: 'var(--oops-ink)', fontWeight: 800 },
         text: 'この開き方では記録が保存できません（ファイルを直接開いた場合やプライベートブラウズでは、iPad 側がデータの保存を許可しません）。Safari で開いてから 共有 → ホーム画面に追加 し、そのアイコンから起動してください。' }));
     }
     s.append(el('p', { style: { marginTop: 'calc(var(--u)*.9)' },
@@ -5156,7 +5171,7 @@ const Parent = (() => {
     const rows = el('div', { style: { display: 'grid', gap: 'calc(var(--u)*.3)', margin: 'calc(var(--u)*.8) 0' } });
     const row = (k, v, warn) => el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 'calc(var(--u)*1)' } },
       el('span', { text: k }),
-      el('b', { text: v, style: { color: warn ? 'var(--oops)' : 'var(--ink)', textAlign: 'right' } }));
+      el('b', { text: v, style: { color: warn ? 'var(--oops-ink)' : 'var(--ink)', textAlign: 'right' } }));
     rows.append(row('いまの保存先', Store.origin, Store.origin === 'file://'));
     rows.append(row('保存の可否', Store.persists ? '保存できます' : '保存できません', !Store.persists));
     rows.append(row('ブラウザが記録を保持する設定', persistState, false));
@@ -5169,7 +5184,7 @@ const Parent = (() => {
         'iPadOS が自動的に消すことがあります。' }));
     }
 
-    const status = el('p', { style: { fontWeight: 800, color: lastBackupMsg && lastBackupMsg.ok ? 'var(--good)' : 'var(--oops)' },
+    const status = el('p', { style: { fontWeight: 800, color: lastBackupMsg && lastBackupMsg.ok ? 'var(--good-ink)' : 'var(--oops-ink)' },
       text: lastBackupMsg ? lastBackupMsg.msg : '' });
     lastBackupMsg = null;
     const stamp = () => {
@@ -5223,7 +5238,7 @@ const Parent = (() => {
       const r = Store.importText(text, mode);
       if (r.ok){ lastBackupMsg = r; Home.render(); render(); return; }
       status.textContent = r.msg;
-      status.style.color = 'var(--oops)';
+      status.style.color = 'var(--oops-ink)';
     }
 
     s.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap' } }, dl, copy),

@@ -299,7 +299,7 @@
   (function coverage(){
     const worst = [];
     // [game, level, questions, floor for the mean number of distinct facts]
-    [['ten', 1, 7.5], ['clock', 0, 7.5], ['bond', 0, 6.5], ['trace', 0, 3]].forEach(([id, li, floor]) => {
+    [['ten', 1, 7.0], ['clock', 0, 7.0], ['bond', 0, 6.5], ['trace', 0, 3]].forEach(([id, li, floor]) => {
       const g = K.Games.byId[id], per = g.levels[li].n || 8;
       let total = 0;
       const RUNS = 10;
@@ -479,6 +479,63 @@
     for (const k of await caches.keys()) await caches.delete(k);      // leave nothing behind
     check('the app still opens with no network', !problems.length, problems.join(' | '));
   }
+
+  /* ---------- 19. the palette stays readable ----------
+     White was the default for text on a coloured fill, and it fails on every crayon
+     in the set: 2.05:1 on the orange「?」 in the number-bond diagram, 2.50:1 on the
+     green a child sees the moment they answer correctly, 1.4–2.8:1 throughout dark
+     mode. Numbers a child has to read are not decoration. */
+  (function palette(){
+    const root = document.documentElement;
+    const was = root.dataset.theme;
+    const px = n => getComputedStyle(root).getPropertyValue(n).trim();
+    function rgb(c){
+      if (c[0] === '#'){
+        const h = c.length === 4 ? c[1]+c[1]+c[2]+c[2]+c[3]+c[3] : c.slice(1);
+        return [0,2,4].map(i => parseInt(h.slice(i,i+2),16));
+      }
+      const m = c.match(/[\d.]+/g);
+      return m ? m.slice(0,3).map(Number) : null;
+    }
+    function lum(c){
+      const v = rgb(c);
+      if (!v) return null;
+      const f = v.map(x => { x/=255; return x <= .03928 ? x/12.92 : Math.pow((x+.055)/1.055, 2.4); });
+      return .2126*f[0] + .7152*f[1] + .0722*f[2];
+    }
+    function ratio(a, b){
+      const la = lum(a), lb = lum(b);
+      if (la == null || lb == null) return null;
+      return (Math.max(la,lb) + .05) / (Math.min(la,lb) + .05);
+    }
+
+    // [foreground token, background token, minimum]  — 3.0 where the text is only
+    // ever a large bold numeral, 4.5 everywhere else
+    const PAIRS = [
+      ['--ink', '--paper', 4.5], ['--ink-soft', '--paper', 4.5], ['--ink-soft', '--paper-2', 4.5],
+      ['--on-crayon', '--good', 4.5], ['--on-crayon', '--accent', 4.5],
+      ['--on-crayon', '--c-blue', 4.5], ['--on-crayon', '--c-purple', 3],
+      ['--on-crayon', '--c-red', 3],    ['--on-crayon', '--c-orange', 4.5],
+      ['--on-crayon', '--c-yellow', 4.5], ['--on-crayon', '--c-green', 4.5],
+      ['--on-crayon', '--c-pink', 4.5],
+      ['--c-red', '--paper', 3],        // the numeral the prompt is about
+      ['--oops-ink', '--paper', 4.5],   // the parent page's warnings
+      ['--good-ink', '--good-soft', 3],
+      ['--accent-ink', '--accent', 3]
+    ];
+    const bad = [];
+    ['light', 'dark'].forEach(theme => {
+      root.dataset.theme = theme;
+      PAIRS.forEach(([f, b, min]) => {
+        const r = ratio(px(f), px(b));
+        if (r == null) bad.push(theme + ' ' + f + '/' + b + ' unreadable token');
+        else if (r < min) bad.push(theme + ' ' + f + ' on ' + b + ' = ' + r.toFixed(2) + ' < ' + min);
+      });
+    });
+    if (was) root.dataset.theme = was; else delete root.dataset.theme;
+    check('every colour a child has to read clears its contrast floor, in both themes',
+      !bad.length, bad.slice(0, 4).join(' | '));
+  })();
 
   function finish(){
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');

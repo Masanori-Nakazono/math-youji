@@ -86,7 +86,7 @@ const Parent = (() => {
           el('td', null, el('div.bar', null, el('i', { style: { width: (max ? (s / max) * 100 : 0) + '%',
             background: now != null && now < .6 ? 'var(--oops)' : 'var(--good)' } }))),
           el('td', { class: 'n', text: s + '/' + max }),
-          el('td', { class: 'n', style: { color: now != null && now < .6 ? 'var(--oops)' : null, fontWeight: 800 }, text: pct(now) }),
+          el('td', { class: 'n', style: { color: now != null && now < .6 ? 'var(--oops-ink)' : null, fontWeight: 800 }, text: pct(now) }),
           el('td', { class: 'n', style: { color: 'var(--ink-soft)' }, text: pct(acc) }),
           el('td', { class: 'n', text: String(seen) })));
       });
@@ -279,11 +279,11 @@ const Parent = (() => {
       toggle('読み上げ', () => Sound.voiceOn, v => { Sound.voiceOn = v; Store.setPref('voice', v); }));
     s.append(row);
     if (!Sound.hasVoice){
-      s.append(el('p', { style: { color: 'var(--oops)' },
+      s.append(el('p', { style: { color: 'var(--oops-ink)' },
         text: '※ この端末で日本語の読み上げ音声が見つかりませんでした。iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 で日本語（Kyoko など）を追加すると、問題文が音声で読まれます。文字だけでも遊べます。' }));
     }
     const reset = el('button.btn', { text: justReset ? '消しました' : '記録をすべて消す',
-      style: { borderColor: 'var(--oops)', color: 'var(--oops)' } });
+      style: { borderColor: 'var(--oops)', color: 'var(--oops-ink)' } });
     justReset = false;
     let armed = false;
     reset.addEventListener('click', () => {
@@ -299,7 +299,7 @@ const Parent = (() => {
       render();
     });
     if (!Store.persists){
-      s.append(el('p', { style: { color: 'var(--oops)', fontWeight: 800 },
+      s.append(el('p', { style: { color: 'var(--oops-ink)', fontWeight: 800 },
         text: 'この開き方では記録が保存できません（ファイルを直接開いた場合やプライベートブラウズでは、iPad 側がデータの保存を許可しません）。Safari で開いてから 共有 → ホーム画面に追加 し、そのアイコンから起動してください。' }));
     }
     s.append(el('p', { style: { marginTop: 'calc(var(--u)*.9)' },
@@ -320,7 +320,7 @@ const Parent = (() => {
     const rows = el('div', { style: { display: 'grid', gap: 'calc(var(--u)*.3)', margin: 'calc(var(--u)*.8) 0' } });
     const row = (k, v, warn) => el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 'calc(var(--u)*1)' } },
       el('span', { text: k }),
-      el('b', { text: v, style: { color: warn ? 'var(--oops)' : 'var(--ink)', textAlign: 'right' } }));
+      el('b', { text: v, style: { color: warn ? 'var(--oops-ink)' : 'var(--ink)', textAlign: 'right' } }));
     rows.append(row('いまの保存先', Store.origin, Store.origin === 'file://'));
     rows.append(row('保存の可否', Store.persists ? '保存できます' : '保存できません', !Store.persists));
     rows.append(row('ブラウザが記録を保持する設定', persistState, false));
@@ -333,7 +333,7 @@ const Parent = (() => {
         'iPadOS が自動的に消すことがあります。' }));
     }
 
-    const status = el('p', { style: { fontWeight: 800, color: lastBackupMsg && lastBackupMsg.ok ? 'var(--good)' : 'var(--oops)' },
+    const status = el('p', { style: { fontWeight: 800, color: lastBackupMsg && lastBackupMsg.ok ? 'var(--good-ink)' : 'var(--oops-ink)' },
       text: lastBackupMsg ? lastBackupMsg.msg : '' });
     lastBackupMsg = null;
     const stamp = () => {
@@ -387,7 +387,7 @@ const Parent = (() => {
       const r = Store.importText(text, mode);
       if (r.ok){ lastBackupMsg = r; Home.render(); render(); return; }
       status.textContent = r.msg;
-      status.style.color = 'var(--oops)';
+      status.style.color = 'var(--oops-ink)';
     }
 
     s.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap' } }, dl, copy),

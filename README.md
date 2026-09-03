@@ -224,6 +224,7 @@ python3 -m http.server 8731     # プロジェクト直下で
 | importing the same backup twice does not inflate | 二重読み込みで数字が増えない |
 | merging keeps the higher star count | 合体しても良いほうが残る |
 | a wrong file is rejected without destroying the records | 誤ったファイルで記録が壊れない |
+| every colour a child has to read clears its contrast floor | 明暗2テーマとも、読む色のコントラストが落ちない |
 | counting the squares reaches the answer the かさくらべ hint promises | ヒントが誤った比べ方を教えない |
 | every puzzle piece fits only its own hole | ピースの向きを見ないと解けない |
 | the app still opens with no network | オフラインで起動する／古いキャッシュが残らない |
