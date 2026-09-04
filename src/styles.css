@@ -1266,7 +1266,8 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 .plate.fixed{ min-width: 0; width: calc(var(--u)*17); height: calc(var(--u)*10.5); padding: calc(var(--u)*.6); }
 .slots{
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  /* fives, like every other quantity in the app — see groupNode */
+  grid-template-columns: repeat(5, 1fr);
   grid-template-rows: repeat(var(--rows, 2), auto);
   gap: calc(var(--u)*.2);
   width: 100%; height: 100%;
@@ -1371,6 +1372,40 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 }
 #result button.shakyitem:active{ transform: translateY(.14em); box-shadow: none; }
 #result button.shakyitem:focus-visible{ outline: calc(var(--u)*.24) solid var(--ring); outline-offset: 2px; }
+
+/* ---------- ぱっと みて いくつ ----------
+   The dots have to be genuinely gone when the cover is up, and genuinely legible
+   in the moment they are not. Nothing here animates in: the whole task is the
+   difference between what was on screen for 0.9s and what the child kept. */
+.flashboard{
+  position: relative;
+  padding: calc(var(--u)*1.6);
+  background: var(--card);
+  border: calc(var(--u)*.26) solid var(--card-edge);
+  border-radius: var(--wob-a);
+  box-shadow: var(--shadow-sm);
+}
+.flashinner{ display: flex; align-items: center; gap: calc(var(--u)*1.6); }
+.flashcover{
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  background: var(--paper-2);
+  border-radius: inherit;
+  font-size: calc(var(--u)*5); line-height: 1;
+  transition: opacity .12s linear;
+}
+.flashboard.open .flashcover{ opacity: 0; }
+.dice{ display: grid; grid-template-columns: repeat(3, auto); gap: calc(var(--u)*.6); }
+.flashrows{ display: grid; gap: calc(var(--u)*.6); }
+.frow{ display: grid; grid-template-columns: repeat(5, auto); gap: calc(var(--u)*.6); }
+.fdot{
+  width: calc(var(--u)*2.6); height: calc(var(--u)*2.6);
+  border-radius: 50%; background: transparent;
+}
+.fdot.on{ background: var(--c-blue); }
+.fdot.on.b{ background: var(--c-red); }
+.fplus{ font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*2.4); color: var(--ink-soft); }
+.choice.flashgo{ font-size: calc(var(--u)*2.2); }
 
 /* ---------- 「かぞえないで こたえられた」 ----------
    ★★★ says every answer was right first time. This says they arrived rather than

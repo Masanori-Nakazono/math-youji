@@ -721,6 +721,64 @@
     K.Store.reset();
   })();
 
+  /* ---------- 23. quantity is shown in fives everywhere ----------
+     「すうじ どれかな」 laid its groups on a six-wide lattice, so 9 read as「6と3」and
+     8 as「6と2」 — the one game whose whole job is tying「数字の形」to「量」was the one
+     fighting the five-structure every ten-frame in the app is built on. */
+  (function fives(){
+    let cols = null;
+    for (let t = 0; t < 40 && cols == null; t++){
+      K.Session.startLevel(K.Games.byId.numeral, 1);
+      const slots = q('#play .plate.fixed .slots');
+      if (slots) cols = getComputedStyle(slots).gridTemplateColumns.split(' ').length;
+    }
+    check('quantities are laid out in fives, like every ten-frame in the app',
+      cols === 5, 'columns=' + cols);
+  })();
+
+  /* ---------- 24. the dots are gone before the question is asked ----------
+     Every other quantity task in the app is solved by tapping objects one at a
+     time, which trains counting. Seeing that a group is five is a different skill,
+     and it is the one 「7は5と2」 has to rest on. It only gets practised if counting
+     is actually impossible. */
+  (function flash(){
+    const bad = [];
+    [0, 1, 2].forEach(li => {
+      K.Session.startLevel(K.Games.byId.flash, li);
+      const board = q('#play .flashboard');
+      const go = q('#play .choices .flashgo');
+      if (!board || !go){ bad.push('L' + (li + 1) + ' has no board or no 「みる」'); return; }
+      if (!qa('#play .flashboard .fdot.on').length) bad.push('L' + (li + 1) + ' drew no dots');
+      if (board.classList.contains('open')) bad.push('L' + (li + 1) + ' starts uncovered');
+      if (qa('#play .choices .choice').filter(c => c !== go).length){
+        bad.push('L' + (li + 1) + ' offers an answer before the look');
+      }
+      go.click();
+      S.flushTimers();
+      if (board.classList.contains('open')) bad.push('L' + (li + 1) + ' leaves the dots up while asking');
+      if (qa('#play .choices .choice').length < 3) bad.push('L' + (li + 1) + ' asked nothing after the look');
+    });
+    check('ぱっと みて いくつ takes the dots away before it asks',
+      !bad.length, bad.slice(0, 3).join(' | '));
+  })();
+
+  /* ---------- 25. counting backwards ----------
+     「10から逆に数える方が難しく、効果があります」 has been on the parent page since the
+     first version, and nothing in the app practised it: skipCount only ever went up
+     and nextBefore took a single step back. Counting down is what くり下がり runs on. */
+  (function backward(){
+    let seen = 0, bad = '';
+    for (let t = 0; t < 80 && !seen; t++){
+      K.Session.startLevel(K.Games.byId.seq, 2);
+      if (String(S.item).indexOf('seq:back:') !== 0) continue;
+      seen++;
+      const nums = qa('#play .numline .nn').slice(0, 3).map(n => Number(n.textContent));
+      if (!(nums[0] === nums[1] + 1 && nums[1] === nums[2] + 1)) bad = 'sequence is ' + nums.join(',');
+    }
+    check('かずの じゅんばん counts backwards as well as forwards',
+      seen > 0 && !bad, bad || 'never drawn in 80 tries');
+  })();
+
   function finish(){
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();

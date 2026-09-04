@@ -110,14 +110,129 @@ Games.add({
 });
 
 /* ============================================================
-   2. すうじ どれかな — numeral ↔ quantity
+   2. ぱっと みて いくつ — subitizing
    ============================================================ */
-/* Every plate is the same size with the same 6x2 lattice of slots: the child has
-   to count, because the card that looks biggest is no longer the one with most. */
+/* Every other quantity task in this app is solved by tapping objects one at a
+   time. That trains counting, and counting is a different skill from *seeing* that
+   a group is five. The second one is what has to be there first: a child who can
+   remember「7は5と2」is one who already sees 7 as five and two, rather than working
+   it out from one. Nothing here practised that, so the dots are taken away before
+   they can be counted — the only way through is to see the shape of the group. */
+const DICE = {
+  1: [[1, 1]],
+  2: [[0, 0], [2, 2]],
+  3: [[0, 0], [1, 1], [2, 2]],
+  4: [[0, 0], [2, 0], [0, 2], [2, 2]],
+  5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]]
+};
+
+function diceNode(n, second){
+  const g = el('div.dice');
+  const spots = DICE[n] || [];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++){
+    const on = spots.some(p => p[0] === c && p[1] === r);
+    g.append(el('span.fdot' + (on ? (second ? '.on.b' : '.on') : '')));
+  }
+  return g;
+}
+
+/* five on top, the rest underneath — the arrangement the whole app is built on */
+function fiveRowsNode(n){
+  const wrap = el('div.flashrows');
+  [0, 1].forEach(row => {
+    const r = el('div.frow');
+    const filled = row === 0 ? Math.min(n, 5) : Math.max(0, n - 5);
+    for (let i = 0; i < 5; i++) r.append(el('span.fdot' + (i < filled ? (row ? '.on.b' : '.on') : '')));
+    wrap.append(r);
+  });
+  return wrap;
+}
+
+function flashQuestion(api, o){
+  let a = 0, b = 0, n = 0;
+  if (o.two){
+    const w = api.want && /^two:(\d+)\+(\d+)$/.exec(api.want);
+    const aim = w && +w[1] >= 1 && +w[1] <= 5 && +w[2] >= 1 && +w[2] <= 5 && +w[1] + +w[2] <= 10;
+    a = aim ? +w[1] : ri(1, 5);
+    b = aim ? +w[2] : ri(1, Math.min(5, 10 - a));
+    n = a + b;
+    api.item('two:' + a + '+' + b, a + ' と ' + b + ' を ぱっと みる');
+  } else {
+    const w = api.want && new RegExp('^' + o.tag + ':(\\d+)$').exec(api.want);
+    n = (w && +w[1] >= o.lo && +w[1] <= o.hi) ? +w[1] : ri(o.lo, o.hi);
+    api.item(o.tag + ':' + n, n + ' を ぱっと みる');
+  }
+  api.setPrompt('「みる」を おして、<b>ぱっと</b> みてね', 'みる、を押して、ぱっと見てね。');
+
+  const board = el('div.flashboard');
+  const inner = el('div.flashinner');
+  if (o.two) inner.append(diceNode(a), el('span.fplus', { text: 'と' }), diceNode(b, true));
+  else if (o.rows) inner.append(fiveRowsNode(n));
+  else inner.append(diceNode(n));
+  board.append(inner, el('div.flashcover', { text: '👀' }));
+  api.field.append(board);
+
+  let shown = false;
+  const go = el('button.choice.flashgo', { type: 'button', text: '👀 みる' });
+  go.addEventListener('click', () => {
+    if (shown || api.locked) return;
+    shown = true;
+    go.disabled = true;
+    Sound.sfx.tap();
+    board.classList.add('open');
+    api.later(() => {
+      board.classList.remove('open');
+      Sound.sfx.place();
+      api.later(ask, 360);
+    }, o.ms);
+  });
+  api.choices.append(go);
+
+  function ask(){
+    if (o.two){
+      api.setPrompt('ぜんぶで いくつ だった？', '全部でいくつだった？');
+      api.buildPad(n);
+    } else {
+      api.setPrompt('いくつ だった？', 'いくつだった？');
+      api.buildChoices(shuffle([n].concat(distractors(n, 3, 1, o.hi + 2))), n);
+    }
+    /* The hint is another look, longer and left up. The child is not being asked to
+       guess better; they are being asked to see, and you cannot see what is covered. */
+    api.onHint(() => {
+      board.classList.add('open');
+      if (!$('.hintline', api.field)) api.field.append(el('div.hintline', { text: 'もういちど みせるね' }));
+    });
+  }
+}
+
+Games.add({
+  id: 'flash', name: 'ぱっと みて いくつ', ico: '👀', world: 'shima', color: 'var(--c-blue)',
+  aim: '数えずに、<b>ひと目で「いくつ」か分かる</b>力（瞬間視）。1〜5をかたまりとして見られること、そして6〜10を「5と いくつ」として見られることは、「いくつと いくつ」を<b>思い出せる</b>ようになるための土台です。1つずつ数える練習だけでは、ここは育ちません。',
+  levels: [
+    { t: '1〜5 ぱっと みて', d: 'てんの かたちで おぼえる',
+      make: api => flashQuestion(api, { tag: 'f5', lo: 1, hi: 5, ms: 1000 }) },
+    { t: '5と いくつ', d: '6〜10 を 5の かたまりで',
+      make: api => flashQuestion(api, { tag: 'f10', lo: 6, hi: 10, ms: 900, rows: true }) },
+    { t: 'ふたつの かたまり', d: 'あわせて いくつ だった？',
+      make: api => flashQuestion(api, { two: true, ms: 900 }) }
+  ]
+});
+
+/* ============================================================
+   3. すうじ どれかな — numeral ↔ quantity
+   ============================================================ */
+/* Every plate is the same size with the same lattice of slots: the child has to
+   count, because the card that looks biggest is no longer the one with most.
+
+   Five to a row, not six. Every other quantity in the app — the ten-frames in
+   いくつと いくつ, 10の おともだち, 11〜20, and every hint — is built on fives, and
+   this game exists precisely to tie「数字の形」to「量」. On a six-wide lattice 9 read
+   as「6と3」and 8 as「6と2」, so the one game whose whole job is that link was the
+   one fighting the structure the rest of the app is teaching. */
 function groupNode(count, thing){
-  const rows = count > 6 ? 2 : 1;          // keep the group vertically centred in the plate
+  const rows = Math.max(1, Math.ceil(count / 5));
   const g = el('div.slots', { style: { '--rows': rows } });
-  for (let i = 0; i < rows * 6; i++) g.append(el('span.slot', null, i < count ? thing.e : ''));
+  for (let i = 0; i < rows * 5; i++) g.append(el('span.slot', null, i < count ? thing.e : ''));
   return g;
 }
 
@@ -270,13 +385,36 @@ function skipCount(api){
   api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, ans + step * 2, step))), ans);
 }
 
+/* 「10から逆に数える方が難しく、効果があります」— the parent page has said so from
+   the start, and nothing in the app practised it. `skipCount` only ever goes up and
+   `nextBefore` takes a single step back. Counting down is what くり下がり runs on. */
+function countBack(api){
+  const w = api.want && /^back:(\d+)$/.exec(api.want);
+  const ans = (w && +w[1] >= 3 && +w[1] <= 17) ? +w[1] : ri(3, 9);
+  const start = ans + 3;
+  const seq = [start, start - 1, start - 2, ans];
+  api.item('back:' + ans, start + ' から ぎゃくに かぞえて ' + ans);
+  api.setPrompt('1ずつ へって いくよ。つぎは？', '1ずつ減っていくよ。次は？');
+  const line = el('div.numline');
+  seq.forEach((v, i) => line.append(el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) })));
+  api.field.append(line, el('div.hintline', { text: 'ぎゃくむきに かぞえて みよう' }));
+  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, start + 2))), ans);
+  api.onHint(() => {
+    if ($('.hint2', api.field)) return;
+    api.field.append(el('div.hintline.hint2', {
+      text: numKana(start) + '、' + numKana(start - 1) + '、' + numKana(start - 2) + '、… つぎは？' }));
+    Sound.say(`${numKana(start)}、${numKana(start-1)}、${numKana(start-2)}、…つぎは？`, { delay: 200 });
+  });
+}
+
 Games.add({
   id: 'seq', name: 'かずの じゅんばん', ico: '🪜', world: 'shima', color: 'var(--c-blue)',
   aim: '数を<b>並びとして</b>とらえ、「つぎ・まえ・あいだ」が言える力。数直線の感覚は、くり上がりの計算やものさしの読み取りにそのままつながります。',
   levels: [
     { t: '1〜10', d: 'あいた ところを うめる', make: api => lineFill(api, 1, 10, 2) },
     { t: '1〜20', d: 'もっと ながい ならび', make: api => { const lo = ri(6, 11); return lineFill(api, lo, lo + 9, 2); } },
-    { t: 'つぎ・まえ', d: 'ならびを あたまで たどる', make: api => chance(.35) ? skipCount(api) : nextBefore(api, 20) }
+    { t: 'つぎ・まえ', d: 'ならびを あたまで たどる',
+      make: api => chance(.3) ? countBack(api) : chance(.5) ? skipCount(api) : nextBefore(api, 20) }
   ]
 });
 
