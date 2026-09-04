@@ -230,6 +230,18 @@ body::before{
 .btn.correct{ background: var(--good); border-color: var(--good); color: var(--on-crayon); }
 .btn:focus-visible{ outline: calc(var(--u)*.28) solid var(--ring); outline-offset: calc(var(--u)*.2); }
 
+/* Screen changes move focus to the heading for assistive tech. Hide the browser
+   ring on that programmatic focus; keep a ring only for real keyboard focus. */
+.screen h1:focus,
+.screen h2:focus,
+.screen [role="heading"]:focus{ outline: none; }
+.screen h1:focus-visible,
+.screen h2:focus-visible,
+.screen [role="heading"]:focus-visible{
+  outline: calc(var(--u)*.28) solid var(--ring);
+  outline-offset: calc(var(--u)*.2);
+}
+
 .btn-accent{
   background: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 72%, var(--ink) 28%);
