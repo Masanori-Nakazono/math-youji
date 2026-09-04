@@ -1635,3 +1635,147 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   font-weight:800;
   min-height:calc(var(--u)*2.2);
 }
+
+/* ===========================================================
+   1ねんせいの きょうしつ — the 小学1年生 stage
+   =========================================================== */
+
+/* a tap on something that is not in the group being collected: it bounces, it is
+   never taken away — a wrong guess about a rule is part of learning the rule */
+.obj.notmine{ animation: shake .42s; filter: grayscale(.7) opacity(.55) }
+/* the hint points at one thing still to collect. It must not use `.picked`, which
+   means「this is in my basket」 everywhere else in the app. */
+.obj.glow{ filter: drop-shadow(0 0 calc(var(--u)*.6) var(--accent)) }
+
+/* the picture graph: rows start at the same edge, so length *is* the comparison */
+.chartboard .mrow{ justify-content: flex-start }
+.chartboard .mrow .row{ flex: 1 1 auto; min-width: 0 }
+
+/* ---- 1たい1で くらべる ---- */
+.pairboard{
+  display: flex; flex-direction: column; align-items: center;
+  gap: calc(var(--u)*.5); width: 100%;
+}
+.pairrow{
+  display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap; gap: calc(var(--u)*.7);
+}
+/* the line the textbook draws between the two rows */
+.pairgap{
+  width: min(100%, calc(var(--u)*40)); height: 0;
+  border-top: calc(var(--u)*.2) dashed var(--card-edge);
+}
+.pairitem{
+  position: relative;
+  width: calc(var(--u)*6); height: calc(var(--u)*6);
+  justify-content: center;
+  font-size: calc(var(--u)*3.2);
+}
+.pairitem.marked{ border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--card)); }
+/* a made pair carries the same number on both halves: that is what keeps the
+   correspondence visible once the finger has moved on */
+.pairitem.paired{ border-color: var(--good); background: var(--good-soft) }
+.pairitem.paired .tag,
+.pairitem .tag{
+  position: absolute; top: calc(var(--u)*-.5); right: calc(var(--u)*-.5);
+  min-width: calc(var(--u)*2); height: calc(var(--u)*2);
+  padding: 0 calc(var(--u)*.3);
+  display: grid; place-items: center; border-radius: 999px;
+  background: var(--good); color: var(--on-crayon);
+  font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*1.3);
+  animation: pop .34s cubic-bezier(.2,.9,.3,1.6);
+}
+.pairitem .tag.left{ background: var(--accent) }
+/* what is left over when the pairing runs out — the answer to every question in
+   this game is standing right here */
+.pairitem.leftover{
+  border-color: var(--accent); border-style: dashed;
+  animation: floatY 1.8s ease-in-out infinite;
+}
+.pairitem.added{ animation: pop .4s cubic-bezier(.2,.9,.3,1.5) }
+.pairslot{
+  width: calc(var(--u)*6); height: calc(var(--u)*6);
+  border-radius: var(--wob-b);
+  font-size: calc(var(--u)*3.2);
+  background: var(--paper-2);
+}
+
+/* ---- 20までの かず ---- */
+/* the ten is one thing, not ten things: give it a solid frame and a label, and
+   never ask the child to count inside it */
+.framelabel{ display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.3) }
+.framelabel small{
+  font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*1.8);
+  color: var(--ink-soft); min-height: calc(var(--u)*2);
+}
+.tenframe.fullten{ border-color: var(--c-blue) }
+
+/* ---- しきに かこう ---- */
+.storycard{
+  display: flex; align-items: center; gap: calc(var(--u)*1);
+  max-width: min(100%, calc(var(--u)*46));
+  padding: calc(var(--u)*1) calc(var(--u)*1.4);
+  background: var(--card);
+  border: calc(var(--u)*.24) solid var(--card-edge);
+  border-radius: var(--wob-a);
+  box-shadow: var(--shadow-sm);
+}
+.storycard .e{ font-size: calc(var(--u)*4); line-height: 1; flex: 0 0 auto }
+.storycard .lines{ display: flex; flex-direction: column; gap: calc(var(--u)*.3); min-width: 0 }
+.storycard .tx{ font-size: calc(var(--u)*2.2); font-weight: 500; line-height: 1.5 }
+.storycard .qx{ font-size: calc(var(--u)*2.2); font-weight: 800; color: var(--c-red) }
+.eq .op.opbox{
+  min-width: calc(var(--u)*5); height: calc(var(--u)*5);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: calc(var(--u)*.3) dashed var(--accent);
+  border-radius: calc(var(--u)*.9);
+  color: var(--accent);
+}
+.eq .op.opbox.filled{ border-style: solid; background: var(--good); border-color: var(--good); color: var(--on-crayon) }
+/* a whole sentence as an answer button: it has to wrap, and it has to stay
+   readable at three of them on one iPad */
+.choice.story{
+  font-family: var(--fs-jp); font-size: calc(var(--u)*2); font-weight: 500;
+  line-height: 1.5; text-align: left;
+  flex: 1 1 calc(var(--u)*20);
+  max-width: min(100%, calc(var(--u)*30));
+  padding: calc(var(--u)*.9) calc(var(--u)*1.2);
+  white-space: normal;
+}
+
+/* ---- the door to the classroom ---- */
+/* .daily paints its text in --accent-ink for the orange gradient it normally has;
+   on the recessed paper of a locked door that is dark brown on near-black */
+.daily.stagelocked{
+  background: var(--paper-2);
+  border-style: dashed;
+  border-color: var(--card-edge);
+  color: var(--ink);
+}
+.daily.stagelocked .s{ color: var(--ink-soft) }
+.stagebar{
+  width: 100%; height: calc(var(--u)*1.1); margin-top: calc(var(--u)*.4);
+  border-radius: 999px; background: var(--card-edge); overflow: hidden;
+}
+.stagebar > i{ display: block; height: 100%; background: var(--accent); border-radius: 999px }
+.world.newstage h3 .chip{ white-space: nowrap }
+#result .unlocked{
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.4);
+  margin-top: calc(var(--u)*1);
+  padding: calc(var(--u)*1.2) calc(var(--u)*1.6);
+  background: var(--good-soft);
+  border: calc(var(--u)*.3) solid var(--good);
+  border-radius: var(--wob-a);
+  max-width: min(100%, calc(var(--u)*48));
+  text-align: center;
+}
+#result .unlocked .e{ font-size: calc(var(--u)*5); line-height: 1 }
+#result .unlocked .l{ font-size: calc(var(--u)*1.7); color: var(--good-ink); font-weight: 800 }
+#result .unlocked b{ font-size: calc(var(--u)*2.6); line-height: 1.35 }
+.bookgroup{
+  grid-column: 1 / -1;
+  width: 100%; margin-top: calc(var(--u)*1.2);
+  font-size: calc(var(--u)*1.5); font-weight: 800; color: var(--ink-soft);
+  display: flex; align-items: center; gap: calc(var(--u)*.6);
+}
+.bookgroup::after{ content: ""; flex: 1 1 auto; border-top: calc(var(--u)*.2) dashed var(--card-edge) }

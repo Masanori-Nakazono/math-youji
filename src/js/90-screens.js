@@ -39,7 +39,9 @@ const Title = (() => {
     node = el('div#title', null,
       mascotSVG('happy', 'talk'),
       logo,
-      el('div.tag', { text: 'しょうがっこうへ いく まえに　さんすうの ちからを あそんで つける' }),
+      el('div.tag', { text: Progress.g1Open()
+        ? 'しょうがっこう 1ねんせいの もんだいも あるよ'
+        : 'しょうがっこうへ いく まえに　さんすうの ちからを あそんで つける' }),
       start,
       el('div.foot', { text: 'おと が でます。iPad は よこむき が おすすめ です' }));
     return UI.register('title', node);
@@ -49,7 +51,7 @@ const Title = (() => {
 
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
-  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl;
+  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, stageEl;
 
   function build(){
     if (node) return node;
@@ -79,7 +81,13 @@ const Home = (() => {
     focusEl = el('button.daily.focusset', { type: 'button', hidden: true });
     shelfEl = el('button.shelf', { type: 'button',
       onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
-    node.append(voiceWarnEl, recommendEl, dailyEl, reviewEl, focusEl, worldsEl, shelfEl);
+    /* The door to 1ねんせい. It is a goal, not today's work, so it sits down with
+       the sticker shelf it depends on rather than up with the daily sets — and it
+       stays out of sight entirely until the shelf is half full, because a padlock
+       is only encouraging to a child who can already see themselves reaching it. */
+    stageEl = el('button.daily.stagelocked', { type: 'button', hidden: true,
+      onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
+    node.append(voiceWarnEl, recommendEl, dailyEl, reviewEl, focusEl, worldsEl, stageEl, shelfEl);
     return UI.register('home', node);
   }
 
@@ -183,13 +191,33 @@ const Home = (() => {
       el('div.lbl', null, 'シール ' + got.length + 'まい', el('small', { text: 'タップで シールブック' })),
       strip);
 
+    const st = Progress.preStickers(), open1 = Progress.g1Open();
+    const left = Math.max(0, st.total - st.got);
+    stageEl.hidden = open1 || st.got < st.total * Progress.TEASE_AT;
+    if (!stageEl.hidden){
+      clear(stageEl);
+      stageEl.append(
+        el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: '🔒' }),
+        el('div.grow', null,
+          el('div.t', { text: 'しょうがっこう 1ねんせいの もんだい' }),
+          el('div.s', { text: 'シールを ぜんぶ あつめると ひらくよ　･　あと ' + left + 'まい' }),
+          el('div.stagebar', null, el('i', { style: { width: (st.total ? (st.got / st.total) * 100 : 0) + '%' } }))),
+        el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: '📖' }));
+    }
+
     clear(worldsEl);
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
       if (!games.length) return;
+      // a whole world can be shut: 1ねんせいの きょうしつ is not on this screen at all
+      // until the sticker book that opens it is full
+      if ((w.stage || 'pre') !== 'pre' && !open1) return;
       const grid = el('div.gamegrid');
       games.forEach(g => grid.append(gameCard(g)));
-      worldsEl.append(el('div.world', { style: { '--wc': w.color } },
+      // the world's own name already says 1ねんせい; a second badge saying it again
+      // only takes the room the name needs to stay on one line
+      worldsEl.append(el('div.world' + ((w.stage || 'pre') !== 'pre' ? '.newstage' : ''),
+        { style: { '--wc': w.color } },
         el('h3', null, el('span.chip', { text: w.name }), el('span.sub', { text: w.sub })), grid));
     });
   }
@@ -258,7 +286,8 @@ const Result = (() => {
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
-    const spoken = (r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
+    const spoken = (r.unlockedG1 ? 'シールが全部そろったね！小学校一年生の問題ができるよ！'
+                 : r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
                  : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
@@ -273,6 +302,18 @@ const Result = (() => {
       el('div.result-sub', { text: r.mode === 'diagnostic'
         ? 'ぴったりの はじまりを みつけたよ'
         : `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+    /* The last sticker. This is the one screen in the app that says the child has
+       finished 入学前 — it has to say it in words a six-year-old reads, on the
+       screen they are already looking at, not in a menu they might find later. It
+       goes above the sticker and the mission: on a screen this tall, the thing
+       that has to be read first cannot be the thing furthest down. */
+    if (r.unlockedG1){
+      inner.append(el('div.unlocked', null,
+        el('div.e', { text: '🎓' }),
+        el('div.l', { text: 'シールが ぜんぶ そろった！' }),
+        el('b', { text: 'しょうがっこう 1ねんせいの もんだいが できるよ！' }),
+        el('div.l', { text: '「1ねんせいの きょうしつ」が ホームに ふえたよ' })));
+    }
     /* The thing ★★★ could never say. These levels are for an answer that arrives,
        and a child who counted their way to every right answer used to get exactly
        the same three stars as one who remembered. */
@@ -314,7 +355,8 @@ const Result = (() => {
           el('div.l', { text: 'つぎの おすすめ' }),
           el('b', { text: g.name + '　《' + lv.t + '》' })));
       }
-    } else if (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1)) {
+    } else if (!r.unlockedG1 && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
+      // one piece of news per screen: the classroom outranks today's kitchen-table task
       inner.append(Missions.resultCard(r.lastGameId));
     }
     const actions = el('div.result-actions');
@@ -342,7 +384,11 @@ const Result = (() => {
     } else if (r.mode === 'daily'){
       actions.append(el('button.btn', { text: 'もういちど', onclick(){ Sound.sfx.tap(); Session.startDaily(10); } }));
     }
-    actions.append(el('button.btn' + (r.mode === 'level' || r.mode === 'diagnostic' || lead || r.mode === 'focus' ? '' : '.btn-accent'),
+    if (r.unlockedG1){
+      actions.append(el('button.btn.btn-accent.primary', { text: '1ねんせいの きょうしつへ',
+        onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
+    }
+    actions.append(el('button.btn' + (r.mode === 'level' || r.mode === 'diagnostic' || lead || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent'),
       { text: 'あそびを えらぶ',
         onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
     inner.append(actions);
@@ -371,23 +417,32 @@ const Book = (() => {
   function render(){
     build();
     clear(grid);
-    const slots = [];
-    Games.list.forEach(g => g.levels.forEach((lv, i) => {
-      slots.push({ key: g.id + ':' + i, gold: false });
-      slots.push({ key: g.id + ':' + i + ':g', gold: true });
-    }));
     let got = 0;
-    slots.forEach(s => {
-      const has = Store.hasSticker(s.key);
+    const drawSlots = keys => keys.forEach(key => {
+      const has = Store.hasSticker(key);
       if (has) got++;
-      grid.append(el('div.sticker' + (has ? (s.gold ? '.got.gold' : '.got') : ''),
-        { text: has ? stickerFor(s.key) : '･' }));
+      grid.append(el('div.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : ''),
+        { text: has ? stickerFor(key) : '･' }));
     });
+    /* The 入学前 shelf is the one that opens the 小1 classroom, so it is the one
+       this page counts towards a goal. The classroom's own stickers go in a second
+       group below, and only once it is open — an empty row of slots for a world a
+       child cannot reach would make the goal look further away than it is. */
+    const pre = Progress.preStickers();
+    drawSlots(Progress.slots('pre'));
     Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0).forEach(k => {
       got++;
       grid.append(el('div.sticker.got.gold', { text: stickerFor(k) }));
     });
-    count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`;
+    if (Progress.g1Open()){
+      grid.append(el('div.bookgroup', { text: '🎓　1ねんせいの きょうしつ' }));
+      drawSlots(Progress.slots('g1'));
+    }
+    const left = Math.max(0, pre.total - pre.got);
+    count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
+      + (left
+        ? `<br><b>あと ${left}まい</b> で しょうがっこう 1ねんせいの もんだいが ひらくよ（${pre.got}／${pre.total}）`
+        : '<br><b>ぜんぶ そろったね！</b> しょうがっこう 1ねんせいの もんだいが できるよ');
   }
   return { build, render };
 })();

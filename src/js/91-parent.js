@@ -83,7 +83,7 @@ const Parent = (() => {
     const body = el('tbody');
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
-      if (!games.length) return;
+      if (!games.length || ((w.stage || 'pre') !== 'pre' && !Progress.g1Open())) return;
       body.append(el('tr', null, el('td', { colspan: 7, style: { color: w.color, fontWeight: 800, paddingTop: 'calc(var(--u)*.8)' }, text: w.name })));
       games.forEach(g => {
         const s = Store.gameStars(g.id, g.levels.length);
@@ -131,7 +131,7 @@ const Parent = (() => {
     const ENOUGH = 8;
     const levels = [];
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
-      if (!Store.levelUnlocked(g.id, i)) return;
+      if (!levelOpen(g, i)) return;
       const n = Store.recentCount(g.id, i);
       if (n < ENOUGH) return;
       levels.push({ g, lv, i, n, acc: Store.recentAccuracy(g.id, i), cold: Store.daysSince(g.id, i) });
@@ -224,7 +224,7 @@ const Parent = (() => {
       el('p', { text: '「うちの子はこれをやって何が身につくのか」への答えです。上の表で数字が低い遊びがあったら、まずここを読んでから、下の「おうちでできること」を試してみてください。' }));
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id && g.aim);
-      if (!games.length) return;
+      if (!games.length || ((w.stage || 'pre') !== 'pre' && !Progress.g1Open())) return;
       sec.append(el('h4', { text: w.name, style: { color: w.color } }));
       const list = el('div.aimlist');
       games.forEach(g => list.append(el('div.aimrow', null,
@@ -241,12 +241,70 @@ const Parent = (() => {
     const s = el('section');
     const row = (k, v) => el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 'calc(var(--u)*1)' } },
       el('span', { text: k }), el('b', { style: { fontFamily: 'var(--fs-num)' }, text: v }));
+    // a locked world must not inflate the denominator: 48/48 has to be reachable
+    const levels = Games.list.reduce((n, g) => n + (stageOpen(g) ? g.levels.length : 0), 0);
+    const pre = Progress.preStickers();
     s.append(el('div.eyebrow', { text: 'summary' }), el('h3', { text: 'これまでの積み重ね' }),
       row('続けた日数（連続）', Store.streak() + '日'),
       row('今日といた問題', Store.todayCount() + '問'),
-      row('集めた ★', Store.totalStars() + ' / ' + (Games.list.reduce((n, g) => n + g.levels.length, 0) * 3)),
+      row('集めた ★', Store.totalStars() + ' / ' + levels * 3),
       row('集めたシール', Store.data.stickers.length + '枚'),
+      row('入学前のシール（1年生が開く条件）', pre.got + ' / ' + pre.total),
       row('「きょうの れんしゅう」初回正答率', pct(Store.practiceAccuracy())));
+    return s;
+  }
+
+  /* ---- 小学1年生の問題 ----
+     The one thing on this page a parent has to be able to decide: the door opens
+     itself when the sticker book is full, and it can be opened by hand when the
+     child is plainly ready and the book is not. */
+  function stageSection(){
+    const s = el('section');
+    const pre = Progress.preStickers();
+    const open1 = Progress.g1Open();
+    const byHand = !!Store.data.g1Open;
+    s.append(el('div.eyebrow', { text: 'next stage' }),
+      el('h3', { text: '小学1年生の問題について' }));
+    s.append(el('p', { html: '入学前の48レベルのシールを<b>すべて集めると</b>、ホームに'
+      + '<b>「1ねんせいの きょうしつ」</b>が増えます。シールはレベルごとに2枚（クリアで1枚、'
+      + '全問1回目で正解するともう1枚・金色）で、全部で' + pre.total + '枚。'
+      + 'いまは <b>' + pre.got + ' / ' + pre.total + '</b> 枚です。' }));
+    s.append(el('p', { text: '中身は「先取りの計算」ではありません。1年生の1学期は、'
+      + '入学前にやったことをもう一度、ちがう聞き方でたどり直します。'
+      + '「同じものの集まり」（自分でまとまりを決めてから数える）と'
+      + '「1対1対応」（両方を数えるのではなく、ペアにして余りを見る）の2つが中心で、'
+      + 'そこから「20までの数（10のまとまりとばら）」と「式に書く（＋か−か）」に進みます。' }));
+    const list = el('div.aimlist');
+    Games.list.filter(g => Progress.stageOf(g) === 'g1').forEach(g => list.append(el('div.aimrow', null,
+      el('div.ico', { text: g.ico }),
+      el('div', null, el('b', { text: g.name }), el('div', { html: g.aim })))));
+    s.append(list);
+    if (open1){
+      s.append(el('p', { style: { color: 'var(--good-ink)', fontWeight: 800 },
+        text: byHand && pre.got < pre.total
+          ? '※ この端末では、おうちの方の操作で先に開いています。'
+          : '✓ 開いています。ホームの「1ねんせいの きょうしつ」から遊べます。' }));
+      return s;
+    }
+    s.append(el('p', { text: 'シールが全部そろう前でも、ここから開けられます。'
+      + '「かぞえよう」や「いくつと いくつ」が安定していて、本人が先に進みたがっているなら、'
+      + '★★★を集めきるのを待つ必要はありません。開けたあとも入学前の遊びはそのまま残りますし、'
+      + '一度開けると閉じられません。' }));
+    let armed = false;
+    const openBtn = el('button.btn', { text: '1ねんせいの もんだいを いま開く' });
+    openBtn.addEventListener('click', () => {
+      if (!armed){
+        armed = true;
+        openBtn.textContent = '開きますか？（もう一度タップ）';
+        setTimeout(() => { armed = false; openBtn.textContent = '1ねんせいの もんだいを いま開く'; }, 4000);
+        return;
+      }
+      Progress.openG1();
+      Sound.sfx.finish();
+      Home.render();
+      render();
+    });
+    s.append(openBtn);
     return s;
   }
 
@@ -274,7 +332,8 @@ const Parent = (() => {
   const PLAN = [
     ['1〜2か月め', 'かずの しま を中心に', 'かぞえよう / すうじ どれかな / かずの じゅんばん。まず10までを確実に。数字のなぞり書きも並行して少しずつ。'],
     ['3〜4か月め', 'けいさんの やま に入る', 'いくつと いくつ → 10の おともだち の順で。ここが半年計画の山場です。毎日「きょうの れんしゅう」を1回。'],
-    ['5〜6か月め', 'たしざん・ひきざん と 生活の数', '式の形に慣れ、とけい・おおきさくらべ・なんばんめ で入学後の単元に先に触れておきます。']
+    ['5〜6か月め', 'たしざん・ひきざん と 生活の数', '式の形に慣れ、とけい・おおきさくらべ・なんばんめ で入学後の単元に先に触れておきます。'],
+    ['そのあと', '1ねんせいの きょうしつ', 'シールが全部そろうと開きます。なかまづくり（同じものの集まり）と 1たい1で くらべる（一対一対応）から、20までの数・式へ。1年生の1学期の順番そのままです。']
   ];
 
   function textSection(eyebrow, title, pairs){
@@ -486,11 +545,14 @@ const Parent = (() => {
         el('div.eyebrow', { text: 'about' }),
         el('h3', { text: 'このアプリがねらっていること' }),
         // counted, not typed: the sentence used to say 15 and quietly went stale
-        el('p', { text: '小学校1年生の算数は「数える」「数を分ける・合わせる」「比べる」「形をとらえる」の4つの土台の上に立っています。逆に言えば、入学前にやるべきことは計算の先取りではなく、この土台を手と目と声で確かめておくことです。このアプリは'
-          + Games.list.length + 'の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。' }),
+        el('p', { text: '小学校1年生の算数は「数える」「数を分ける・合わせる」「比べる」「形をとらえる」の4つの土台の上に立っています。逆に言えば、入学前にやるべきことは計算の先取りではなく、この土台を手と目と声で確かめておくことです。このアプリは入学前の'
+          + Games.list.filter(g => Progress.stageOf(g) === 'pre').length
+          + 'の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。'
+          + 'それを全部終えると、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
         el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると自動でヒントが出て、必ず自分で正解にたどり着いて終われるようにしてあります。' })),
       nextUpSection(),
       statsSection(),
+      stageSection(),
       progressSection(),
       aimsSection(),
       planSection(),

@@ -25,7 +25,7 @@ const Diagnostic = (() => {
   function current(){
     let weakest = null;
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
-      if (!Store.levelUnlocked(g.id, i)) return;
+      if (!levelOpen(g, i)) return;
       const n = Store.recentCount(g.id, i);
       if (n < 4) return;
       const acc = Store.recentAccuracy(g.id, i);
@@ -35,14 +35,19 @@ const Diagnostic = (() => {
 
     const first = Store.data.diagnostic && Store.data.diagnostic.recommended;
     if (first && Games.byId[first.gameId]
-        && Store.levelUnlocked(first.gameId, first.levelIndex || 0)
+        && levelOpen(Games.byId[first.gameId], first.levelIndex || 0)
         && Store.stars(first.gameId, first.levelIndex || 0) < 2) return first;
 
-    for (const id of ['count', 'flash', 'numeral', 'seq', 'bond']){
+    /* Once the 入学前 half is finished there is nothing left under 2 stars to
+       recommend there, so the queue continues into the classroom. */
+    const order = Progress.g1Open()
+      ? ['count', 'flash', 'numeral', 'seq', 'bond', 'g1set', 'g1pair', 'g1teen', 'g1shiki']
+      : ['count', 'flash', 'numeral', 'seq', 'bond'];
+    for (const id of order){
       const g = Games.byId[id];
       if (!g) continue;
       for (let i = 0; i < g.levels.length; i++){
-        if (Store.levelUnlocked(id, i) && Store.stars(id, i) < 2) return { gameId: id, levelIndex: i };
+        if (levelOpen(g, i) && Store.stars(id, i) < 2) return { gameId: id, levelIndex: i };
       }
     }
     return { gameId: 'bond', levelIndex: 0 };
@@ -88,7 +93,15 @@ const Missions = (() => {
     ['pattern', 'スプーンと フォークで きまりの ならびを つくろう', 'つぎに くるものを おうちのひとに あててもらおう'],
     ['pattern', '3つの ものを つかって くりかえしを つくろう', 'どこから おなじ ならびが はじまる？'],
     ['clock', 'ながい はりが 6に きたら なにを するか きめよう', '「はん」の ときの はりを みよう'],
-    ['clock', 'おやつの じかんを とけいで さがそう', 'みじかい はりと ながい はりを りょうほう みよう']
+    ['clock', 'おやつの じかんを とけいで さがそう', 'みじかい はりと ながい はりを りょうほう みよう'],
+    ['g1set', 'だいどころから 「まるい もの」を ぜんぶ あつめよう', 'あつめてから いくつか かぞえてね'],
+    ['g1set', 'おもちゃばこから じぶんで きめた なかまを あつめよう', 'どういう なかまに したか おしえてね'],
+    ['g1pair', 'おさらと コップを 1つずつ ペアに して ならべよう', 'どちらが あまった？ いくつ あまった？'],
+    ['g1pair', 'かぞくの かずと おはしの かずを ペアに してみよう', 'たりない ときは あと いくつ？'],
+    ['g1teen', 'おはじきを 10こ まとめて、そのあと ばらを たそう', '「10と いくつ」で いえるかな？'],
+    ['g1teen', 'カレンダーで 11から 20を じゅんばんに さがそう', 'どれも 「10と いくつ」だね'],
+    ['g1shiki', 'おやつを もらった ときの しきを いってみよう', '「3と 2で 5」より「3たす2は5」で いえるかな'],
+    ['g1shiki', '「5ひく2」に なる おはなしを つくって みよう', 'たべた・あげた・かえった、どれでも いいよ']
   ];
 
   const today = () => Store.todayKey();

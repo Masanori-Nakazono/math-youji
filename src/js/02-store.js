@@ -30,6 +30,11 @@ const Store = (() => {
     missions: {},     // "YYYY-MM-DD" -> { id, gameId, text, prompt, done, reviewed }
     name: '',
     sfx: true, voice: true, voiceId: null,
+    /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
+       the parent's override: a child who is ready but cannot get ★★★ on とけい must
+       not be held behind a padlock they cannot move — the same reason a level opens
+       after three honest attempts. Once true it stays true. */
+    g1Open: false,
     createdAt: Date.now()
   });
 
@@ -165,7 +170,7 @@ const Store = (() => {
       if (typeof data.name !== 'string') return null;
       out.name = data.name;
     }
-    for (const k of ['sfx', 'voice']){
+    for (const k of ['sfx', 'voice', 'g1Open']){
       if (data[k] !== undefined){
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];
@@ -236,6 +241,8 @@ const Store = (() => {
         out.missions[d] = Object.assign({}, score(incoming) > score(cur) ? incoming : cur);
       }
     }
+    // a stage that has been opened on either device stays open
+    out.g1Open = !!(base.g1Open || add.g1Open);
     out.createdAt = Math.min(base.createdAt || Date.now(), add.createdAt || Date.now());
     return out;
   }

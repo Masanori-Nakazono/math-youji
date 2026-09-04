@@ -9,14 +9,22 @@ const Games = {
   add(def){ this.list.push(def); this.byId[def.id] = def; return def; }
 };
 
+/* `stage` says which half of the app a world belongs to. Everything the app
+   shipped with is 入学前 ('pre'); 'g1' is the 小学1年生 classroom, which stays shut
+   until the sticker book is full. A world with no stage is 'pre', so nothing that
+   existed before has to say so. */
 const WORLDS = [
   { id: 'shima', name: 'かずの しま',    sub: 'かぞえる・すうじ',       color: 'var(--c-blue)' },
   { id: 'umi',   name: 'くらべる うみ',  sub: 'くらべる・じゅんばん',   color: 'var(--c-green)' },
   { id: 'yama',  name: 'けいさんの やま', sub: 'あわせる・のこりは',    color: 'var(--c-red)' },
-  { id: 'mori',  name: 'かたちの もり',  sub: 'かたち・きまり・とけい', color: 'var(--c-purple)' }
+  { id: 'mori',  name: 'かたちの もり',  sub: 'かたち・きまり・とけい', color: 'var(--c-purple)' },
+  { id: 'kyoshitsu', name: '1ねんせいの きょうしつ', sub: 'なかま・1たい1・20までの かず・しき',
+    color: 'var(--c-orange)', stage: 'g1' }
 ];
 
-const STICKER_POOL = ['🐰','🐻','🐼','🦊','🐯','🦁','🐨','🐸','🐵','🐧','🐤','🦉','🦄','🐢','🐬','🐳','🦋','🐝','🐞','🦕','🦖','🐙','🦀','🐡','🐘','🦒','🦓','🦔','🐿','🦥','🐠','🐟','🦈','🐌','🐛','🕊','🦩','🦜','🐴','🐑','🌻','🌸','🌈','🍎','🍓','🍇','🍑','🍉','🍌','🥕','🌽','🍄','🍒','🥝','🍍','🥥','🌷','🌼','🌺','🍀','🍰','🧁','🍩','🎂','🍬','🍭','🍦','🍪','🍫','🥐','🚀','🚂','⛵️','🎈','🎁','🏆','👑','💎','🔔','🎨','🎺','🪁','🧸','🪀','🎏','🎐','🛼','🎠','🎪','🏰','⚽️','🏀','🎾','🥁','🎹','⭐️','🌙','☀️','⛄️','🌟'];
+const STICKER_POOL = ['🐰','🐻','🐼','🦊','🐯','🦁','🐨','🐸','🐵','🐧','🐤','🦉','🦄','🐢','🐬','🐳','🦋','🐝','🐞','🦕','🦖','🐙','🦀','🐡','🐘','🦒','🦓','🦔','🐿','🦥','🐠','🐟','🦈','🐌','🐛','🕊','🦩','🦜','🐴','🐑','🌻','🌸','🌈','🍎','🍓','🍇','🍑','🍉','🍌','🥕','🌽','🍄','🍒','🥝','🍍','🥥','🌷','🌼','🌺','🍀','🍰','🧁','🍩','🎂','🍬','🍭','🍦','🍪','🍫','🥐','🚀','🚂','⛵️','🎈','🎁','🏆','👑','💎','🔔','🎨','🎺','🪁','🧸','🪀','🎏','🎐','🛼','🎠','🎪','🏰','⚽️','🏀','🎾','🥁','🎹','⭐️','🌙','☀️','⛄️','🌟',
+/* the 小1 classroom adds 12 levels, and a sticker slot must never reuse an emoji another slot already has */
+'🦭','🦦','🦫','🦃','🕊️','🦚','🦢','🐖','🐄','🦌','🐫','🦙','🐊','🦎','🦂','🪰','🍋','🍈','🥭','🫐','🍅','🥦','🌰','🥨','🍿','🍮','🍯','🧃','🎃','🎄','🪗','🪄','🧭','🔭','🎲','🪩','🛴','🚁','🚤','🗿'];
 /* Stickers are handed out by slot position, not by hash, so no level shares an
    emoji with another while the pool is large enough. */
 let STICKER_INDEX = null;
@@ -37,6 +45,64 @@ function stickerFor(key){
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
   return STICKER_POOL[h % STICKER_POOL.length];
 }
+
+/* ===========================================================
+   stages — what has to be finished before 小学1年生 opens
+   ===========================================================
+   The 入学前 half of the app is 48 levels and 96 sticker slots: one sticker for
+   clearing a level, a gold one for clearing it with every answer right first time.
+   Filling that shelf is the whole of the 小1 classroom's entrance requirement, so
+   the goal a child is already working towards is the same goal that opens the next
+   room — no separate test, no adult judgement.
+
+   Two things this deliberately does NOT do. It never counts 小1's own stickers
+   (that would be circular), and it never *closes* again: a shelf cannot lose a
+   sticker, but a future release could add a 入学前 level, and a child who walked
+   through the door must not find it locked afterwards. */
+const Progress = (() => {
+  const stageOf = g => g.stage || 'pre';
+
+  /** every sticker slot belonging to one stage, plain and gold */
+  function slots(stage){
+    const out = [];
+    Games.list.forEach(g => {
+      if (stageOf(g) !== stage) return;
+      g.levels.forEach((lv, i) => out.push(g.id + ':' + i, g.id + ':' + i + ':g'));
+    });
+    return out;
+  }
+
+  function count(stage){
+    const all = slots(stage);
+    let got = 0;
+    all.forEach(k => { if (Store.hasSticker(k)) got++; });
+    return { got, total: all.length };
+  }
+
+  /** true once the shelf is full — or once a parent has opened the door by hand */
+  function g1Open(){
+    if (Store.data.g1Open) return true;
+    const c = count('pre');
+    return c.total > 0 && c.got >= c.total;
+  }
+
+  return {
+    stageOf,
+    slots,
+    preStickers: () => count('pre'),
+    g1Open,
+    /** opened by hand from the parent page; never reversible */
+    openG1(){ Store.setPref('g1Open', true); },
+    /** shown on Home once the shelf is half full: before that a locked door is
+        just noise to a child who has months of かずの しま ahead of them */
+    TEASE_AT: 0.5
+  };
+})();
+
+/** Is this game's half of the app open at all? */
+function stageOpen(g){ return Progress.stageOf(g) === 'pre' || Progress.g1Open(); }
+/** The gate every question-drawing surface asks: open stage AND unlocked level. */
+function levelOpen(g, i){ return stageOpen(g) && Store.levelUnlocked(g.id, i); }
 
 const Session = (() => {
   let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, backBtn, moodEl, feedbackEl;
@@ -198,7 +264,7 @@ const Session = (() => {
     const pool = [];
     Games.list.forEach(g => {
       g.levels.forEach((lv, i) => {
-        if (Store.levelUnlocked(g.id, i)) pool.push({ game: g, level: lv, levelIndex: i });
+        if (levelOpen(g, i)) pool.push({ game: g, level: lv, levelIndex: i });
       });
     });
     if (!pool.length){                       // nothing unlocked yet — never leave an empty plan
@@ -256,7 +322,7 @@ const Session = (() => {
       if (!at) return;                                   // never met: nowhere to ask it
       const cut = at.lastIndexOf(':');
       const g = Games.byId[at.slice(0, cut)], li = Number(at.slice(cut + 1));
-      if (!g || !g.levels[li] || !Store.levelUnlocked(g.id, li)) return;
+      if (!g || !g.levels[li] || !levelOpen(g, li)) return;
       want.push({ game: g, level: g.levels[li], levelIndex: li, want: k });
     });
     if (!want.length){ startDaily(10); return; }         // nothing to aim at yet
@@ -650,6 +716,11 @@ const Session = (() => {
     if (stars >= 1){ Sound.sfx.finish(); UI.confetti(60); }
     else Sound.sfx.place();
     let newSticker = null;
+    /* The last sticker on the shelf is the moment the 小1 classroom opens, and the
+       child has to be told so on the screen they are already looking at. Read the
+       gate before the sticker is handed out, so「もう開いていた」and「いま開いた」
+       stay distinguishable. */
+    const wasOpen = Progress.g1Open();
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;
       Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
@@ -671,13 +742,18 @@ const Session = (() => {
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
       if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
     }
+    const justOpenedG1 = !wasOpen && Progress.g1Open();
+    if (justOpenedG1){
+      Sound.sfx.unlockSfx();
+      UI.confetti(90);
+    }
     const gameCounts = {};
     plan.forEach(x => { gameCounts[x.game.id] = (gameCounts[x.game.id] || 0) + 1; });
     const primaryGameId = mode === 'level' && curGame ? curGame.id
       : Object.keys(gameCounts).sort((a, b) => gameCounts[b] - gameCounts[a])[0] || null;
     Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
                   sticker: newSticker, shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
-                  focusKeys: focusKeys.slice(), swift,
+                  focusKeys: focusKeys.slice(), swift, unlockedG1: justOpenedG1,
                   recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
                   lastGameId: primaryGameId });
   }

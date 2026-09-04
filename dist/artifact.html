@@ -1640,6 +1640,150 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   font-weight:800;
   min-height:calc(var(--u)*2.2);
 }
+
+/* ===========================================================
+   1ねんせいの きょうしつ — the 小学1年生 stage
+   =========================================================== */
+
+/* a tap on something that is not in the group being collected: it bounces, it is
+   never taken away — a wrong guess about a rule is part of learning the rule */
+.obj.notmine{ animation: shake .42s; filter: grayscale(.7) opacity(.55) }
+/* the hint points at one thing still to collect. It must not use `.picked`, which
+   means「this is in my basket」 everywhere else in the app. */
+.obj.glow{ filter: drop-shadow(0 0 calc(var(--u)*.6) var(--accent)) }
+
+/* the picture graph: rows start at the same edge, so length *is* the comparison */
+.chartboard .mrow{ justify-content: flex-start }
+.chartboard .mrow .row{ flex: 1 1 auto; min-width: 0 }
+
+/* ---- 1たい1で くらべる ---- */
+.pairboard{
+  display: flex; flex-direction: column; align-items: center;
+  gap: calc(var(--u)*.5); width: 100%;
+}
+.pairrow{
+  display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap; gap: calc(var(--u)*.7);
+}
+/* the line the textbook draws between the two rows */
+.pairgap{
+  width: min(100%, calc(var(--u)*40)); height: 0;
+  border-top: calc(var(--u)*.2) dashed var(--card-edge);
+}
+.pairitem{
+  position: relative;
+  width: calc(var(--u)*6); height: calc(var(--u)*6);
+  justify-content: center;
+  font-size: calc(var(--u)*3.2);
+}
+.pairitem.marked{ border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--card)); }
+/* a made pair carries the same number on both halves: that is what keeps the
+   correspondence visible once the finger has moved on */
+.pairitem.paired{ border-color: var(--good); background: var(--good-soft) }
+.pairitem.paired .tag,
+.pairitem .tag{
+  position: absolute; top: calc(var(--u)*-.5); right: calc(var(--u)*-.5);
+  min-width: calc(var(--u)*2); height: calc(var(--u)*2);
+  padding: 0 calc(var(--u)*.3);
+  display: grid; place-items: center; border-radius: 999px;
+  background: var(--good); color: var(--on-crayon);
+  font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*1.3);
+  animation: pop .34s cubic-bezier(.2,.9,.3,1.6);
+}
+.pairitem .tag.left{ background: var(--accent) }
+/* what is left over when the pairing runs out — the answer to every question in
+   this game is standing right here */
+.pairitem.leftover{
+  border-color: var(--accent); border-style: dashed;
+  animation: floatY 1.8s ease-in-out infinite;
+}
+.pairitem.added{ animation: pop .4s cubic-bezier(.2,.9,.3,1.5) }
+.pairslot{
+  width: calc(var(--u)*6); height: calc(var(--u)*6);
+  border-radius: var(--wob-b);
+  font-size: calc(var(--u)*3.2);
+  background: var(--paper-2);
+}
+
+/* ---- 20までの かず ---- */
+/* the ten is one thing, not ten things: give it a solid frame and a label, and
+   never ask the child to count inside it */
+.framelabel{ display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.3) }
+.framelabel small{
+  font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*1.8);
+  color: var(--ink-soft); min-height: calc(var(--u)*2);
+}
+.tenframe.fullten{ border-color: var(--c-blue) }
+
+/* ---- しきに かこう ---- */
+.storycard{
+  display: flex; align-items: center; gap: calc(var(--u)*1);
+  max-width: min(100%, calc(var(--u)*46));
+  padding: calc(var(--u)*1) calc(var(--u)*1.4);
+  background: var(--card);
+  border: calc(var(--u)*.24) solid var(--card-edge);
+  border-radius: var(--wob-a);
+  box-shadow: var(--shadow-sm);
+}
+.storycard .e{ font-size: calc(var(--u)*4); line-height: 1; flex: 0 0 auto }
+.storycard .lines{ display: flex; flex-direction: column; gap: calc(var(--u)*.3); min-width: 0 }
+.storycard .tx{ font-size: calc(var(--u)*2.2); font-weight: 500; line-height: 1.5 }
+.storycard .qx{ font-size: calc(var(--u)*2.2); font-weight: 800; color: var(--c-red) }
+.eq .op.opbox{
+  min-width: calc(var(--u)*5); height: calc(var(--u)*5);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: calc(var(--u)*.3) dashed var(--accent);
+  border-radius: calc(var(--u)*.9);
+  color: var(--accent);
+}
+.eq .op.opbox.filled{ border-style: solid; background: var(--good); border-color: var(--good); color: var(--on-crayon) }
+/* a whole sentence as an answer button: it has to wrap, and it has to stay
+   readable at three of them on one iPad */
+.choice.story{
+  font-family: var(--fs-jp); font-size: calc(var(--u)*2); font-weight: 500;
+  line-height: 1.5; text-align: left;
+  flex: 1 1 calc(var(--u)*20);
+  max-width: min(100%, calc(var(--u)*30));
+  padding: calc(var(--u)*.9) calc(var(--u)*1.2);
+  white-space: normal;
+}
+
+/* ---- the door to the classroom ---- */
+/* .daily paints its text in --accent-ink for the orange gradient it normally has;
+   on the recessed paper of a locked door that is dark brown on near-black */
+.daily.stagelocked{
+  background: var(--paper-2);
+  border-style: dashed;
+  border-color: var(--card-edge);
+  color: var(--ink);
+}
+.daily.stagelocked .s{ color: var(--ink-soft) }
+.stagebar{
+  width: 100%; height: calc(var(--u)*1.1); margin-top: calc(var(--u)*.4);
+  border-radius: 999px; background: var(--card-edge); overflow: hidden;
+}
+.stagebar > i{ display: block; height: 100%; background: var(--accent); border-radius: 999px }
+.world.newstage h3 .chip{ white-space: nowrap }
+#result .unlocked{
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.4);
+  margin-top: calc(var(--u)*1);
+  padding: calc(var(--u)*1.2) calc(var(--u)*1.6);
+  background: var(--good-soft);
+  border: calc(var(--u)*.3) solid var(--good);
+  border-radius: var(--wob-a);
+  max-width: min(100%, calc(var(--u)*48));
+  text-align: center;
+}
+#result .unlocked .e{ font-size: calc(var(--u)*5); line-height: 1 }
+#result .unlocked .l{ font-size: calc(var(--u)*1.7); color: var(--good-ink); font-weight: 800 }
+#result .unlocked b{ font-size: calc(var(--u)*2.6); line-height: 1.35 }
+.bookgroup{
+  grid-column: 1 / -1;
+  width: 100%; margin-top: calc(var(--u)*1.2);
+  font-size: calc(var(--u)*1.5); font-weight: 800; color: var(--ink-soft);
+  display: flex; align-items: center; gap: calc(var(--u)*.6);
+}
+.bookgroup::after{ content: ""; flex: 1 1 auto; border-top: calc(var(--u)*.2) dashed var(--card-edge) }
 </style>
 <div id="stage"></div>
 <div id="fx" aria-hidden="true"></div>
@@ -2035,6 +2179,11 @@ const Store = (() => {
     missions: {},     // "YYYY-MM-DD" -> { id, gameId, text, prompt, done, reviewed }
     name: '',
     sfx: true, voice: true, voiceId: null,
+    /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
+       the parent's override: a child who is ready but cannot get ★★★ on とけい must
+       not be held behind a padlock they cannot move — the same reason a level opens
+       after three honest attempts. Once true it stays true. */
+    g1Open: false,
     createdAt: Date.now()
   });
 
@@ -2170,7 +2319,7 @@ const Store = (() => {
       if (typeof data.name !== 'string') return null;
       out.name = data.name;
     }
-    for (const k of ['sfx', 'voice']){
+    for (const k of ['sfx', 'voice', 'g1Open']){
       if (data[k] !== undefined){
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];
@@ -2241,6 +2390,8 @@ const Store = (() => {
         out.missions[d] = Object.assign({}, score(incoming) > score(cur) ? incoming : cur);
       }
     }
+    // a stage that has been opened on either device stays open
+    out.g1Open = !!(base.g1Open || add.g1Open);
     out.createdAt = Math.min(base.createdAt || Date.now(), add.createdAt || Date.now());
     return out;
   }
@@ -2937,14 +3088,22 @@ const Games = {
   add(def){ this.list.push(def); this.byId[def.id] = def; return def; }
 };
 
+/* `stage` says which half of the app a world belongs to. Everything the app
+   shipped with is 入学前 ('pre'); 'g1' is the 小学1年生 classroom, which stays shut
+   until the sticker book is full. A world with no stage is 'pre', so nothing that
+   existed before has to say so. */
 const WORLDS = [
   { id: 'shima', name: 'かずの しま',    sub: 'かぞえる・すうじ',       color: 'var(--c-blue)' },
   { id: 'umi',   name: 'くらべる うみ',  sub: 'くらべる・じゅんばん',   color: 'var(--c-green)' },
   { id: 'yama',  name: 'けいさんの やま', sub: 'あわせる・のこりは',    color: 'var(--c-red)' },
-  { id: 'mori',  name: 'かたちの もり',  sub: 'かたち・きまり・とけい', color: 'var(--c-purple)' }
+  { id: 'mori',  name: 'かたちの もり',  sub: 'かたち・きまり・とけい', color: 'var(--c-purple)' },
+  { id: 'kyoshitsu', name: '1ねんせいの きょうしつ', sub: 'なかま・1たい1・20までの かず・しき',
+    color: 'var(--c-orange)', stage: 'g1' }
 ];
 
-const STICKER_POOL = ['🐰','🐻','🐼','🦊','🐯','🦁','🐨','🐸','🐵','🐧','🐤','🦉','🦄','🐢','🐬','🐳','🦋','🐝','🐞','🦕','🦖','🐙','🦀','🐡','🐘','🦒','🦓','🦔','🐿','🦥','🐠','🐟','🦈','🐌','🐛','🕊','🦩','🦜','🐴','🐑','🌻','🌸','🌈','🍎','🍓','🍇','🍑','🍉','🍌','🥕','🌽','🍄','🍒','🥝','🍍','🥥','🌷','🌼','🌺','🍀','🍰','🧁','🍩','🎂','🍬','🍭','🍦','🍪','🍫','🥐','🚀','🚂','⛵️','🎈','🎁','🏆','👑','💎','🔔','🎨','🎺','🪁','🧸','🪀','🎏','🎐','🛼','🎠','🎪','🏰','⚽️','🏀','🎾','🥁','🎹','⭐️','🌙','☀️','⛄️','🌟'];
+const STICKER_POOL = ['🐰','🐻','🐼','🦊','🐯','🦁','🐨','🐸','🐵','🐧','🐤','🦉','🦄','🐢','🐬','🐳','🦋','🐝','🐞','🦕','🦖','🐙','🦀','🐡','🐘','🦒','🦓','🦔','🐿','🦥','🐠','🐟','🦈','🐌','🐛','🕊','🦩','🦜','🐴','🐑','🌻','🌸','🌈','🍎','🍓','🍇','🍑','🍉','🍌','🥕','🌽','🍄','🍒','🥝','🍍','🥥','🌷','🌼','🌺','🍀','🍰','🧁','🍩','🎂','🍬','🍭','🍦','🍪','🍫','🥐','🚀','🚂','⛵️','🎈','🎁','🏆','👑','💎','🔔','🎨','🎺','🪁','🧸','🪀','🎏','🎐','🛼','🎠','🎪','🏰','⚽️','🏀','🎾','🥁','🎹','⭐️','🌙','☀️','⛄️','🌟',
+/* the 小1 classroom adds 12 levels, and a sticker slot must never reuse an emoji another slot already has */
+'🦭','🦦','🦫','🦃','🕊️','🦚','🦢','🐖','🐄','🦌','🐫','🦙','🐊','🦎','🦂','🪰','🍋','🍈','🥭','🫐','🍅','🥦','🌰','🥨','🍿','🍮','🍯','🧃','🎃','🎄','🪗','🪄','🧭','🔭','🎲','🪩','🛴','🚁','🚤','🗿'];
 /* Stickers are handed out by slot position, not by hash, so no level shares an
    emoji with another while the pool is large enough. */
 let STICKER_INDEX = null;
@@ -2965,6 +3124,64 @@ function stickerFor(key){
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
   return STICKER_POOL[h % STICKER_POOL.length];
 }
+
+/* ===========================================================
+   stages — what has to be finished before 小学1年生 opens
+   ===========================================================
+   The 入学前 half of the app is 48 levels and 96 sticker slots: one sticker for
+   clearing a level, a gold one for clearing it with every answer right first time.
+   Filling that shelf is the whole of the 小1 classroom's entrance requirement, so
+   the goal a child is already working towards is the same goal that opens the next
+   room — no separate test, no adult judgement.
+
+   Two things this deliberately does NOT do. It never counts 小1's own stickers
+   (that would be circular), and it never *closes* again: a shelf cannot lose a
+   sticker, but a future release could add a 入学前 level, and a child who walked
+   through the door must not find it locked afterwards. */
+const Progress = (() => {
+  const stageOf = g => g.stage || 'pre';
+
+  /** every sticker slot belonging to one stage, plain and gold */
+  function slots(stage){
+    const out = [];
+    Games.list.forEach(g => {
+      if (stageOf(g) !== stage) return;
+      g.levels.forEach((lv, i) => out.push(g.id + ':' + i, g.id + ':' + i + ':g'));
+    });
+    return out;
+  }
+
+  function count(stage){
+    const all = slots(stage);
+    let got = 0;
+    all.forEach(k => { if (Store.hasSticker(k)) got++; });
+    return { got, total: all.length };
+  }
+
+  /** true once the shelf is full — or once a parent has opened the door by hand */
+  function g1Open(){
+    if (Store.data.g1Open) return true;
+    const c = count('pre');
+    return c.total > 0 && c.got >= c.total;
+  }
+
+  return {
+    stageOf,
+    slots,
+    preStickers: () => count('pre'),
+    g1Open,
+    /** opened by hand from the parent page; never reversible */
+    openG1(){ Store.setPref('g1Open', true); },
+    /** shown on Home once the shelf is half full: before that a locked door is
+        just noise to a child who has months of かずの しま ahead of them */
+    TEASE_AT: 0.5
+  };
+})();
+
+/** Is this game's half of the app open at all? */
+function stageOpen(g){ return Progress.stageOf(g) === 'pre' || Progress.g1Open(); }
+/** The gate every question-drawing surface asks: open stage AND unlocked level. */
+function levelOpen(g, i){ return stageOpen(g) && Store.levelUnlocked(g.id, i); }
 
 const Session = (() => {
   let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, backBtn, moodEl, feedbackEl;
@@ -3126,7 +3343,7 @@ const Session = (() => {
     const pool = [];
     Games.list.forEach(g => {
       g.levels.forEach((lv, i) => {
-        if (Store.levelUnlocked(g.id, i)) pool.push({ game: g, level: lv, levelIndex: i });
+        if (levelOpen(g, i)) pool.push({ game: g, level: lv, levelIndex: i });
       });
     });
     if (!pool.length){                       // nothing unlocked yet — never leave an empty plan
@@ -3184,7 +3401,7 @@ const Session = (() => {
       if (!at) return;                                   // never met: nowhere to ask it
       const cut = at.lastIndexOf(':');
       const g = Games.byId[at.slice(0, cut)], li = Number(at.slice(cut + 1));
-      if (!g || !g.levels[li] || !Store.levelUnlocked(g.id, li)) return;
+      if (!g || !g.levels[li] || !levelOpen(g, li)) return;
       want.push({ game: g, level: g.levels[li], levelIndex: li, want: k });
     });
     if (!want.length){ startDaily(10); return; }         // nothing to aim at yet
@@ -3578,6 +3795,11 @@ const Session = (() => {
     if (stars >= 1){ Sound.sfx.finish(); UI.confetti(60); }
     else Sound.sfx.place();
     let newSticker = null;
+    /* The last sticker on the shelf is the moment the 小1 classroom opens, and the
+       child has to be told so on the screen they are already looking at. Read the
+       gate before the sticker is handed out, so「もう開いていた」and「いま開いた」
+       stay distinguishable. */
+    const wasOpen = Progress.g1Open();
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;
       Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
@@ -3599,13 +3821,18 @@ const Session = (() => {
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
       if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
     }
+    const justOpenedG1 = !wasOpen && Progress.g1Open();
+    if (justOpenedG1){
+      Sound.sfx.unlockSfx();
+      UI.confetti(90);
+    }
     const gameCounts = {};
     plan.forEach(x => { gameCounts[x.game.id] = (gameCounts[x.game.id] || 0) + 1; });
     const primaryGameId = mode === 'level' && curGame ? curGame.id
       : Object.keys(gameCounts).sort((a, b) => gameCounts[b] - gameCounts[a])[0] || null;
     Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
                   sticker: newSticker, shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
-                  focusKeys: focusKeys.slice(), swift,
+                  focusKeys: focusKeys.slice(), swift, unlockedG1: justOpenedG1,
                   recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
                   lastGameId: primaryGameId });
   }
@@ -5801,6 +6028,673 @@ Games.add({
   ]
 });
 
+/* ---- 14-g-ichinen.js ---- */
+/* ===========================================================
+   14 — WORLD 5「1ねんせいの きょうしつ」 小学1年生・はじめの単元
+   ===========================================================
+   This world is shut until the sticker book is full (see `Progress` in 05).
+
+   What goes in it is not "next year's arithmetic brought forward". The first
+   weeks of 小学1年生 go back over ground the child has already walked on — and
+   ask for the part the 入学前 games never asked for:
+
+   *「同じものの集まり」*  かぞえよう asks how many are there; a 1年生 is asked to
+   *make the group first* —「くだものを ぜんぶ」— and only then to count it. The
+   number is a property of a set someone decided on, not of whatever happens to be
+   on the table. なかまわけ sorts things into given boxes; here the child chooses
+   the rule and gathers to it.
+
+   *「1対1対応」*  どっちが おおい is answered by counting both sides. A 1年生 is
+   asked to pair them off instead: put one against one, and read the answer off
+   what is left over. That is the same operation as 求差 (「いくつ おおい」) and it
+   is where ひきざん's second meaning comes from, so it is worth doing with the
+   fingers before it is done with a number.
+
+   The other two games are where those two ideas are heading: 20までの かず
+   (10 のまとまりと ばら) and しき (putting a story into ＋ and −, and reading a
+   ＋ or − back out as a story).
+   =========================================================== */
+'use strict';
+
+/* ============================================================
+   17. なかまづくり — sets: a group made on purpose, then counted
+   ============================================================ */
+
+/** Two kinds of thing scattered together. Tap every one of the named kind — and
+    only then say how many there were. Counting comes second here on purpose:
+    the group has to exist before it has a number. */
+function collectSame(api){
+  const [kA, kB] = sample(Object.keys(CATS), 2);
+  const target = CATS[kA], other = CATS[kB];
+  const n = ri(3, 6), m = ri(2, 5);
+  api.item('same:' + kA + ':' + n, target.lbl + ' の なかま ' + n + 'こ');
+  api.setPrompt(`<b>${target.lbl}</b> の なかまを ぜんぶ タップしよう`,
+                `${target.lbl}の仲間を、全部タップしよう。`);
+
+  const items = shuffle(
+    sample(target.items, n).map(e => ({ e, hit: true }))
+      .concat(sample(other.items, m).map(e => ({ e, hit: false }))));
+  const field = el('div.objfield');
+  const pts = scatter(items.length);
+  const objs = [];
+  items.forEach((it, i) => {
+    const o = el('div.obj', { style: { left: (pts[i][0] * 100) + '%', top: (pts[i][1] * 100) + '%' } }, it.e);
+    o.dataset.hit = it.hit ? '1' : '0';
+    objs.push(o);
+    field.append(o);
+  });
+  api.field.append(field);
+
+  let done = 0;
+  objs.forEach(o => tappable(o, () => {
+    if (api.locked || o.classList.contains('counted')) return;
+    if (o.dataset.hit !== '1'){
+      o.classList.add('notmine');
+      api.later(() => o.classList.remove('notmine'), 460);
+      api.wrong(o);
+      Sound.say(`それは${target.lbl}の仲間じゃないね。`, { delay: 260 });
+      return;
+    }
+    done++;
+    o.classList.add('counted');
+    o.append(el('span.tag', { text: String(done) }));
+    Sound.sfx.count(done - 1);
+    Sound.say(numKana(done), { delay: 0, rate: 1.08 });
+    if (done === n) api.later(ask, 640);
+  }));
+
+  function ask(){
+    api.setPrompt(`あつめた <b>${target.lbl}</b> は ぜんぶで いくつ？`,
+                  `集めた${target.lbl}は、全部でいくつ？`);
+    api.buildChoices(shuffle([n].concat(distractors(n, 2, 1, n + 3))), n);
+  }
+
+  api.onHint(() => {
+    if ($('.hintline', api.field)) return;
+    api.field.append(el('div.hintline', { text: target.lbl + 'は ' + target.items.slice(0, 4).join(' ') + ' の なかま' }));
+    const left = objs.find(o => o.dataset.hit === '1' && !o.classList.contains('counted'));
+    if (left) left.classList.add('glow');
+  });
+}
+
+/** The same things laid out one kind per row, ends lined up. This is the picture
+    graph 1年生 build in「せいり」: once each group is a row, どれが おおい is read
+    off the length instead of counted twice. */
+function groupChart(api){
+  const keys = sample(Object.keys(CATS), ri(2, 3));
+  const counts = [];
+  keys.forEach(() => {
+    let v = ri(2, 7), guard = 0;
+    while (counts.indexOf(v) >= 0 && guard++ < 60) v = ri(2, 7);
+    counts.push(v);
+  });
+  const rows = keys.map((k, i) => ({ k, cat: CATS[k], n: counts[i], items: sample(CATS[k].items, counts[i]) }));
+  const board = el('div.measure.chartboard');
+  const asCount = chance(.45);
+  const most = chance(.6);
+  const target = asCount ? pick(rows) : null;
+  const wantN = asCount ? target.n
+    : (most ? Math.max.apply(null, counts) : Math.min.apply(null, counts));
+
+  rows.forEach(r => {
+    const row = el('div.mrow', { style: { cursor: asCount ? 'default' : 'pointer' } },
+      el('div.cap', { text: r.cat.e }));
+    const g = el('div.row', { style: { gap: 'calc(var(--u)*.3)', justifyContent: 'flex-start' } });
+    r.items.forEach(e => g.append(el('span.item', { text: e, style: { fontSize: 'calc(var(--u)*2.4)' } })));
+    row.append(g);
+    row.dataset.n = r.n;
+    if (!asCount){
+      tappable(row, () => {
+        if (api.locked) return;
+        if (r.n === wantN){ row.classList.add('correct'); api.correct(); }
+        else {
+          row.classList.add('wrong');
+          api.later(() => row.classList.remove('wrong'), 460);
+          api.wrong(row);
+        }
+      });
+    }
+    board.append(row);
+  });
+  api.field.append(board);
+
+  if (asCount){
+    api.item('chart:' + target.k + ':' + target.n, target.cat.lbl + ' は ' + target.n + 'こ');
+    api.setPrompt(`${target.cat.e} <b>${target.cat.lbl}</b> の なかまは いくつ？`,
+                  `${target.cat.lbl}の仲間は、いくつ？`);
+    api.buildChoices(shuffle([wantN].concat(distractors(wantN, 2, 1, 9))), wantN);
+  } else {
+    api.item('chartcmp:' + counts.slice().sort((a, b) => a - b).join('_') + ':' + (most ? 'g' : 'l'),
+      counts.slice().sort((a, b) => a - b).join('と') + ' の ' + (most ? 'おおい' : 'すくない') + ' ほう');
+    api.setPrompt(most ? 'いちばん <b>おおい</b> なかまは どれ？' : 'いちばん <b>すくない</b> なかまは どれ？',
+                  most ? '一番多い仲間は、どれ？' : '一番少ない仲間は、どれ？');
+  }
+  api.onHint(() => {
+    if ($('.hintline', api.field)) return;
+    $$('.mrow', board).forEach(r => r.append(el('span.ordno', { text: r.dataset.n })));
+    api.field.append(el('div.hintline', { text: 'はしを そろえて ながさを くらべよう' }));
+  });
+}
+
+/** Five things, four of one kind. Naming the one that does not belong means
+    holding the rule in mind, which is the other half of making a group. */
+function oddOneOut(api){
+  const [kA, kB] = sample(Object.keys(CATS), 2);
+  const four = sample(CATS[kA].items, 4);
+  const odd = pick(CATS[kB].items);
+  api.item('odd:' + kA + '_' + kB, CATS[kA].lbl + ' の なかに ' + CATS[kB].lbl);
+  api.setPrompt('なかまはずれは どれ？', '仲間はずれは、どれ？');
+  api.field.append(el('div.hintline', { text: 'ほかの 4つと ちがう なかまを さがそう' }));
+  api.buildChoices(shuffle(four.concat([odd])), odd);
+  api.onHint(() => {
+    if ($('.hint2', api.field)) return;
+    api.field.append(el('div.hintline.hint2', { text: '4つは ' + CATS[kA].lbl + ' の なかまだよ' }));
+  });
+}
+
+/** No single right answer: the child picks the rule first, then gathers to it.
+    Both rules on the table are true of the same pile, so the app cannot be
+    "guessed" — it can only be answered by holding one rule and applying it. */
+function ownGroup(api){
+  const keys = sample(Object.keys(CATS), 3);
+  const per = 3;
+  api.item('own:' + keys.slice().sort().join('_'), 'じぶんで きめて あつめる');
+  api.setPrompt('あつめる なかまを じぶんで えらぼう', '集める仲間を、自分で選ぼう。');
+
+  const picks = [];
+  keys.forEach(k => sample(CATS[k].items, per).forEach(e => picks.push({ e, k })));
+  const field = el('div.objfield');
+  const pts = scatter(picks.length);
+  const objs = [];
+  shuffle(picks).forEach((p, i) => {
+    const o = el('div.obj', { style: { left: (pts[i][0] * 100) + '%', top: (pts[i][1] * 100) + '%' } }, p.e);
+    o.dataset.cat = p.k;
+    objs.push(o);
+    field.append(o);
+  });
+  api.field.append(field);
+
+  let chosen = null, done = 0;
+  keys.forEach(k => {
+    const b = el('button.choice.pic', { type: 'button', text: CATS[k].lbl });
+    b.addEventListener('click', () => {
+      if (api.locked || chosen) return;
+      chosen = k;
+      Sound.sfx.tap();
+      clear(api.choices);
+      const cat = CATS[k];
+      api.setPrompt(`<b>${cat.lbl}</b> を ぜんぶ あつめよう`, `${cat.lbl}を、全部集めよう。`);
+      objs.forEach(o => tappable(o, () => tap(o)));
+    });
+    api.choices.append(b);
+  });
+
+  function tap(o){
+    if (api.locked || o.classList.contains('counted')) return;
+    if (o.dataset.cat !== chosen){
+      o.classList.add('notmine');
+      api.later(() => o.classList.remove('notmine'), 460);
+      api.wrong(o);
+      Sound.say(`それは${CATS[chosen].lbl}の仲間じゃないね。`, { delay: 260 });
+      return;
+    }
+    done++;
+    o.classList.add('counted');
+    o.append(el('span.tag', { text: String(done) }));
+    Sound.sfx.count(done - 1);
+    Sound.say(numKana(done), { delay: 0, rate: 1.08 });
+    if (done === per){
+      api.later(() => {
+        api.setPrompt(`${CATS[chosen].lbl} の なかまが <b>${per}</b>こ あつまったね！`,
+                      `${CATS[chosen].lbl}の仲間が、${koKana(per)}集まったね。`);
+        api.correct({ quiet: true, delay: 1200 });
+        UI.bigMark('◯');
+      }, 320);
+    }
+  }
+
+  api.onHint(() => {
+    if ($('.hintline', api.field)) return;
+    api.field.append(el('div.hintline', {
+      text: chosen ? CATS[chosen].lbl + 'は ' + CATS[chosen].items.slice(0, 4).join(' ')
+                   : 'どれでも いいよ。ひとつ えらんでね' }));
+    if (chosen){
+      const left = objs.find(o => o.dataset.cat === chosen && !o.classList.contains('counted'));
+      if (left) left.classList.add('glow');
+    }
+  });
+}
+
+Games.add({
+  id: 'g1set', name: 'なかまづくり', ico: '🎒', world: 'kyoshitsu', color: 'var(--c-orange)', stage: 'g1',
+  aim: '<b>同じものの集まりを、自分で作ってから数える</b>力。1年生の最初の単元です。「6こ」という数は、机の上にあるもの全部の数ではなく、「くだもの」という<b>まとまりを決めた人がいて、初めて言える数</b>です。かぞえようが「いくつ？」だけを聞いていたのに対し、ここでは集める→数える、の順に進みます。表やグラフの入り口でもあります。',
+  levels: [
+    { t: 'なかまを あつめる', d: 'あつめてから かぞえる', make: collectSame },
+    { t: 'どの なかまが おおい', d: 'ならべて くらべる', make: groupChart },
+    { t: 'じぶんで きめる', d: 'なかまはずれ・じぶんで あつめる',
+      make: api => chance(.5) ? oddOneOut(api) : ownGroup(api) }
+  ]
+});
+
+/* ============================================================
+   18. 1たい1で くらべる — one-to-one correspondence
+   ============================================================ */
+/* Two rows, and a pair is made by touching one from each. The pair takes a number
+   on both halves, so the correspondence stays visible after the tap — this is the
+   線でむすぶ of the textbook, done with a finger.
+
+   Pairing is never wrong. Any top with any bottom is a legitimate pair, so there
+   is nothing to guess at here: the question only starts once the pairing runs out
+   and the child can see what is left over. */
+function pairUp(api, na, nb, onSettled){
+  const t1 = pick(THINGS);
+  let t2 = pick(THINGS);
+  for (let g = 0; g < 40 && t2.e === t1.e; g++) t2 = pick(THINGS);
+
+  const board = el('div.pairboard');
+  const rowA = el('div.pairrow'), rowB = el('div.pairrow');
+  const made = { a: t1, b: t2, na, nb, pairs: 0, rowA, rowB, board };
+  let marked = null, settled = false;
+
+  function itemsOf(row){ return $$('.pairitem', row); }
+
+  function settle(){
+    settled = true;
+    [rowA, rowB].forEach(r => itemsOf(r).forEach(x => {
+      if (!x.classList.contains('paired')) x.classList.add('leftover');
+    }));
+    if (marked){ marked.classList.remove('marked'); marked = null; }
+    onSettled(made);
+  }
+
+  function tap(it){
+    // once the pairing has run out the board is the answer, not an input: a tap on
+    // a leftover must not put a selection ring round it while the question is being read
+    if (api.locked || settled || it.classList.contains('paired')) return;
+    if (!marked || marked.dataset.side === it.dataset.side){
+      if (marked) marked.classList.remove('marked');
+      marked = it;
+      it.classList.add('marked');
+      Sound.sfx.tap();
+      return;
+    }
+    made.pairs++;
+    [marked, it].forEach(x => {
+      x.classList.remove('marked');
+      x.classList.add('paired');
+      x.append(el('span.tag', { text: String(made.pairs) }));
+    });
+    marked = null;
+    Sound.sfx.count(made.pairs - 1);
+    Sound.say(numKana(made.pairs), { delay: 0, rate: 1.08 });
+    if (made.pairs === Math.min(na, nb)) api.later(settle, 620);
+  }
+
+  const fill = (row, thing, n, side) => {
+    for (let i = 0; i < n; i++){
+      const it = el('div.qi.pairitem', { text: thing.e });
+      it.dataset.side = side;
+      tappable(it, () => tap(it));
+      row.append(it);
+    }
+  };
+  fill(rowA, t1, na, 'a');
+  fill(rowB, t2, nb, 'b');
+  board.append(rowA, el('div.pairgap', { 'aria-hidden': 'true' }), rowB);
+  api.field.append(board);
+
+  api.setPrompt(`${t1.e} と ${t2.e} を <b>1つずつ</b> ペアに しよう`,
+                `${t1.n}と${t2.n}を、一つずつペアにしよう。`);
+  api.onHint(() => {
+    if ($('.hintline', api.field)) return;
+    api.field.append(el('div.hintline', { text: 'うえを 1つ タップ、つぎに したを 1つ タップ' }));
+    const a = itemsOf(rowA).find(x => !x.classList.contains('paired'));
+    if (a) a.classList.add('marked');
+  });
+  return made;
+}
+
+/* Each of these three names its item *before* calling pairUp, not inside the
+   settle callback: the engine reads the item straight after make() returns, and an
+   unnamed question drops out of the shuffle bag and out of 集中練習. */
+
+/** Which row has something left over — including「おなじ」, which is the case a
+    child who only ever counts the longer row never meets. */
+function pairWhichMore(api){
+  const same = chance(.3);
+  const na = ri(3, 7);
+  let nb = same ? na : clamp(na + pick([1, 2, -1, -2]), 2, 8);
+  if (!same && nb === na) nb = na + 1;
+  api.item('more:' + Math.min(na, nb) + '_' + Math.max(na, nb),
+    na === nb ? na + ' と ' + nb + ' は おなじ'
+              : Math.max(na, nb) + ' と ' + Math.min(na, nb) + ' の くらべ');
+  pairUp(api, na, nb, made => {
+    const A = made.na, B = made.nb;
+    const ans = A === B ? 'おなじ' : (A > B ? made.a.e : made.b.e);
+    api.setPrompt('ペアに ならなかったのは どっち？　どちらが <b>おおい</b>？',
+                  'ペアにならなかったのは、どっち？　どちらが多い？');
+    api.buildChoices(shuffle([made.a.e, made.b.e, 'おなじ']), ans);
+  });
+}
+
+/** 求差. The leftover *is* the difference — the child reads it off the board
+    instead of taking one number away from another. */
+function pairHowManyMore(api){
+  const na = ri(3, 9);
+  let nb = clamp(na + pick([1, 2, 3, -1, -2, -3]), 2, 9);
+  if (nb === na) nb = na === 9 ? 8 : na + 1;
+  api.item('diff1to1:' + Math.max(na, nb) + '-' + Math.min(na, nb),
+    Math.max(na, nb) + ' と ' + Math.min(na, nb) + ' の ちがい');
+  pairUp(api, na, nb, made => {
+    const A = made.na, B = made.nb;
+    const big = A > B ? made.a : made.b, ans = Math.abs(A - B);
+    api.setPrompt(`${big.e} は いくつ <b>おおい</b>？`, `${big.n}は、いくつ多い？`);
+    api.field.append(el('div.eq', null,
+      String(Math.max(A, B)), el('span.op', { text: '−' }), String(Math.min(A, B)),
+      el('span.op', { text: '＝' }), el('span.box', { text: '?' })));
+    api.buildPad(ans);
+    api.onHint(() => {
+      const left = $$('.pairitem.leftover', made.board);
+      left.forEach((x, i) => { if (!$('.tag', x)) x.append(el('span.tag.left', { text: String(i + 1) })); });
+    });
+  });
+}
+
+/** Making the two rows the same length. Same difference, opposite direction:
+    「あと いくつ たすと おなじ」 is where 求補 comes from. */
+function pairMakeSame(api){
+  const big = ri(4, 8), small = clamp(big - ri(1, 3), 1, 7);
+  // either row can be the short one: always shortening the bottom row would let a
+  // child answer from where the gap is rather than from how big it is
+  const flip = chance(.5);
+  const na = flip ? small : big, nb = flip ? big : small;
+  const byTapping = chance(.5);
+  api.item('same1to1:' + big + '-' + small, small + ' を ' + big + ' に そろえる');
+  pairUp(api, na, nb, made => {
+    const A = made.na, B = made.nb;
+    const short = A < B ? made.rowA : made.rowB;
+    const shortThing = A < B ? made.a : made.b;
+    const need = Math.abs(A - B);
+    if (byTapping){
+      api.setPrompt(`${shortThing.e} を たして <b>おなじ かず</b>に しよう`,
+                    `${shortThing.n}を足して、同じ数にしよう。`);
+      let added = 0;
+      for (let i = 0; i < need + 2; i++){
+        const slot = el('div.cell.tappable.pairslot');
+        tappable(slot, () => {
+          if (api.locked || slot.dataset.filled === '1') return;
+          slot.dataset.filled = '1';
+          slot.classList.remove('tappable');
+          slot.textContent = shortThing.e;
+          added++;
+          Sound.sfx.place();
+          if (added === need){
+            $$('.pairslot', short).forEach(s => { if (s.dataset.filled !== '1') s.remove(); });
+            api.later(() => {
+              api.setPrompt(`どちらも <b>${Math.max(A, B)}</b>こ。おなじに なったね！`,
+                            `どちらも${koKana(Math.max(A, B))}。同じになったね。`);
+              api.correct({ quiet: true, delay: 1300 });
+              UI.bigMark('◯');
+            }, 300);
+          }
+        });
+        short.append(slot);
+      }
+      api.onHint(() => {
+        $$('.pairitem.leftover', made.board).forEach(x => x.classList.add('marked'));
+      });
+    } else {
+      api.setPrompt(`おなじ かずに するには ${shortThing.e} が あと いくつ？`,
+                    `同じ数にするには、${shortThing.n}があといくつ？`);
+      api.buildPad(need, {
+        correctOpts: { delay: 1400 },
+        onPick(){
+          for (let i = 0; i < need; i++){
+            api.later(() => {
+              short.append(el('div.qi.pairitem.paired.added', { text: shortThing.e }));
+            }, i * 200 + 200);
+          }
+        }
+      });
+      api.onHint(() => {
+        $$('.pairitem.leftover', made.board).forEach(x => x.classList.add('marked'));
+      });
+    }
+  });
+}
+
+Games.add({
+  id: 'g1pair', name: '1たい1で くらべる', ico: '🔗', world: 'kyoshitsu', color: 'var(--c-orange)', stage: 'g1',
+  aim: '<b>一対一に対応させて</b>、多い少ないと「いくつちがう」を決める力。どっちが おおい は両方を数えて比べますが、1年生は<b>ペアにして、あまりを見る</b>方法を先に習います。この「あまり」がそのまま「ちがいは いくつ」（求差のひきざん）になるので、指でペアを作った経験があるかどうかで、後の 8−5 の意味の理解が変わります。',
+  levels: [
+    { t: 'ペアに して くらべる', d: 'あまったのは どっち', make: pairWhichMore },
+    { t: 'いくつ おおい', d: 'あまりが ちがいの かず', make: pairHowManyMore },
+    { t: 'おなじ かずに する', d: 'あと いくつ たりない', make: pairMakeSame }
+  ]
+});
+
+/* ============================================================
+   19. 20までの かず — ten and some more
+   ============================================================ */
+/* A full ten-frame is one thing, not ten: that is the whole idea of place value,
+   and it is the reason 1年生 spend weeks on 11〜20 before touching くり上がり. The
+   left frame is never re-counted here — it is always exactly ten. */
+function teenFrames(total, opts){
+  const o = opts || {};
+  const ones = Math.max(0, total - 10);
+  const ten = el('div.tenframe.fullten', { style: { '--cols': 5 } });
+  for (let i = 0; i < 10; i++) ten.append(el('div.cell', null, el('div.dot')));
+  const rest = el('div.tenframe', { style: { '--cols': 5 } });
+  for (let i = 0; i < 5; i++){
+    const c = el('div.cell' + (i >= ones ? '.hole' : ''));
+    if (i < ones) c.append(el('div.dot.b'));
+    rest.append(c);
+  }
+  const set = el('div.frameset', null,
+    el('div.framelabel', null, ten, el('small', { text: o.mute ? '' : '10' })),
+    el('div.framelabel', null, rest, el('small', { text: o.mute ? '' : String(ones) })));
+  return set;
+}
+
+function tenAndSome(api){
+  const ones = ri(1, 9), total = 10 + ones;
+  api.item('teen:' + total, '10と ' + ones + ' で ' + total);
+  api.setPrompt(`<b>10</b> と <b>${ones}</b> で いくつ？`, `10と${numKana(ones)}で、いくつ？`);
+  api.field.append(teenFrames(total),
+    el('div.eq', null, '10', el('span.op', { text: 'と' }), String(ones),
+      el('span.op', { text: 'で' }), el('span.box', { text: '?' })));
+  api.buildPad(total, { lo: 10, hi: 20 });
+  api.onHint(() => {
+    if ($('.hintline', api.field)) return;
+    api.field.append(el('div.hintline', { text: 'ひだりは かぞえなくて いいよ。ぴったり 10だから、じゅう…' }));
+    Sound.say('左は数えなくていいよ。ぴったり10だから、じゅう…', { delay: 200 });
+  });
+}
+
+/** The other direction: given 14, say how many are left over once ten are taken
+    as one group. Reading a teen number as「10と4」is the skill, not saying it. */
+function teenSplit(api){
+  const total = ri(11, 19), ones = total - 10;
+  api.item('teensplit:' + total, total + ' は 10と ' + ones);
+  api.setPrompt(`<b>${total}</b> は 10と いくつ？`, `${numKana(total)}は、10といくつ？`);
+  api.field.append(teenFrames(total, { mute: true }),
+    el('div.eq', null, String(total), el('span.op', { text: 'は' }), '10',
+      el('span.op', { text: 'と' }), el('span.box', { text: '?' })));
+  api.buildPad(ones, { lo: 0, hi: 10 });
+  api.onHint(() => {
+    if ($('.hintline', api.field)) return;
+    api.field.append(el('div.hintline', { text: 'みぎの わくの あかい ○を かぞえよう' }));
+  });
+}
+
+/** 12+3, 17−4 — the ten stays whole and only the ones move. This is the last
+    step before くり上がり, and the one that makes くり上がり make sense. */
+function teenCalc(api){
+  const plus = chance(.55);
+  const ones = plus ? ri(1, 5) : ri(4, 9);
+  const b = plus ? ri(1, 9 - ones) : ri(1, ones - 1);
+  const a = 10 + ones, ans = plus ? a + b : a - b;
+  api.item((plus ? 'teensum:' : 'teenrest:') + a + (plus ? '+' : '-') + b,
+    a + (plus ? ' ＋ ' : ' − ') + b);
+  api.setPrompt('しきを みて こたえよう',
+                `${numKana(a)}、${plus ? 'たす' : 'ひく'}、${numKana(b)}は？`);
+  api.field.append(el('div.eq', null,
+    String(a), el('span.op', { text: plus ? '＋' : '−' }), String(b),
+    el('span.op', { text: '＝' }), el('span.box', { text: '?' })));
+  api.buildPad(ans, { lo: 10, hi: 20 });
+  api.onHint(() => {
+    if ($('.frameset', api.field)) return;
+    api.field.prepend(teenFrames(a, { mute: true }));
+    api.field.append(el('div.hintline', {
+      text: plus ? '10は そのまま。ばらの ' + ones + ' に ' + b + ' を たそう'
+                 : '10は そのまま。ばらの ' + ones + ' から ' + b + ' を ひこう' }));
+  });
+}
+
+Games.add({
+  id: 'g1teen', name: '20までの かず', ico: '🧮', world: 'kyoshitsu', color: 'var(--c-orange)', stage: 'g1',
+  fluent: true,
+  aim: '<b>10のまとまりと ばら</b>で数をとらえる力。「じゅうさん」と言えることと、13を「10と3」として見られることは別です。ここが入っていると、くり上がりのたし算（9+4）で「10のまとまりを作る」という考え方が通じるようになります。位取りの出発点でもあります。',
+  levels: [
+    { t: '10と いくつ', d: 'あわせて いくつに なる', make: tenAndSome },
+    { t: '10と いくつに わける', d: 'ならびも たしかめる',
+      make: api => { if (!chance(.45)) return teenSplit(api);
+                     const lo = ri(10, 11); return lineFill(api, lo, lo + 9, 2); } },
+    { t: '10いくつの けいさん', d: 'くり上がりの まえに', make: teenCalc }
+  ]
+});
+
+/* ============================================================
+   20. しきに かこう — the story and the sentence
+   ============================================================ */
+/* たしざん / ひきざん already ask for the answer to a story. 1年生 are asked for
+   something else first: which sentence the story *is*. Choosing between 5＋2 and
+   5−2 for the same picture, and then reading 5−2 back out as a story, is where
+   ＋ and − stop being buttons and start being meanings (合併・増加 / 求残・求差). */
+function pickEquation(api){
+  const plus = chance(.5);
+  const a = ri(2, 7), b = ri(1, Math.min(4, a - 1)), thing = pick(THINGS);
+  const ans = (plus ? a + '＋' + b : a + '−' + b);
+  api.item((plus ? 'shiki+:' : 'shiki-:') + a + '_' + b,
+    a + (plus ? ' ＋ ' : ' − ') + b + ' の しき');
+  api.setPrompt(
+    plus ? `${thing.e} が ${numTag(a)}つ。${numTag(b)}つ やってきたよ`
+         : `${thing.e} が ${numTag(a)}つ。${numTag(b)}つ いなくなるよ`,
+    plus ? `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、やってきたよ。`
+         : `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、いなくなるよ。`);
+  storyScene(api, a, b, plus ? '+' : '-', thing, () => {
+    api.setPrompt('この おはなしの <b>しき</b> は どれ？', 'このお話の式は、どれ？');
+    // a third option with a different second number, kept inside 1..a-1 so that
+    // 「5−6」 never appears on a screen a six-year-old is reading
+    const pool = range(1, plus ? 9 - a : a - 1).filter(v => v !== b);
+    const other = pool.length ? pick(pool) : b + 1;
+    const opts = [ans, (plus ? a + '−' + b : a + '＋' + b), a + (plus ? '＋' : '−') + other];
+    api.buildChoices(shuffle(opts), ans);
+    api.onHint(() => {
+      if ($('.hintline', api.field)) return;
+      api.field.append(el('div.hintline', {
+        text: plus ? 'ふえた ときは ＋（たす）だよ' : 'へった ときは −（ひく）だよ' }));
+    });
+  });
+}
+
+/* A story in words only. Without a picture to count, ＋ or − has to come from
+   what happened — which is the thing that actually transfers to 文章題. */
+const WORD_STORIES = [
+  { op: '+', t: (a, b, x) => `${x.n}が ${a}こ あります。${b}こ もらいました。`,
+    s: (a, b, x) => `${x.n}が${koKana(a)}あります。${koKana(b)}もらいました。`, q: 'ぜんぶで いくつ？' },
+  { op: '+', t: (a, b, x) => `${x.n}が ${a}こ。あとから ${b}こ ふえました。`,
+    s: (a, b, x) => `${x.n}が${koKana(a)}。あとから${koKana(b)}増えました。`, q: 'ぜんぶで いくつ？' },
+  { op: '-', t: (a, b, x) => `${x.n}が ${a}こ あります。${b}こ たべました。`,
+    s: (a, b, x) => `${x.n}が${koKana(a)}あります。${koKana(b)}食べました。`, q: 'のこりは いくつ？' },
+  { op: '-', t: (a, b, x) => `${x.n}が ${a}こ あります。${b}こ あげました。`,
+    s: (a, b, x) => `${x.n}が${koKana(a)}あります。${koKana(b)}あげました。`, q: 'のこりは いくつ？' }
+];
+
+function plusOrMinus(api){
+  const st = pick(WORD_STORIES);
+  const plus = st.op === '+';
+  const a = plus ? ri(2, 6) : ri(3, 9);
+  const b = plus ? ri(1, 10 - a) : ri(1, a - 1);
+  const ans = plus ? a + b : a - b;
+  const thing = pick(THINGS);
+  api.item((plus ? 'word+:' : 'word-:') + a + '_' + b,
+    a + (plus ? ' ＋ ' : ' − ') + b + ' の おはなし');
+  api.setPrompt('この おはなしは <b>たしざん</b>？ <b>ひきざん</b>？',
+                st.s(a, b, thing) + st.q + '足し算か、引き算か、選ぼう。');
+  const card = el('div.storycard', null,
+    el('div.e', { text: thing.e }),
+    el('div.lines', null,
+      el('div.tx', { text: st.t(a, b, thing) }),
+      el('div.qx', { text: st.q })));
+  api.field.append(card);
+  const eq = el('div.eq', null,
+    String(a), el('span.op.opbox', { text: '?' }), String(b),
+    el('span.op', { text: '＝' }), el('span.box', { text: '?' }));
+  api.field.append(eq);
+  api.buildChoices(['＋', '−'], plus ? '＋' : '−', {
+    onPick(v){
+      $('.opbox', eq).textContent = v;
+      $('.opbox', eq).classList.add('filled');
+      Sound.sfx.place();
+      api.later(() => {
+        api.setPrompt(st.q, st.q);
+        api.buildPad(ans);
+      }, 420);
+      return false;                    // the operation was only half the question
+    }
+  });
+  api.onHint(() => {
+    if ($('.hintline', api.field)) return;
+    api.field.append(el('div.hintline', {
+      text: plus ? 'ふえた・もらった → ＋' : 'へった・たべた・あげた → −' }));
+  });
+}
+
+/** The reverse direction: here is 5−2, which story is it about? A child who can
+    only run stories forwards has not yet got the sentence. */
+function matchStory(api){
+  const plus = chance(.5);
+  const a = plus ? ri(2, 6) : ri(4, 9);
+  const b = plus ? ri(1, 10 - a) : ri(1, a - 2);
+  const thing = pick(THINGS);
+  let c = b + pick([1, 2]);
+  if (!plus && c >= a) c = b - 1 || b + 1;
+  api.item((plus ? 'read+:' : 'read-:') + a + '_' + b,
+    a + (plus ? ' ＋ ' : ' − ') + b + ' に あう おはなし');
+  api.setPrompt(`<b>${a} ${plus ? '＋' : '−'} ${b}</b> の おはなしは どれ？`,
+                `${numKana(a)}、${plus ? 'たす' : 'ひく'}、${numKana(b)}のお話は、どれ？`);
+  api.field.append(el('div.eq', null,
+    String(a), el('span.op', { text: plus ? '＋' : '−' }), String(b)));
+  const line = (n, verb) => `${thing.n}が ${a}こ。\n${n}こ ${verb}`;
+  const right   = plus ? line(b, 'もらった') : line(b, 'たべた');
+  const wrongOp = plus ? line(b, 'たべた')   : line(b, 'もらった');
+  const wrongN  = plus ? line(c, 'もらった') : line(c, 'たべた');
+  api.buildChoices(shuffle([right, wrongOp, wrongN]), right, {
+    cls: 'story',
+    // one sentence per line: a narrow button breaks Japanese wherever it likes,
+    // and 「た/べた」 across two lines is not something a six-year-old should have
+    // to reassemble before they can answer
+    render: v => el('span', null, v.split('\n').map((t, i) => i ? [el('br'), t] : t))
+  });
+  api.onHint(() => {
+    if ($('.hintline', api.field)) return;
+    api.field.append(el('div.hintline', {
+      text: plus ? '＋ は ふえる おはなし。かずも おなじか みてね'
+                 : '− は へる おはなし。かずも おなじか みてね' }));
+  });
+}
+
+Games.add({
+  id: 'g1shiki', name: 'しきに かこう', ico: '✍️', world: 'kyoshitsu', color: 'var(--c-orange)', stage: 'g1',
+  aim: '場面と式を<b>行き来する</b>力。たしざん・ひきざん が「答えはいくつ」を聞くのに対し、ここは「この話はどの式か」「この式はどの話か」を聞きます。文章題でつまずく子の多くは計算ではなく、この置きかえでつまずきます。増える・もらう＝＋、減る・食べる＝− を、言葉と結びつけておく単元です。',
+  levels: [
+    { t: 'おはなしの しき', d: 'えを みて ＋か −か', make: pickEquation },
+    { t: 'たす？ ひく？', d: 'ことばだけの おはなし', make: plusOrMinus },
+    { t: 'しきに あう おはなし', d: 'しきから おはなしを えらぶ', make: matchStory }
+  ]
+});
+
 /* ---- 89-experience.js ---- */
 /* ===========================================================
    89 — first-run diagnostic, recommendations, and real-world missions
@@ -5829,7 +6723,7 @@ const Diagnostic = (() => {
   function current(){
     let weakest = null;
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
-      if (!Store.levelUnlocked(g.id, i)) return;
+      if (!levelOpen(g, i)) return;
       const n = Store.recentCount(g.id, i);
       if (n < 4) return;
       const acc = Store.recentAccuracy(g.id, i);
@@ -5839,14 +6733,19 @@ const Diagnostic = (() => {
 
     const first = Store.data.diagnostic && Store.data.diagnostic.recommended;
     if (first && Games.byId[first.gameId]
-        && Store.levelUnlocked(first.gameId, first.levelIndex || 0)
+        && levelOpen(Games.byId[first.gameId], first.levelIndex || 0)
         && Store.stars(first.gameId, first.levelIndex || 0) < 2) return first;
 
-    for (const id of ['count', 'flash', 'numeral', 'seq', 'bond']){
+    /* Once the 入学前 half is finished there is nothing left under 2 stars to
+       recommend there, so the queue continues into the classroom. */
+    const order = Progress.g1Open()
+      ? ['count', 'flash', 'numeral', 'seq', 'bond', 'g1set', 'g1pair', 'g1teen', 'g1shiki']
+      : ['count', 'flash', 'numeral', 'seq', 'bond'];
+    for (const id of order){
       const g = Games.byId[id];
       if (!g) continue;
       for (let i = 0; i < g.levels.length; i++){
-        if (Store.levelUnlocked(id, i) && Store.stars(id, i) < 2) return { gameId: id, levelIndex: i };
+        if (levelOpen(g, i) && Store.stars(id, i) < 2) return { gameId: id, levelIndex: i };
       }
     }
     return { gameId: 'bond', levelIndex: 0 };
@@ -5892,7 +6791,15 @@ const Missions = (() => {
     ['pattern', 'スプーンと フォークで きまりの ならびを つくろう', 'つぎに くるものを おうちのひとに あててもらおう'],
     ['pattern', '3つの ものを つかって くりかえしを つくろう', 'どこから おなじ ならびが はじまる？'],
     ['clock', 'ながい はりが 6に きたら なにを するか きめよう', '「はん」の ときの はりを みよう'],
-    ['clock', 'おやつの じかんを とけいで さがそう', 'みじかい はりと ながい はりを りょうほう みよう']
+    ['clock', 'おやつの じかんを とけいで さがそう', 'みじかい はりと ながい はりを りょうほう みよう'],
+    ['g1set', 'だいどころから 「まるい もの」を ぜんぶ あつめよう', 'あつめてから いくつか かぞえてね'],
+    ['g1set', 'おもちゃばこから じぶんで きめた なかまを あつめよう', 'どういう なかまに したか おしえてね'],
+    ['g1pair', 'おさらと コップを 1つずつ ペアに して ならべよう', 'どちらが あまった？ いくつ あまった？'],
+    ['g1pair', 'かぞくの かずと おはしの かずを ペアに してみよう', 'たりない ときは あと いくつ？'],
+    ['g1teen', 'おはじきを 10こ まとめて、そのあと ばらを たそう', '「10と いくつ」で いえるかな？'],
+    ['g1teen', 'カレンダーで 11から 20を じゅんばんに さがそう', 'どれも 「10と いくつ」だね'],
+    ['g1shiki', 'おやつを もらった ときの しきを いってみよう', '「3と 2で 5」より「3たす2は5」で いえるかな'],
+    ['g1shiki', '「5ひく2」に なる おはなしを つくって みよう', 'たべた・あげた・かえった、どれでも いいよ']
   ];
 
   const today = () => Store.todayKey();
@@ -6032,7 +6939,9 @@ const Title = (() => {
     node = el('div#title', null,
       mascotSVG('happy', 'talk'),
       logo,
-      el('div.tag', { text: 'しょうがっこうへ いく まえに　さんすうの ちからを あそんで つける' }),
+      el('div.tag', { text: Progress.g1Open()
+        ? 'しょうがっこう 1ねんせいの もんだいも あるよ'
+        : 'しょうがっこうへ いく まえに　さんすうの ちからを あそんで つける' }),
       start,
       el('div.foot', { text: 'おと が でます。iPad は よこむき が おすすめ です' }));
     return UI.register('title', node);
@@ -6042,7 +6951,7 @@ const Title = (() => {
 
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
-  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl;
+  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, stageEl;
 
   function build(){
     if (node) return node;
@@ -6072,7 +6981,13 @@ const Home = (() => {
     focusEl = el('button.daily.focusset', { type: 'button', hidden: true });
     shelfEl = el('button.shelf', { type: 'button',
       onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
-    node.append(voiceWarnEl, recommendEl, dailyEl, reviewEl, focusEl, worldsEl, shelfEl);
+    /* The door to 1ねんせい. It is a goal, not today's work, so it sits down with
+       the sticker shelf it depends on rather than up with the daily sets — and it
+       stays out of sight entirely until the shelf is half full, because a padlock
+       is only encouraging to a child who can already see themselves reaching it. */
+    stageEl = el('button.daily.stagelocked', { type: 'button', hidden: true,
+      onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
+    node.append(voiceWarnEl, recommendEl, dailyEl, reviewEl, focusEl, worldsEl, stageEl, shelfEl);
     return UI.register('home', node);
   }
 
@@ -6176,13 +7091,33 @@ const Home = (() => {
       el('div.lbl', null, 'シール ' + got.length + 'まい', el('small', { text: 'タップで シールブック' })),
       strip);
 
+    const st = Progress.preStickers(), open1 = Progress.g1Open();
+    const left = Math.max(0, st.total - st.got);
+    stageEl.hidden = open1 || st.got < st.total * Progress.TEASE_AT;
+    if (!stageEl.hidden){
+      clear(stageEl);
+      stageEl.append(
+        el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: '🔒' }),
+        el('div.grow', null,
+          el('div.t', { text: 'しょうがっこう 1ねんせいの もんだい' }),
+          el('div.s', { text: 'シールを ぜんぶ あつめると ひらくよ　･　あと ' + left + 'まい' }),
+          el('div.stagebar', null, el('i', { style: { width: (st.total ? (st.got / st.total) * 100 : 0) + '%' } }))),
+        el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: '📖' }));
+    }
+
     clear(worldsEl);
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
       if (!games.length) return;
+      // a whole world can be shut: 1ねんせいの きょうしつ is not on this screen at all
+      // until the sticker book that opens it is full
+      if ((w.stage || 'pre') !== 'pre' && !open1) return;
       const grid = el('div.gamegrid');
       games.forEach(g => grid.append(gameCard(g)));
-      worldsEl.append(el('div.world', { style: { '--wc': w.color } },
+      // the world's own name already says 1ねんせい; a second badge saying it again
+      // only takes the room the name needs to stay on one line
+      worldsEl.append(el('div.world' + ((w.stage || 'pre') !== 'pre' ? '.newstage' : ''),
+        { style: { '--wc': w.color } },
         el('h3', null, el('span.chip', { text: w.name }), el('span.sub', { text: w.sub })), grid));
     });
   }
@@ -6251,7 +7186,8 @@ const Result = (() => {
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
-    const spoken = (r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
+    const spoken = (r.unlockedG1 ? 'シールが全部そろったね！小学校一年生の問題ができるよ！'
+                 : r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
                  : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
@@ -6266,6 +7202,18 @@ const Result = (() => {
       el('div.result-sub', { text: r.mode === 'diagnostic'
         ? 'ぴったりの はじまりを みつけたよ'
         : `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+    /* The last sticker. This is the one screen in the app that says the child has
+       finished 入学前 — it has to say it in words a six-year-old reads, on the
+       screen they are already looking at, not in a menu they might find later. It
+       goes above the sticker and the mission: on a screen this tall, the thing
+       that has to be read first cannot be the thing furthest down. */
+    if (r.unlockedG1){
+      inner.append(el('div.unlocked', null,
+        el('div.e', { text: '🎓' }),
+        el('div.l', { text: 'シールが ぜんぶ そろった！' }),
+        el('b', { text: 'しょうがっこう 1ねんせいの もんだいが できるよ！' }),
+        el('div.l', { text: '「1ねんせいの きょうしつ」が ホームに ふえたよ' })));
+    }
     /* The thing ★★★ could never say. These levels are for an answer that arrives,
        and a child who counted their way to every right answer used to get exactly
        the same three stars as one who remembered. */
@@ -6307,7 +7255,8 @@ const Result = (() => {
           el('div.l', { text: 'つぎの おすすめ' }),
           el('b', { text: g.name + '　《' + lv.t + '》' })));
       }
-    } else if (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1)) {
+    } else if (!r.unlockedG1 && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
+      // one piece of news per screen: the classroom outranks today's kitchen-table task
       inner.append(Missions.resultCard(r.lastGameId));
     }
     const actions = el('div.result-actions');
@@ -6335,7 +7284,11 @@ const Result = (() => {
     } else if (r.mode === 'daily'){
       actions.append(el('button.btn', { text: 'もういちど', onclick(){ Sound.sfx.tap(); Session.startDaily(10); } }));
     }
-    actions.append(el('button.btn' + (r.mode === 'level' || r.mode === 'diagnostic' || lead || r.mode === 'focus' ? '' : '.btn-accent'),
+    if (r.unlockedG1){
+      actions.append(el('button.btn.btn-accent.primary', { text: '1ねんせいの きょうしつへ',
+        onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
+    }
+    actions.append(el('button.btn' + (r.mode === 'level' || r.mode === 'diagnostic' || lead || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent'),
       { text: 'あそびを えらぶ',
         onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
     inner.append(actions);
@@ -6364,23 +7317,32 @@ const Book = (() => {
   function render(){
     build();
     clear(grid);
-    const slots = [];
-    Games.list.forEach(g => g.levels.forEach((lv, i) => {
-      slots.push({ key: g.id + ':' + i, gold: false });
-      slots.push({ key: g.id + ':' + i + ':g', gold: true });
-    }));
     let got = 0;
-    slots.forEach(s => {
-      const has = Store.hasSticker(s.key);
+    const drawSlots = keys => keys.forEach(key => {
+      const has = Store.hasSticker(key);
       if (has) got++;
-      grid.append(el('div.sticker' + (has ? (s.gold ? '.got.gold' : '.got') : ''),
-        { text: has ? stickerFor(s.key) : '･' }));
+      grid.append(el('div.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : ''),
+        { text: has ? stickerFor(key) : '･' }));
     });
+    /* The 入学前 shelf is the one that opens the 小1 classroom, so it is the one
+       this page counts towards a goal. The classroom's own stickers go in a second
+       group below, and only once it is open — an empty row of slots for a world a
+       child cannot reach would make the goal look further away than it is. */
+    const pre = Progress.preStickers();
+    drawSlots(Progress.slots('pre'));
     Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0).forEach(k => {
       got++;
       grid.append(el('div.sticker.got.gold', { text: stickerFor(k) }));
     });
-    count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`;
+    if (Progress.g1Open()){
+      grid.append(el('div.bookgroup', { text: '🎓　1ねんせいの きょうしつ' }));
+      drawSlots(Progress.slots('g1'));
+    }
+    const left = Math.max(0, pre.total - pre.got);
+    count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
+      + (left
+        ? `<br><b>あと ${left}まい</b> で しょうがっこう 1ねんせいの もんだいが ひらくよ（${pre.got}／${pre.total}）`
+        : '<br><b>ぜんぶ そろったね！</b> しょうがっこう 1ねんせいの もんだいが できるよ');
   }
   return { build, render };
 })();
@@ -6471,7 +7433,7 @@ const Parent = (() => {
     const body = el('tbody');
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
-      if (!games.length) return;
+      if (!games.length || ((w.stage || 'pre') !== 'pre' && !Progress.g1Open())) return;
       body.append(el('tr', null, el('td', { colspan: 7, style: { color: w.color, fontWeight: 800, paddingTop: 'calc(var(--u)*.8)' }, text: w.name })));
       games.forEach(g => {
         const s = Store.gameStars(g.id, g.levels.length);
@@ -6519,7 +7481,7 @@ const Parent = (() => {
     const ENOUGH = 8;
     const levels = [];
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
-      if (!Store.levelUnlocked(g.id, i)) return;
+      if (!levelOpen(g, i)) return;
       const n = Store.recentCount(g.id, i);
       if (n < ENOUGH) return;
       levels.push({ g, lv, i, n, acc: Store.recentAccuracy(g.id, i), cold: Store.daysSince(g.id, i) });
@@ -6612,7 +7574,7 @@ const Parent = (() => {
       el('p', { text: '「うちの子はこれをやって何が身につくのか」への答えです。上の表で数字が低い遊びがあったら、まずここを読んでから、下の「おうちでできること」を試してみてください。' }));
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id && g.aim);
-      if (!games.length) return;
+      if (!games.length || ((w.stage || 'pre') !== 'pre' && !Progress.g1Open())) return;
       sec.append(el('h4', { text: w.name, style: { color: w.color } }));
       const list = el('div.aimlist');
       games.forEach(g => list.append(el('div.aimrow', null,
@@ -6629,12 +7591,70 @@ const Parent = (() => {
     const s = el('section');
     const row = (k, v) => el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 'calc(var(--u)*1)' } },
       el('span', { text: k }), el('b', { style: { fontFamily: 'var(--fs-num)' }, text: v }));
+    // a locked world must not inflate the denominator: 48/48 has to be reachable
+    const levels = Games.list.reduce((n, g) => n + (stageOpen(g) ? g.levels.length : 0), 0);
+    const pre = Progress.preStickers();
     s.append(el('div.eyebrow', { text: 'summary' }), el('h3', { text: 'これまでの積み重ね' }),
       row('続けた日数（連続）', Store.streak() + '日'),
       row('今日といた問題', Store.todayCount() + '問'),
-      row('集めた ★', Store.totalStars() + ' / ' + (Games.list.reduce((n, g) => n + g.levels.length, 0) * 3)),
+      row('集めた ★', Store.totalStars() + ' / ' + levels * 3),
       row('集めたシール', Store.data.stickers.length + '枚'),
+      row('入学前のシール（1年生が開く条件）', pre.got + ' / ' + pre.total),
       row('「きょうの れんしゅう」初回正答率', pct(Store.practiceAccuracy())));
+    return s;
+  }
+
+  /* ---- 小学1年生の問題 ----
+     The one thing on this page a parent has to be able to decide: the door opens
+     itself when the sticker book is full, and it can be opened by hand when the
+     child is plainly ready and the book is not. */
+  function stageSection(){
+    const s = el('section');
+    const pre = Progress.preStickers();
+    const open1 = Progress.g1Open();
+    const byHand = !!Store.data.g1Open;
+    s.append(el('div.eyebrow', { text: 'next stage' }),
+      el('h3', { text: '小学1年生の問題について' }));
+    s.append(el('p', { html: '入学前の48レベルのシールを<b>すべて集めると</b>、ホームに'
+      + '<b>「1ねんせいの きょうしつ」</b>が増えます。シールはレベルごとに2枚（クリアで1枚、'
+      + '全問1回目で正解するともう1枚・金色）で、全部で' + pre.total + '枚。'
+      + 'いまは <b>' + pre.got + ' / ' + pre.total + '</b> 枚です。' }));
+    s.append(el('p', { text: '中身は「先取りの計算」ではありません。1年生の1学期は、'
+      + '入学前にやったことをもう一度、ちがう聞き方でたどり直します。'
+      + '「同じものの集まり」（自分でまとまりを決めてから数える）と'
+      + '「1対1対応」（両方を数えるのではなく、ペアにして余りを見る）の2つが中心で、'
+      + 'そこから「20までの数（10のまとまりとばら）」と「式に書く（＋か−か）」に進みます。' }));
+    const list = el('div.aimlist');
+    Games.list.filter(g => Progress.stageOf(g) === 'g1').forEach(g => list.append(el('div.aimrow', null,
+      el('div.ico', { text: g.ico }),
+      el('div', null, el('b', { text: g.name }), el('div', { html: g.aim })))));
+    s.append(list);
+    if (open1){
+      s.append(el('p', { style: { color: 'var(--good-ink)', fontWeight: 800 },
+        text: byHand && pre.got < pre.total
+          ? '※ この端末では、おうちの方の操作で先に開いています。'
+          : '✓ 開いています。ホームの「1ねんせいの きょうしつ」から遊べます。' }));
+      return s;
+    }
+    s.append(el('p', { text: 'シールが全部そろう前でも、ここから開けられます。'
+      + '「かぞえよう」や「いくつと いくつ」が安定していて、本人が先に進みたがっているなら、'
+      + '★★★を集めきるのを待つ必要はありません。開けたあとも入学前の遊びはそのまま残りますし、'
+      + '一度開けると閉じられません。' }));
+    let armed = false;
+    const openBtn = el('button.btn', { text: '1ねんせいの もんだいを いま開く' });
+    openBtn.addEventListener('click', () => {
+      if (!armed){
+        armed = true;
+        openBtn.textContent = '開きますか？（もう一度タップ）';
+        setTimeout(() => { armed = false; openBtn.textContent = '1ねんせいの もんだいを いま開く'; }, 4000);
+        return;
+      }
+      Progress.openG1();
+      Sound.sfx.finish();
+      Home.render();
+      render();
+    });
+    s.append(openBtn);
     return s;
   }
 
@@ -6662,7 +7682,8 @@ const Parent = (() => {
   const PLAN = [
     ['1〜2か月め', 'かずの しま を中心に', 'かぞえよう / すうじ どれかな / かずの じゅんばん。まず10までを確実に。数字のなぞり書きも並行して少しずつ。'],
     ['3〜4か月め', 'けいさんの やま に入る', 'いくつと いくつ → 10の おともだち の順で。ここが半年計画の山場です。毎日「きょうの れんしゅう」を1回。'],
-    ['5〜6か月め', 'たしざん・ひきざん と 生活の数', '式の形に慣れ、とけい・おおきさくらべ・なんばんめ で入学後の単元に先に触れておきます。']
+    ['5〜6か月め', 'たしざん・ひきざん と 生活の数', '式の形に慣れ、とけい・おおきさくらべ・なんばんめ で入学後の単元に先に触れておきます。'],
+    ['そのあと', '1ねんせいの きょうしつ', 'シールが全部そろうと開きます。なかまづくり（同じものの集まり）と 1たい1で くらべる（一対一対応）から、20までの数・式へ。1年生の1学期の順番そのままです。']
   ];
 
   function textSection(eyebrow, title, pairs){
@@ -6874,11 +7895,14 @@ const Parent = (() => {
         el('div.eyebrow', { text: 'about' }),
         el('h3', { text: 'このアプリがねらっていること' }),
         // counted, not typed: the sentence used to say 15 and quietly went stale
-        el('p', { text: '小学校1年生の算数は「数える」「数を分ける・合わせる」「比べる」「形をとらえる」の4つの土台の上に立っています。逆に言えば、入学前にやるべきことは計算の先取りではなく、この土台を手と目と声で確かめておくことです。このアプリは'
-          + Games.list.length + 'の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。' }),
+        el('p', { text: '小学校1年生の算数は「数える」「数を分ける・合わせる」「比べる」「形をとらえる」の4つの土台の上に立っています。逆に言えば、入学前にやるべきことは計算の先取りではなく、この土台を手と目と声で確かめておくことです。このアプリは入学前の'
+          + Games.list.filter(g => Progress.stageOf(g) === 'pre').length
+          + 'の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。'
+          + 'それを全部終えると、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
         el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると自動でヒントが出て、必ず自分で正解にたどり着いて終われるようにしてあります。' })),
       nextUpSection(),
       statsSection(),
+      stageSection(),
       progressSection(),
       aimsSection(),
       planSection(),
@@ -6967,7 +7991,7 @@ const Parent = (() => {
 /* Expose the internals for debugging / automated checks. */
 window.KazuApp = {
   Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent,
-  Diagnostic, Missions,
+  Diagnostic, Missions, Progress, stageOpen, levelOpen,
   el, svg, clear, $, $$,
   STICKER_POOL, stickerFor,
   numKana, koKana, tsuKana, banmeKana, jiKana, distractors

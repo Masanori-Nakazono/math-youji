@@ -405,7 +405,9 @@
       S.planGames.forEach(k => { const g = k.split(':')[0]; tally[g] = (tally[g] || 0) + 1; });
     }
     const weak = ((tally.bond || 0) + (tally.ten || 0)) / DAYS;
-    const others = K.Games.list.filter(g => g.id !== 'bond' && g.id !== 'ten');
+    // a stage that has not been opened yet is not in the pool, and not being asked
+    // about is the point of it — only the open half has to keep showing up
+    const others = K.Games.list.filter(g => g.id !== 'bond' && g.id !== 'ten' && K.stageOpen(g));
     const everyoneAppears = others.every(g => (tally[g.id] || 0) > 0);
     check('the daily set aims at the weak topics without abandoning the rest',
       weak >= 2.5 && everyoneAppears,
@@ -967,6 +969,102 @@
       gated && adultAnswer && review && review.id === 'test-mission'
         && K.Store.mission(day).reviewed && onlyYesterday === null,
       'gated=' + gated + ' review=' + (review && review.id) + ' oldIgnored=' + (onlyYesterday === null));
+    K.Store.reset();
+  })();
+
+  /* ---------- 31. the 小学1年生 stage opens on the last sticker, and not before ----------
+     The whole point of the sticker book is that it is a goal a child can see. The
+     door it opens has to be shut until the shelf is actually full, has to open on
+     the sticker that fills it, and has to say so on the screen the child is
+     looking at — not in a menu they might find later. */
+  (function stageGate(){
+    K.Store.reset();
+    const pre = K.Progress.slots('pre'), g1 = K.Progress.slots('g1');
+    const shutAtStart = !K.Progress.g1Open();
+
+    // every 小1 level is out of reach of every question surface while it is shut
+    const g1Games = K.Games.list.filter(g => K.Progress.stageOf(g) === 'g1');
+    const noneOpen = g1Games.every(g => g.levels.every((lv, i) => !K.levelOpen(g, i)));
+    K.Games.list.forEach(g => g.levels.forEach((lv, i) => {
+      K.Store.data.stars[g.id + ':' + i] = 3;      // even with stars, the stage is shut
+      K.Store.data.recent[g.id + ':' + i] = '1'.repeat(20);
+    }));
+    const tally = {};
+    for (let d = 0; d < 40; d++){
+      K.Session.startDaily(10);
+      S.planGames.forEach(k => { tally[k.split(':')[0]] = 1; });
+    }
+    const stayedOut = g1Games.every(g => !tally[g.id]);
+
+    // one sticker short is still shut
+    pre.slice(0, -1).forEach(k => K.Store.addSticker(k));
+    const shutOneShort = !K.Progress.g1Open();
+    K.Store.addSticker(pre[pre.length - 1]);
+    const openedOnLast = K.Progress.g1Open();
+
+    // and now the 小1 levels are reachable, and Home draws the world
+    K.Home.render();
+    const worldOnHome = qa('#home .world h3 .chip').some(c => c.textContent.indexOf('1ねんせい') >= 0);
+    const nowInPool = (() => {
+      const seen = {};
+      for (let d = 0; d < 60; d++){
+        K.Session.startDaily(10);
+        S.planGames.forEach(k => { seen[k.split(':')[0]] = 1; });
+      }
+      return g1Games.some(g => seen[g.id]);
+    })();
+    check('小学1年生 opens on the last sticker of the 入学前 shelf, never before',
+      shutAtStart && noneOpen && stayedOut && shutOneShort && openedOnLast
+        && worldOnHome && nowInPool && g1.length === 24,
+      'shut=' + shutAtStart + ' hidden=' + noneOpen + ' outOfDaily=' + stayedOut
+        + ' oneShort=' + shutOneShort + ' opened=' + openedOnLast
+        + ' onHome=' + worldOnHome + ' inDaily=' + nowInPool + ' g1slots=' + g1.length);
+    K.Store.reset();
+  })();
+
+  /* ---------- 32. finishing the shelf tells the child so, in words they read ---------- */
+  (function unlockMessage(){
+    K.Store.reset();
+    /* One slot short of a full shelf, and the missing one is the gold sticker for
+       a level the suite can actually play: the last slot in registration order
+       belongs to 「はりを うごかす」, which needs a hand on a clock face. */
+    const missing = 'bond:0:g';
+    K.Progress.slots('pre').forEach(k => { if (k !== missing) K.Store.addSticker(k); });
+    const shutBefore = !K.Progress.g1Open();
+    K.Session.startLevel(K.Games.byId.bond, 0);
+    let guard = 0;
+    while (!onResult() && guard++ < 40){    // every answer right first time — ★★★
+      S.forceCorrect();
+      S.flushTimers();
+    }
+    const said = (q('#result .unlocked') || {}).textContent || '';
+    check('the last sticker says「1ねんせいの もんだいが できるよ」on the result screen',
+      shutBefore && K.Store.hasSticker(missing) && K.Progress.g1Open()
+        && said.indexOf('1ねんせいの もんだいが できる') >= 0,
+      'shutBefore=' + shutBefore + ' gold=' + K.Store.hasSticker(missing)
+        + ' open=' + K.Progress.g1Open() + ' text=' + said.slice(0, 60));
+    K.Store.reset();
+  })();
+
+  /* ---------- 33. a child who is ready must never be stuck behind the padlock ----------
+     Every gold sticker needs a run with every answer right first time. That is a
+     real goal, and it is also a wall a ready child can fail to clear on とけい
+     alone — so the parent page can open the door by hand, exactly like the three
+     attempts that open a level nobody can pass. */
+  (function parentOverride(){
+    K.Store.reset();
+    const before = K.Progress.g1Open();
+    K.Progress.openG1();
+    const after = K.Progress.g1Open();
+    const survives = (() => {
+      const text = K.Store.exportText();
+      K.Store.reset();
+      const wiped = K.Progress.g1Open();
+      K.Store.importText(text, 'replace');
+      return !wiped && K.Progress.g1Open();
+    })();
+    check('a parent can open 小学1年生 by hand, and the backup remembers it',
+      !before && after && survives, 'before=' + before + ' after=' + after + ' backup=' + survives);
     K.Store.reset();
   })();
 
