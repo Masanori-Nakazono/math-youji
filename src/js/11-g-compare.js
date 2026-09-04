@@ -85,12 +85,38 @@ function compareNumerals(api){
   api.buildChoices(shuffle([a, b]), ans);
 }
 
+/** The quantity stays the same when the spacing changes. This asks about
+    conservation directly instead of merely making large icons look numerous. */
+function conserveNumber(api){
+  const n = ri(4, 8), thing = pick(THINGS);
+  api.item('conserve:' + n, n + 'こを ひろげても おなじ');
+  api.setPrompt('よく みていてね。ならびかたを かえるよ', 'よく見ていてね。並び方を変えるよ。');
+  const row = el('div.conserve-row');
+  for (let i = 0; i < n; i++) row.append(el('span', { text: thing.e }));
+  api.field.append(row);
+  api.later(() => {
+    row.classList.add('spread');
+    Sound.sfx.swoosh();
+    api.later(() => {
+      api.setPrompt('ひろげたら、かずは かわった？', '広げたら、数は変わった？');
+      api.buildChoices(['おなじ', 'かわった'], 'おなじ');
+    }, 650);
+  }, 650);
+  api.onHint(() => {
+    $$('.conserve-row span', api.field).forEach((x, i) => {
+      if (!$('.tag', x)) x.append(el('small.tag', { text: String(i + 1) }));
+    });
+    api.field.append(el('div.hintline', { text: 'ばしょが かわっても ' + n + 'こ のまま' }));
+  });
+}
+
 Games.add({
   id: 'compare', name: 'どっちが おおい', ico: '⚖️', world: 'umi', color: 'var(--c-green)',
   aim: '<b>見た目の大きさや広がりに惑わされず</b>、数そのもので多い少ないを判断する力。「大きい物が少しある方が多く見える」段階を、数えて確かめる経験で越えていきます。',
   levels: [
     { t: 'ぱっと みて', d: 'はっきり ちがう かず', make: compareEasy },
-    { t: 'ちかい かず', d: 'かぞえないと わからない', make: compareClose },
+    { t: 'ちかい かず', d: 'ならべかえても かずは おなじ',
+      make: api => chance(.35) ? conserveNumber(api) : compareClose(api) },
     { t: '3つ・すうじ', d: 'いちばん おおい／すくない', make: api => chance(.4) ? compareNumerals(api) : compareThree(api) }
   ]
 });

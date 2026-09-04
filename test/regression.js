@@ -40,6 +40,14 @@
   }
   /** tap answers until the question is accepted; false when nothing is tappable */
   function answerOnce(){
+    // 「まえから Nこ」は the first N animals as a set; random tapping is not a
+    // meaningful driver and can keep clearing the set forever by chance.
+    const ordinalCount = (q('#play .prompt .txt') && q('#play .prompt .txt').textContent || '')
+      .match(/まえから\s*(\d+)こ/);
+    if (ordinalCount){
+      qa('#play .queue .qi').slice(0, Number(ordinalCount[1])).forEach(x => x.click());
+      return true;
+    }
     // drag-and-drop questions: pick a piece, then try each destination
     const piece = q('#play .tile:not(.gone)') || q('#play .shapetile:not(.used)');
     if (piece){
@@ -66,6 +74,11 @@
   function blanks(){ return qa('#play .nn.gap, #play .car.blank').length; }
   function pipsDone(){ return qa('#play .pip.done, #play .pip.miss').length; }
   function onResult(){ return !doc.getElementById('result').hidden; }
+  function leavePlay(){
+    const back = q('#play .backbtn');
+    back.click();
+    back.click();
+  }
 
   const eachLevel = fn => K.Games.list.forEach(g => g.levels.forEach((lv, li) => fn(g, li, lv)));
 
@@ -116,8 +129,7 @@
   (function staleTimers(){
     K.Session.startLevel(K.Games.byId.bond, 0);
     answerOnce();                                   // schedules "advance to next question"
-    const back = q('#play .backbtn');
-    back.click();                                   // leave before it fires
+    leavePlay();                                    // confirm, then leave before it fires
     K.Session.startLevel(K.Games.byId.numeral, 0);
     const idxAtStart = S.idx;
     S.flushTimers();
@@ -126,7 +138,7 @@
 
     // and a slow story animation must not paint into whatever came after it
     K.Session.startLevel(K.Games.byId.add, 1);
-    q('#play .backbtn').click();
+    leavePlay();
     K.Session.startLevel(K.Games.byId.seq, 0);
     S.flushTimers();
     check('a story animation cannot write into the next question',
@@ -160,8 +172,9 @@
         wrong[0].click();
         if (wrong[0].classList.contains('correct')) break;
       }
-      const hintCount = qa('#play .playfield .hintline').length;
-      if (hintCount > 1) noisy.push(g.id + '/L' + li + ' x' + hintCount);
+      const hintTexts = qa('#play .playfield .hintline').map(x => x.textContent.trim());
+      if (new Set(hintTexts).size < hintTexts.length)
+        noisy.push(g.id + '/L' + li + ' duplicate: ' + hintTexts.join(' / '));
       const changed = q('#play').innerHTML.length !== before;
       const dimmed = qa('#play .choice.dim').length > 0;
       const chip   = !q('#play .feedback').hidden;
@@ -171,7 +184,7 @@
     check('two wrong answers always change something on screen (M5)', !silent.length, silent.slice(0, 6).join(' | '));
   })();
 
-  /* ---------- 6. tracing reports misses, so stars and accuracy stay honest ---------- */
+  /* ---------- 6. motor slips do not lower the child's mathematics score ---------- */
   (function traceHonesty(){
     K.Session.startLevel(K.Games.byId.trace, 0);
     const box = q('#play .tracebox');
@@ -179,7 +192,8 @@
     const fire = (type, x, y) => box.dispatchEvent(new PointerEvent(type, {
       bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 1, isPrimary: true, button: 0 }));
     for (let i = 0; i < 4; i++){ fire('pointerdown', r.left + 4, r.bottom - 4); fire('pointerup', r.left + 4, r.bottom - 4); }
-    check('tracing counts misses instead of always scoring three stars', S.mistakes > 0, 'mistakes=' + S.mistakes);
+    check('missing the tracing start point gives guidance without lowering math stars',
+      S.mistakes === 0 && !!q('#play .trace-ghost'), 'mistakes=' + S.mistakes);
   })();
 
   /* ---------- 7. clock hours use clock readings, not counting readings ---------- */
@@ -236,6 +250,11 @@
     K.Store.recordLevel('bond', 0, 3, 8, 8);
     K.Store.recordLevel('count', 1, 2, 6, 8);
     K.Store.addSticker('bond:0');
+    K.Store.recordDiagnostic([{ gameId: 'count', levelIndex: 0, clean: true }],
+      { gameId: 'flash', levelIndex: 0 });
+    K.Store.recordMission({ day: '2026-01-02', id: 'backup-mission', gameId: 'count',
+      text: '3こ かぞえる', prompt: 'ひとつずつ' });
+    K.Store.completeMission('2026-01-02');
     const text = K.Store.exportText();
     const starsBefore = JSON.stringify(K.Store.data.stars);
     const seenBefore  = JSON.stringify(K.Store.data.seen);
@@ -244,7 +263,9 @@
     K.Store.reset();
     const r1 = K.Store.importText(text, 'replace');
     check('a backup restores the records exactly',
-      r1.ok && JSON.stringify(K.Store.data.stars) === starsBefore && K.Store.hasSticker('bond:0'),
+      r1.ok && JSON.stringify(K.Store.data.stars) === starsBefore && K.Store.hasSticker('bond:0')
+        && K.Store.data.diagnostic.recommended.gameId === 'flash'
+        && K.Store.mission('2026-01-02').done,
       r1.msg || 'import failed');
 
     // importing the same file twice must not double any number
@@ -264,6 +285,19 @@
     const junk = K.Store.importText('not json at all', 'merge');
     check('a wrong file is rejected without destroying the records',
       !bad.ok && !junk.ok && K.Store.stars('bond', 0) === 3, 'bad=' + bad.ok + ' junk=' + junk.ok);
+
+    K.Store.recordMission({ day: '2026-02-03', id: 'mission-a', gameId: 'count',
+      text: 'A', prompt: 'A' });
+    K.Store.completeMission('2026-02-03');
+    const foreign = JSON.parse(K.Store.exportText());
+    foreign.data.missions['2026-02-03'] = {
+      day: '2026-02-03', id: 'mission-b', gameId: 'count',
+      text: 'B', prompt: 'B', done: false, reviewed: false
+    };
+    K.Store.importText(JSON.stringify(foreign), 'merge');
+    check('backup merge never transfers completion to different mission text',
+      K.Store.mission('2026-02-03').id === 'mission-a' && K.Store.mission('2026-02-03').done,
+      JSON.stringify(K.Store.mission('2026-02-03')));
   })();
 
   /* ---------- 12. a second tap on the answer must not answer twice ----------
@@ -777,6 +811,153 @@
     }
     check('かずの じゅんばん counts backwards as well as forwards',
       seen > 0 && !bad, bad || 'never drawn in 80 tries');
+  })();
+
+  /* ---------- 26. the first-run sampler recommends without locking content ---------- */
+  (function diagnostic(){
+    K.Store.reset();
+    const offered = K.Diagnostic.shouldRun();
+    K.Session.startDiagnostic();
+    const length = S.planLength;
+    for (let i = 0; i < length && !onResult(); i++){
+      S.forceCorrect(); S.flushTimers();
+    }
+    const saved = K.Store.data.diagnostic;
+    const allOpen = K.Games.list.every(g => K.Store.levelUnlocked(g.id, 0));
+    K.Diagnostic.startRecommended();
+    const started = S.planGames[0] === saved.recommended.gameId + ':' + saved.recommended.levelIndex;
+    check('the first-run adventure records a recommendation without locking any game',
+      offered && length === 10 && saved && saved.recommended && allOpen && started,
+      'offered=' + offered + ' length=' + length + ' saved=' + !!saved
+        + ' allOpen=' + allOpen + ' started=' + started);
+    K.Store.reset();
+  })();
+
+  /* ---------- 27. constructive questions really appear in the existing worlds ---------- */
+  (function constructive(){
+    const targets = [
+      ['count', 1, 'count:conserve:'],
+      ['compare', 1, 'compare:conserve:'],
+      ['bond', 1, 'bond:ways:'],
+      ['ten', 2, 'ten:three10'],
+      ['pattern', 2, 'pattern:create:']
+    ];
+    const missing = [];
+    targets.forEach(([id, li, prefix]) => {
+      let found = false;
+      for (let i = 0; i < 80 && !found; i++){
+        K.Session.startLevel(K.Games.byId[id], li);
+        found = String(S.item).indexOf(prefix) === 0;
+      }
+      if (!found) missing.push(id + '/L' + li);
+    });
+    check('each world can ask the child to construct or verify an idea, not only pick an answer',
+      !missing.length, missing.join(', '));
+  })();
+
+  /* ---------- 27b. rapid taps cannot become extra numbers or false mistakes ---------- */
+  (function constructiveTapSafety(){
+    let three = false, extraAccepted = false;
+    for (let i = 0; i < 100 && !three; i++){
+      K.Session.startLevel(K.Games.byId.ten, 2);
+      three = String(S.item) === 'ten:three10';
+    }
+    if (three){
+      const key = n => qa('#play .padkey').find(x => x.textContent === String(n));
+      key(9).click(); key(0).click(); key(0).click(); key(1).click();
+      extraAccepted = S.locked;
+      S.flushTimers();
+    }
+
+    let ways = false, doubleTapMistake = null;
+    for (let i = 0; i < 100 && !ways; i++){
+      K.Session.startLevel(K.Games.byId.bond, 1);
+      ways = String(S.item).indexOf('bond:ways:') === 0;
+    }
+    if (ways){
+      const b = q('#play .choices .choice');
+      const before = S.mistakes;
+      b.click(); b.click();
+      doubleTapMistake = S.mistakes !== before;
+    }
+    check('rapid taps do not add a fourth number or mark one construction wrong',
+      three && !extraAccepted && ways && !doubleTapMistake,
+      'three=' + three + ' extra=' + extraAccepted + ' ways=' + ways + ' falseMistake=' + doubleTapMistake);
+  })();
+
+  /* ---------- 28. half past can be set by moving the long hand ---------- */
+  (function minuteHand(){
+    let found = false, solved = false;
+    for (let i = 0; i < 80 && !found; i++){
+      K.Session.startLevel(K.Games.byId.clock, 2);
+      found = String(S.item).indexOf('clock:sethalf:') === 0;
+    }
+    if (found){
+      const clock = q('#play .clock.pickable'), r = clock.getBoundingClientRect();
+      const setSix = qa('#play .clock-adjust').find(b => /6に/.test(b.textContent));
+      if (setSix) setSix.click();
+      q('#play .choices .btn-accent').click();
+      solved = S.locked && !!setSix
+        && q('#play .clock.pickable').parentElement.getAttribute('role') === 'group'
+        && q('#play .clock-readout[aria-live="polite"]');
+    }
+    check('moving the long hand to 6 sets 「なんじはん」',
+      found && solved, 'found=' + found + ' solved=' + solved);
+  })();
+
+  /* ---------- 29. safety affordances are present ---------- */
+  (function safety(){
+    K.Session.startLevel(K.Games.byId.count, 0);
+    const back = q('#play .backbtn');
+    back.click();
+    const stayed = K.UI.currentName() === 'play' && /もういちど/.test(back.getAttribute('aria-label') || '');
+    S.forceCorrect(); S.flushTimers();                 // a new question must disarm the old warning
+    const nextBack = q('#play .backbtn');
+    nextBack.click();
+    const stayedNext = K.UI.currentName() === 'play';
+    nextBack.click();
+    const left = K.UI.currentName() !== 'play';
+    K.Session.startLevel(K.Games.byId.count, 0);
+    const promptLive = q('#play .prompt .txt').getAttribute('aria-live') === 'polite';
+    const feedbackLive = q('#play .feedback').getAttribute('role') === 'status';
+    const roundSize = q('#play .speakBtn') ? q('#play .speakBtn').getBoundingClientRect().width
+      : q('#play .btn-round').getBoundingClientRect().width;
+    check('back needs confirmation, dynamic text is announced, and round controls are child-sized',
+      stayed && stayedNext && left && promptLive && feedbackLive && roundSize >= 63,
+      'stayed=' + stayed + '/' + stayedNext + ' left=' + left
+        + ' live=' + promptLive + '/' + feedbackLive + ' size=' + roundSize);
+  })();
+
+  /* ---------- 30. missions persist completion and next-day reflection ---------- */
+  (function missions(){
+    K.Store.reset();
+    const d = new Date(); d.setDate(d.getDate() - 1);
+    const day = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-'
+              + String(d.getDate()).padStart(2, '0');
+    K.Store.recordMission({ day, id: 'test-mission', gameId: 'count',
+      text: '3こ かぞえよう', prompt: 'ひとつずつ かぞえよう' });
+    const mission = K.Store.mission(day);
+    K.Missions.open(mission);
+    q('#mission .btn-accent').click();
+    const gated = K.UI.currentName() === 'gate' && !K.Store.mission(day).done;
+    const formula = q('#gate .q').textContent.match(/(\d+) × (\d+)/);
+    const answer = formula ? Number(formula[1]) * Number(formula[2]) : -1;
+    const adultAnswer = qa('#gate .choice').find(b => Number(b.textContent) === answer);
+    if (adultAnswer) adultAnswer.click();
+    const review = K.Missions.yesterdayReview();
+    K.Store.reviewMission(day);
+    const old = new Date(); old.setDate(old.getDate() - 2);
+    const oldDay = old.getFullYear() + '-' + String(old.getMonth() + 1).padStart(2, '0') + '-'
+                 + String(old.getDate()).padStart(2, '0');
+    K.Store.recordMission({ day: oldDay, id: 'old-mission', gameId: 'count',
+      text: 'ふるい', prompt: 'ふるい' });
+    K.Store.completeMission(oldDay);
+    const onlyYesterday = K.Missions.yesterdayReview();
+    check('a completed real-world mission returns for a next-day reflection',
+      gated && adultAnswer && review && review.id === 'test-mission'
+        && K.Store.mission(day).reviewed && onlyYesterday === null,
+      'gated=' + gated + ' review=' + (review && review.id) + ' oldIgnored=' + (onlyYesterday === null));
+    K.Store.reset();
   })();
 
   function finish(){

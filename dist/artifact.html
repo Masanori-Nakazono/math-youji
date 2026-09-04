@@ -1439,6 +1439,28 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   border-color: color-mix(in srgb, var(--c-blue) 55%, var(--ink) 20%);
 }
 .daily.focusset .s{ color: var(--ink-soft); opacity: 1; }
+.daily.recommended{
+  background: var(--card);
+  color: var(--ink);
+  border-color: var(--c-blue);
+}
+.daily.recommended .s{ color: var(--ink-soft); opacity: 1; }
+.daily.reviewmission{
+  background: color-mix(in srgb, var(--c-purple) 14%, var(--card));
+  color: var(--ink);
+  border-color: var(--c-purple);
+}
+.daily.reviewmission .s{ color: var(--ink-soft); opacity: 1; }
+.voice-warning{
+  flex: 0 0 auto;
+  padding: calc(var(--u)*.55) calc(var(--u)*1);
+  border-radius: var(--wob-b);
+  background: var(--oops-soft);
+  color: var(--oops-ink);
+  border: calc(var(--u)*.18) solid var(--oops);
+  font-size: calc(var(--u)*1.45);
+  font-weight: 800;
+}
 
 /* ---------- parent: 今週やること ---------- */
 #parent .todo{
@@ -1472,7 +1494,7 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 .tile{ width: max(calc(var(--u)*4.6), var(--tap)); height: max(calc(var(--u)*4.6), var(--tap)); }
 .shapetile{ width: max(calc(var(--u)*7.6), var(--tap)); height: max(calc(var(--u)*7.6), var(--tap)); }
 .qi{ min-width: max(calc(var(--u)*5.4), var(--tap)); min-height: max(calc(var(--u)*5.4), var(--tap)); }
-.btn-round{ width: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); height: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); }
+.btn-round{ width: max(calc(var(--u)*4.4), var(--tap)); height: max(calc(var(--u)*4.4), var(--tap)); }
 
 /* ---------- parent: what each game is for ---------- */
 #parent .aimnote{
@@ -1508,6 +1530,103 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   min-height: max(calc(var(--u)*6), var(--tap));
   font-size: calc(var(--u)*3.2);
   padding: calc(var(--u)*.4) calc(var(--u)*.5);
+}
+
+/* ---------- diagnostic and real-world mission ---------- */
+#result .inner{ overflow-y: auto; justify-content: safe center; padding: calc(var(--u)*.4); }
+.diagnostic-next{
+  display:flex; flex-direction:column; gap:calc(var(--u)*.25);
+  background:color-mix(in srgb, var(--c-blue) 14%, var(--card));
+  border:calc(var(--u)*.2) solid var(--c-blue);
+  border-radius:var(--wob-b);
+  padding:calc(var(--u)*.7) calc(var(--u)*1.4);
+}
+.diagnostic-badge{
+  padding:calc(var(--u)*.4) calc(var(--u)*1.1);
+  border-radius:999px;
+  background:var(--good-soft); color:var(--good-ink);
+  font-size:calc(var(--u)*1.5); font-weight:800;
+}
+.diagnostic-next .l{ color:var(--ink-soft); font-size:calc(var(--u)*1.25); font-weight:800 }
+.result-mission{
+  width:min(100%, calc(var(--u)*48));
+  display:grid; gap:calc(var(--u)*.18);
+  padding:calc(var(--u)*.7) calc(var(--u)*1.1);
+  background:color-mix(in srgb, var(--c-purple) 12%, var(--card));
+  color:var(--ink);
+  border:calc(var(--u)*.2) solid var(--c-purple);
+  border-radius:var(--wob-b);
+  font:inherit; text-align:left; cursor:pointer;
+}
+.result-mission b{ font-size:calc(var(--u)*1.35) }
+.result-mission span{ font-size:calc(var(--u)*1.55); font-weight:800 }
+.result-mission small{ color:var(--ink-soft); font-size:calc(var(--u)*1.15) }
+.mission-sheet{
+  flex:1 1 auto; min-height:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:calc(var(--u)*1.2); text-align:center;
+}
+.mission-sheet .mascot{ width:calc(var(--u)*11); height:calc(var(--u)*11) }
+.mission-main{
+  width:min(100%, calc(var(--u)*54));
+  font-size:calc(var(--u)*2.5); line-height:1.35; font-weight:800;
+  padding:calc(var(--u)*1.2);
+  background:var(--card); border:calc(var(--u)*.24) solid var(--card-edge);
+  border-radius:var(--wob-a);
+}
+.mission-note{ font-size:calc(var(--u)*1.55); color:var(--ink-soft); font-weight:800 }
+.mission-actions{ display:flex; gap:calc(var(--u)*.8); flex-wrap:wrap; justify-content:center }
+
+/* ---------- constructive reasoning activities ---------- */
+.conserve-row{
+  width:min(100%, calc(var(--u)*46));
+  display:flex; justify-content:center; align-items:center;
+  gap:calc(var(--u)*.25);
+  min-height:calc(var(--u)*9);
+  padding:calc(var(--u)*1);
+  background:var(--card); border:calc(var(--u)*.24) solid var(--card-edge);
+  border-radius:var(--wob-a);
+}
+.conserve-row span{
+  position:relative; font-size:calc(var(--u)*4); line-height:1;
+  transition:margin .6s cubic-bezier(.2,.8,.3,1), transform .6s;
+}
+.conserve-row.spread span{ margin:0 calc(var(--u)*.65); transform:rotate(8deg) }
+.conserve-row .tag{
+  position:absolute; right:-.3em; top:-.45em;
+  width:1.35em; height:1.35em; display:grid; place-items:center;
+  border-radius:50%; background:var(--good); color:var(--on-crayon);
+  font-family:var(--fs-num); font-size:.38em; font-weight:800;
+}
+.car.empty{
+  border-style:dashed; border-color:var(--card-edge);
+  background:var(--paper-2);
+}
+.ways-board{ display:flex; gap:calc(var(--u)*1); flex-wrap:wrap; justify-content:center }
+.ways-board .way{
+  display:flex; align-items:center; gap:calc(var(--u)*.5);
+  padding:calc(var(--u)*.5); background:var(--card);
+  border:calc(var(--u)*.2) solid var(--card-edge); border-radius:var(--wob-b);
+}
+.ways-board .way .no{
+  width:calc(var(--u)*2); height:calc(var(--u)*2); display:grid; place-items:center;
+  border-radius:50%; background:var(--accent); color:var(--accent-ink); font-weight:800;
+}
+.ways-board .bond .whole{ width:calc(var(--u)*4.5); height:calc(var(--u)*4.5); font-size:calc(var(--u)*2.5) }
+.ways-board .bond .legs{ width:calc(var(--u)*12); height:calc(var(--u)*1.8) }
+.ways-board .bond .part{ min-width:calc(var(--u)*4.5); min-height:calc(var(--u)*4.5); font-size:calc(var(--u)*2.4) }
+.three-sum{
+  font-family:var(--fs-num); font-size:calc(var(--u)*4); font-weight:800;
+  padding:calc(var(--u)*.7) calc(var(--u)*1.2);
+  background:var(--card); border:calc(var(--u)*.24) solid var(--card-edge);
+  border-radius:var(--wob-b);
+}
+.clock-adjust{ min-height:var(--tap); padding-inline:calc(var(--u)*1.1) }
+.clock-readout{
+  font-size:calc(var(--u)*1.35);
+  color:var(--ink-soft);
+  font-weight:800;
+  min-height:calc(var(--u)*2.2);
 }
 </style>
 <div id="stage"></div>
@@ -1797,6 +1916,27 @@ const Sound = (() => {
     speechSynthesis.addEventListener('voiceschanged', loadVoices);
   }
 
+  /** iOS may populate voices asynchronously after the first user gesture. */
+  function probeVoice(timeout){
+    if (!voiceOn || !window.speechSynthesis) return Promise.resolve(false);
+    loadVoices();
+    if (jaVoice) return Promise.resolve(true);
+    return new Promise(resolve => {
+      let done = false;
+      const finish = ok => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try{ speechSynthesis.removeEventListener('voiceschanged', changed); }catch(e){}
+        resolve(!!ok);
+      };
+      const changed = () => { loadVoices(); if (jaVoice) finish(true); };
+      const timer = setTimeout(() => { loadVoices(); finish(!!jaVoice); },
+        timeout == null ? 1200 : timeout);
+      try{ speechSynthesis.addEventListener('voiceschanged', changed); }catch(e){}
+    });
+  }
+
   /* Japanese TTS decides its phrasing and pitch accent by parsing the sentence,
      and a space inside a sentence breaks that parse — the reason the same line
      can come out either flat or lively. The prompts are written with kanji and
@@ -1839,7 +1979,7 @@ const Sound = (() => {
   }
 
   return {
-    sfx: S, unlock, say, hush,
+    sfx: S, unlock, say, hush, probeVoice,
     get sfxOn(){ return sfxOn; },  set sfxOn(v){ sfxOn = !!v; },
     get voiceOn(){ return voiceOn; }, set voiceOn(v){ voiceOn = !!v; if (!v) hush(); },
     get hasVoice(){ return !!jaVoice; },
@@ -1879,6 +2019,8 @@ const Store = (() => {
     stickers: [],     // earned sticker keys
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
+    diagnostic: null, // { completedDay, outcomes, recommended }
+    missions: {},     // "YYYY-MM-DD" -> { id, gameId, text, prompt, done, reviewed }
     name: '',
     sfx: true, voice: true, voiceId: null,
     createdAt: Date.now()
@@ -1963,6 +2105,24 @@ const Store = (() => {
     out.stickers = Array.from(new Set((base.stickers || []).concat(add.stickers || [])));
     const bp = base.practice || [0, 0], ap = add.practice || [0, 0];
     out.practice = (ap[1] || 0) > (bp[1] || 0) ? ap.slice() : bp.slice();
+    const bd = base.diagnostic, ad = add.diagnostic;
+    out.diagnostic = !bd ? ad : !ad ? bd
+      : ((ad.completedDay || 0) > (bd.completedDay || 0) ? ad : bd);
+    out.missions = Object.assign({}, base.missions || {});
+    for (const d in (add.missions || {})){
+      const cur = out.missions[d], incoming = add.missions[d];
+      if (!cur) out.missions[d] = Object.assign({}, incoming);
+      else if (cur.id === incoming.id) out.missions[d] = Object.assign({}, cur, incoming, {
+        done: !!(cur.done || incoming.done),
+        reviewed: !!(cur.reviewed || incoming.reviewed)
+      });
+      else {
+        // A catalog update can assign a different mission to the same date.
+        // Keep one actual record intact; never transfer completion to other text.
+        const score = m => (m.reviewed ? 4 : 0) + (m.done ? 2 : 0) + (m.doneDay || 0) / 1e9;
+        out.missions[d] = Object.assign({}, score(incoming) > score(cur) ? incoming : cur);
+      }
+    }
     out.createdAt = Math.min(base.createdAt || Date.now(), add.createdAt || Date.now());
     return out;
   }
@@ -2076,6 +2236,37 @@ const Store = (() => {
       mem.daily[t] = (mem.daily[t] || 0) + total;
       save();
     },
+    recordDiagnostic(outcomes, recommended){
+      mem.diagnostic = {
+        completedDay: dayNo(),
+        outcomes: (outcomes || []).map(x => ({
+          gameId: x.gameId, levelIndex: x.levelIndex || 0, clean: !!x.clean
+        })),
+        recommended: recommended || null
+      };
+      save();
+    },
+    recordMission(mission){
+      if (!mission || !mission.day) return;
+      mem.missions[mission.day] = Object.assign({}, mission, { done: false, reviewed: false });
+      save();
+    },
+    completeMission(day){
+      const m = mem.missions[day];
+      if (!m) return false;
+      m.done = true;
+      m.doneDay = dayNo();
+      save();
+      return true;
+    },
+    reviewMission(day){
+      const m = mem.missions[day];
+      if (!m) return false;
+      m.reviewed = true;
+      save();
+      return true;
+    },
+    mission: day => mem.missions[day] || null,
     practiceAccuracy(){
       const p = mem.practice;
       return (p && p[1]) ? p[0] / p[1] : null;
@@ -2642,7 +2833,7 @@ function stickerFor(key){
 }
 
 const Session = (() => {
-  let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, moodEl, feedbackEl;
+  let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, backBtn, moodEl, feedbackEl;
   let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
@@ -2665,6 +2856,8 @@ const Session = (() => {
   }
   let usedItems = new Set();      // the shuffle bag for the current session
   let shaky = [];                 // facts missed this session, for the result screen
+  let sessionOutcomes = [];       // [{ gameId, levelIndex, clean }] for diagnostic/recommendation
+  let quitArmed = false, quitTimer = null;
 
   /* ---------- timer lifecycle ----------
      Every delayed callback in a question is tied to an epoch. Leaving a question
@@ -2701,10 +2894,12 @@ const Session = (() => {
     if (node) return node;
     titleEl   = el('h2');
     pipsEl    = el('div.pips');
-    promptTxt = el('div.txt');
+    promptTxt = el('div.txt', { 'aria-live': 'polite', 'aria-atomic': 'true' });
     fieldEl   = el('div.playfield');
     choicesEl = el('div.choices');
-    feedbackEl = el('div.feedback', { hidden: true });
+    feedbackEl = el('div.feedback', {
+      hidden: true, 'aria-live': 'polite', 'aria-atomic': 'true', role: 'status'
+    });
     speakBtn  = el('button.btn.btn-ghost.btn-round', {
       'aria-label': 'もういちど きく', title: 'もういちど きく',
       onclick(){ Sound.sfx.tap(); if (lastSpeech) Sound.say(lastSpeech, { delay: 40 }); }
@@ -2713,9 +2908,12 @@ const Session = (() => {
     moodEl.style.width = 'calc(var(--u)*4.6)';
     moodEl.style.height = 'calc(var(--u)*4.6)';
 
+    backBtn = el('button.btn.btn-ghost.btn-round.backbtn', {
+      'aria-label': 'もどる', onclick: quit
+    }, '←');
     node = el('div#play', null,
       el('div.topbar', null,
-        el('button.btn.btn-ghost.btn-round.backbtn', { 'aria-label': 'もどる', onclick: quit }, '←'),
+        backBtn,
         titleEl, pipsEl),
       el('div.prompt', null, moodEl,
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn),
@@ -2744,8 +2942,29 @@ const Session = (() => {
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
   }
   function clearFeedback(){ feedbackEl.hidden = true; clear(feedbackEl); }
+  function disarmQuit(){
+    quitArmed = false;
+    clearTimeout(quitTimer);
+    if (backBtn){
+      backBtn.textContent = '←';
+      backBtn.setAttribute('aria-label', 'もどる');
+    }
+  }
 
   function quit(){
+    if (!quitArmed){
+      quitArmed = true;
+      backBtn.textContent = '？';
+      backBtn.setAttribute('aria-label', 'もういちど おすと おわる');
+      showFeedback('oops', 'もういちど おすと おわるよ');
+      clearTimeout(quitTimer);
+      quitTimer = setTimeout(() => {
+        disarmQuit();
+        clearFeedback();
+      }, 2600);
+      return;
+    }
+    disarmQuit();
     killTimers();
     Sound.hush();
     Sound.sfx.tap();
@@ -2784,6 +3003,26 @@ const Session = (() => {
     const n = count || 10;
     plan = drawDailyPlan(pool, n);
     titleEl.textContent = 'きょうの れんしゅう';
+    begin();
+  }
+
+  /** A short first-run sampler. It chooses a starting point; it never locks content
+      or labels a child. Every game remains available from Home. */
+  function startDiagnostic(){
+    build();
+    killTimers();
+    mode = 'diagnostic'; curGame = null;
+    const picks = [
+      ['count', 0], ['numeral', 0], ['seq', 0], ['compare', 0], ['ordinal', 0],
+      ['measure', 0], ['bond', 0], ['shape', 0], ['pattern', 0], ['clock', 0]
+    ];
+    plan = picks.map(([id, levelIndex]) => {
+      const game = Games.byId[id];
+      return game && game.levels[levelIndex]
+        ? { game, level: game.levels[levelIndex], levelIndex }
+        : null;
+    }).filter(Boolean);
+    titleEl.textContent = 'はじめの ぼうけん';
     begin();
   }
 
@@ -2876,9 +3115,10 @@ const Session = (() => {
   }
 
   function begin(){
+    disarmQuit();
     idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0;
     if (mode !== 'focus') focusKeys = [];
-    usedItems = new Set(); shaky = [];
+    usedItems = new Set(); shaky = []; sessionOutcomes = [];
     clear(pipsEl);
     plan.forEach(() => pipsEl.append(el('div.pip')));
     UI.show('play');
@@ -3089,13 +3329,16 @@ const Session = (() => {
   }
 
   function nextQuestion(){
+    disarmQuit();
     killTimers();
     wrongThisQ = 0;
     $$('.pip', pipsEl).forEach((p, i) => p.classList.toggle('now', i === idx));
     setMood('idle');
     const step = plan[idx];
     if (mode !== 'level'){
-      titleEl.textContent = (mode === 'daily' ? 'きょうの れんしゅう' : 'にがて あつめ') + '　' + step.game.name;
+      const modeName = mode === 'daily' ? 'きょうの れんしゅう'
+                     : mode === 'focus' ? 'にがて あつめ' : 'はじめの ぼうけん';
+      titleEl.textContent = modeName + '　' + step.game.name;
     }
     drawQuestion(step);
     // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
@@ -3140,15 +3383,20 @@ const Session = (() => {
     markResponse();
     clearFeedback();
     const clean = wrongThisQ === 0;
+    sessionOutcomes.push({
+      gameId: plan[idx].game.id, levelIndex: plan[idx].levelIndex, clean
+    });
     if (clean) firstTryRight++;
     const g = plan[idx].game;
     const timed = g.fluent && clean ? respondedMs : null;
     if (timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
-    Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
-    if (curItem){
-      Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed);
-      if (!clean && !shaky.some(x => x.key === curItem)){
-        shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
+    if (mode !== 'diagnostic'){
+      Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
+      if (curItem){
+        Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed);
+        if (!clean && !shaky.some(x => x.key === curItem)){
+          shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
+        }
       }
     }
     Sound.sfx.correct();
@@ -3185,7 +3433,7 @@ const Session = (() => {
        guaranteed for finishing, so the unlock gate really only asked whether the
        child had sat through the level. Grade the questions answered right first
        time instead, and let a session score nothing. */
-    const stars = starsFor(firstTryRight, total);
+    const stars = mode === 'diagnostic' ? 3 : starsFor(firstTryRight, total);
     /* ★★★ says every answer was right first time. This says they arrived — which is
        the thing these levels are actually for, and the thing three stars could not
        distinguish from nine seconds of counting. Only on the games where speed is
@@ -3207,6 +3455,9 @@ const Session = (() => {
           newSticker = { emoji: stickerFor(key + ':g'), gold: true };
         }
       }
+    } else if (mode === 'diagnostic'){
+      const recommended = Diagnostic.recommendFrom(sessionOutcomes);
+      Store.recordDiagnostic(sessionOutcomes, recommended);
     } else {
       if (mode === 'daily') Store.recordPractice(firstTryRight, total);
       else Store.recordFocus(firstTryRight, total);
@@ -3214,12 +3465,19 @@ const Session = (() => {
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
       if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
     }
+    const gameCounts = {};
+    plan.forEach(x => { gameCounts[x.game.id] = (gameCounts[x.game.id] || 0) + 1; });
+    const primaryGameId = mode === 'level' && curGame ? curGame.id
+      : Object.keys(gameCounts).sort((a, b) => gameCounts[b] - gameCounts[a])[0] || null;
     Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
-                  sticker: newSticker, shaky: shaky.slice(0, 3), focusKeys: focusKeys.slice(), swift });
+                  sticker: newSticker, shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
+                  focusKeys: focusKeys.slice(), swift,
+                  recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
+                  lastGameId: primaryGameId });
   }
 
   return {
-    startLevel, startDaily, startFocus, build,
+    startLevel, startDaily, startFocus, startDiagnostic, build,
     _test: {
       flushTimers,
       get idx(){ return idx; },
@@ -3348,7 +3606,9 @@ Games.add({
   aim: 'ものを <b>1つずつ指さして数え</b>、最後に言った数がそのまとまり全体の数だと分かる力（一対一対応と基数性）。数唱が言えることと「数えられる」ことは別で、就学前にいちばん差がつく土台です。',
   levels: [
     { t: '1〜5', d: 'いちれつに ならんだ もの', make: api => countQuestion(api, 1, 5, 'line') },
-    { t: '1〜10', d: 'ばらばらに ある もの', make: api => countQuestion(api, 4, 10, 'scatter') },
+    { t: '1〜10', d: 'ばらばらでも かずは おなじ', make: api => chance(.25)
+        ? conserveNumber(api)
+        : countQuestion(api, 4, 10, 'scatter') },
     { t: '◯こ ちょうだい', d: 'かずだけ とりだす', make: api => giveQuestion(api, 3, 10) }
   ]
 });
@@ -3744,13 +4004,17 @@ function traceQuestion(api, digits){
       box.setPointerCapture && box.setPointerCapture(e.pointerId);
       e.preventDefault();
     } else {
-      // touched the wrong place: bounce the start dot toward the finger, and after a
-      // couple of tries count it as a miss so the hint fires and the stars are honest
+      // Starting outside the dot is a motor-control slip, not evidence that the
+      // child misunderstood the numeral. Nudge visually without lowering math stars.
       const dot = $('.trace-start', box);
       if (dot && dot.animate) dot.animate(
         [{ transform: 'scale(1)' }, { transform: 'scale(1.6)' }, { transform: 'scale(1)' }],
         { duration: 420 });
-      if (++strays % 2 === 0) api.wrong();
+      if (++strays % 2 === 0){
+        nudged = true;
+        showGuide();
+        Sound.say('赤い点から、なぞってみよう。', { delay: 100 });
+      }
       armIdle();
     }
   }
@@ -3897,12 +4161,38 @@ function compareNumerals(api){
   api.buildChoices(shuffle([a, b]), ans);
 }
 
+/** The quantity stays the same when the spacing changes. This asks about
+    conservation directly instead of merely making large icons look numerous. */
+function conserveNumber(api){
+  const n = ri(4, 8), thing = pick(THINGS);
+  api.item('conserve:' + n, n + 'こを ひろげても おなじ');
+  api.setPrompt('よく みていてね。ならびかたを かえるよ', 'よく見ていてね。並び方を変えるよ。');
+  const row = el('div.conserve-row');
+  for (let i = 0; i < n; i++) row.append(el('span', { text: thing.e }));
+  api.field.append(row);
+  api.later(() => {
+    row.classList.add('spread');
+    Sound.sfx.swoosh();
+    api.later(() => {
+      api.setPrompt('ひろげたら、かずは かわった？', '広げたら、数は変わった？');
+      api.buildChoices(['おなじ', 'かわった'], 'おなじ');
+    }, 650);
+  }, 650);
+  api.onHint(() => {
+    $$('.conserve-row span', api.field).forEach((x, i) => {
+      if (!$('.tag', x)) x.append(el('small.tag', { text: String(i + 1) }));
+    });
+    api.field.append(el('div.hintline', { text: 'ばしょが かわっても ' + n + 'こ のまま' }));
+  });
+}
+
 Games.add({
   id: 'compare', name: 'どっちが おおい', ico: '⚖️', world: 'umi', color: 'var(--c-green)',
   aim: '<b>見た目の大きさや広がりに惑わされず</b>、数そのもので多い少ないを判断する力。「大きい物が少しある方が多く見える」段階を、数えて確かめる経験で越えていきます。',
   levels: [
     { t: 'ぱっと みて', d: 'はっきり ちがう かず', make: compareEasy },
-    { t: 'ちかい かず', d: 'かぞえないと わからない', make: compareClose },
+    { t: 'ちかい かず', d: 'ならべかえても かずは おなじ',
+      make: api => chance(.35) ? conserveNumber(api) : compareClose(api) },
     { t: '3つ・すうじ', d: 'いちばん おおい／すくない', make: api => chance(.4) ? compareNumerals(api) : compareThree(api) }
   ]
 });
@@ -4343,12 +4633,67 @@ function compose(api, maxWhole, pad){
   }
 }
 
+/** Make two different decompositions. There is no single hidden answer: every
+    split is valid, and the child succeeds by producing a genuinely different one. */
+function makeTwoWays(api){
+  const whole = ri(6, 9);
+  api.item('ways:' + whole, whole + ' を 2とおりに わける');
+  api.setPrompt(`${numTag(whole)} を ちがう 2つの やりかたで わけよう`,
+                `${numKana(whole)}を、違う二つのやり方で分けよう。`);
+  const made = [], board = el('div.ways-board');
+  let accepting = true;
+  api.field.append(board);
+
+  const draw = () => {
+    clear(board);
+    made.forEach((a, i) => board.append(
+      el('div.way', null,
+        el('span.no', { text: String(i + 1) }),
+        bondNode(whole, a, whole - a))));
+  };
+  const build = () => {
+    clear(api.choices);
+    accepting = true;
+    for (let a = 1; a < whole; a++){
+      const b = el('button.choice', { type: 'button', text: String(a) });
+      b.addEventListener('click', () => {
+        if (api.locked || !accepting) return;
+        accepting = false;                    // a double tap is one construction
+        const same = made.some(x => Math.min(x, whole - x) === Math.min(a, whole - a));
+        if (same){
+          api.wrong(b);
+          Sound.say('同じ分け方だね。違う分け方も作ってみよう。', { delay: 250 });
+          api.later(() => { accepting = true; }, 360);
+          return;
+        }
+        made.push(a);
+        b.classList.add('correct');
+        draw();
+        Sound.say(`${numKana(a)}と${numKana(whole-a)}。`, { delay: 120 });
+        if (made.length >= 2) api.later(() => api.correct({ quiet: true, delay: 900 }), 350);
+        else api.later(build, 350);
+      });
+      api.choices.append(b);
+    }
+  };
+  draw();
+  build();
+  api.onHint(() => {
+    const a = made.length ? Math.min(whole - 1, made[0] + 1) : 1;
+    api.field.append(el('div.hintline', {
+      text: a + ' と ' + (whole - a) + ' に わけることも できるよ'
+    }));
+  });
+}
+
 Games.add({
   id: 'bond', name: 'いくつと いくつ', ico: '🧩', world: 'yama', color: 'var(--c-red)', focus: 1.7, fluent: true,
   aim: '5や10を<b>2つの数に分けたり、合わせたり</b>する感覚。たし算・ひき算を「数えないで思い出す」ための部品で、くり上がり・くり下がりの計算はこれが土台になります。ここが自動化していると小1は驚くほど楽になります。',
   levels: [
     { t: '5は いくつと いくつ', d: 'ごの ぶんかい', make: api => chance(.25) ? compose(api, 5) : decompose(api, 5) },
-    { t: '6〜9', d: 'すこし おおきい かず', make: api => chance(.3) ? compose(api, ri(6, 9)) : decompose(api, ri(6, 9)) },
+    { t: '6〜9', d: 'ちがう わけかたも つくる', make: api => chance(.3)
+        ? makeTwoWays(api)
+        : chance(.3) ? compose(api, ri(6, 9)) : decompose(api, ri(6, 9)) },
     // the top level asks the child to produce the number, not pick it out of three
     { t: '10は いくつと いくつ', d: 'すうじを じぶんで えらぶ', make: api => chance(.25) ? compose(api, 10, true) : decompose(api, 10, true) }
   ]
@@ -4474,13 +4819,53 @@ function pairHunt(api){
   });
 }
 
+/** Build ten from three numbers. Multiple answers are accepted; the app evaluates
+    the child's construction instead of asking them to recognise one prepared pair. */
+function threeMakeTen(api){
+  api.item('three10', '3つの かずで 10を つくる');
+  api.setPrompt('3つの すうじを えらんで <b>10</b> を つくろう',
+                '三つの数字を選んで、10を作ろう。');
+  const picked = [];
+  let accepting = true;
+  const readout = el('div.three-sum', { text: '? ＋ ? ＋ ? ＝ 10' });
+  api.field.append(readout);
+  const redraw = () => {
+    const vals = picked.concat(['?', '?', '?']).slice(0, 3);
+    readout.textContent = vals.join(' ＋ ') + ' ＝ 10';
+  };
+  for (let v = 0; v <= 9; v++){
+    const b = el('button.choice.padkey', { type: 'button', text: String(v) });
+    b.addEventListener('click', () => {
+      if (api.locked || !accepting) return;
+      picked.push(v); redraw(); Sound.sfx.tap();
+      if (picked.length < 3) return;
+      accepting = false;
+      const sum = picked.reduce((a, x) => a + x, 0);
+      if (sum === 10){
+        b.classList.add('correct');
+        api.correct({ delay: 1400 });
+      } else {
+        api.wrong(b);
+        Sound.say(`合わせると${numKana(sum)}だね。10になるように変えてみよう。`, { delay: 280 });
+        api.later(() => { picked.length = 0; redraw(); accepting = true; }, 650);
+      }
+    });
+    api.choices.append(b);
+  }
+  api.choices.classList.add('pad');
+  api.onHint(() => {
+    api.field.append(el('div.hintline', { text: 'まず 5 を えらんで、のこりの 5 を 2つに わけてみよう' }));
+  });
+}
+
 Games.add({
   id: 'ten', name: '10の おともだち', ico: '🔟', world: 'yama', color: 'var(--c-red)', focus: 1.7, fluent: true,
   aim: '<b>合わせて10になる組み合わせ</b>を、考えずに言えるようにする練習。「9+4」を「9+1+3」と処理するくり上がりの計算は、これが即答できるかどうかで速さがまったく変わります。',
   levels: [
     { t: '10まで うめる', d: 'わくを いっぱいに する', make: fillToTen },
     { t: '◯と いくつで10', d: 'あと いくつ？ じぶんで こたえる', make: api => partnerOfTen(api, true) },
-    { t: 'ペアを さがす', d: '2まいで 10を つくる', make: pairHunt }
+    { t: 'ペアを さがす', d: '2まい・3まいで 10を つくる',
+      make: api => chance(.35) ? threeMakeTen(api) : pairHunt(api) }
   ]
 });
 
@@ -5044,13 +5429,50 @@ function patternQuestion(api, unitKind, blanks){
   });
 }
 
+/** Let the child author the repeating unit, then show the rule they created. */
+function createPattern(api){
+  const opts = sample(PAT_TOKENS, 5), chosen = [];
+  api.item('create:AB', 'じぶんで 2つの くりかえしを つくる');
+  api.setPrompt('すきな 2つを えらんで、きまりを つくろう',
+                '好きな二つを選んで、きまりを作ろう。');
+  const train = el('div.train');
+  for (let i = 0; i < 8; i++) train.append(el('div.car.empty'));
+  api.field.append(train);
+  opts.forEach(v => {
+    const b = el('button.choice.pic', { type: 'button', text: v });
+    b.addEventListener('click', () => {
+      if (api.locked) return;
+      if (chosen.indexOf(v) >= 0) return;     // a child's double tap is one choice
+      chosen.push(v);
+      const cars = $$('.car', train);
+      cars.forEach((c, i) => {
+        if (i >= chosen.length && chosen.length < 2) return;
+        c.classList.remove('empty');
+        c.textContent = chosen[i % chosen.length];
+      });
+      b.classList.add('picked');
+      if (chosen.length === 2){
+        $$('.choice.picked', api.choices).forEach(x => x.classList.add('correct'));
+        api.setPrompt('できた きまりを こえに だして いってみよう',
+                      'できた決まりを、声に出して言ってみよう。');
+        api.later(() => api.correct({ quiet: true, delay: 1300 }), 500);
+      }
+    });
+    api.choices.append(b);
+  });
+  api.onHint(() => {
+    if (chosen.length) api.field.append(el('div.hintline', { text: chosen[0] + ' の つぎに くるものを えらぼう' }));
+  });
+}
+
 Games.add({
   id: 'pattern', name: 'きまり さがし', ico: '🎏', world: 'mori', color: 'var(--c-purple)',
   aim: '<b>繰り返しのきまりを見つけて先を予想する</b>力。規則性に気づく経験は、九九・図形の性質・関数の考えまで続く「算数的な見方」そのものです。',
   levels: [
     { t: '2つの くりかえし', d: '●▲●▲…', make: api => patternQuestion(api, 'AB', 1) },
     { t: '3つの くりかえし', d: '●●▲ / ●▲▲', make: api => patternQuestion(api, pick(['AAB', 'ABB', 'ABC']), 1) },
-    { t: 'むずかしい きまり', d: 'あなが 2つ', make: api => patternQuestion(api, pick(['ABC', 'ABBA', 'AAB']), 2) }
+    { t: 'むずかしい きまり', d: 'あなを うめる・じぶんで つくる',
+      make: api => chance(.3) ? createPattern(api) : patternQuestion(api, pick(['ABC', 'ABBA', 'AAB']), 2) }
   ]
 });
 
@@ -5113,32 +5535,54 @@ function pickClock(api, half){
   });
 }
 
-function setClock(api){
-  const target = ri(1, 12);
-  api.item('set:' + target, target + 'じ に はりを あわせる');
-  api.setPrompt(`<b>${target}じ</b> に なるように みじかい はりを うごかそう`,
-                `${jiKana(target)}になるように、短い針を動かそう。`);
-  let cur = ri(1, 12);
-  for (let g = 0; g < 100 && cur === target; g++) cur = ri(1, 12);
-  if (cur === target) cur = target === 12 ? 1 : target + 1;
-  const holder = el('div', { style: { touchAction: 'none' } });
+function setClock(api, hand){
+  const minuteMode = hand === 'minute';
+  const targetHour = ri(1, 12), target = minuteMode ? 30 : targetHour;
+  api.item(minuteMode ? 'sethalf:' + targetHour : 'set:' + targetHour,
+    minuteMode ? targetHour + 'じはん に ながいはりを あわせる' : targetHour + 'じ に みじかいはりを あわせる');
+  api.setPrompt(minuteMode
+      ? `<b>${targetHour}じはん</b> に なるように ながい はりを うごかそう`
+      : `<b>${targetHour}じ</b> に なるように みじかい はりを うごかそう`,
+    minuteMode
+      ? `${jiKana(targetHour, true)}になるように、長い針を動かそう。`
+      : `${jiKana(targetHour)}になるように、短い針を動かそう。`);
+  let cur = minuteMode ? pick([0, 5, 10, 15, 20, 40, 45, 50, 55]) : ri(1, 12);
+  for (let g = 0; g < 100 && cur === target; g++)
+    cur = minuteMode ? pick([0, 5, 10, 15, 20, 40, 45, 50, 55]) : ri(1, 12);
+  if (cur === target) cur = minuteMode ? 0 : (targetHour === 12 ? 1 : targetHour + 1);
+  const holder = el('div', {
+    style: { touchAction: 'none' }, role: 'group',
+    'aria-label': minuteMode ? 'ながい はりを うごかす とけい' : 'みじかい はりを うごかす とけい'
+  });
   api.field.append(holder);
-  const readout = el('div.hintline', { text: 'いま ' + cur + 'じ' });
+  const readout = el('div.clock-readout', { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
   api.field.append(readout);
 
-  const clock = clockSVG(cur, 0, { cls: 'pickable' });
+  const clock = clockSVG(minuteMode ? targetHour : cur, minuteMode ? cur : 0, { cls: 'pickable' });
   clock.style.width = 'calc(var(--u)*26)';
   clock.style.height = 'calc(var(--u)*26)';
   holder.append(clock);
   const hourHand = $('.hand-h', clock);
+  const minuteHand = $('.hand-m', clock);
 
   function paint(){
-    // rebuilding the SVG here would destroy the node that received pointerdown,
-    // which is exactly why dragging the hand never worked
-    const a = ((cur % 12) / 12) * Math.PI * 2 - Math.PI / 2;
-    hourHand.setAttribute('x2', (50 + Math.cos(a) * 21).toFixed(2));
-    hourHand.setAttribute('y2', (50 + Math.sin(a) * 21).toFixed(2));
-    readout.textContent = 'いま ' + cur + 'じ';
+    if (minuteMode){
+      const ma = (cur / 60) * Math.PI * 2 - Math.PI / 2;
+      const ha = (((targetHour % 12) + .5) / 12) * Math.PI * 2 - Math.PI / 2;
+      minuteHand.setAttribute('x2', (50 + Math.cos(ma) * 33).toFixed(2));
+      minuteHand.setAttribute('y2', (50 + Math.sin(ma) * 33).toFixed(2));
+      hourHand.setAttribute('x2', (50 + Math.cos(ha) * 21).toFixed(2));
+      hourHand.setAttribute('y2', (50 + Math.sin(ha) * 21).toFixed(2));
+      readout.textContent = cur === 30 ? targetHour + 'じはん' : 'ながい はりは ' + cur + 'ふん';
+      holder.setAttribute('aria-label', readout.textContent + '。ながい はりを うごかす とけい');
+    } else {
+      // rebuilding the SVG would destroy the node that received pointerdown
+      const a = ((cur % 12) / 12) * Math.PI * 2 - Math.PI / 2;
+      hourHand.setAttribute('x2', (50 + Math.cos(a) * 21).toFixed(2));
+      hourHand.setAttribute('y2', (50 + Math.sin(a) * 21).toFixed(2));
+      readout.textContent = 'いま ' + cur + 'じ';
+      holder.setAttribute('aria-label', readout.textContent + '。みじかい はりを うごかす とけい');
+    }
   }
 
   let down = false;
@@ -5149,15 +5593,21 @@ function setClock(api){
     const dy = e.clientY - (r.top + r.height / 2);
     let ang = Math.atan2(dy, dx) + Math.PI / 2;
     if (ang < 0) ang += Math.PI * 2;
-    let h = Math.round(ang / (Math.PI * 2) * 12);
-    if (h === 0) h = 12;
-    if (h !== cur){ cur = h; Sound.sfx.tap(); paint(); }
+    let v;
+    if (minuteMode){
+      v = Math.round(ang / (Math.PI * 2) * 12) * 5;
+      if (v === 60) v = 0;
+    } else {
+      v = Math.round(ang / (Math.PI * 2) * 12);
+      if (v === 0) v = 12;
+    }
+    if (v !== cur){ cur = v; Sound.sfx.tap(); paint(); }
   }
   clock.addEventListener('pointerdown', e => {
     if (api.locked) return;
     down = true;
     e.preventDefault();
-    if (clock.setPointerCapture) clock.setPointerCapture(e.pointerId);
+    try{ if (clock.setPointerCapture) clock.setPointerCapture(e.pointerId); }catch(err){}
     setFrom(e);
   });
   clock.addEventListener('pointermove', e => { if (down && !api.locked){ e.preventDefault(); setFrom(e); } });
@@ -5171,11 +5621,36 @@ function setClock(api){
       if (api.locked) return;
       if (cur === target) api.correct(); else { api.wrong(check); }
     } });
-  api.choices.append(check);
+  const controls = minuteMode
+    ? [
+        el('button.btn.clock-adjust', {
+          type: 'button', text: 'ながい はりを 12に',
+          onclick(){ if (!api.locked){ cur = 0; Sound.sfx.tap(); paint(); } }
+        }),
+        el('button.btn.clock-adjust', {
+          type: 'button', text: 'ながい はりを 6に',
+          onclick(){ if (!api.locked){ cur = 30; Sound.sfx.tap(); paint(); } }
+        })
+      ]
+    : [
+        el('button.btn.clock-adjust', {
+          type: 'button', text: '1じ もどす',
+          onclick(){ if (!api.locked){ cur = cur === 1 ? 12 : cur - 1; Sound.sfx.tap(); paint(); } }
+        }),
+        el('button.btn.clock-adjust', {
+          type: 'button', text: '1じ すすめる',
+          onclick(){ if (!api.locked){ cur = cur === 12 ? 1 : cur + 1; Sound.sfx.tap(); paint(); } }
+        })
+      ];
+  api.choices.append(...controls, check);
   api.onHint(() => {
     if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', { text: 'みじかい はりが ' + target + ' を さすように まわそう' }));
-    $$('text', clock).forEach(t => { if (t.textContent === String(target)) t.classList.add('goal'); });
+    api.field.append(el('div.hintline', { text: minuteMode
+      ? '「はん」の とき、ながい はりは 6を さすよ'
+      : 'みじかい はりが ' + targetHour + ' を さすように まわそう' }));
+    $$('text', clock).forEach(t => {
+      if (t.textContent === String(minuteMode ? 6 : targetHour)) t.classList.add('goal');
+    });
   });
 }
 
@@ -5185,9 +5660,199 @@ Games.add({
   levels: [
     { t: 'なんじ', d: 'ちょうどの じかん', make: api => readClock(api, false) },
     { t: 'なんじはん', d: 'はんも よめるように', make: api => chance(.5) ? readClock(api, true) : pickClock(api, true) },
-    { t: 'はりを うごかす', d: 'じぶんで あわせる', n: 6, make: setClock }
+    { t: 'はりを うごかす', d: 'なんじ・なんじはんに あわせる', n: 6,
+      make: api => setClock(api, chance(.5) ? 'minute' : 'hour') }
   ]
 });
+
+/* ---- 89-experience.js ---- */
+/* ===========================================================
+   89 — first-run diagnostic, recommendations, and real-world missions
+   =========================================================== */
+'use strict';
+
+const Diagnostic = (() => {
+  const ORDER = ['count', 'numeral', 'seq', 'compare', 'ordinal', 'measure',
+                 'bond', 'shape', 'pattern', 'clock'];
+
+  function shouldRun(){
+    return !Store.data.diagnostic
+      && Store.totalStars() === 0
+      && Object.keys(Store.data.recent || {}).length === 0;
+  }
+
+  function recommendFrom(outcomes){
+    const xs = outcomes || [];
+    for (const id of ORDER){
+      const x = xs.find(o => o.gameId === id);
+      if (x && !x.clean) return { gameId: id, levelIndex: 0 };
+    }
+    return { gameId: 'flash', levelIndex: 0 };
+  }
+
+  function current(){
+    let weakest = null;
+    Games.list.forEach(g => g.levels.forEach((lv, i) => {
+      if (!Store.levelUnlocked(g.id, i)) return;
+      const n = Store.recentCount(g.id, i);
+      if (n < 4) return;
+      const acc = Store.recentAccuracy(g.id, i);
+      if (!weakest || acc < weakest.acc) weakest = { gameId: g.id, levelIndex: i, acc };
+    }));
+    if (weakest && weakest.acc < .75) return weakest;
+
+    const first = Store.data.diagnostic && Store.data.diagnostic.recommended;
+    if (first && Games.byId[first.gameId]
+        && Store.levelUnlocked(first.gameId, first.levelIndex || 0)
+        && Store.stars(first.gameId, first.levelIndex || 0) < 2) return first;
+
+    for (const id of ['count', 'flash', 'numeral', 'seq', 'bond']){
+      const g = Games.byId[id];
+      if (!g) continue;
+      for (let i = 0; i < g.levels.length; i++){
+        if (Store.levelUnlocked(id, i) && Store.stars(id, i) < 2) return { gameId: id, levelIndex: i };
+      }
+    }
+    return { gameId: 'bond', levelIndex: 0 };
+  }
+
+  function startRecommended(){
+    const r = current(), g = r && Games.byId[r.gameId];
+    if (g && g.levels[r.levelIndex]) Session.startLevel(g, r.levelIndex);
+    else Session.startDaily(10);
+  }
+
+  return { shouldRun, recommendFrom, current, startRecommended };
+})();
+
+const Missions = (() => {
+  const BANK = [
+    ['count', 'おうちの なかから ものを 5こ あつめよう', 'ひとつずつ ゆびを さして かぞえてみよう'],
+    ['count', '3にんぶんの スプーンを もってこよう', 'ひとりに 1ぽんずつ あるかな？'],
+    ['flash', 'おはじきや おかしを 5こと 2こに ならべよう', 'ぜんぶを かぞえる まえに いくつか いってみよう'],
+    ['flash', 'サイコロを 3かい ふって ぱっと かずを いおう', 'てんを ひとつずつ かぞえないで みてみよう'],
+    ['numeral', '1から10の すうじを いえの なかで 3つ さがそう', 'みつけた すうじを こえに だそう'],
+    ['numeral', 'カレンダーで きょうの すうじを さがそう', 'おなじ すうじが ほかにも あるかな？'],
+    ['seq', 'カレンダーの 1から10を じゅんばんに ゆびで たどろう', 'こんどは 10から ぎゃくに たどってみよう'],
+    ['seq', 'おふろで 10から 1まで ぎゃくに かぞえよう', '0まで いえたら おしまい'],
+    ['compare', 'おなじ おもちゃを 2つの ばしょに ならべよう', 'ひろげても かずは おなじか たしかめよう'],
+    ['compare', 'くだものと おかしを ならべて どちらが おおいか くらべよう', '1つずつ ペアに してみよう'],
+    ['ordinal', 'ぬいぐるみを 5こ ならべて まえから 3ばんめを さがそう', 'うしろからだと なんばんめ？'],
+    ['ordinal', 'かぞくで ならんで みぎから 2ばんめを いおう', 'どちらから かぞえたかも はなそう'],
+    ['measure', 'えんぴつを 3ぼん はしを そろえて ならべよう', 'ながい じゅんに できるかな？'],
+    ['measure', 'おうちのひとと、ちがう かたちの コップの みずを くらべよう', 'せが たかいだけで きめないでね'],
+    ['bond', '7この おかしを 2つの おさらに わけよう', 'ちがう わけかたも できるかな？'],
+    ['bond', '5この ものを みぎてと ひだりてに かくそう', 'なんこと なんこに わかれた？'],
+    ['ten', '10この おかしを 2にんで わけよう', '5と5 いがいの わけかたも ためそう'],
+    ['ten', '10になる すうじの ペアを 3つ いおう', 'ゆびや おはじきを つかっても いいよ'],
+    ['add', 'おさらに 2こと 3この ものを おいて あわせよう', 'ぜんぶで いくつに なった？'],
+    ['add', 'おもちゃを 1つ ふやして なんこに なったか いおう', 'ふえる まえの かずも おぼえておこう'],
+    ['sub', '6この ものから 2こ かたづけよう', 'のこりを かぞえる まえに よそうしよう'],
+    ['sub', 'ふたつの おさらに ものを おいて ちがいを くらべよう', '1つずつ ペアに すると いくつ あまる？'],
+    ['shape', 'まるい ものを おうちで 4つ さがそう', 'おおきさや いろが ちがっても まるかな？'],
+    ['shape', 'しかくと さんかくを つかって えを つくろう', 'なんの かたちを いくつ つかった？'],
+    ['sort', 'おもちゃを じぶんで 2つの なかまに わけよう', 'どうして その なかまに したか おしえてね'],
+    ['sort', 'おなじ ものを こんどは ちがう きまりで わけよう', 'いろ・かたち・つかいかた どれにする？'],
+    ['pattern', 'スプーンと フォークで きまりの ならびを つくろう', 'つぎに くるものを おうちのひとに あててもらおう'],
+    ['pattern', '3つの ものを つかって くりかえしを つくろう', 'どこから おなじ ならびが はじまる？'],
+    ['clock', 'ながい はりが 6に きたら なにを するか きめよう', '「はん」の ときの はりを みよう'],
+    ['clock', 'おやつの じかんを とけいで さがそう', 'みじかい はりと ながい はりを りょうほう みよう']
+  ];
+
+  const today = () => Store.todayKey();
+  const hash = s => {
+    let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h;
+  };
+
+  function forGame(gameId){
+    const day = today();
+    let m = Store.mission(day);
+    if (m) return m;
+    const pool = BANK.filter(x => x[0] === gameId);
+    const src = (pool.length ? pool : BANK)[hash(day + ':' + gameId) % (pool.length || BANK.length)];
+    m = { day, id: src[0] + ':' + hash(day + src[1]), gameId: src[0], text: src[1], prompt: src[2] };
+    Store.recordMission(m);
+    return Store.mission(day);
+  }
+
+  function yesterdayReview(){
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+      + '-' + String(d.getDate()).padStart(2, '0');
+    const m = Store.mission(key);
+    return m && m.done && !m.reviewed ? m : null;
+  }
+
+  let node, titleEl, promptEl, noteEl, doneBtn;
+  function build(){
+    if (node) return node;
+    titleEl = el('h2', { text: 'きょうの さんすう ミッション' });
+    promptEl = el('div.mission-main');
+    noteEl = el('div.mission-note');
+    doneBtn = el('button.btn.btn-accent', { type: 'button' });
+    node = el('div#mission', null,
+      el('div.topbar', null,
+        el('button.btn.btn-ghost.btn-round', {
+          'aria-label': 'もどる',
+          onclick(){ Home.render(); UI.show('home', { replace: true }); }
+        }, '←'),
+        titleEl),
+      el('div.mission-sheet', null, mascotSVG('happy', 'talk'), promptEl, noteEl,
+        el('div.mission-actions', null, doneBtn,
+          el('button.btn', {
+            text: 'あとで',
+            onclick(){ Home.render(); UI.show('home', { replace: true }); }
+          }))));
+    return UI.register('mission', node);
+  }
+
+  function open(mission){
+    build();
+    titleEl.textContent = 'きょうの さんすう ミッション';
+    promptEl.textContent = mission.text;
+    noteEl.textContent = mission.prompt;
+    doneBtn.textContent = 'おうちのひとに かくにんしてもらう';
+    doneBtn.onclick = () => {
+      Parent.open(() => {
+        Store.completeMission(mission.day);
+        Sound.sfx.finish();
+        Home.render();
+        UI.show('home', { replace: true });
+      });
+    };
+    UI.show('mission');
+    Sound.say(mission.text + '。' + mission.prompt, { delay: 250 });
+  }
+
+  function openReview(mission){
+    build();
+    titleEl.textContent = 'きのうの ミッション';
+    promptEl.textContent = mission.text;
+    noteEl.textContent = 'どんな ふうに できたか、おうちのひとに おはなししよう';
+    doneBtn.textContent = 'おはなし できた！';
+    doneBtn.onclick = () => {
+      Store.reviewMission(mission.day);
+      Sound.sfx.correct();
+      Home.render();
+      UI.show('home', { replace: true });
+    };
+    UI.show('mission');
+    Sound.say('昨日のミッション、どんなふうにできたかお話ししよう。', { delay: 250 });
+  }
+
+  function resultCard(gameId){
+    const m = forGame(gameId || 'count');
+    const b = el('button.result-mission', { type: 'button', onclick(){ open(m); } },
+      el('b', { text: 'きょうの さんすう ミッション' }),
+      el('span', { text: m.text }),
+      el('small', { text: m.done ? 'できました！' : 'おうちのひとと やってみよう' }));
+    return b;
+  }
+
+  return { forGame, yesterdayReview, open, openReview, resultCard };
+})();
 
 /* ---- 90-screens.js ---- */
 /* ===========================================================
@@ -5197,7 +5862,7 @@ Games.add({
 
 /* ---------------------------------------------------------- TITLE */
 const Title = (() => {
-  let node;
+  let node, starting = false;
   function build(){
     if (node) return node;
     const logo = el('h1.big', null,
@@ -5210,11 +5875,22 @@ const Title = (() => {
     const start = el('button.btn.btn-accent', {
       text: 'はじめる',
       onclick(){
+        if (starting) return;
+        starting = true;
         Sound.unlock();
         Sound.sfx.unlockSfx();
         Sound.say('数の冒険へ、ようこそ！', { delay: 260 });
-        Home.render();
-        UI.show('home', { replace: true });
+        Sound.probeVoice(1200).then(hasVoice => {
+          starting = false;
+          if (Sound.voiceOn && !hasVoice){
+            Home.render();
+            UI.show('home', { replace: true });
+          } else if (Diagnostic.shouldRun()) Session.startDiagnostic();
+          else {
+            Home.render();
+            UI.show('home', { replace: true });
+          }
+        });
       }
     });
     node = el('div#title', null,
@@ -5230,13 +5906,20 @@ const Title = (() => {
 
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
-  let node, worldsEl, starEl, dailyEl, focusEl, shelfEl;
+  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl;
 
   function build(){
     if (node) return node;
     starEl   = el('span', { text: '0' });
     worldsEl = el('div.worlds');
     dailyEl  = el('button.daily', { type: 'button', onclick(){ Sound.sfx.tap(); Session.startDaily(10); } });
+    recommendEl = el('button.daily.recommended', {
+      type: 'button', onclick(){ Sound.sfx.tap(); Diagnostic.startRecommended(); }
+    });
+    reviewEl = el('button.daily.reviewmission', { type: 'button', hidden: true });
+    voiceWarnEl = el('div.voice-warning', {
+      hidden: true, role: 'status', 'aria-live': 'polite'
+    });
     node = el('div#home', null,
       el('div.home-head', null,
         el('h1.logo', null,
@@ -5253,7 +5936,7 @@ const Home = (() => {
     focusEl = el('button.daily.focusset', { type: 'button', hidden: true });
     shelfEl = el('button.shelf', { type: 'button',
       onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
-    node.append(dailyEl, focusEl, worldsEl, shelfEl);
+    node.append(voiceWarnEl, recommendEl, dailyEl, reviewEl, focusEl, worldsEl, shelfEl);
     return UI.register('home', node);
   }
 
@@ -5280,6 +5963,45 @@ const Home = (() => {
     build();
     starEl.textContent = String(Store.totalStars());
     const n = Store.todayCount(), streak = Store.streak();
+    const firstRun = Diagnostic.shouldRun();
+    const rec = Diagnostic.current();
+    const recGame = rec && Games.byId[rec.gameId];
+    clear(recommendEl);
+    recommendEl.hidden = !recGame;
+    if (recGame){
+      const lv = recGame.levels[rec.levelIndex] || recGame.levels[0];
+      recommendEl.append(
+        mascotSVG('happy', 'talk'),
+        el('div.grow', null,
+          el('div.t', { text: firstRun ? 'はじめの ぼうけん' : 'いまの おすすめ' }),
+          el('div.s', { text: firstRun
+            ? '10もんで ぴったりの はじまりを みつけよう'
+            : recGame.name + '　《' + lv.t + '》' })),
+        el('div', { class: 'go', text: '▶' }));
+      recommendEl.onclick = () => {
+        Sound.sfx.tap();
+        if (firstRun) Session.startDiagnostic(); else Diagnostic.startRecommended();
+      };
+    }
+    voiceWarnEl.hidden = !Sound.voiceOn || (!!window.speechSynthesis && Sound.hasVoice);
+    voiceWarnEl.textContent = voiceWarnEl.hidden ? ''
+      : 'よみあげる こえが みつかりません。おうちの ひとと せっていを みてね。';
+    if (!voiceWarnEl.hidden){
+      Sound.probeVoice(3000).then(ok => {
+        if (ok){ voiceWarnEl.hidden = true; voiceWarnEl.textContent = ''; }
+      });
+    }
+    const review = Missions.yesterdayReview();
+    reviewEl.hidden = !review;
+    if (review){
+      clear(reviewEl);
+      reviewEl.append(
+        el('div.grow', null,
+          el('div.t', { text: 'きのうの ミッション' }),
+          el('div.s', { text: 'どんな ふうに できたか おはなししよう' })),
+        el('div', { class: 'go', text: '▶' }));
+      reviewEl.onclick = () => Missions.openReview(review);
+    }
     clear(dailyEl);
     dailyEl.classList.toggle('done', n >= 10);
     dailyEl.append(
@@ -5386,22 +6108,28 @@ const Result = (() => {
   function show(r){
     build();
     clear(inner);
-    const msg = r.stars === 3 ? 'パーフェクト！'
+    const msg = r.mode === 'diagnostic' ? 'さいしょの ぼうけん クリア！'
+              : r.stars === 3 ? 'パーフェクト！'
               : r.stars === 2 ? 'よく できました！'
               : r.stars === 1 ? 'クリア！'
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
-    const spoken = (r.swift ? 'パーフェクト！すぐ答えられたね！'
+    const spoken = (r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
+                 : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
                  : r.stars === 1 ? 'クリア！'
                  : '惜しい！もう一度やってみよう。');
     inner.append(
       mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
-      UI.stars(r.stars, true),
+      r.mode === 'diagnostic'
+        ? el('div.diagnostic-badge', { text: '10もん たんけん できたね' })
+        : UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }),
-      el('div.result-sub', { text: `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+      el('div.result-sub', { text: r.mode === 'diagnostic'
+        ? 'ぴったりの はじまりを みつけたよ'
+        : `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
     /* The thing ★★★ could never say. These levels are for an answer that arrives,
        and a child who counted their way to every right answer used to get exactly
        the same three stars as one who remembered. */
@@ -5435,15 +6163,31 @@ const Result = (() => {
         el('div.e', { text: r.sticker.emoji }),
         el('div.l', { text: r.sticker.gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' })));
     }
+    if (r.mode === 'diagnostic' && r.recommended){
+      const g = Games.byId[r.recommended.gameId];
+      if (g){
+        const lv = g.levels[r.recommended.levelIndex] || g.levels[0];
+        inner.append(el('div.diagnostic-next', null,
+          el('div.l', { text: 'つぎの おすすめ' }),
+          el('b', { text: g.name + '　《' + lv.t + '》' })));
+      }
+    } else if (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1)) {
+      inner.append(Missions.resultCard(r.lastGameId));
+    }
     const actions = el('div.result-actions');
     // practising the facts that just went wrong outranks anything else on offer
-    const lead = aimed.length > 0;
+    const lead = aimed.length > 0 && r.mode !== 'diagnostic';
     if (r.mode === 'focus'){
       actions.append(el('button.btn.btn-accent.primary', { text: 'もういちど', onclick: runFocus }));
     } else if (lead){
       actions.append(el('button.btn.btn-accent.primary', { text: 'にがてを れんしゅう', onclick: runFocus }));
     }
-    if (r.mode === 'level'){
+    if (r.mode === 'diagnostic'){
+      actions.append(el('button.btn.btn-accent.primary', {
+        text: 'おすすめで あそぶ',
+        onclick(){ Sound.sfx.tap(); Diagnostic.startRecommended(); }
+      }));
+    } else if (r.mode === 'level'){
       // when nothing was earned, another go is the obvious next step, not a footnote
       actions.append(el('button.btn' + (r.stars === 0 && !lead ? '.btn-accent.primary' : ''), { text: 'もういちど',
         onclick(){ Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); } }));
@@ -5455,7 +6199,7 @@ const Result = (() => {
     } else if (r.mode === 'daily'){
       actions.append(el('button.btn', { text: 'もういちど', onclick(){ Sound.sfx.tap(); Session.startDaily(10); } }));
     }
-    actions.append(el('button.btn' + (r.mode === 'level' || lead || r.mode === 'focus' ? '' : '.btn-accent'),
+    actions.append(el('button.btn' + (r.mode === 'level' || r.mode === 'diagnostic' || lead || r.mode === 'focus' ? '' : '.btn-accent'),
       { text: 'あそびを えらぶ',
         onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
     inner.append(actions);
@@ -5512,7 +6256,7 @@ const Book = (() => {
 'use strict';
 
 const Parent = (() => {
-  let gateNode, sheetNode, sheetInner, justReset = false;
+  let gateNode, sheetNode, sheetInner, justReset = false, afterGate = null;
   let persistState = '確認中';
   let lastBackupMsg = null;   // survives the re-render that a successful import triggers
   let a = 0, b = 0, want = 0;
@@ -5530,7 +6274,13 @@ const Parent = (() => {
       opts.forEach(v => choices.append(el('button.choice', {
         type: 'button', text: String(v),
         onclick(e){
-          if (v === want){ Sound.sfx.correct(); render(); UI.show('parent'); }
+          if (v === want){
+            Sound.sfx.correct();
+            const next = afterGate;
+            afterGate = null;
+            if (next) next();
+            else { render(); UI.show('parent'); }
+          }
           else { e.currentTarget.classList.add('wrong'); Sound.sfx.wrong(); setTimeout(roll, 500); }
         }
       })));
@@ -5548,8 +6298,9 @@ const Parent = (() => {
     return gateNode;
   }
 
-  function open(){
+  function open(onSuccess){
     buildGate();
+    afterGate = typeof onSuccess === 'function' ? onSuccess : null;
     gateNode._roll();
     UI.show('gate');
   }
@@ -6085,6 +6836,7 @@ const Parent = (() => {
 /* Expose the internals for debugging / automated checks. */
 window.KazuApp = {
   Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent,
+  Diagnostic, Missions,
   el, svg, clear, $, $$,
   STICKER_POOL, stickerFor,
   numKana, koKana, tsuKana, banmeKana, jiKana, distractors

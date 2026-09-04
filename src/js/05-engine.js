@@ -39,7 +39,7 @@ function stickerFor(key){
 }
 
 const Session = (() => {
-  let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, moodEl, feedbackEl;
+  let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, backBtn, moodEl, feedbackEl;
   let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
@@ -62,6 +62,8 @@ const Session = (() => {
   }
   let usedItems = new Set();      // the shuffle bag for the current session
   let shaky = [];                 // facts missed this session, for the result screen
+  let sessionOutcomes = [];       // [{ gameId, levelIndex, clean }] for diagnostic/recommendation
+  let quitArmed = false, quitTimer = null;
 
   /* ---------- timer lifecycle ----------
      Every delayed callback in a question is tied to an epoch. Leaving a question
@@ -98,10 +100,12 @@ const Session = (() => {
     if (node) return node;
     titleEl   = el('h2');
     pipsEl    = el('div.pips');
-    promptTxt = el('div.txt');
+    promptTxt = el('div.txt', { 'aria-live': 'polite', 'aria-atomic': 'true' });
     fieldEl   = el('div.playfield');
     choicesEl = el('div.choices');
-    feedbackEl = el('div.feedback', { hidden: true });
+    feedbackEl = el('div.feedback', {
+      hidden: true, 'aria-live': 'polite', 'aria-atomic': 'true', role: 'status'
+    });
     speakBtn  = el('button.btn.btn-ghost.btn-round', {
       'aria-label': 'もういちど きく', title: 'もういちど きく',
       onclick(){ Sound.sfx.tap(); if (lastSpeech) Sound.say(lastSpeech, { delay: 40 }); }
@@ -110,9 +114,12 @@ const Session = (() => {
     moodEl.style.width = 'calc(var(--u)*4.6)';
     moodEl.style.height = 'calc(var(--u)*4.6)';
 
+    backBtn = el('button.btn.btn-ghost.btn-round.backbtn', {
+      'aria-label': 'もどる', onclick: quit
+    }, '←');
     node = el('div#play', null,
       el('div.topbar', null,
-        el('button.btn.btn-ghost.btn-round.backbtn', { 'aria-label': 'もどる', onclick: quit }, '←'),
+        backBtn,
         titleEl, pipsEl),
       el('div.prompt', null, moodEl,
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn),
@@ -141,8 +148,29 @@ const Session = (() => {
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
   }
   function clearFeedback(){ feedbackEl.hidden = true; clear(feedbackEl); }
+  function disarmQuit(){
+    quitArmed = false;
+    clearTimeout(quitTimer);
+    if (backBtn){
+      backBtn.textContent = '←';
+      backBtn.setAttribute('aria-label', 'もどる');
+    }
+  }
 
   function quit(){
+    if (!quitArmed){
+      quitArmed = true;
+      backBtn.textContent = '？';
+      backBtn.setAttribute('aria-label', 'もういちど おすと おわる');
+      showFeedback('oops', 'もういちど おすと おわるよ');
+      clearTimeout(quitTimer);
+      quitTimer = setTimeout(() => {
+        disarmQuit();
+        clearFeedback();
+      }, 2600);
+      return;
+    }
+    disarmQuit();
     killTimers();
     Sound.hush();
     Sound.sfx.tap();
@@ -181,6 +209,26 @@ const Session = (() => {
     const n = count || 10;
     plan = drawDailyPlan(pool, n);
     titleEl.textContent = 'きょうの れんしゅう';
+    begin();
+  }
+
+  /** A short first-run sampler. It chooses a starting point; it never locks content
+      or labels a child. Every game remains available from Home. */
+  function startDiagnostic(){
+    build();
+    killTimers();
+    mode = 'diagnostic'; curGame = null;
+    const picks = [
+      ['count', 0], ['numeral', 0], ['seq', 0], ['compare', 0], ['ordinal', 0],
+      ['measure', 0], ['bond', 0], ['shape', 0], ['pattern', 0], ['clock', 0]
+    ];
+    plan = picks.map(([id, levelIndex]) => {
+      const game = Games.byId[id];
+      return game && game.levels[levelIndex]
+        ? { game, level: game.levels[levelIndex], levelIndex }
+        : null;
+    }).filter(Boolean);
+    titleEl.textContent = 'はじめの ぼうけん';
     begin();
   }
 
@@ -273,9 +321,10 @@ const Session = (() => {
   }
 
   function begin(){
+    disarmQuit();
     idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0;
     if (mode !== 'focus') focusKeys = [];
-    usedItems = new Set(); shaky = [];
+    usedItems = new Set(); shaky = []; sessionOutcomes = [];
     clear(pipsEl);
     plan.forEach(() => pipsEl.append(el('div.pip')));
     UI.show('play');
@@ -486,13 +535,16 @@ const Session = (() => {
   }
 
   function nextQuestion(){
+    disarmQuit();
     killTimers();
     wrongThisQ = 0;
     $$('.pip', pipsEl).forEach((p, i) => p.classList.toggle('now', i === idx));
     setMood('idle');
     const step = plan[idx];
     if (mode !== 'level'){
-      titleEl.textContent = (mode === 'daily' ? 'きょうの れんしゅう' : 'にがて あつめ') + '　' + step.game.name;
+      const modeName = mode === 'daily' ? 'きょうの れんしゅう'
+                     : mode === 'focus' ? 'にがて あつめ' : 'はじめの ぼうけん';
+      titleEl.textContent = modeName + '　' + step.game.name;
     }
     drawQuestion(step);
     // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
@@ -537,15 +589,20 @@ const Session = (() => {
     markResponse();
     clearFeedback();
     const clean = wrongThisQ === 0;
+    sessionOutcomes.push({
+      gameId: plan[idx].game.id, levelIndex: plan[idx].levelIndex, clean
+    });
     if (clean) firstTryRight++;
     const g = plan[idx].game;
     const timed = g.fluent && clean ? respondedMs : null;
     if (timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
-    Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
-    if (curItem){
-      Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed);
-      if (!clean && !shaky.some(x => x.key === curItem)){
-        shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
+    if (mode !== 'diagnostic'){
+      Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
+      if (curItem){
+        Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed);
+        if (!clean && !shaky.some(x => x.key === curItem)){
+          shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
+        }
       }
     }
     Sound.sfx.correct();
@@ -582,7 +639,7 @@ const Session = (() => {
        guaranteed for finishing, so the unlock gate really only asked whether the
        child had sat through the level. Grade the questions answered right first
        time instead, and let a session score nothing. */
-    const stars = starsFor(firstTryRight, total);
+    const stars = mode === 'diagnostic' ? 3 : starsFor(firstTryRight, total);
     /* ★★★ says every answer was right first time. This says they arrived — which is
        the thing these levels are actually for, and the thing three stars could not
        distinguish from nine seconds of counting. Only on the games where speed is
@@ -604,6 +661,9 @@ const Session = (() => {
           newSticker = { emoji: stickerFor(key + ':g'), gold: true };
         }
       }
+    } else if (mode === 'diagnostic'){
+      const recommended = Diagnostic.recommendFrom(sessionOutcomes);
+      Store.recordDiagnostic(sessionOutcomes, recommended);
     } else {
       if (mode === 'daily') Store.recordPractice(firstTryRight, total);
       else Store.recordFocus(firstTryRight, total);
@@ -611,12 +671,19 @@ const Session = (() => {
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
       if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
     }
+    const gameCounts = {};
+    plan.forEach(x => { gameCounts[x.game.id] = (gameCounts[x.game.id] || 0) + 1; });
+    const primaryGameId = mode === 'level' && curGame ? curGame.id
+      : Object.keys(gameCounts).sort((a, b) => gameCounts[b] - gameCounts[a])[0] || null;
     Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
-                  sticker: newSticker, shaky: shaky.slice(0, 3), focusKeys: focusKeys.slice(), swift });
+                  sticker: newSticker, shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
+                  focusKeys: focusKeys.slice(), swift,
+                  recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
+                  lastGameId: primaryGameId });
   }
 
   return {
-    startLevel, startDaily, startFocus, build,
+    startLevel, startDaily, startFocus, startDiagnostic, build,
     _test: {
       flushTimers,
       get idx(){ return idx; },

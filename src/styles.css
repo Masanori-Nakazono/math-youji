@@ -1434,6 +1434,28 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   border-color: color-mix(in srgb, var(--c-blue) 55%, var(--ink) 20%);
 }
 .daily.focusset .s{ color: var(--ink-soft); opacity: 1; }
+.daily.recommended{
+  background: var(--card);
+  color: var(--ink);
+  border-color: var(--c-blue);
+}
+.daily.recommended .s{ color: var(--ink-soft); opacity: 1; }
+.daily.reviewmission{
+  background: color-mix(in srgb, var(--c-purple) 14%, var(--card));
+  color: var(--ink);
+  border-color: var(--c-purple);
+}
+.daily.reviewmission .s{ color: var(--ink-soft); opacity: 1; }
+.voice-warning{
+  flex: 0 0 auto;
+  padding: calc(var(--u)*.55) calc(var(--u)*1);
+  border-radius: var(--wob-b);
+  background: var(--oops-soft);
+  color: var(--oops-ink);
+  border: calc(var(--u)*.18) solid var(--oops);
+  font-size: calc(var(--u)*1.45);
+  font-weight: 800;
+}
 
 /* ---------- parent: 今週やること ---------- */
 #parent .todo{
@@ -1467,7 +1489,7 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 .tile{ width: max(calc(var(--u)*4.6), var(--tap)); height: max(calc(var(--u)*4.6), var(--tap)); }
 .shapetile{ width: max(calc(var(--u)*7.6), var(--tap)); height: max(calc(var(--u)*7.6), var(--tap)); }
 .qi{ min-width: max(calc(var(--u)*5.4), var(--tap)); min-height: max(calc(var(--u)*5.4), var(--tap)); }
-.btn-round{ width: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); height: max(calc(var(--u)*4.4), calc(var(--tap)*.75)); }
+.btn-round{ width: max(calc(var(--u)*4.4), var(--tap)); height: max(calc(var(--u)*4.4), var(--tap)); }
 
 /* ---------- parent: what each game is for ---------- */
 #parent .aimnote{
@@ -1503,4 +1525,101 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   min-height: max(calc(var(--u)*6), var(--tap));
   font-size: calc(var(--u)*3.2);
   padding: calc(var(--u)*.4) calc(var(--u)*.5);
+}
+
+/* ---------- diagnostic and real-world mission ---------- */
+#result .inner{ overflow-y: auto; justify-content: safe center; padding: calc(var(--u)*.4); }
+.diagnostic-next{
+  display:flex; flex-direction:column; gap:calc(var(--u)*.25);
+  background:color-mix(in srgb, var(--c-blue) 14%, var(--card));
+  border:calc(var(--u)*.2) solid var(--c-blue);
+  border-radius:var(--wob-b);
+  padding:calc(var(--u)*.7) calc(var(--u)*1.4);
+}
+.diagnostic-badge{
+  padding:calc(var(--u)*.4) calc(var(--u)*1.1);
+  border-radius:999px;
+  background:var(--good-soft); color:var(--good-ink);
+  font-size:calc(var(--u)*1.5); font-weight:800;
+}
+.diagnostic-next .l{ color:var(--ink-soft); font-size:calc(var(--u)*1.25); font-weight:800 }
+.result-mission{
+  width:min(100%, calc(var(--u)*48));
+  display:grid; gap:calc(var(--u)*.18);
+  padding:calc(var(--u)*.7) calc(var(--u)*1.1);
+  background:color-mix(in srgb, var(--c-purple) 12%, var(--card));
+  color:var(--ink);
+  border:calc(var(--u)*.2) solid var(--c-purple);
+  border-radius:var(--wob-b);
+  font:inherit; text-align:left; cursor:pointer;
+}
+.result-mission b{ font-size:calc(var(--u)*1.35) }
+.result-mission span{ font-size:calc(var(--u)*1.55); font-weight:800 }
+.result-mission small{ color:var(--ink-soft); font-size:calc(var(--u)*1.15) }
+.mission-sheet{
+  flex:1 1 auto; min-height:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:calc(var(--u)*1.2); text-align:center;
+}
+.mission-sheet .mascot{ width:calc(var(--u)*11); height:calc(var(--u)*11) }
+.mission-main{
+  width:min(100%, calc(var(--u)*54));
+  font-size:calc(var(--u)*2.5); line-height:1.35; font-weight:800;
+  padding:calc(var(--u)*1.2);
+  background:var(--card); border:calc(var(--u)*.24) solid var(--card-edge);
+  border-radius:var(--wob-a);
+}
+.mission-note{ font-size:calc(var(--u)*1.55); color:var(--ink-soft); font-weight:800 }
+.mission-actions{ display:flex; gap:calc(var(--u)*.8); flex-wrap:wrap; justify-content:center }
+
+/* ---------- constructive reasoning activities ---------- */
+.conserve-row{
+  width:min(100%, calc(var(--u)*46));
+  display:flex; justify-content:center; align-items:center;
+  gap:calc(var(--u)*.25);
+  min-height:calc(var(--u)*9);
+  padding:calc(var(--u)*1);
+  background:var(--card); border:calc(var(--u)*.24) solid var(--card-edge);
+  border-radius:var(--wob-a);
+}
+.conserve-row span{
+  position:relative; font-size:calc(var(--u)*4); line-height:1;
+  transition:margin .6s cubic-bezier(.2,.8,.3,1), transform .6s;
+}
+.conserve-row.spread span{ margin:0 calc(var(--u)*.65); transform:rotate(8deg) }
+.conserve-row .tag{
+  position:absolute; right:-.3em; top:-.45em;
+  width:1.35em; height:1.35em; display:grid; place-items:center;
+  border-radius:50%; background:var(--good); color:var(--on-crayon);
+  font-family:var(--fs-num); font-size:.38em; font-weight:800;
+}
+.car.empty{
+  border-style:dashed; border-color:var(--card-edge);
+  background:var(--paper-2);
+}
+.ways-board{ display:flex; gap:calc(var(--u)*1); flex-wrap:wrap; justify-content:center }
+.ways-board .way{
+  display:flex; align-items:center; gap:calc(var(--u)*.5);
+  padding:calc(var(--u)*.5); background:var(--card);
+  border:calc(var(--u)*.2) solid var(--card-edge); border-radius:var(--wob-b);
+}
+.ways-board .way .no{
+  width:calc(var(--u)*2); height:calc(var(--u)*2); display:grid; place-items:center;
+  border-radius:50%; background:var(--accent); color:var(--accent-ink); font-weight:800;
+}
+.ways-board .bond .whole{ width:calc(var(--u)*4.5); height:calc(var(--u)*4.5); font-size:calc(var(--u)*2.5) }
+.ways-board .bond .legs{ width:calc(var(--u)*12); height:calc(var(--u)*1.8) }
+.ways-board .bond .part{ min-width:calc(var(--u)*4.5); min-height:calc(var(--u)*4.5); font-size:calc(var(--u)*2.4) }
+.three-sum{
+  font-family:var(--fs-num); font-size:calc(var(--u)*4); font-weight:800;
+  padding:calc(var(--u)*.7) calc(var(--u)*1.2);
+  background:var(--card); border:calc(var(--u)*.24) solid var(--card-edge);
+  border-radius:var(--wob-b);
+}
+.clock-adjust{ min-height:var(--tap); padding-inline:calc(var(--u)*1.1) }
+.clock-readout{
+  font-size:calc(var(--u)*1.35);
+  color:var(--ink-soft);
+  font-weight:800;
+  min-height:calc(var(--u)*2.2);
 }

@@ -108,12 +108,67 @@ function compose(api, maxWhole, pad){
   }
 }
 
+/** Make two different decompositions. There is no single hidden answer: every
+    split is valid, and the child succeeds by producing a genuinely different one. */
+function makeTwoWays(api){
+  const whole = ri(6, 9);
+  api.item('ways:' + whole, whole + ' を 2とおりに わける');
+  api.setPrompt(`${numTag(whole)} を ちがう 2つの やりかたで わけよう`,
+                `${numKana(whole)}を、違う二つのやり方で分けよう。`);
+  const made = [], board = el('div.ways-board');
+  let accepting = true;
+  api.field.append(board);
+
+  const draw = () => {
+    clear(board);
+    made.forEach((a, i) => board.append(
+      el('div.way', null,
+        el('span.no', { text: String(i + 1) }),
+        bondNode(whole, a, whole - a))));
+  };
+  const build = () => {
+    clear(api.choices);
+    accepting = true;
+    for (let a = 1; a < whole; a++){
+      const b = el('button.choice', { type: 'button', text: String(a) });
+      b.addEventListener('click', () => {
+        if (api.locked || !accepting) return;
+        accepting = false;                    // a double tap is one construction
+        const same = made.some(x => Math.min(x, whole - x) === Math.min(a, whole - a));
+        if (same){
+          api.wrong(b);
+          Sound.say('同じ分け方だね。違う分け方も作ってみよう。', { delay: 250 });
+          api.later(() => { accepting = true; }, 360);
+          return;
+        }
+        made.push(a);
+        b.classList.add('correct');
+        draw();
+        Sound.say(`${numKana(a)}と${numKana(whole-a)}。`, { delay: 120 });
+        if (made.length >= 2) api.later(() => api.correct({ quiet: true, delay: 900 }), 350);
+        else api.later(build, 350);
+      });
+      api.choices.append(b);
+    }
+  };
+  draw();
+  build();
+  api.onHint(() => {
+    const a = made.length ? Math.min(whole - 1, made[0] + 1) : 1;
+    api.field.append(el('div.hintline', {
+      text: a + ' と ' + (whole - a) + ' に わけることも できるよ'
+    }));
+  });
+}
+
 Games.add({
   id: 'bond', name: 'いくつと いくつ', ico: '🧩', world: 'yama', color: 'var(--c-red)', focus: 1.7, fluent: true,
   aim: '5や10を<b>2つの数に分けたり、合わせたり</b>する感覚。たし算・ひき算を「数えないで思い出す」ための部品で、くり上がり・くり下がりの計算はこれが土台になります。ここが自動化していると小1は驚くほど楽になります。',
   levels: [
     { t: '5は いくつと いくつ', d: 'ごの ぶんかい', make: api => chance(.25) ? compose(api, 5) : decompose(api, 5) },
-    { t: '6〜9', d: 'すこし おおきい かず', make: api => chance(.3) ? compose(api, ri(6, 9)) : decompose(api, ri(6, 9)) },
+    { t: '6〜9', d: 'ちがう わけかたも つくる', make: api => chance(.3)
+        ? makeTwoWays(api)
+        : chance(.3) ? compose(api, ri(6, 9)) : decompose(api, ri(6, 9)) },
     // the top level asks the child to produce the number, not pick it out of three
     { t: '10は いくつと いくつ', d: 'すうじを じぶんで えらぶ', make: api => chance(.25) ? compose(api, 10, true) : decompose(api, 10, true) }
   ]
@@ -239,13 +294,53 @@ function pairHunt(api){
   });
 }
 
+/** Build ten from three numbers. Multiple answers are accepted; the app evaluates
+    the child's construction instead of asking them to recognise one prepared pair. */
+function threeMakeTen(api){
+  api.item('three10', '3つの かずで 10を つくる');
+  api.setPrompt('3つの すうじを えらんで <b>10</b> を つくろう',
+                '三つの数字を選んで、10を作ろう。');
+  const picked = [];
+  let accepting = true;
+  const readout = el('div.three-sum', { text: '? ＋ ? ＋ ? ＝ 10' });
+  api.field.append(readout);
+  const redraw = () => {
+    const vals = picked.concat(['?', '?', '?']).slice(0, 3);
+    readout.textContent = vals.join(' ＋ ') + ' ＝ 10';
+  };
+  for (let v = 0; v <= 9; v++){
+    const b = el('button.choice.padkey', { type: 'button', text: String(v) });
+    b.addEventListener('click', () => {
+      if (api.locked || !accepting) return;
+      picked.push(v); redraw(); Sound.sfx.tap();
+      if (picked.length < 3) return;
+      accepting = false;
+      const sum = picked.reduce((a, x) => a + x, 0);
+      if (sum === 10){
+        b.classList.add('correct');
+        api.correct({ delay: 1400 });
+      } else {
+        api.wrong(b);
+        Sound.say(`合わせると${numKana(sum)}だね。10になるように変えてみよう。`, { delay: 280 });
+        api.later(() => { picked.length = 0; redraw(); accepting = true; }, 650);
+      }
+    });
+    api.choices.append(b);
+  }
+  api.choices.classList.add('pad');
+  api.onHint(() => {
+    api.field.append(el('div.hintline', { text: 'まず 5 を えらんで、のこりの 5 を 2つに わけてみよう' }));
+  });
+}
+
 Games.add({
   id: 'ten', name: '10の おともだち', ico: '🔟', world: 'yama', color: 'var(--c-red)', focus: 1.7, fluent: true,
   aim: '<b>合わせて10になる組み合わせ</b>を、考えずに言えるようにする練習。「9+4」を「9+1+3」と処理するくり上がりの計算は、これが即答できるかどうかで速さがまったく変わります。',
   levels: [
     { t: '10まで うめる', d: 'わくを いっぱいに する', make: fillToTen },
     { t: '◯と いくつで10', d: 'あと いくつ？ じぶんで こたえる', make: api => partnerOfTen(api, true) },
-    { t: 'ペアを さがす', d: '2まいで 10を つくる', make: pairHunt }
+    { t: 'ペアを さがす', d: '2まい・3まいで 10を つくる',
+      make: api => chance(.35) ? threeMakeTen(api) : pairHunt(api) }
   ]
 });
 

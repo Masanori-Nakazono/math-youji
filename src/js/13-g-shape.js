@@ -385,13 +385,50 @@ function patternQuestion(api, unitKind, blanks){
   });
 }
 
+/** Let the child author the repeating unit, then show the rule they created. */
+function createPattern(api){
+  const opts = sample(PAT_TOKENS, 5), chosen = [];
+  api.item('create:AB', 'じぶんで 2つの くりかえしを つくる');
+  api.setPrompt('すきな 2つを えらんで、きまりを つくろう',
+                '好きな二つを選んで、きまりを作ろう。');
+  const train = el('div.train');
+  for (let i = 0; i < 8; i++) train.append(el('div.car.empty'));
+  api.field.append(train);
+  opts.forEach(v => {
+    const b = el('button.choice.pic', { type: 'button', text: v });
+    b.addEventListener('click', () => {
+      if (api.locked) return;
+      if (chosen.indexOf(v) >= 0) return;     // a child's double tap is one choice
+      chosen.push(v);
+      const cars = $$('.car', train);
+      cars.forEach((c, i) => {
+        if (i >= chosen.length && chosen.length < 2) return;
+        c.classList.remove('empty');
+        c.textContent = chosen[i % chosen.length];
+      });
+      b.classList.add('picked');
+      if (chosen.length === 2){
+        $$('.choice.picked', api.choices).forEach(x => x.classList.add('correct'));
+        api.setPrompt('できた きまりを こえに だして いってみよう',
+                      'できた決まりを、声に出して言ってみよう。');
+        api.later(() => api.correct({ quiet: true, delay: 1300 }), 500);
+      }
+    });
+    api.choices.append(b);
+  });
+  api.onHint(() => {
+    if (chosen.length) api.field.append(el('div.hintline', { text: chosen[0] + ' の つぎに くるものを えらぼう' }));
+  });
+}
+
 Games.add({
   id: 'pattern', name: 'きまり さがし', ico: '🎏', world: 'mori', color: 'var(--c-purple)',
   aim: '<b>繰り返しのきまりを見つけて先を予想する</b>力。規則性に気づく経験は、九九・図形の性質・関数の考えまで続く「算数的な見方」そのものです。',
   levels: [
     { t: '2つの くりかえし', d: '●▲●▲…', make: api => patternQuestion(api, 'AB', 1) },
     { t: '3つの くりかえし', d: '●●▲ / ●▲▲', make: api => patternQuestion(api, pick(['AAB', 'ABB', 'ABC']), 1) },
-    { t: 'むずかしい きまり', d: 'あなが 2つ', make: api => patternQuestion(api, pick(['ABC', 'ABBA', 'AAB']), 2) }
+    { t: 'むずかしい きまり', d: 'あなを うめる・じぶんで つくる',
+      make: api => chance(.3) ? createPattern(api) : patternQuestion(api, pick(['ABC', 'ABBA', 'AAB']), 2) }
   ]
 });
 
@@ -454,32 +491,54 @@ function pickClock(api, half){
   });
 }
 
-function setClock(api){
-  const target = ri(1, 12);
-  api.item('set:' + target, target + 'じ に はりを あわせる');
-  api.setPrompt(`<b>${target}じ</b> に なるように みじかい はりを うごかそう`,
-                `${jiKana(target)}になるように、短い針を動かそう。`);
-  let cur = ri(1, 12);
-  for (let g = 0; g < 100 && cur === target; g++) cur = ri(1, 12);
-  if (cur === target) cur = target === 12 ? 1 : target + 1;
-  const holder = el('div', { style: { touchAction: 'none' } });
+function setClock(api, hand){
+  const minuteMode = hand === 'minute';
+  const targetHour = ri(1, 12), target = minuteMode ? 30 : targetHour;
+  api.item(minuteMode ? 'sethalf:' + targetHour : 'set:' + targetHour,
+    minuteMode ? targetHour + 'じはん に ながいはりを あわせる' : targetHour + 'じ に みじかいはりを あわせる');
+  api.setPrompt(minuteMode
+      ? `<b>${targetHour}じはん</b> に なるように ながい はりを うごかそう`
+      : `<b>${targetHour}じ</b> に なるように みじかい はりを うごかそう`,
+    minuteMode
+      ? `${jiKana(targetHour, true)}になるように、長い針を動かそう。`
+      : `${jiKana(targetHour)}になるように、短い針を動かそう。`);
+  let cur = minuteMode ? pick([0, 5, 10, 15, 20, 40, 45, 50, 55]) : ri(1, 12);
+  for (let g = 0; g < 100 && cur === target; g++)
+    cur = minuteMode ? pick([0, 5, 10, 15, 20, 40, 45, 50, 55]) : ri(1, 12);
+  if (cur === target) cur = minuteMode ? 0 : (targetHour === 12 ? 1 : targetHour + 1);
+  const holder = el('div', {
+    style: { touchAction: 'none' }, role: 'group',
+    'aria-label': minuteMode ? 'ながい はりを うごかす とけい' : 'みじかい はりを うごかす とけい'
+  });
   api.field.append(holder);
-  const readout = el('div.hintline', { text: 'いま ' + cur + 'じ' });
+  const readout = el('div.clock-readout', { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
   api.field.append(readout);
 
-  const clock = clockSVG(cur, 0, { cls: 'pickable' });
+  const clock = clockSVG(minuteMode ? targetHour : cur, minuteMode ? cur : 0, { cls: 'pickable' });
   clock.style.width = 'calc(var(--u)*26)';
   clock.style.height = 'calc(var(--u)*26)';
   holder.append(clock);
   const hourHand = $('.hand-h', clock);
+  const minuteHand = $('.hand-m', clock);
 
   function paint(){
-    // rebuilding the SVG here would destroy the node that received pointerdown,
-    // which is exactly why dragging the hand never worked
-    const a = ((cur % 12) / 12) * Math.PI * 2 - Math.PI / 2;
-    hourHand.setAttribute('x2', (50 + Math.cos(a) * 21).toFixed(2));
-    hourHand.setAttribute('y2', (50 + Math.sin(a) * 21).toFixed(2));
-    readout.textContent = 'いま ' + cur + 'じ';
+    if (minuteMode){
+      const ma = (cur / 60) * Math.PI * 2 - Math.PI / 2;
+      const ha = (((targetHour % 12) + .5) / 12) * Math.PI * 2 - Math.PI / 2;
+      minuteHand.setAttribute('x2', (50 + Math.cos(ma) * 33).toFixed(2));
+      minuteHand.setAttribute('y2', (50 + Math.sin(ma) * 33).toFixed(2));
+      hourHand.setAttribute('x2', (50 + Math.cos(ha) * 21).toFixed(2));
+      hourHand.setAttribute('y2', (50 + Math.sin(ha) * 21).toFixed(2));
+      readout.textContent = cur === 30 ? targetHour + 'じはん' : 'ながい はりは ' + cur + 'ふん';
+      holder.setAttribute('aria-label', readout.textContent + '。ながい はりを うごかす とけい');
+    } else {
+      // rebuilding the SVG would destroy the node that received pointerdown
+      const a = ((cur % 12) / 12) * Math.PI * 2 - Math.PI / 2;
+      hourHand.setAttribute('x2', (50 + Math.cos(a) * 21).toFixed(2));
+      hourHand.setAttribute('y2', (50 + Math.sin(a) * 21).toFixed(2));
+      readout.textContent = 'いま ' + cur + 'じ';
+      holder.setAttribute('aria-label', readout.textContent + '。みじかい はりを うごかす とけい');
+    }
   }
 
   let down = false;
@@ -490,15 +549,21 @@ function setClock(api){
     const dy = e.clientY - (r.top + r.height / 2);
     let ang = Math.atan2(dy, dx) + Math.PI / 2;
     if (ang < 0) ang += Math.PI * 2;
-    let h = Math.round(ang / (Math.PI * 2) * 12);
-    if (h === 0) h = 12;
-    if (h !== cur){ cur = h; Sound.sfx.tap(); paint(); }
+    let v;
+    if (minuteMode){
+      v = Math.round(ang / (Math.PI * 2) * 12) * 5;
+      if (v === 60) v = 0;
+    } else {
+      v = Math.round(ang / (Math.PI * 2) * 12);
+      if (v === 0) v = 12;
+    }
+    if (v !== cur){ cur = v; Sound.sfx.tap(); paint(); }
   }
   clock.addEventListener('pointerdown', e => {
     if (api.locked) return;
     down = true;
     e.preventDefault();
-    if (clock.setPointerCapture) clock.setPointerCapture(e.pointerId);
+    try{ if (clock.setPointerCapture) clock.setPointerCapture(e.pointerId); }catch(err){}
     setFrom(e);
   });
   clock.addEventListener('pointermove', e => { if (down && !api.locked){ e.preventDefault(); setFrom(e); } });
@@ -512,11 +577,36 @@ function setClock(api){
       if (api.locked) return;
       if (cur === target) api.correct(); else { api.wrong(check); }
     } });
-  api.choices.append(check);
+  const controls = minuteMode
+    ? [
+        el('button.btn.clock-adjust', {
+          type: 'button', text: 'ながい はりを 12に',
+          onclick(){ if (!api.locked){ cur = 0; Sound.sfx.tap(); paint(); } }
+        }),
+        el('button.btn.clock-adjust', {
+          type: 'button', text: 'ながい はりを 6に',
+          onclick(){ if (!api.locked){ cur = 30; Sound.sfx.tap(); paint(); } }
+        })
+      ]
+    : [
+        el('button.btn.clock-adjust', {
+          type: 'button', text: '1じ もどす',
+          onclick(){ if (!api.locked){ cur = cur === 1 ? 12 : cur - 1; Sound.sfx.tap(); paint(); } }
+        }),
+        el('button.btn.clock-adjust', {
+          type: 'button', text: '1じ すすめる',
+          onclick(){ if (!api.locked){ cur = cur === 12 ? 1 : cur + 1; Sound.sfx.tap(); paint(); } }
+        })
+      ];
+  api.choices.append(...controls, check);
   api.onHint(() => {
     if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', { text: 'みじかい はりが ' + target + ' を さすように まわそう' }));
-    $$('text', clock).forEach(t => { if (t.textContent === String(target)) t.classList.add('goal'); });
+    api.field.append(el('div.hintline', { text: minuteMode
+      ? '「はん」の とき、ながい はりは 6を さすよ'
+      : 'みじかい はりが ' + targetHour + ' を さすように まわそう' }));
+    $$('text', clock).forEach(t => {
+      if (t.textContent === String(minuteMode ? 6 : targetHour)) t.classList.add('goal');
+    });
   });
 }
 
@@ -526,6 +616,7 @@ Games.add({
   levels: [
     { t: 'なんじ', d: 'ちょうどの じかん', make: api => readClock(api, false) },
     { t: 'なんじはん', d: 'はんも よめるように', make: api => chance(.5) ? readClock(api, true) : pickClock(api, true) },
-    { t: 'はりを うごかす', d: 'じぶんで あわせる', n: 6, make: setClock }
+    { t: 'はりを うごかす', d: 'なんじ・なんじはんに あわせる', n: 6,
+      make: api => setClock(api, chance(.5) ? 'minute' : 'hour') }
   ]
 });

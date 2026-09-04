@@ -126,6 +126,27 @@ const Sound = (() => {
     speechSynthesis.addEventListener('voiceschanged', loadVoices);
   }
 
+  /** iOS may populate voices asynchronously after the first user gesture. */
+  function probeVoice(timeout){
+    if (!voiceOn || !window.speechSynthesis) return Promise.resolve(false);
+    loadVoices();
+    if (jaVoice) return Promise.resolve(true);
+    return new Promise(resolve => {
+      let done = false;
+      const finish = ok => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try{ speechSynthesis.removeEventListener('voiceschanged', changed); }catch(e){}
+        resolve(!!ok);
+      };
+      const changed = () => { loadVoices(); if (jaVoice) finish(true); };
+      const timer = setTimeout(() => { loadVoices(); finish(!!jaVoice); },
+        timeout == null ? 1200 : timeout);
+      try{ speechSynthesis.addEventListener('voiceschanged', changed); }catch(e){}
+    });
+  }
+
   /* Japanese TTS decides its phrasing and pitch accent by parsing the sentence,
      and a space inside a sentence breaks that parse — the reason the same line
      can come out either flat or lively. The prompts are written with kanji and
@@ -168,7 +189,7 @@ const Sound = (() => {
   }
 
   return {
-    sfx: S, unlock, say, hush,
+    sfx: S, unlock, say, hush, probeVoice,
     get sfxOn(){ return sfxOn; },  set sfxOn(v){ sfxOn = !!v; },
     get voiceOn(){ return voiceOn; }, set voiceOn(v){ voiceOn = !!v; if (!v) hush(); },
     get hasVoice(){ return !!jaVoice; },

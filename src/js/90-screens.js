@@ -5,7 +5,7 @@
 
 /* ---------------------------------------------------------- TITLE */
 const Title = (() => {
-  let node;
+  let node, starting = false;
   function build(){
     if (node) return node;
     const logo = el('h1.big', null,
@@ -18,11 +18,22 @@ const Title = (() => {
     const start = el('button.btn.btn-accent', {
       text: 'はじめる',
       onclick(){
+        if (starting) return;
+        starting = true;
         Sound.unlock();
         Sound.sfx.unlockSfx();
         Sound.say('数の冒険へ、ようこそ！', { delay: 260 });
-        Home.render();
-        UI.show('home', { replace: true });
+        Sound.probeVoice(1200).then(hasVoice => {
+          starting = false;
+          if (Sound.voiceOn && !hasVoice){
+            Home.render();
+            UI.show('home', { replace: true });
+          } else if (Diagnostic.shouldRun()) Session.startDiagnostic();
+          else {
+            Home.render();
+            UI.show('home', { replace: true });
+          }
+        });
       }
     });
     node = el('div#title', null,
@@ -38,13 +49,20 @@ const Title = (() => {
 
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
-  let node, worldsEl, starEl, dailyEl, focusEl, shelfEl;
+  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl;
 
   function build(){
     if (node) return node;
     starEl   = el('span', { text: '0' });
     worldsEl = el('div.worlds');
     dailyEl  = el('button.daily', { type: 'button', onclick(){ Sound.sfx.tap(); Session.startDaily(10); } });
+    recommendEl = el('button.daily.recommended', {
+      type: 'button', onclick(){ Sound.sfx.tap(); Diagnostic.startRecommended(); }
+    });
+    reviewEl = el('button.daily.reviewmission', { type: 'button', hidden: true });
+    voiceWarnEl = el('div.voice-warning', {
+      hidden: true, role: 'status', 'aria-live': 'polite'
+    });
     node = el('div#home', null,
       el('div.home-head', null,
         el('h1.logo', null,
@@ -61,7 +79,7 @@ const Home = (() => {
     focusEl = el('button.daily.focusset', { type: 'button', hidden: true });
     shelfEl = el('button.shelf', { type: 'button',
       onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
-    node.append(dailyEl, focusEl, worldsEl, shelfEl);
+    node.append(voiceWarnEl, recommendEl, dailyEl, reviewEl, focusEl, worldsEl, shelfEl);
     return UI.register('home', node);
   }
 
@@ -88,6 +106,45 @@ const Home = (() => {
     build();
     starEl.textContent = String(Store.totalStars());
     const n = Store.todayCount(), streak = Store.streak();
+    const firstRun = Diagnostic.shouldRun();
+    const rec = Diagnostic.current();
+    const recGame = rec && Games.byId[rec.gameId];
+    clear(recommendEl);
+    recommendEl.hidden = !recGame;
+    if (recGame){
+      const lv = recGame.levels[rec.levelIndex] || recGame.levels[0];
+      recommendEl.append(
+        mascotSVG('happy', 'talk'),
+        el('div.grow', null,
+          el('div.t', { text: firstRun ? 'はじめの ぼうけん' : 'いまの おすすめ' }),
+          el('div.s', { text: firstRun
+            ? '10もんで ぴったりの はじまりを みつけよう'
+            : recGame.name + '　《' + lv.t + '》' })),
+        el('div', { class: 'go', text: '▶' }));
+      recommendEl.onclick = () => {
+        Sound.sfx.tap();
+        if (firstRun) Session.startDiagnostic(); else Diagnostic.startRecommended();
+      };
+    }
+    voiceWarnEl.hidden = !Sound.voiceOn || (!!window.speechSynthesis && Sound.hasVoice);
+    voiceWarnEl.textContent = voiceWarnEl.hidden ? ''
+      : 'よみあげる こえが みつかりません。おうちの ひとと せっていを みてね。';
+    if (!voiceWarnEl.hidden){
+      Sound.probeVoice(3000).then(ok => {
+        if (ok){ voiceWarnEl.hidden = true; voiceWarnEl.textContent = ''; }
+      });
+    }
+    const review = Missions.yesterdayReview();
+    reviewEl.hidden = !review;
+    if (review){
+      clear(reviewEl);
+      reviewEl.append(
+        el('div.grow', null,
+          el('div.t', { text: 'きのうの ミッション' }),
+          el('div.s', { text: 'どんな ふうに できたか おはなししよう' })),
+        el('div', { class: 'go', text: '▶' }));
+      reviewEl.onclick = () => Missions.openReview(review);
+    }
     clear(dailyEl);
     dailyEl.classList.toggle('done', n >= 10);
     dailyEl.append(
@@ -194,22 +251,28 @@ const Result = (() => {
   function show(r){
     build();
     clear(inner);
-    const msg = r.stars === 3 ? 'パーフェクト！'
+    const msg = r.mode === 'diagnostic' ? 'さいしょの ぼうけん クリア！'
+              : r.stars === 3 ? 'パーフェクト！'
               : r.stars === 2 ? 'よく できました！'
               : r.stars === 1 ? 'クリア！'
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
-    const spoken = (r.swift ? 'パーフェクト！すぐ答えられたね！'
+    const spoken = (r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
+                 : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
                  : r.stars === 1 ? 'クリア！'
                  : '惜しい！もう一度やってみよう。');
     inner.append(
       mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
-      UI.stars(r.stars, true),
+      r.mode === 'diagnostic'
+        ? el('div.diagnostic-badge', { text: '10もん たんけん できたね' })
+        : UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }),
-      el('div.result-sub', { text: `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+      el('div.result-sub', { text: r.mode === 'diagnostic'
+        ? 'ぴったりの はじまりを みつけたよ'
+        : `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
     /* The thing ★★★ could never say. These levels are for an answer that arrives,
        and a child who counted their way to every right answer used to get exactly
        the same three stars as one who remembered. */
@@ -243,15 +306,31 @@ const Result = (() => {
         el('div.e', { text: r.sticker.emoji }),
         el('div.l', { text: r.sticker.gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' })));
     }
+    if (r.mode === 'diagnostic' && r.recommended){
+      const g = Games.byId[r.recommended.gameId];
+      if (g){
+        const lv = g.levels[r.recommended.levelIndex] || g.levels[0];
+        inner.append(el('div.diagnostic-next', null,
+          el('div.l', { text: 'つぎの おすすめ' }),
+          el('b', { text: g.name + '　《' + lv.t + '》' })));
+      }
+    } else if (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1)) {
+      inner.append(Missions.resultCard(r.lastGameId));
+    }
     const actions = el('div.result-actions');
     // practising the facts that just went wrong outranks anything else on offer
-    const lead = aimed.length > 0;
+    const lead = aimed.length > 0 && r.mode !== 'diagnostic';
     if (r.mode === 'focus'){
       actions.append(el('button.btn.btn-accent.primary', { text: 'もういちど', onclick: runFocus }));
     } else if (lead){
       actions.append(el('button.btn.btn-accent.primary', { text: 'にがてを れんしゅう', onclick: runFocus }));
     }
-    if (r.mode === 'level'){
+    if (r.mode === 'diagnostic'){
+      actions.append(el('button.btn.btn-accent.primary', {
+        text: 'おすすめで あそぶ',
+        onclick(){ Sound.sfx.tap(); Diagnostic.startRecommended(); }
+      }));
+    } else if (r.mode === 'level'){
       // when nothing was earned, another go is the obvious next step, not a footnote
       actions.append(el('button.btn' + (r.stars === 0 && !lead ? '.btn-accent.primary' : ''), { text: 'もういちど',
         onclick(){ Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); } }));
@@ -263,7 +342,7 @@ const Result = (() => {
     } else if (r.mode === 'daily'){
       actions.append(el('button.btn', { text: 'もういちど', onclick(){ Sound.sfx.tap(); Session.startDaily(10); } }));
     }
-    actions.append(el('button.btn' + (r.mode === 'level' || lead || r.mode === 'focus' ? '' : '.btn-accent'),
+    actions.append(el('button.btn' + (r.mode === 'level' || r.mode === 'diagnostic' || lead || r.mode === 'focus' ? '' : '.btn-accent'),
       { text: 'あそびを えらぶ',
         onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
     inner.append(actions);

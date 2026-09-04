@@ -4,7 +4,7 @@
 'use strict';
 
 const Parent = (() => {
-  let gateNode, sheetNode, sheetInner, justReset = false;
+  let gateNode, sheetNode, sheetInner, justReset = false, afterGate = null;
   let persistState = '確認中';
   let lastBackupMsg = null;   // survives the re-render that a successful import triggers
   let a = 0, b = 0, want = 0;
@@ -22,7 +22,13 @@ const Parent = (() => {
       opts.forEach(v => choices.append(el('button.choice', {
         type: 'button', text: String(v),
         onclick(e){
-          if (v === want){ Sound.sfx.correct(); render(); UI.show('parent'); }
+          if (v === want){
+            Sound.sfx.correct();
+            const next = afterGate;
+            afterGate = null;
+            if (next) next();
+            else { render(); UI.show('parent'); }
+          }
           else { e.currentTarget.classList.add('wrong'); Sound.sfx.wrong(); setTimeout(roll, 500); }
         }
       })));
@@ -40,8 +46,9 @@ const Parent = (() => {
     return gateNode;
   }
 
-  function open(){
+  function open(onSuccess){
     buildGate();
+    afterGate = typeof onSuccess === 'function' ? onSuccess : null;
     gateNode._roll();
     UI.show('gate');
   }

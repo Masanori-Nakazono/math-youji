@@ -26,6 +26,8 @@ const Store = (() => {
     stickers: [],     // earned sticker keys
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
+    diagnostic: null, // { completedDay, outcomes, recommended }
+    missions: {},     // "YYYY-MM-DD" -> { id, gameId, text, prompt, done, reviewed }
     name: '',
     sfx: true, voice: true, voiceId: null,
     createdAt: Date.now()
@@ -110,6 +112,24 @@ const Store = (() => {
     out.stickers = Array.from(new Set((base.stickers || []).concat(add.stickers || [])));
     const bp = base.practice || [0, 0], ap = add.practice || [0, 0];
     out.practice = (ap[1] || 0) > (bp[1] || 0) ? ap.slice() : bp.slice();
+    const bd = base.diagnostic, ad = add.diagnostic;
+    out.diagnostic = !bd ? ad : !ad ? bd
+      : ((ad.completedDay || 0) > (bd.completedDay || 0) ? ad : bd);
+    out.missions = Object.assign({}, base.missions || {});
+    for (const d in (add.missions || {})){
+      const cur = out.missions[d], incoming = add.missions[d];
+      if (!cur) out.missions[d] = Object.assign({}, incoming);
+      else if (cur.id === incoming.id) out.missions[d] = Object.assign({}, cur, incoming, {
+        done: !!(cur.done || incoming.done),
+        reviewed: !!(cur.reviewed || incoming.reviewed)
+      });
+      else {
+        // A catalog update can assign a different mission to the same date.
+        // Keep one actual record intact; never transfer completion to other text.
+        const score = m => (m.reviewed ? 4 : 0) + (m.done ? 2 : 0) + (m.doneDay || 0) / 1e9;
+        out.missions[d] = Object.assign({}, score(incoming) > score(cur) ? incoming : cur);
+      }
+    }
     out.createdAt = Math.min(base.createdAt || Date.now(), add.createdAt || Date.now());
     return out;
   }
@@ -223,6 +243,37 @@ const Store = (() => {
       mem.daily[t] = (mem.daily[t] || 0) + total;
       save();
     },
+    recordDiagnostic(outcomes, recommended){
+      mem.diagnostic = {
+        completedDay: dayNo(),
+        outcomes: (outcomes || []).map(x => ({
+          gameId: x.gameId, levelIndex: x.levelIndex || 0, clean: !!x.clean
+        })),
+        recommended: recommended || null
+      };
+      save();
+    },
+    recordMission(mission){
+      if (!mission || !mission.day) return;
+      mem.missions[mission.day] = Object.assign({}, mission, { done: false, reviewed: false });
+      save();
+    },
+    completeMission(day){
+      const m = mem.missions[day];
+      if (!m) return false;
+      m.done = true;
+      m.doneDay = dayNo();
+      save();
+      return true;
+    },
+    reviewMission(day){
+      const m = mem.missions[day];
+      if (!m) return false;
+      m.reviewed = true;
+      save();
+      return true;
+    },
+    mission: day => mem.missions[day] || null,
     practiceAccuracy(){
       const p = mem.practice;
       return (p && p[1]) ? p[0] / p[1] : null;

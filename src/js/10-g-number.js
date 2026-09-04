@@ -104,7 +104,9 @@ Games.add({
   aim: 'ものを <b>1つずつ指さして数え</b>、最後に言った数がそのまとまり全体の数だと分かる力（一対一対応と基数性）。数唱が言えることと「数えられる」ことは別で、就学前にいちばん差がつく土台です。',
   levels: [
     { t: '1〜5', d: 'いちれつに ならんだ もの', make: api => countQuestion(api, 1, 5, 'line') },
-    { t: '1〜10', d: 'ばらばらに ある もの', make: api => countQuestion(api, 4, 10, 'scatter') },
+    { t: '1〜10', d: 'ばらばらでも かずは おなじ', make: api => chance(.25)
+        ? conserveNumber(api)
+        : countQuestion(api, 4, 10, 'scatter') },
     { t: '◯こ ちょうだい', d: 'かずだけ とりだす', make: api => giveQuestion(api, 3, 10) }
   ]
 });
@@ -500,13 +502,17 @@ function traceQuestion(api, digits){
       box.setPointerCapture && box.setPointerCapture(e.pointerId);
       e.preventDefault();
     } else {
-      // touched the wrong place: bounce the start dot toward the finger, and after a
-      // couple of tries count it as a miss so the hint fires and the stars are honest
+      // Starting outside the dot is a motor-control slip, not evidence that the
+      // child misunderstood the numeral. Nudge visually without lowering math stars.
       const dot = $('.trace-start', box);
       if (dot && dot.animate) dot.animate(
         [{ transform: 'scale(1)' }, { transform: 'scale(1.6)' }, { transform: 'scale(1)' }],
         { duration: 420 });
-      if (++strays % 2 === 0) api.wrong();
+      if (++strays % 2 === 0){
+        nudged = true;
+        showGuide();
+        Sound.say('赤い点から、なぞってみよう。', { delay: 100 });
+      }
       armIdle();
     }
   }
