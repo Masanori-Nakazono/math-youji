@@ -154,7 +154,9 @@ function makeTwoWays(api){
   draw();
   build();
   api.onHint(() => {
-    const a = made.length ? Math.min(whole - 1, made[0] + 1) : 1;
+    const used = new Set(made.map(x => Math.min(x, whole - x)));
+    const a = Array.from({ length: whole - 1 }, (_, i) => i + 1)
+      .find(x => !used.has(Math.min(x, whole - x))) || 1;
     api.field.append(el('div.hintline', {
       text: a + ' と ' + (whole - a) + ' に わけることも できるよ'
     }));

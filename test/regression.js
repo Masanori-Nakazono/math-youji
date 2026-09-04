@@ -286,6 +286,16 @@
     check('a wrong file is rejected without destroying the records',
       !bad.ok && !junk.ok && K.Store.stars('bond', 0) === 3, 'bad=' + bad.ok + ' junk=' + junk.ok);
 
+    const intact = JSON.stringify(K.Store.data);
+    const nullStickers = K.Store.importText('{"stars":{},"stickers":null}', 'replace');
+    const nullMissions = K.Store.importText('{"stars":{},"missions":null}', 'replace');
+    const badFacts = K.Store.importText('{"stars":{},"facts":{"ten:3":null}}', 'replace');
+    check('a structurally broken backup is rejected atomically',
+      !nullStickers.ok && !nullMissions.ok && !badFacts.ok
+        && JSON.stringify(K.Store.data) === intact
+        && Array.isArray(K.Store.data.stickers) && K.Store.data.missions,
+      'stickers=' + nullStickers.ok + ' missions=' + nullMissions.ok + ' facts=' + badFacts.ok);
+
     K.Store.recordMission({ day: '2026-02-03', id: 'mission-a', gameId: 'count',
       text: 'A', prompt: 'A' });
     K.Store.completeMission('2026-02-03');

@@ -32,6 +32,17 @@ const UI = (() => {
     n.scrollTop = 0;
     const sc = $('.worlds, .sheet, .levels, .book', n);
     if (sc) sc.scrollTop = o.keepScroll ? sc.scrollTop : 0;
+    /* A visual transition is otherwise silent to screen readers and leaves
+       keyboard/switch focus on a control that just became hidden. */
+    if (o.focus !== false){
+      const heading = $('h1, h2, [role="heading"]', n);
+      if (heading){
+        if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+        requestAnimationFrame(() => {
+          if (current === name && !n.hidden) heading.focus({ preventScroll: true });
+        });
+      }
+    }
     return n;
   }
   const currentName = () => current;

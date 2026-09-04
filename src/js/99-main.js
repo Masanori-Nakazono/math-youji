@@ -8,7 +8,7 @@
   (function fixViewport(){
     let m = document.querySelector('meta[name="viewport"]');
     if (!m){ m = document.createElement('meta'); m.name = 'viewport'; document.head.appendChild(m); }
-    m.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+    m.setAttribute('content', 'width=device-width, initial-scale=1, viewport-fit=cover');
   })();
 
   /* scale unit from the real stage size so the layout is identical on any iPad */
@@ -26,11 +26,6 @@
   if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
   resize();
 
-  /* stop iOS double-tap zoom and rubber-band scrolling on the stage */
-  document.addEventListener('gesturestart', e => e.preventDefault());
-  document.addEventListener('touchmove', e => {
-    if (!e.target.closest('.worlds, .sheet, .levels, .book, .queue, .train')) e.preventDefault();
-  }, { passive: false });
   UI.init();
   Sound.sfxOn   = Store.data.sfx   !== false;
   Sound.voiceOn = Store.data.voice !== false;

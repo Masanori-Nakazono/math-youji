@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -2085,6 +2085,112 @@ const Store = (() => {
     return JSON.stringify({ app: FILE_TAG, v: 1, savedAt: new Date().toISOString(), data: mem }, null, 2);
   }
 
+  const isRecord = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const isCount = v => Number.isFinite(v) && v >= 0;
+  const safeKey = k => k !== '__proto__' && k !== 'prototype' && k !== 'constructor';
+
+  /** Validate into a fresh object before touching the live record. Older backups
+      may omit newer fields, but a field that is present must have the shape the
+      rest of Store expects. */
+  function normalizeData(data){
+    if (!isRecord(data)) return null;
+    const out = blank();
+    const copyMap = (name, valid) => {
+      if (data[name] == null) return data[name] === undefined;
+      if (!isRecord(data[name])) return false;
+      const next = {};
+      for (const k of Object.keys(data[name])){
+        if (!safeKey(k) || !valid(data[name][k])) return false;
+        next[k] = data[name][k];
+      }
+      out[name] = next;
+      return true;
+    };
+
+    if (!copyMap('stars', v => isCount(v) && v <= 3)
+     || !copyMap('plays', isCount)
+     || !copyMap('seen', isCount)
+     || !copyMap('daily', isCount)
+     || !copyMap('last', isCount)
+     || !copyMap('swift', v => v === 0 || v === 1)
+     || !copyMap('recent', v => typeof v === 'string' && /^[01]{0,30}$/.test(v))
+     || !copyMap('firstTry', v => Array.isArray(v) && v.length >= 2
+          && isCount(v[0]) && isCount(v[1]) && v[0] <= v[1])
+     || !copyMap('facts', v => Array.isArray(v) && v.length >= 3
+          && isCount(v[0]) && isCount(v[1]) && v[1] <= v[0] && isCount(v[2])
+          && (v[3] == null || typeof v[3] === 'string')
+          && (v[4] == null || typeof v[4] === 'string')
+          && (v[5] == null || isCount(v[5])))) return null;
+
+    if (data.stickers !== undefined){
+      if (!Array.isArray(data.stickers) || data.stickers.some(v => typeof v !== 'string')) return null;
+      out.stickers = Array.from(new Set(data.stickers));
+    }
+    if (data.practice !== undefined){
+      if (!Array.isArray(data.practice) || data.practice.length < 2
+       || !isCount(data.practice[0]) || !isCount(data.practice[1])
+       || data.practice[0] > data.practice[1]) return null;
+      out.practice = data.practice.slice(0, 2);
+    }
+    if (data.diagnostic !== undefined && data.diagnostic !== null){
+      const d = data.diagnostic;
+      if (!isRecord(d) || !isCount(d.completedDay)
+       || !Array.isArray(d.outcomes)
+       || d.outcomes.some(x => !isRecord(x) || typeof x.gameId !== 'string'
+          || !isCount(x.levelIndex) || typeof x.clean !== 'boolean')
+       || (d.recommended != null && (!isRecord(d.recommended)
+          || typeof d.recommended.gameId !== 'string'
+          || !isCount(d.recommended.levelIndex)))) return null;
+      out.diagnostic = {
+        completedDay: d.completedDay,
+        outcomes: d.outcomes.map(x => ({
+          gameId: x.gameId, levelIndex: x.levelIndex, clean: x.clean
+        })),
+        recommended: d.recommended == null ? null : {
+          gameId: d.recommended.gameId, levelIndex: d.recommended.levelIndex
+        }
+      };
+    }
+    if (data.missions !== undefined){
+      if (!isRecord(data.missions)) return null;
+      out.missions = {};
+      for (const day of Object.keys(data.missions)){
+        const m = data.missions[day];
+        if (!safeKey(day) || !isRecord(m)
+         || typeof m.day !== 'string' || typeof m.id !== 'string'
+         || typeof m.gameId !== 'string' || typeof m.text !== 'string'
+         || typeof m.prompt !== 'string'
+         || (m.done !== undefined && typeof m.done !== 'boolean')
+         || (m.reviewed !== undefined && typeof m.reviewed !== 'boolean')
+         || (m.doneDay !== undefined && !isCount(m.doneDay))) return null;
+        out.missions[day] = {
+          day: m.day, id: m.id, gameId: m.gameId, text: m.text, prompt: m.prompt,
+          done: !!m.done, reviewed: !!m.reviewed
+        };
+        if (m.doneDay !== undefined) out.missions[day].doneDay = m.doneDay;
+      }
+    }
+    if (data.name !== undefined){
+      if (typeof data.name !== 'string') return null;
+      out.name = data.name;
+    }
+    for (const k of ['sfx', 'voice']){
+      if (data[k] !== undefined){
+        if (typeof data[k] !== 'boolean') return null;
+        out[k] = data[k];
+      }
+    }
+    if (data.voiceId !== undefined){
+      if (data.voiceId !== null && typeof data.voiceId !== 'string') return null;
+      out.voiceId = data.voiceId;
+    }
+    if (data.createdAt !== undefined){
+      if (!isCount(data.createdAt)) return null;
+      out.createdAt = data.createdAt;
+    }
+    return out;
+  }
+
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
   function mergeInto(base, add){
     const out = Object.assign(blank(), base);
@@ -2145,15 +2251,20 @@ const Store = (() => {
 
   /** mode: 'merge' (default, never loses or inflates) or 'replace' */
   function importText(text, mode){
+    if (typeof text !== 'string' || text.length > 2 * 1024 * 1024){
+      return { ok: false, msg: 'ファイルが大きすぎるか、読み取れない形式です。' };
+    }
     let parsed;
     try{ parsed = JSON.parse(text); }
     catch(e){ return { ok: false, msg: 'ファイルの中身を読み取れませんでした。' }; }
     const data = (parsed && parsed.app === FILE_TAG && parsed.data) ? parsed.data
-               : (parsed && parsed.stars) ? parsed        // a bare data object is fine too
+               : (parsed && isRecord(parsed.stars)) ? parsed // a bare data object is fine too
                : null;
-    if (!data || typeof data !== 'object') return { ok: false, msg: 'このファイルは かずのぼうけん の記録ではないようです。' };
+    const normalized = normalizeData(data);
+    if (!normalized) return { ok: false, msg: '記録の形式がこわれているため、読み込みませんでした。' };
     const before = Object.keys(mem.stars || {}).length;
-    mem = mode === 'replace' ? Object.assign(blank(), data) : mergeInto(mem, data);
+    const next = mode === 'replace' ? normalized : mergeInto(mem, normalized);
+    mem = next;
     writeNow();
     const after = Object.keys(mem.stars || {}).length;
     return { ok: true, msg: `読み込みました（★のついたレベル ${before} → ${after}、シール ${mem.stickers.length} 枚）`,
@@ -2584,6 +2695,17 @@ const UI = (() => {
     n.scrollTop = 0;
     const sc = $('.worlds, .sheet, .levels, .book', n);
     if (sc) sc.scrollTop = o.keepScroll ? sc.scrollTop : 0;
+    /* A visual transition is otherwise silent to screen readers and leaves
+       keyboard/switch focus on a control that just became hidden. */
+    if (o.focus !== false){
+      const heading = $('h1, h2, [role="heading"]', n);
+      if (heading){
+        if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+        requestAnimationFrame(() => {
+          if (current === name && !n.hidden) heading.focus({ preventScroll: true });
+        });
+      }
+    }
     return n;
   }
   const currentName = () => current;
@@ -4695,7 +4817,9 @@ function makeTwoWays(api){
   draw();
   build();
   api.onHint(() => {
-    const a = made.length ? Math.min(whole - 1, made[0] + 1) : 1;
+    const used = new Set(made.map(x => Math.min(x, whole - x)));
+    const a = Array.from({ length: whole - 1 }, (_, i) => i + 1)
+      .find(x => !used.has(Math.min(x, whole - x))) || 1;
     api.field.append(el('div.hintline', {
       text: a + ' と ' + (whole - a) + ' に わけることも できるよ'
     }));
@@ -6794,7 +6918,7 @@ const Parent = (() => {
   (function fixViewport(){
     let m = document.querySelector('meta[name="viewport"]');
     if (!m){ m = document.createElement('meta'); m.name = 'viewport'; document.head.appendChild(m); }
-    m.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+    m.setAttribute('content', 'width=device-width, initial-scale=1, viewport-fit=cover');
   })();
 
   /* scale unit from the real stage size so the layout is identical on any iPad */
@@ -6812,11 +6936,6 @@ const Parent = (() => {
   if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
   resize();
 
-  /* stop iOS double-tap zoom and rubber-band scrolling on the stage */
-  document.addEventListener('gesturestart', e => e.preventDefault());
-  document.addEventListener('touchmove', e => {
-    if (!e.target.closest('.worlds, .sheet, .levels, .book, .queue, .train')) e.preventDefault();
-  }, { passive: false });
   UI.init();
   Sound.sfxOn   = Store.data.sfx   !== false;
   Sound.voiceOn = Store.data.voice !== false;
