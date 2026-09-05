@@ -982,11 +982,12 @@
     const pre = K.Progress.slots('pre'), g1 = K.Progress.slots('g1');
     const shutAtStart = !K.Progress.g1Open();
     /* Visible from day one, behind a padlock: the four names are the reason to
-       fill the shelf, and an empty space where they would be is not. */
+       fill the shelf, and an empty space where they would be is not. The padlocked
+       cards say it on their own — there is no banner about the door any more. */
     K.Home.render();
     const seenOnDayOne = qa('#home .gamecard.locked').length === 4
       && qa('#home .world h3 .chip').some(c => c.textContent.indexOf('1ねんせい') >= 0)
-      && !!q('#home .stagelocked') && !q('#home .stagelocked').hidden;
+      && !q('#home .stagelocked');
 
     // every 小1 level is out of reach of every question surface while it is shut
     const g1Games = K.Games.list.filter(g => K.Progress.stageOf(g) === 'g1');
@@ -1072,6 +1073,34 @@
     })();
     check('a parent can open 小学1年生 by hand, and the backup remembers it',
       !before && after && survives, 'before=' + before + ' after=' + after + ' backup=' + survives);
+    K.Store.reset();
+  })();
+
+  /* ---------- 34. the daily banners share one row ----------
+     おすすめ, きょうの れんしゅう, きのうの ミッション and にがて あつめ each used
+     to be a full-width banner. On a day all four are up they took the top third of
+     the screen and the map they lead to became a strip. They live on one row now:
+     the row's height must not grow with the number of banners on it. */
+  (function dailyRow(){
+    K.Store.reset();
+    K.Home.render();
+    const row = q('#home .dailies');
+    const shown = () => qa('#home .dailies > .daily').filter(b => !b.hidden);
+    const oneUp = row.getBoundingClientRect().height;
+    // force every banner up, the way a child mid-way through a week sees it
+    shown();
+    qa('#home .dailies > .daily').forEach(b => { b.hidden = false; });
+    row.className = 'dailies n4';
+    const allUp = row.getBoundingClientRect().height;
+    const tops = qa('#home .dailies > .daily').map(b => Math.round(b.getBoundingClientRect().top));
+    const oneRow = new Set(tops).size === 1;
+    // and the door to 小学1年生 is not a banner of its own down at the foot
+    const noStageBanner = !q('#home .stagelocked');
+    check('the daily banners stay on one row, however many are up',
+      !!row && oneRow && allUp <= oneUp * 1.35 && noStageBanner,
+      'h1=' + Math.round(oneUp) + ' h4=' + Math.round(allUp) + ' tops=' + tops.join(',')
+        + ' stageBanner=' + !noStageBanner);
+    K.Home.render();
     K.Store.reset();
   })();
 

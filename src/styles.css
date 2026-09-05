@@ -506,6 +506,40 @@ body::before{
   color: var(--ink);
   border-color: var(--good);
 }
+.daily .go{ font-size: calc(var(--u)*2.4); line-height: 1; flex: 0 0 auto; }
+
+/* The daily sets share one row. Each of the four (おすすめ / きょうの れんしゅう /
+   きのうの ミッション / にがて あつめ) used to be a full-width banner of its own,
+   so on a busy day the map they lead to was a strip at the bottom of the screen.
+   One row, never wrapping: with one banner it fills the width exactly as before,
+   with four they are quarters and the long subtitles clip. */
+.dailies{
+  flex: 0 0 auto;
+  display: flex; flex-wrap: nowrap; align-items: stretch;
+  gap: calc(var(--u)*.7);
+}
+.dailies > .daily{
+  flex: 1 1 0; min-width: 0;
+  gap: calc(var(--u)*.7);
+  padding: calc(var(--u)*.6) calc(var(--u)*1);
+}
+.dailies > .daily .t{ font-size: calc(var(--u)*1.8); }
+.dailies > .daily .s{ font-size: calc(var(--u)*1.25); }
+/* one line each: a banner that wraps is a banner that grows the row back */
+.dailies > .daily .t,
+.dailies > .daily .s{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dailies > .daily .mascot{ width: calc(var(--u)*4.4); height: calc(var(--u)*4.4); }
+.dailies > .daily .go{ font-size: calc(var(--u)*2); }
+/* three or four banners at once: the name is what the child reads, so the mascot
+   gives up its width to it before the words start clipping */
+.dailies.n3 > .daily .mascot,
+.dailies.n4 > .daily .mascot{ display: none; }
+.dailies.n3 > .daily .t,
+.dailies.n4 > .daily .t{ font-size: calc(var(--u)*1.55); }
+.dailies.n3 > .daily .s,
+.dailies.n4 > .daily .s{ font-size: calc(var(--u)*1.1); }
+.dailies.n3 > .daily .go,
+.dailies.n4 > .daily .go{ font-size: calc(var(--u)*1.6); }
 
 /* worlds */
 .worlds{
@@ -1743,39 +1777,6 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   white-space: normal;
 }
 
-/* ---- the door to the classroom ---- */
-/* .daily paints its text in --accent-ink for the orange gradient it normally has;
-   on the recessed paper of a locked door that is dark brown on near-black */
-.daily.stagelocked{
-  background: var(--paper-2);
-  border-style: dashed;
-  border-color: var(--card-edge);
-  color: var(--ink);
-}
-.daily.stagelocked .s{ color: var(--ink-soft) }
-.daily.stagelocked .key{ font-size: calc(var(--u)*3); line-height: 1; flex: 0 0 auto }
-/* the last few stickers are the ones worth making a noise about */
-.daily.stagelocked.nearly{
-  border-style: solid;
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, var(--paper-2));
-}
-.stagebar{
-  position: relative;
-  width: 100%; height: calc(var(--u)*1.5); margin-top: calc(var(--u)*.4);
-  border-radius: 999px; background: var(--card-edge); overflow: hidden;
-}
-.stagebar > i{
-  display: block; height: 100%; border-radius: 999px;
-  background: var(--accent);
-  transition: width .5s cubic-bezier(.2,.8,.3,1);
-}
-.stagebar .n{
-  position: absolute; inset: 0;
-  display: grid; place-items: center;
-  font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*1.05);
-  color: var(--ink);
-}
 .world.newstage h3 .chip{ white-space: nowrap }
 
 /* ---- a course you can see, and cannot open yet ----

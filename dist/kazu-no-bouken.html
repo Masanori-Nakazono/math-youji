@@ -525,6 +525,40 @@ body::before{
   color: var(--ink);
   border-color: var(--good);
 }
+.daily .go{ font-size: calc(var(--u)*2.4); line-height: 1; flex: 0 0 auto; }
+
+/* The daily sets share one row. Each of the four (おすすめ / きょうの れんしゅう /
+   きのうの ミッション / にがて あつめ) used to be a full-width banner of its own,
+   so on a busy day the map they lead to was a strip at the bottom of the screen.
+   One row, never wrapping: with one banner it fills the width exactly as before,
+   with four they are quarters and the long subtitles clip. */
+.dailies{
+  flex: 0 0 auto;
+  display: flex; flex-wrap: nowrap; align-items: stretch;
+  gap: calc(var(--u)*.7);
+}
+.dailies > .daily{
+  flex: 1 1 0; min-width: 0;
+  gap: calc(var(--u)*.7);
+  padding: calc(var(--u)*.6) calc(var(--u)*1);
+}
+.dailies > .daily .t{ font-size: calc(var(--u)*1.8); }
+.dailies > .daily .s{ font-size: calc(var(--u)*1.25); }
+/* one line each: a banner that wraps is a banner that grows the row back */
+.dailies > .daily .t,
+.dailies > .daily .s{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dailies > .daily .mascot{ width: calc(var(--u)*4.4); height: calc(var(--u)*4.4); }
+.dailies > .daily .go{ font-size: calc(var(--u)*2); }
+/* three or four banners at once: the name is what the child reads, so the mascot
+   gives up its width to it before the words start clipping */
+.dailies.n3 > .daily .mascot,
+.dailies.n4 > .daily .mascot{ display: none; }
+.dailies.n3 > .daily .t,
+.dailies.n4 > .daily .t{ font-size: calc(var(--u)*1.55); }
+.dailies.n3 > .daily .s,
+.dailies.n4 > .daily .s{ font-size: calc(var(--u)*1.1); }
+.dailies.n3 > .daily .go,
+.dailies.n4 > .daily .go{ font-size: calc(var(--u)*1.6); }
 
 /* worlds */
 .worlds{
@@ -1762,39 +1796,6 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   white-space: normal;
 }
 
-/* ---- the door to the classroom ---- */
-/* .daily paints its text in --accent-ink for the orange gradient it normally has;
-   on the recessed paper of a locked door that is dark brown on near-black */
-.daily.stagelocked{
-  background: var(--paper-2);
-  border-style: dashed;
-  border-color: var(--card-edge);
-  color: var(--ink);
-}
-.daily.stagelocked .s{ color: var(--ink-soft) }
-.daily.stagelocked .key{ font-size: calc(var(--u)*3); line-height: 1; flex: 0 0 auto }
-/* the last few stickers are the ones worth making a noise about */
-.daily.stagelocked.nearly{
-  border-style: solid;
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, var(--paper-2));
-}
-.stagebar{
-  position: relative;
-  width: 100%; height: calc(var(--u)*1.5); margin-top: calc(var(--u)*.4);
-  border-radius: 999px; background: var(--card-edge); overflow: hidden;
-}
-.stagebar > i{
-  display: block; height: 100%; border-radius: 999px;
-  background: var(--accent);
-  transition: width .5s cubic-bezier(.2,.8,.3,1);
-}
-.stagebar .n{
-  position: absolute; inset: 0;
-  display: grid; place-items: center;
-  font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*1.05);
-  color: var(--ink);
-}
 .world.newstage h3 .chip{ white-space: nowrap }
 
 /* ---- a course you can see, and cannot open yet ----
@@ -7017,7 +7018,7 @@ const Title = (() => {
 
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
-  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, stageEl;
+  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl;
 
   function build(){
     if (node) return node;
@@ -7047,13 +7048,14 @@ const Home = (() => {
     focusEl = el('button.daily.focusset', { type: 'button', hidden: true });
     shelfEl = el('button.shelf', { type: 'button',
       onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
-    /* The door to 1ねんせい. It is a goal, not today's work, so it sits down with
-       the sticker shelf it depends on rather than up with the daily sets — and it
-       stays out of sight entirely until the shelf is half full, because a padlock
-       is only encouraging to a child who can already see themselves reaching it. */
-    stageEl = el('button.daily.stagelocked', { type: 'button', hidden: true,
-      onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
-    node.append(voiceWarnEl, recommendEl, dailyEl, reviewEl, focusEl, worldsEl, stageEl, shelfEl);
+    /* The door to 1ねんせい used to have a progress banner of its own down here.
+       It said what the locked cards on the map already say, and between it and the
+       sticker shelf the map itself was the smallest thing on its own screen. The
+       padlocked cards in the 1ねんせい world carry the message now. */
+    /* one row, never a stack: four banners each on their own line pushed the
+       map itself off the bottom of an iPad */
+    dailiesEl = el('div.dailies', null, recommendEl, dailyEl, reviewEl, focusEl);
+    node.append(voiceWarnEl, dailiesEl, worldsEl, shelfEl);
     return UI.register('home', node);
   }
 
@@ -7117,7 +7119,7 @@ const Home = (() => {
           el('div.s', { text: firstRun
             ? '10もんで ぴったりの はじまりを みつけよう'
             : recGame.name + '　《' + lv.t + '》' })),
-        el('div', { class: 'go', text: '▶' }));
+        el('div.go', { text: '▶' }));
       recommendEl.onclick = () => {
         Sound.sfx.tap();
         if (firstRun) Session.startDiagnostic(); else Diagnostic.startRecommended();
@@ -7139,7 +7141,7 @@ const Home = (() => {
         el('div.grow', null,
           el('div.t', { text: 'きのうの ミッション' }),
           el('div.s', { text: 'どんな ふうに できたか おはなししよう' })),
-        el('div', { class: 'go', text: '▶' }));
+        el('div.go', { text: '▶' }));
       reviewEl.onclick = () => Missions.openReview(review);
     }
     clear(dailyEl);
@@ -7151,7 +7153,7 @@ const Home = (() => {
         el('div.s', { text: n >= 10
           ? `きょうは ${n}もん がんばったね　･　${streak}にち れんぞく`
           : 'ぜんぶの あそびから 10もん でるよ' })),
-      el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: n >= 10 ? '🎉' : '▶' }));
+      el('div.go', { text: n >= 10 ? '🎉' : '▶' }));
 
     const weak = Store.weakFacts(4);
     focusEl.hidden = weak.length < 2;      // one wobbly fact is not a practice set
@@ -7163,7 +7165,7 @@ const Home = (() => {
           el('div.t', { text: 'にがて あつめ' }),
           el('div.s', { text: weak.slice(0, 2).map(w => w.label).join('　･　')
                               + (weak.length > 2 ? '　ほか' : '') })),
-        el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: '▶' }));
+        el('div.go', { text: '▶' }));
       focusEl.onclick = () => { Sound.sfx.tap(); Session.startFocus(weak.map(w => w.key), { n: 10 }); };
     }
 
@@ -7180,26 +7182,12 @@ const Home = (() => {
       el('div.lbl', null, 'シール ' + got.length + 'まい', el('small', { text: 'タップで シールブック' })),
       strip);
 
-    const st = Progress.preStickers(), open1 = Progress.g1Open();
-    const left = Math.max(0, st.total - st.got);
-    const nearly = left <= 6;
-    stageEl.hidden = open1;
-    if (!stageEl.hidden){
-      clear(stageEl);
-      stageEl.classList.toggle('nearly', nearly);
-      stageEl.append(
-        el('div.key', { text: '🔒' }),
-        el('div.grow', null,
-          el('div.t', { text: nearly ? 'もうすぐ ひらくよ！　あと ' + left + 'まい'
-                                     : 'しょうがっこう 1ねんせいの もんだい' }),
-          el('div.s', { text: nearly
-            ? 'シールが ぜんぶ そろうと 1ねんせいの きょうしつが ひらくよ'
-            : 'シールを ぜんぶ あつめると ひらくよ　･　あと ' + left + 'まい' }),
-          el('div.stagebar', null,
-            el('i', { style: { width: (st.total ? (st.got / st.total) * 100 : 0) + '%' } }),
-            el('span.n', { text: st.got + ' / ' + st.total }))),
-        el('div.key', { text: '📖' }));
-    }
+    /* how many banners share the row decides how much of each one fits: with three
+       or four up, the mascot's width is worth more to the name than the mascot is */
+    const shown = [...dailiesEl.children].filter(c => !c.hidden).length;
+    dailiesEl.className = 'dailies n' + shown;
+
+    const open1 = Progress.g1Open();
 
     clear(worldsEl);
     WORLDS.forEach(w => {

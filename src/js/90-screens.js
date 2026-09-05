@@ -51,7 +51,7 @@ const Title = (() => {
 
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
-  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, stageEl;
+  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl;
 
   function build(){
     if (node) return node;
@@ -81,13 +81,14 @@ const Home = (() => {
     focusEl = el('button.daily.focusset', { type: 'button', hidden: true });
     shelfEl = el('button.shelf', { type: 'button',
       onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
-    /* The door to 1ねんせい. It is a goal, not today's work, so it sits down with
-       the sticker shelf it depends on rather than up with the daily sets — and it
-       stays out of sight entirely until the shelf is half full, because a padlock
-       is only encouraging to a child who can already see themselves reaching it. */
-    stageEl = el('button.daily.stagelocked', { type: 'button', hidden: true,
-      onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
-    node.append(voiceWarnEl, recommendEl, dailyEl, reviewEl, focusEl, worldsEl, stageEl, shelfEl);
+    /* The door to 1ねんせい used to have a progress banner of its own down here.
+       It said what the locked cards on the map already say, and between it and the
+       sticker shelf the map itself was the smallest thing on its own screen. The
+       padlocked cards in the 1ねんせい world carry the message now. */
+    /* one row, never a stack: four banners each on their own line pushed the
+       map itself off the bottom of an iPad */
+    dailiesEl = el('div.dailies', null, recommendEl, dailyEl, reviewEl, focusEl);
+    node.append(voiceWarnEl, dailiesEl, worldsEl, shelfEl);
     return UI.register('home', node);
   }
 
@@ -151,7 +152,7 @@ const Home = (() => {
           el('div.s', { text: firstRun
             ? '10もんで ぴったりの はじまりを みつけよう'
             : recGame.name + '　《' + lv.t + '》' })),
-        el('div', { class: 'go', text: '▶' }));
+        el('div.go', { text: '▶' }));
       recommendEl.onclick = () => {
         Sound.sfx.tap();
         if (firstRun) Session.startDiagnostic(); else Diagnostic.startRecommended();
@@ -173,7 +174,7 @@ const Home = (() => {
         el('div.grow', null,
           el('div.t', { text: 'きのうの ミッション' }),
           el('div.s', { text: 'どんな ふうに できたか おはなししよう' })),
-        el('div', { class: 'go', text: '▶' }));
+        el('div.go', { text: '▶' }));
       reviewEl.onclick = () => Missions.openReview(review);
     }
     clear(dailyEl);
@@ -185,7 +186,7 @@ const Home = (() => {
         el('div.s', { text: n >= 10
           ? `きょうは ${n}もん がんばったね　･　${streak}にち れんぞく`
           : 'ぜんぶの あそびから 10もん でるよ' })),
-      el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: n >= 10 ? '🎉' : '▶' }));
+      el('div.go', { text: n >= 10 ? '🎉' : '▶' }));
 
     const weak = Store.weakFacts(4);
     focusEl.hidden = weak.length < 2;      // one wobbly fact is not a practice set
@@ -197,7 +198,7 @@ const Home = (() => {
           el('div.t', { text: 'にがて あつめ' }),
           el('div.s', { text: weak.slice(0, 2).map(w => w.label).join('　･　')
                               + (weak.length > 2 ? '　ほか' : '') })),
-        el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: '▶' }));
+        el('div.go', { text: '▶' }));
       focusEl.onclick = () => { Sound.sfx.tap(); Session.startFocus(weak.map(w => w.key), { n: 10 }); };
     }
 
@@ -214,26 +215,12 @@ const Home = (() => {
       el('div.lbl', null, 'シール ' + got.length + 'まい', el('small', { text: 'タップで シールブック' })),
       strip);
 
-    const st = Progress.preStickers(), open1 = Progress.g1Open();
-    const left = Math.max(0, st.total - st.got);
-    const nearly = left <= 6;
-    stageEl.hidden = open1;
-    if (!stageEl.hidden){
-      clear(stageEl);
-      stageEl.classList.toggle('nearly', nearly);
-      stageEl.append(
-        el('div.key', { text: '🔒' }),
-        el('div.grow', null,
-          el('div.t', { text: nearly ? 'もうすぐ ひらくよ！　あと ' + left + 'まい'
-                                     : 'しょうがっこう 1ねんせいの もんだい' }),
-          el('div.s', { text: nearly
-            ? 'シールが ぜんぶ そろうと 1ねんせいの きょうしつが ひらくよ'
-            : 'シールを ぜんぶ あつめると ひらくよ　･　あと ' + left + 'まい' }),
-          el('div.stagebar', null,
-            el('i', { style: { width: (st.total ? (st.got / st.total) * 100 : 0) + '%' } }),
-            el('span.n', { text: st.got + ' / ' + st.total }))),
-        el('div.key', { text: '📖' }));
-    }
+    /* how many banners share the row decides how much of each one fits: with three
+       or four up, the mascot's width is worth more to the name than the mascot is */
+    const shown = [...dailiesEl.children].filter(c => !c.hidden).length;
+    dailiesEl.className = 'dailies n' + shown;
+
+    const open1 = Progress.g1Open();
 
     clear(worldsEl);
     WORLDS.forEach(w => {
