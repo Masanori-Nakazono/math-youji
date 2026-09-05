@@ -92,10 +92,7 @@ const Progress = (() => {
     preStickers: () => count('pre'),
     g1Open,
     /** opened by hand from the parent page; never reversible */
-    openG1(){ Store.setPref('g1Open', true); },
-    /** shown on Home once the shelf is half full: before that a locked door is
-        just noise to a child who has months of かずの しま ahead of them */
-    TEASE_AT: 0.5
+    openG1(){ Store.setPref('g1Open', true); }
   };
 })();
 

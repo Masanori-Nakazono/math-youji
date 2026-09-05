@@ -110,6 +110,29 @@ const Home = (() => {
       st);
   }
 
+  /* The classroom is on this screen from the first day, behind a padlock.
+
+     It was hidden until the shelf was half full, on the theory that a lock a child
+     cannot open yet is discouraging. That is true of a lock with nothing behind it
+     — and this one has four named games behind it. Seeing 「なかまづくり」 and
+     「20までの かず」 sitting there, greyed out, is the reason to fill the shelf;
+     an empty space where they would be is not. Tapping one says how to get in and
+     goes to the sticker book, which is where the count lives. */
+  function lockedCard(g){
+    return el('button.gamecard.locked', {
+      type: 'button', title: g.name + '　シールを ぜんぶ あつめると あそべるよ',
+      onclick(){
+        Sound.sfx.tap();
+        Sound.say('シールが全部そろうと、遊べるようになるよ。', { delay: 120 });
+        Book.render();
+        UI.show('book');
+      }
+    },
+      el('div.ico', { text: g.ico }),
+      el('div.nm', { text: g.name }),
+      el('div.lockmark', { text: '🔒' }));
+  }
+
   function render(){
     build();
     starEl.textContent = String(Store.totalStars());
@@ -193,32 +216,39 @@ const Home = (() => {
 
     const st = Progress.preStickers(), open1 = Progress.g1Open();
     const left = Math.max(0, st.total - st.got);
-    stageEl.hidden = open1 || st.got < st.total * Progress.TEASE_AT;
+    const nearly = left <= 6;
+    stageEl.hidden = open1;
     if (!stageEl.hidden){
       clear(stageEl);
+      stageEl.classList.toggle('nearly', nearly);
       stageEl.append(
-        el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: '🔒' }),
+        el('div.key', { text: '🔒' }),
         el('div.grow', null,
-          el('div.t', { text: 'しょうがっこう 1ねんせいの もんだい' }),
-          el('div.s', { text: 'シールを ぜんぶ あつめると ひらくよ　･　あと ' + left + 'まい' }),
-          el('div.stagebar', null, el('i', { style: { width: (st.total ? (st.got / st.total) * 100 : 0) + '%' } }))),
-        el('div', { style: { fontSize: 'calc(var(--u)*3)' }, text: '📖' }));
+          el('div.t', { text: nearly ? 'もうすぐ ひらくよ！　あと ' + left + 'まい'
+                                     : 'しょうがっこう 1ねんせいの もんだい' }),
+          el('div.s', { text: nearly
+            ? 'シールが ぜんぶ そろうと 1ねんせいの きょうしつが ひらくよ'
+            : 'シールを ぜんぶ あつめると ひらくよ　･　あと ' + left + 'まい' }),
+          el('div.stagebar', null,
+            el('i', { style: { width: (st.total ? (st.got / st.total) * 100 : 0) + '%' } }),
+            el('span.n', { text: st.got + ' / ' + st.total }))),
+        el('div.key', { text: '📖' }));
     }
 
     clear(worldsEl);
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
       if (!games.length) return;
-      // a whole world can be shut: 1ねんせいの きょうしつ is not on this screen at all
-      // until the sticker book that opens it is full
-      if ((w.stage || 'pre') !== 'pre' && !open1) return;
+      const shut = (w.stage || 'pre') !== 'pre' && !open1;
       const grid = el('div.gamegrid');
-      games.forEach(g => grid.append(gameCard(g)));
+      games.forEach(g => grid.append(shut ? lockedCard(g) : gameCard(g)));
       // the world's own name already says 1ねんせい; a second badge saying it again
       // only takes the room the name needs to stay on one line
-      worldsEl.append(el('div.world' + ((w.stage || 'pre') !== 'pre' ? '.newstage' : ''),
+      worldsEl.append(el('div.world' + ((w.stage || 'pre') !== 'pre' ? '.newstage' : '')
+        + (shut ? '.shut' : ''),
         { style: { '--wc': w.color } },
-        el('h3', null, el('span.chip', { text: w.name }), el('span.sub', { text: w.sub })), grid));
+        el('h3', null, el('span.chip', { text: w.name }),
+          el('span.sub', { text: shut ? 'シールが ぜんぶ そろうと ひらくよ' : w.sub })), grid));
     });
   }
   return { build, render };
@@ -302,6 +332,17 @@ const Result = (() => {
       el('div.result-sub', { text: r.mode === 'diagnostic'
         ? 'ぴったりの はじまりを みつけたよ'
         : `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+    /* Every sticker is now a step towards a door the child can already see on the
+       home screen. Saying how many are left, at the moment one is earned, is what
+       turns「シールを もらった」into「あと 3まい」. */
+    if (r.sticker && !r.unlockedG1 && !Progress.g1Open()){
+      const st = Progress.preStickers();
+      const left = Math.max(0, st.total - st.got);
+      if (left) inner.append(el('div.stagenext' + (left <= 6 ? '.nearly' : ''), null,
+        el('span.mk', { text: '🔒' }),
+        '1ねんせいの きょうしつまで ',
+        el('b', { text: 'あと ' + left + 'まい' })));
+    }
     /* The last sticker. This is the one screen in the app that says the child has
        finished 入学前 — it has to say it in words a six-year-old reads, on the
        screen they are already looking at, not in a menu they might find later. It
@@ -437,6 +478,11 @@ const Book = (() => {
     if (Progress.g1Open()){
       grid.append(el('div.bookgroup', { text: '🎓　1ねんせいの きょうしつ' }));
       drawSlots(Progress.slots('g1'));
+    } else {
+      /* Shown, but plainly not part of the count above: a shelf a child can see
+         waiting for them is the reason to fill the one they are on. */
+      grid.append(el('div.bookgroup.shut', { text: '🔒　1ねんせいの きょうしつ　ぜんぶ そろうと ここが ひらくよ' }));
+      Progress.slots('g1').forEach(() => grid.append(el('div.sticker.shut', { text: '🔒' })));
     }
     const left = Math.max(0, pre.total - pre.got);
     count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`

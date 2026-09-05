@@ -12,7 +12,7 @@
    less likely to throw away the localStorage the records live in. */
 'use strict';
 
-const VERSION = '2348ae51be85';
+const VERSION = '7a1500479a1b';
 const CACHE   = 'kazu-no-bouken-' + VERSION;
 const SHELL   = ['./', './index.html', './manifest.webmanifest',
                  './icon-180.png', './icon-192.png', './icon-512.png'];

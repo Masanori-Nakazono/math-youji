@@ -981,6 +981,12 @@
     K.Store.reset();
     const pre = K.Progress.slots('pre'), g1 = K.Progress.slots('g1');
     const shutAtStart = !K.Progress.g1Open();
+    /* Visible from day one, behind a padlock: the four names are the reason to
+       fill the shelf, and an empty space where they would be is not. */
+    K.Home.render();
+    const seenOnDayOne = qa('#home .gamecard.locked').length === 4
+      && qa('#home .world h3 .chip').some(c => c.textContent.indexOf('1ねんせい') >= 0)
+      && !!q('#home .stagelocked') && !q('#home .stagelocked').hidden;
 
     // every 小1 level is out of reach of every question surface while it is shut
     const g1Games = K.Games.list.filter(g => K.Progress.stageOf(g) === 'g1');
@@ -1002,9 +1008,10 @@
     K.Store.addSticker(pre[pre.length - 1]);
     const openedOnLast = K.Progress.g1Open();
 
-    // and now the 小1 levels are reachable, and Home draws the world
+    // and now the 小1 levels are reachable, and Home swaps the padlocks for games
     K.Home.render();
-    const worldOnHome = qa('#home .world h3 .chip').some(c => c.textContent.indexOf('1ねんせい') >= 0);
+    const worldOnHome = qa('#home .world h3 .chip').some(c => c.textContent.indexOf('1ねんせい') >= 0)
+      && !qa('#home .gamecard.locked').length;
     const nowInPool = (() => {
       const seen = {};
       for (let d = 0; d < 60; d++){
@@ -1014,9 +1021,9 @@
       return g1Games.some(g => seen[g.id]);
     })();
     check('小学1年生 opens on the last sticker of the 入学前 shelf, never before',
-      shutAtStart && noneOpen && stayedOut && shutOneShort && openedOnLast
+      shutAtStart && seenOnDayOne && noneOpen && stayedOut && shutOneShort && openedOnLast
         && worldOnHome && nowInPool && g1.length === 24,
-      'shut=' + shutAtStart + ' hidden=' + noneOpen + ' outOfDaily=' + stayedOut
+      'shut=' + shutAtStart + ' visibleDay1=' + seenOnDayOne + ' hidden=' + noneOpen + ' outOfDaily=' + stayedOut
         + ' oneShort=' + shutOneShort + ' opened=' + openedOnLast
         + ' onHome=' + worldOnHome + ' inDaily=' + nowInPool + ' g1slots=' + g1.length);
     K.Store.reset();

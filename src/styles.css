@@ -1753,12 +1753,65 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   color: var(--ink);
 }
 .daily.stagelocked .s{ color: var(--ink-soft) }
+.daily.stagelocked .key{ font-size: calc(var(--u)*3); line-height: 1; flex: 0 0 auto }
+/* the last few stickers are the ones worth making a noise about */
+.daily.stagelocked.nearly{
+  border-style: solid;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--paper-2));
+}
 .stagebar{
-  width: 100%; height: calc(var(--u)*1.1); margin-top: calc(var(--u)*.4);
+  position: relative;
+  width: 100%; height: calc(var(--u)*1.5); margin-top: calc(var(--u)*.4);
   border-radius: 999px; background: var(--card-edge); overflow: hidden;
 }
-.stagebar > i{ display: block; height: 100%; background: var(--accent); border-radius: 999px }
+.stagebar > i{
+  display: block; height: 100%; border-radius: 999px;
+  background: var(--accent);
+  transition: width .5s cubic-bezier(.2,.8,.3,1);
+}
+.stagebar .n{
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*1.05);
+  color: var(--ink);
+}
 .world.newstage h3 .chip{ white-space: nowrap }
+
+/* ---- a course you can see, and cannot open yet ----
+   Not hidden: the four names behind the padlock are the reason to fill the shelf.
+   Dimmed enough to read as "not yet", legible enough to read at all. */
+.world.shut{ border-style: dashed }
+.world.shut h3 .chip{ background: var(--ink-faint) }
+.gamecard.locked{
+  border-style: dashed;
+  background: var(--paper-2);
+  cursor: pointer;
+}
+.gamecard.locked .ico{ filter: grayscale(1); opacity: .45 }
+.gamecard.locked .nm{ color: var(--ink-soft) }
+.gamecard.locked .lockmark{ font-size: calc(var(--u)*1.5); line-height: 1; opacity: .8 }
+.sticker.shut{
+  background: transparent;
+  border-color: var(--card-edge);
+  font-size: calc(var(--u)*1.8);
+  opacity: .5;
+}
+.bookgroup.shut{ color: var(--ink-faint) }
+#result .stagenext{
+  display: flex; align-items: center; gap: calc(var(--u)*.5);
+  margin-top: calc(var(--u)*.8);
+  padding: calc(var(--u)*.5) calc(var(--u)*1.2);
+  border-radius: 999px;
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  font-size: calc(var(--u)*1.5); font-weight: 800;
+}
+#result .stagenext b{ color: var(--ink) }
+#result .stagenext.nearly{
+  background: color-mix(in srgb, var(--accent) 18%, var(--paper-2));
+  color: var(--ink);
+}
 #result .unlocked{
   display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.4);
   margin-top: calc(var(--u)*1);
