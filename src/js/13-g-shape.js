@@ -147,6 +147,10 @@ function shapePuzzle(api){
   const tray = el('div.shapes-tray');
   api.field.append(box, tray);
 
+  const boxes = pz.pieces.map(p => bbox(p.pts));
+  const biggest = Math.max.apply(null, boxes.map(b => Math.max(b.w, b.h)));
+  const edge = c => 'color-mix(in srgb, ' + c + ' 60%, var(--ink) 40%)';
+
   const slots = pz.pieces.map((p, i) => {
     const poly = svg('polygon', {
       points: p.pts.map(q => q.join(',')).join(' '),
@@ -158,47 +162,102 @@ function shapePuzzle(api){
     return poly;
   });
 
+  /* One viewBox unit in screen pixels. The picture is letterboxed inside its box
+     (preserveAspectRatio="meet"), so the scale is whichever axis runs out first. */
+  function unitPx(){
+    const r = s.getBoundingClientRect();
+    return r.width ? Math.min(r.width / 100, r.height / 80) : 0;
+  }
+
+  /* Which hole was this drop meant for? A five-year-old aiming at ちょうちょ's wing
+     or the tree's trunk misses by a few millimetres, and this level is about
+     telling shapes apart, not about fine motor control — so a drop anywhere in the
+     picture counts as an attempt at the nearest empty hole. Being generous about
+     *where* must not be generous about *which*: the shape still has to match. */
+  function nearestSlot(pt){
+    if (!pt) return null;
+    const fr = box.getBoundingClientRect();
+    const slack = 10;
+    if (pt.x < fr.left - slack || pt.x > fr.right + slack
+     || pt.y < fr.top - slack || pt.y > fr.bottom + slack) return null;
+    let best = null, bestD = Infinity;
+    slots.forEach(sl => {
+      if (sl.dataset.filled === '1') return;
+      const r = sl.getBoundingClientRect();
+      const dx = Math.max(r.left - pt.x, 0, pt.x - r.right);
+      const dy = Math.max(r.top - pt.y, 0, pt.y - r.bottom);
+      // landing inside a hole's box wins outright; the centre only breaks ties
+      const d = Math.hypot(dx, dy) * 1000
+              + Math.hypot(pt.x - (r.left + r.right) / 2, pt.y - (r.top + r.bottom) / 2);
+      if (d < bestD){ bestD = d; best = sl; }
+    });
+    return best;
+  }
+
   const colors = shuffle(SHAPE_COLORS);
   let filled = 0;
   const dd = UI.makeDragDrop({
-    onDrop(item, target){
+    /* The piece in the child's hand is drawn at exactly the size of the hole it is
+       going into. The tray tile has to be a tap-sized box whatever the piece, so
+       tile size can never mean hole size; the thing being dragged can. */
+    ghost(item){
+      const k = unitPx();
+      if (!k) return null;
+      const i = +item.dataset.idx, b = boxes[i], pad = 1.6;
+      const sv = svg('svg', {
+        viewBox: `${b.x0 - pad} ${b.y0 - pad} ${b.w + pad * 2} ${b.h + pad * 2}`,
+        width:  ((b.w + pad * 2) * k).toFixed(1),
+        height: ((b.h + pad * 2) * k).toFixed(1)
+      }, svg('polygon', {
+        points: pz.pieces[i].pts.map(q => q.join(',')).join(' '),
+        fill: item.dataset.color, stroke: edge(item.dataset.color),
+        'stroke-width': 1.6, 'stroke-linejoin': 'round'
+      }));
+      return el('div.piece-ghost', null, sv);
+    },
+    onDrop(item, target, pt){
       if (api.locked) return;
-      if (target.dataset.filled === '1') return;
-      if (item.dataset.sig === target.dataset.sig){
-        target.setAttribute('fill', item.dataset.color);
-        target.setAttribute('stroke', 'color-mix(in srgb, ' + item.dataset.color + ' 60%, var(--ink) 40%)');
-        target.setAttribute('stroke-dasharray', '');
-        target.setAttribute('stroke-width', '1.6');
-        target.dataset.filled = '1';
+      const slot = (target.dataset.sig && target.dataset.filled !== '1')
+        ? target : nearestSlot(pt);
+      if (!slot) return;
+      if (item.dataset.sig === slot.dataset.sig){
+        slot.setAttribute('fill', item.dataset.color);
+        slot.setAttribute('stroke', edge(item.dataset.color));
+        slot.setAttribute('stroke-dasharray', '');
+        slot.setAttribute('stroke-width', '1.6');
+        slot.classList.remove('glow');
+        slot.dataset.filled = '1';
         item.classList.add('used');
         filled++;
         Sound.sfx.place();
         if (filled === slots.length) api.later(() => api.correct(), 260);
       } else {
-        target.animate([{ opacity: 1 }, { opacity: .35 }, { opacity: 1 }], { duration: 300 });
+        slot.animate([{ opacity: 1 }, { opacity: .35 }, { opacity: 1 }], { duration: 300 });
         api.wrong(item);
         dd.select(item);            // stay picked up so the next slot is one tap away
       }
     }
   });
   slots.forEach(sl => dd.bindTarget(sl));
+  dd.bindTarget(box);               // a near miss still reaches the hole it aimed at
 
-  // each tray tile is cropped around its own piece, on a shared scale, so small
-  // pieces stay recognisable while the size difference between pieces stays readable
-  const boxes = pz.pieces.map(p => bbox(p.pts));
-  const biggest = Math.max.apply(null, boxes.map(b => Math.max(b.w, b.h)));
+  /* Every tray tile is drawn on one scale, so a piece that is half the size of
+     another looks half the size here too — that is the only clue the child has for
+     which hole a tile belongs in. The square root softens the ratio: at true scale
+     the tree's trunk would be a 10px sliver in a tap-sized box. */
   shuffle(pz.pieces.map((p, i) => ({ p, i }))).forEach(({ p, i }) => {
     const color = colors[i % colors.length];
     const b = boxes[i];
-    const S = Math.max(Math.max(b.w, b.h) * 1.25, biggest * 0.5);
+    const span = Math.max(b.w, b.h);
+    const S = span / (Math.sqrt(span / biggest) * 0.82);
     const t = el('div.shapetile');
     const mini = svg('svg', { viewBox: `${b.cx - S / 2} ${b.cy - S / 2} ${S} ${S}` },
       svg('polygon', { points: p.pts.map(q => q.join(',')).join(' '), fill: color,
-        stroke: 'color-mix(in srgb, ' + color + ' 60%, var(--ink) 40%)',
-        'stroke-width': S * 0.028, 'stroke-linejoin': 'round' }));
+        stroke: edge(color), 'stroke-width': S * 0.028, 'stroke-linejoin': 'round' }));
     t.append(mini);
     t.dataset.sig = signature(p.pts);
     t.dataset.color = color;
+    t.dataset.idx = i;
     dd.bindItem(t);
     tray.append(t);
   });

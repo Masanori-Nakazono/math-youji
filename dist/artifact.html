@@ -988,6 +988,10 @@ body::before{
   transform: translate(-50%,-50%) scale(1.2) rotate(-4deg);
   filter: drop-shadow(0 .3em .5em rgba(0,0,0,.3));
 }
+/* the puzzle piece is carried at the exact size of the hole, so it must not be
+   scaled or tilted on the way there */
+#ghost.piece-ghost{ transform: translate(-50%,-50%); }
+#ghost.piece-ghost svg{ display: block; overflow: visible; }
 
 /* ===========================================================
    PATTERN TRAIN
@@ -1183,6 +1187,11 @@ body::before{
    SHAPE PUZZLE
    =========================================================== */
 .shapefield{
+  /* The picture must keep its own size. As a shrinkable flex item it collapsed to
+     a letterbox on the iPad — the fit search only checks that nothing sticks out of
+     the playfield, so a squashed picture reads as "fits" and --u grows again. The
+     holes then ended up several times smaller than the tray tiles they take. */
+  flex: 0 0 auto;
   position: relative;
   width: min(100%, calc(var(--u)*36));
   height: calc(var(--u)*28.8);
@@ -1194,7 +1203,7 @@ body::before{
   touch-action: none;
 }
 .shapefield svg{ position: absolute; inset: 0; width: 100%; height: 100%; }
-.shapes-tray{ display: flex; gap: calc(var(--u)*.8); flex-wrap: wrap; justify-content: center; }
+.shapes-tray{ flex: 0 0 auto; display: flex; gap: calc(var(--u)*.8); flex-wrap: wrap; justify-content: center; }
 .shapetile{
   width: calc(var(--u)*7.6); height: calc(var(--u)*7.6);
   background: var(--card);
@@ -1207,6 +1216,7 @@ body::before{
 }
 .shapetile.sel{ border-color: var(--accent); box-shadow: 0 0 0 calc(var(--u)*.26) color-mix(in srgb,var(--accent) 45%, transparent); transform: translateY(calc(var(--u)*-.4)); }
 .shapetile.used{ opacity: .18; pointer-events: none; }
+.shapetile.dragging{ opacity: .25; }
 .shapetile svg{ width: 84%; height: 84%; }
 
 .shapegrid{
@@ -3062,7 +3072,8 @@ const UI = (() => {
       setOver(null);
       const it = dragging; dragging = null;
       if (it && moved){
-        if (t) opts.onDrop(it, t);
+        // where the finger let go, so a target can be generous about a near miss
+        if (t) opts.onDrop(it, t, { x, y });
         return true;
       }
       return false;
@@ -3087,12 +3098,17 @@ const UI = (() => {
         moved = true;
         clearSel();
         dragging.classList.add('dragging');
-        ghost = dragging.cloneNode(true);
+        // a game may hand back its own node — the shape puzzle draws the piece at
+        // the size of the hole it is heading for, so the child can see it fit
+        const custom = opts.ghost ? opts.ghost(dragging) : null;
+        ghost = custom || dragging.cloneNode(true);
         ghost.id = 'ghost';
         ghost.classList.remove('dragging', 'sel');
-        const r = dragging.getBoundingClientRect();
-        ghost.style.width = r.width + 'px';
-        ghost.style.height = r.height + 'px';
+        if (!custom){
+          const r = dragging.getBoundingClientRect();
+          ghost.style.width = r.width + 'px';
+          ghost.style.height = r.height + 'px';
+        }
         document.body.append(ghost);
       }
       ghost.style.left = e.clientX + 'px';
@@ -3118,8 +3134,16 @@ const UI = (() => {
     function bindItem(it){ it.addEventListener('pointerdown', onDown); }
     function bindTarget(t){
       t.setAttribute('data-drop', '');
-      t.addEventListener('click', () => {
-        if (selected){ const s = selected; opts.onDrop(s, t); if (s.classList.contains('gone')) clearSel(); }
+      t.addEventListener('click', e => {
+        if (!selected) return;
+        // targets may nest (a puzzle hole inside the picture field): the inner one
+        // wins, or one tap would be counted twice
+        e.stopPropagation();
+        const s = selected;
+        opts.onDrop(s, t, { x: e.clientX, y: e.clientY });
+        // a piece that has been used up must not stay in the child's hand: the next
+        // tap on the board would otherwise be scored as putting it in the wrong place
+        if (s.classList.contains('gone') || s.classList.contains('used')) clearSel();
       });
     }
     function select(it){ clearSel(); selected = it; it.classList.add('sel'); }
@@ -5605,6 +5629,10 @@ function shapePuzzle(api){
   const tray = el('div.shapes-tray');
   api.field.append(box, tray);
 
+  const boxes = pz.pieces.map(p => bbox(p.pts));
+  const biggest = Math.max.apply(null, boxes.map(b => Math.max(b.w, b.h)));
+  const edge = c => 'color-mix(in srgb, ' + c + ' 60%, var(--ink) 40%)';
+
   const slots = pz.pieces.map((p, i) => {
     const poly = svg('polygon', {
       points: p.pts.map(q => q.join(',')).join(' '),
@@ -5616,47 +5644,102 @@ function shapePuzzle(api){
     return poly;
   });
 
+  /* One viewBox unit in screen pixels. The picture is letterboxed inside its box
+     (preserveAspectRatio="meet"), so the scale is whichever axis runs out first. */
+  function unitPx(){
+    const r = s.getBoundingClientRect();
+    return r.width ? Math.min(r.width / 100, r.height / 80) : 0;
+  }
+
+  /* Which hole was this drop meant for? A five-year-old aiming at ちょうちょ's wing
+     or the tree's trunk misses by a few millimetres, and this level is about
+     telling shapes apart, not about fine motor control — so a drop anywhere in the
+     picture counts as an attempt at the nearest empty hole. Being generous about
+     *where* must not be generous about *which*: the shape still has to match. */
+  function nearestSlot(pt){
+    if (!pt) return null;
+    const fr = box.getBoundingClientRect();
+    const slack = 10;
+    if (pt.x < fr.left - slack || pt.x > fr.right + slack
+     || pt.y < fr.top - slack || pt.y > fr.bottom + slack) return null;
+    let best = null, bestD = Infinity;
+    slots.forEach(sl => {
+      if (sl.dataset.filled === '1') return;
+      const r = sl.getBoundingClientRect();
+      const dx = Math.max(r.left - pt.x, 0, pt.x - r.right);
+      const dy = Math.max(r.top - pt.y, 0, pt.y - r.bottom);
+      // landing inside a hole's box wins outright; the centre only breaks ties
+      const d = Math.hypot(dx, dy) * 1000
+              + Math.hypot(pt.x - (r.left + r.right) / 2, pt.y - (r.top + r.bottom) / 2);
+      if (d < bestD){ bestD = d; best = sl; }
+    });
+    return best;
+  }
+
   const colors = shuffle(SHAPE_COLORS);
   let filled = 0;
   const dd = UI.makeDragDrop({
-    onDrop(item, target){
+    /* The piece in the child's hand is drawn at exactly the size of the hole it is
+       going into. The tray tile has to be a tap-sized box whatever the piece, so
+       tile size can never mean hole size; the thing being dragged can. */
+    ghost(item){
+      const k = unitPx();
+      if (!k) return null;
+      const i = +item.dataset.idx, b = boxes[i], pad = 1.6;
+      const sv = svg('svg', {
+        viewBox: `${b.x0 - pad} ${b.y0 - pad} ${b.w + pad * 2} ${b.h + pad * 2}`,
+        width:  ((b.w + pad * 2) * k).toFixed(1),
+        height: ((b.h + pad * 2) * k).toFixed(1)
+      }, svg('polygon', {
+        points: pz.pieces[i].pts.map(q => q.join(',')).join(' '),
+        fill: item.dataset.color, stroke: edge(item.dataset.color),
+        'stroke-width': 1.6, 'stroke-linejoin': 'round'
+      }));
+      return el('div.piece-ghost', null, sv);
+    },
+    onDrop(item, target, pt){
       if (api.locked) return;
-      if (target.dataset.filled === '1') return;
-      if (item.dataset.sig === target.dataset.sig){
-        target.setAttribute('fill', item.dataset.color);
-        target.setAttribute('stroke', 'color-mix(in srgb, ' + item.dataset.color + ' 60%, var(--ink) 40%)');
-        target.setAttribute('stroke-dasharray', '');
-        target.setAttribute('stroke-width', '1.6');
-        target.dataset.filled = '1';
+      const slot = (target.dataset.sig && target.dataset.filled !== '1')
+        ? target : nearestSlot(pt);
+      if (!slot) return;
+      if (item.dataset.sig === slot.dataset.sig){
+        slot.setAttribute('fill', item.dataset.color);
+        slot.setAttribute('stroke', edge(item.dataset.color));
+        slot.setAttribute('stroke-dasharray', '');
+        slot.setAttribute('stroke-width', '1.6');
+        slot.classList.remove('glow');
+        slot.dataset.filled = '1';
         item.classList.add('used');
         filled++;
         Sound.sfx.place();
         if (filled === slots.length) api.later(() => api.correct(), 260);
       } else {
-        target.animate([{ opacity: 1 }, { opacity: .35 }, { opacity: 1 }], { duration: 300 });
+        slot.animate([{ opacity: 1 }, { opacity: .35 }, { opacity: 1 }], { duration: 300 });
         api.wrong(item);
         dd.select(item);            // stay picked up so the next slot is one tap away
       }
     }
   });
   slots.forEach(sl => dd.bindTarget(sl));
+  dd.bindTarget(box);               // a near miss still reaches the hole it aimed at
 
-  // each tray tile is cropped around its own piece, on a shared scale, so small
-  // pieces stay recognisable while the size difference between pieces stays readable
-  const boxes = pz.pieces.map(p => bbox(p.pts));
-  const biggest = Math.max.apply(null, boxes.map(b => Math.max(b.w, b.h)));
+  /* Every tray tile is drawn on one scale, so a piece that is half the size of
+     another looks half the size here too — that is the only clue the child has for
+     which hole a tile belongs in. The square root softens the ratio: at true scale
+     the tree's trunk would be a 10px sliver in a tap-sized box. */
   shuffle(pz.pieces.map((p, i) => ({ p, i }))).forEach(({ p, i }) => {
     const color = colors[i % colors.length];
     const b = boxes[i];
-    const S = Math.max(Math.max(b.w, b.h) * 1.25, biggest * 0.5);
+    const span = Math.max(b.w, b.h);
+    const S = span / (Math.sqrt(span / biggest) * 0.82);
     const t = el('div.shapetile');
     const mini = svg('svg', { viewBox: `${b.cx - S / 2} ${b.cy - S / 2} ${S} ${S}` },
       svg('polygon', { points: p.pts.map(q => q.join(',')).join(' '), fill: color,
-        stroke: 'color-mix(in srgb, ' + color + ' 60%, var(--ink) 40%)',
-        'stroke-width': S * 0.028, 'stroke-linejoin': 'round' }));
+        stroke: edge(color), 'stroke-width': S * 0.028, 'stroke-linejoin': 'round' }));
     t.append(mini);
     t.dataset.sig = signature(p.pts);
     t.dataset.color = color;
+    t.dataset.idx = i;
     dd.bindItem(t);
     tray.append(t);
   });

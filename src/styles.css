@@ -983,6 +983,10 @@ body::before{
   transform: translate(-50%,-50%) scale(1.2) rotate(-4deg);
   filter: drop-shadow(0 .3em .5em rgba(0,0,0,.3));
 }
+/* the puzzle piece is carried at the exact size of the hole, so it must not be
+   scaled or tilted on the way there */
+#ghost.piece-ghost{ transform: translate(-50%,-50%); }
+#ghost.piece-ghost svg{ display: block; overflow: visible; }
 
 /* ===========================================================
    PATTERN TRAIN
@@ -1178,6 +1182,11 @@ body::before{
    SHAPE PUZZLE
    =========================================================== */
 .shapefield{
+  /* The picture must keep its own size. As a shrinkable flex item it collapsed to
+     a letterbox on the iPad — the fit search only checks that nothing sticks out of
+     the playfield, so a squashed picture reads as "fits" and --u grows again. The
+     holes then ended up several times smaller than the tray tiles they take. */
+  flex: 0 0 auto;
   position: relative;
   width: min(100%, calc(var(--u)*36));
   height: calc(var(--u)*28.8);
@@ -1189,7 +1198,7 @@ body::before{
   touch-action: none;
 }
 .shapefield svg{ position: absolute; inset: 0; width: 100%; height: 100%; }
-.shapes-tray{ display: flex; gap: calc(var(--u)*.8); flex-wrap: wrap; justify-content: center; }
+.shapes-tray{ flex: 0 0 auto; display: flex; gap: calc(var(--u)*.8); flex-wrap: wrap; justify-content: center; }
 .shapetile{
   width: calc(var(--u)*7.6); height: calc(var(--u)*7.6);
   background: var(--card);
@@ -1202,6 +1211,7 @@ body::before{
 }
 .shapetile.sel{ border-color: var(--accent); box-shadow: 0 0 0 calc(var(--u)*.26) color-mix(in srgb,var(--accent) 45%, transparent); transform: translateY(calc(var(--u)*-.4)); }
 .shapetile.used{ opacity: .18; pointer-events: none; }
+.shapetile.dragging{ opacity: .25; }
 .shapetile svg{ width: 84%; height: 84%; }
 
 .shapegrid{

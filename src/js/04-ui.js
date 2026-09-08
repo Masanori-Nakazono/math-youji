@@ -198,7 +198,8 @@ const UI = (() => {
       setOver(null);
       const it = dragging; dragging = null;
       if (it && moved){
-        if (t) opts.onDrop(it, t);
+        // where the finger let go, so a target can be generous about a near miss
+        if (t) opts.onDrop(it, t, { x, y });
         return true;
       }
       return false;
@@ -223,12 +224,17 @@ const UI = (() => {
         moved = true;
         clearSel();
         dragging.classList.add('dragging');
-        ghost = dragging.cloneNode(true);
+        // a game may hand back its own node — the shape puzzle draws the piece at
+        // the size of the hole it is heading for, so the child can see it fit
+        const custom = opts.ghost ? opts.ghost(dragging) : null;
+        ghost = custom || dragging.cloneNode(true);
         ghost.id = 'ghost';
         ghost.classList.remove('dragging', 'sel');
-        const r = dragging.getBoundingClientRect();
-        ghost.style.width = r.width + 'px';
-        ghost.style.height = r.height + 'px';
+        if (!custom){
+          const r = dragging.getBoundingClientRect();
+          ghost.style.width = r.width + 'px';
+          ghost.style.height = r.height + 'px';
+        }
         document.body.append(ghost);
       }
       ghost.style.left = e.clientX + 'px';
@@ -254,8 +260,16 @@ const UI = (() => {
     function bindItem(it){ it.addEventListener('pointerdown', onDown); }
     function bindTarget(t){
       t.setAttribute('data-drop', '');
-      t.addEventListener('click', () => {
-        if (selected){ const s = selected; opts.onDrop(s, t); if (s.classList.contains('gone')) clearSel(); }
+      t.addEventListener('click', e => {
+        if (!selected) return;
+        // targets may nest (a puzzle hole inside the picture field): the inner one
+        // wins, or one tap would be counted twice
+        e.stopPropagation();
+        const s = selected;
+        opts.onDrop(s, t, { x: e.clientX, y: e.clientY });
+        // a piece that has been used up must not stay in the child's hand: the next
+        // tap on the board would otherwise be scored as putting it in the wrong place
+        if (s.classList.contains('gone') || s.classList.contains('used')) clearSel();
       });
     }
     function select(it){ clearSel(); selected = it; it.classList.add('sel'); }
