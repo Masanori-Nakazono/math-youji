@@ -1155,6 +1155,16 @@ body::before{
 .mrow.wrong{ border-color: var(--oops); background: var(--oops-soft); animation: shake .4s; }
 .mrow.picked{ border-color: var(--accent); }
 .mrow .cap{ font-size: calc(var(--u)*2.4); flex: 0 0 auto; }
+/* A picture-graph row is labelled with a word, at a fixed width so every row's
+   items still start on the same line. An emoji here would be one more of the very
+   things the child has been asked to count. */
+.mrow .cap.caplbl{
+  width: calc(var(--u)*7); text-align: right;
+  font-size: calc(var(--u)*1.5); font-weight: 800; line-height: 1.15;
+  color: var(--ink-soft);
+}
+/* two rows a child pairs off by eye: a line break destroys the correspondence */
+.row.pairline{ flex-wrap: nowrap; justify-content: flex-start; }
 .mrow .track{ flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
 .mrow .track .gap{ flex: 0 0 auto; }
 .mrow .stickbar{
@@ -1302,6 +1312,8 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   transform: scale(1.12);
 }
 .nn.near{ box-shadow: 0 0 0 calc(var(--u)*.24) color-mix(in srgb, var(--accent) 55%, transparent); }
+/* the hole the child just filled: their answer, written into the run of numbers */
+.nn.filled{ border-color: var(--good); background: var(--good-soft); }
 
 /* the basket the prompt keeps talking about */
 .basket{
@@ -1702,16 +1714,24 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 
 /* ---- 1たい1で くらべる ---- */
 .pairboard{
-  display: flex; flex-direction: column; align-items: center;
-  gap: calc(var(--u)*.5); width: 100%;
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: calc(var(--u)*.5);
+  width: fit-content; max-width: 100%; margin-inline: auto;
 }
+/* One column per pair position, the same width in both rows, and no wrapping.
+   Centred flex rows put five stars over five fish and the other two on a second
+   line, and centred rows of different lengths never stood one item above its
+   partner — so the thing this whole game is about, the bit left over at the end,
+   was the one thing the picture could not show. */
 .pairrow{
-  display: flex; align-items: center; justify-content: center;
-  flex-wrap: wrap; gap: calc(var(--u)*.7);
+  display: grid;
+  grid-template-columns: repeat(var(--pn, 5), calc(var(--u)*6));
+  gap: calc(var(--u)*.7);
+  justify-content: start; align-items: center;
 }
 /* the line the textbook draws between the two rows */
 .pairgap{
-  width: min(100%, calc(var(--u)*40)); height: 0;
+  width: 100%; height: 0;
   border-top: calc(var(--u)*.2) dashed var(--card-edge);
 }
 .pairitem{
@@ -1960,6 +1980,37 @@ const jiKana = (h, half) => (JI[h] || numKana(h) + 'じ') + (half ? 'はん' : '
 
 /** hiragana display text; digits get the numeral face via <b> */
 const numTag = n => `<b>${n}</b>`;
+
+/* ---- showing the child their own answer ----
+   A question that ends with「?」still on screen never lets the child see what they
+   said inside the sentence they said it about. 「7 と 1 で ?」 only finishes meaning
+   something when it reads 「7 と 1 で 8」, and the beat where it does is the whole
+   of what a five-year-old takes away from getting it right. Two levels already did
+   this by hand (いくつと いくつ L3, 10の おともだち L2); these make it the default. */
+
+/** Write the answer into the blank a question left open. Works for the「?」box in
+    an equation and for a hole in a number line. */
+function fillBlank(node, value){
+  if (!node) return;
+  node.textContent = String(value);
+  node.classList.remove('gap', 'now');
+  node.classList.add('filled');
+}
+
+/** buildChoices / buildPad options that run `show` on the correct answer and hold
+    the screen long enough to read what it wrote. Any other options are passed
+    through, and an existing `onPick` still decides whether the question ends. */
+function revealed(show, opts){
+  const o = opts || {};
+  const out = Object.assign({}, o);
+  delete out.delay;
+  out.correctOpts = Object.assign({ delay: o.delay || 1300 }, o.correctOpts);
+  out.onPick = (v, b) => {
+    try{ show(v, b); }catch(e){ console.error('reveal failed', e); }
+    return o.onPick ? o.onPick(v, b) : undefined;
+  };
+  return out;
+}
 
 /** Make a node behave like a button for both finger and keyboard. */
 function tappable(node, fn){
@@ -3168,7 +3219,7 @@ const Games = {
 
 /* `stage` says which half of the app a world belongs to. Everything the app
    shipped with is 入学前 ('pre'); 'g1' is the 小学1年生 classroom, which stays shut
-   until the sticker book is full. A world with no stage is 'pre', so nothing that
+   until every 入学前 level is cleared. A world with no stage is 'pre', so nothing that
    existed before has to say so. */
 const WORLDS = [
   { id: 'shima', name: 'かずの しま',    sub: 'かぞえる・すうじ',       color: 'var(--c-blue)' },
@@ -3208,9 +3259,17 @@ function stickerFor(key){
    ===========================================================
    The 入学前 half of the app is 48 levels and 96 sticker slots: one sticker for
    clearing a level, a gold one for clearing it with every answer right first time.
-   Filling that shelf is the whole of the 小1 classroom's entrance requirement, so
-   the goal a child is already working towards is the same goal that opens the next
-   room — no separate test, no adult judgement.
+   Clearing all 48 — the plain stickers — is the 小1 classroom's entrance
+   requirement, so the goal a child is already working towards is the same goal
+   that opens the next room: no separate test, no adult judgement.
+
+   The gold stickers are NOT part of the key. Each one needs a run with every
+   answer right first time, and needing forty-eight of those put the classroom
+   somewhere around the three-hundredth day of use for a child working at the
+   pace this app recommends (one level a day) — which is to say, after 1年生 had
+   already started, and after the material in the classroom had stopped being
+   preparation. They stay on the shelf as something to come back for; they are
+   not a door the child has to get through.
 
    Two things this deliberately does NOT do. It never counts 小1's own stickers
    (that would be circular), and it never *closes* again: a shelf cannot lose a
@@ -3219,7 +3278,7 @@ function stickerFor(key){
 const Progress = (() => {
   const stageOf = g => g.stage || 'pre';
 
-  /** every sticker slot belonging to one stage, plain and gold */
+  /** every sticker slot belonging to one stage, plain and gold — what the book draws */
   function slots(stage){
     const out = [];
     Games.list.forEach(g => {
@@ -3229,14 +3288,24 @@ const Progress = (() => {
     return out;
   }
 
+  /** the slots the door actually counts: one per level, earned by clearing it */
+  function gateSlots(stage){
+    const out = [];
+    Games.list.forEach(g => {
+      if (stageOf(g) !== stage) return;
+      g.levels.forEach((lv, i) => out.push(g.id + ':' + i));
+    });
+    return out;
+  }
+
   function count(stage){
-    const all = slots(stage);
+    const all = gateSlots(stage);
     let got = 0;
     all.forEach(k => { if (Store.hasSticker(k)) got++; });
     return { got, total: all.length };
   }
 
-  /** true once the shelf is full — or once a parent has opened the door by hand */
+  /** true once every 入学前 level is cleared — or once a parent opened the door by hand */
   function g1Open(){
     if (Store.data.g1Open) return true;
     const c = count('pre');
@@ -3246,6 +3315,8 @@ const Progress = (() => {
   return {
     stageOf,
     slots,
+    gateSlots,
+    /** { got, total } over the levels the door counts — cleared levels, not stickers */
     preStickers: () => count('pre'),
     g1Open,
     /** opened by hand from the parent page; never reversible */
@@ -3265,6 +3336,11 @@ const Session = (() => {
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
   let locked = false, mode = 'level', curGame = null, curLevelIdx = 0;
   let hintBtns = [], hintFn = null, hintExtras = [], hintShown = false, lastSpeech = '';
+  /* Most questions keep their hint back until a second mistake, so the child
+     gets a real second try first. A question whose picture is already hidden
+     (ぱっと みて いくつ) has nothing to try with: 「もういちど」 over a covered
+     board is an invitation to guess. Those games ask for their hint at 1. */
+  let hintAfter = 2, extrasShown = false;
   /* What this question is *about*. Every generator names its item, so the app can
      avoid asking the same fact twice in one sitting, steer toward the facts this
      child keeps missing, and tell the parent which ones they are. */
@@ -3588,7 +3664,8 @@ const Session = (() => {
         const p = a.game.id + ':';
         return w.indexOf(p) === 0 ? w.slice(p.length) : null;
       },
-      onHint(fn){ if (!stale()) hintFn = fn; },
+      /** `after` = how many mistakes before it fires (default 2, minimum 1). */
+      onHint(fn, after){ if (stale()) return; hintFn = fn; if (after) hintAfter = Math.max(1, after); },
       correct(o){ if (!stale()) onCorrect(o || {}); },
       wrong(target){ if (!stale()) onWrong(target); },
       /** delayed work that dies with the question */
@@ -3701,6 +3778,7 @@ const Session = (() => {
 
   function resetSurface(){
     locked = false; hintBtns = []; hintFn = null; hintExtras = []; hintShown = false;
+    hintAfter = 2; extrasShown = false;
     askedAt = 0; respondedMs = null;
     curItem = null; curLabel = null;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
@@ -3785,17 +3863,20 @@ const Session = (() => {
       target.classList.add('wrong');
       later(() => target.classList.remove('wrong'), 460);
     }
-    if (wrongThisQ === 1){
+    if (wrongThisQ >= hintAfter && !hintShown){
+      hintShown = true;
+      showFeedback('hint', 'ヒントを だすね');
+      Sound.say('ヒントを出すね。', { delay: 260 });
+      if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
+    } else if (wrongThisQ === 1){
       showFeedback('oops', 'もういちど やってみよう');
       Sound.say('惜しいね。もう一度やってみよう。', { delay: 260 });
-    } else if (wrongThisQ >= 2){
+    }
+    if (wrongThisQ >= 2){
       // The game's own hint is preferred, but the choice-dimming fallback runs too:
       // a hint that only speaks would leave a muted device with no feedback at all.
-      if (!hintShown){
-        hintShown = true;
-        showFeedback('hint', 'ヒントを だすね');
-        Sound.say('ヒントを出すね。', { delay: 260 });
-        if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
+      if (!extrasShown){
+        extrasShown = true;
         hintExtras.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
       }
       const live = hintBtns.filter(b => !b.classList.contains('dim'));
@@ -4129,19 +4210,34 @@ function flashQuestion(api, o){
   api.choices.append(go);
 
   function ask(){
+    /* Getting it right and never seeing the dots again is half a lesson. This game
+       exists to make 7 *look* like「5と2」, so the arrangement has to come back at
+       the moment the child is told they were right — that is when it gets attached
+       to the number they said. */
+    const said = o.two ? `${numKana(a)}と${numKana(b)}で、${numKana(n)}。`
+               : o.rows && n > 5 ? `${numKana(5)}と${numKana(n - 5)}で、${numKana(n)}。`
+               : `${numKana(n)}だったね。`;
+    /* The praise the engine speaks lands first; naming the arrangement comes after
+       it, over the uncovered board, and the question waits for both. */
+    const reveal = revealed(() => {
+      board.classList.add('open');
+      api.later(() => Sound.say(said), 1050);
+    }, { delay: 2300 });
     if (o.two){
       api.setPrompt('ぜんぶで いくつ だった？', '全部でいくつだった？');
-      api.buildPad(n);
+      api.buildPad(n, reveal);
     } else {
       api.setPrompt('いくつ だった？', 'いくつだった？');
-      api.buildChoices(shuffle([n].concat(distractors(n, 3, 1, o.hi + 2))), n);
+      api.buildChoices(shuffle([n].concat(distractors(n, 3, 1, o.hi + 2))), n, reveal);
     }
     /* The hint is another look, longer and left up. The child is not being asked to
-       guess better; they are being asked to see, and you cannot see what is covered. */
+       guess better; they are being asked to see, and you cannot see what is covered
+       — which is also why it comes after the *first* mistake here and not the
+       second: 「もういちど やってみよう」 over a covered board is only a guess. */
     api.onHint(() => {
       board.classList.add('open');
       if (!$('.hintline', api.field)) api.field.append(el('div.hintline', { text: 'もういちど みせるね' }));
-    });
+    }, 1);
   }
 }
 
@@ -4305,11 +4401,16 @@ function nextBefore(api, hi){
     mode === 'next' ? n + ' の つぎ' : mode === 'before' ? n + ' の まえ' : (n - 1) + ' と ' + (n + 1) + ' の あいだ');
   api.setPrompt(html, speech);
   const line = el('div.numline');
+  let hole = null;
   for (let v = Math.max(1, ans - 3); v <= Math.min(hi, ans + 3); v++){
-    line.append(el('div.nn' + (v === ans ? '.gap.now' : ''), { text: v === ans ? '?' : String(v) }));
+    const cell = el('div.nn' + (v === ans ? '.gap.now' : ''), { text: v === ans ? '?' : String(v) });
+    if (v === ans) hole = cell;
+    line.append(cell);
   }
   api.field.append(line);
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, hi))), ans);
+  // the answer belongs in the line, where the child can see the run read straight
+  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, hi))), ans,
+    revealed(() => fillBlank(hole, ans)));
 }
 
 function skipCount(api){
@@ -4320,9 +4421,11 @@ function skipCount(api){
   api.item('skip' + step + ':' + ans, step + 'ずつ ふえて ' + ans);
   api.setPrompt(`${step}ずつ ふえて いくよ。つぎは？`, `${numKana(step)}ずつ増えていくよ。次は？`);
   const line = el('div.numline');
-  seq.forEach((v, i) => line.append(el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) })));
+  const cells = seq.map((v, i) => el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) }));
+  cells.forEach(c => line.append(c));
   api.field.append(line);
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, ans + step * 2, step))), ans);
+  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, ans + step * 2, step))), ans,
+    revealed(() => fillBlank(cells[3], ans)));
 }
 
 /* 「10から逆に数える方が難しく、効果があります」— the parent page has said so from
@@ -4336,9 +4439,11 @@ function countBack(api){
   api.item('back:' + ans, start + ' から ぎゃくに かぞえて ' + ans);
   api.setPrompt('1ずつ へって いくよ。つぎは？', '1ずつ減っていくよ。次は？');
   const line = el('div.numline');
-  seq.forEach((v, i) => line.append(el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) })));
+  const cells = seq.map((v, i) => el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) }));
+  cells.forEach(c => line.append(c));
   api.field.append(line, el('div.hintline', { text: 'ぎゃくむきに かぞえて みよう' }));
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, start + 2))), ans);
+  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, start + 2))), ans,
+    revealed(() => fillBlank(cells[3], ans)));
   api.onHint(() => {
     if ($('.hint2', api.field)) return;
     api.field.append(el('div.hintline.hint2', {
@@ -5058,14 +5163,16 @@ function compose(api, maxWhole, pad){
   }
   const frameset = el('div.frameset', null, f);
   if (!pad) api.field.append(frameset);          // countable at the top level: see decompose
+  const box = el('span.box', { text: '?' });
   api.field.append(
-    el('div.eq', null, String(a), el('span.op', { text: 'と' }), String(b), el('span.op', { text: 'で' }), el('span.box', { text: '?' })));
+    el('div.eq', null, String(a), el('span.op', { text: 'と' }), String(b), el('span.op', { text: 'で' }), box));
   const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
+  const reveal = revealed(() => { fillBlank(box, ans); showFrame(); }, { delay: 1400 });
   if (pad){
-    api.buildPad(ans, { correctOpts: { delay: 1200 }, onPick(){ showFrame(); } });
+    api.buildPad(ans, reveal);
     api.onHint(showFrame);
   } else {
-    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans);
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans, reveal);
   }
 }
 
@@ -5194,24 +5301,24 @@ function partnerOfTen(api, pad){
      The equation stays — that is the question; the frame is the answer. */
   const frameset = el('div.frameset', null, f);
   if (!pad) api.field.append(frameset);
+  const box = el('span.box', { text: '?' });
   api.field.append(
-    el('div.eq', null, String(a), el('span.op', { text: 'と' }), el('span.box', { text: '?' }), el('span.op', { text: 'で' }), '10'));
+    el('div.eq', null, String(a), el('span.op', { text: 'と' }), box, el('span.op', { text: 'で' }), '10'));
   const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
+  const fillIn = () => {
+    fillBlank(box, ans);
+    showFrame();
+    for (let i = a; i < 10; i++){
+      api.later(() => {
+        if (!cells[i].firstChild){ cells[i].classList.remove('hole'); cells[i].append(el('div.dot.b')); Sound.sfx.place(); }
+      }, (i - a) * 150 + 200);
+    }
+  };
   if (pad){
-    api.buildPad(ans, {
-      correctOpts: { delay: 1500 },
-      onPick(){
-        showFrame();
-        for (let i = a; i < 10; i++){
-          api.later(() => {
-            if (!cells[i].firstChild){ cells[i].classList.remove('hole'); cells[i].append(el('div.dot.b')); Sound.sfx.place(); }
-          }, (i - a) * 150 + 200);
-        }
-      }
-    });
+    api.buildPad(ans, revealed(fillIn, { delay: 1500 }));
     api.onHint(showFrame);
   } else {
-    api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans);
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans, revealed(fillIn, { delay: 1500 }));
   }
 }
 
@@ -5382,8 +5489,11 @@ function addStory(api, max){
                 `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、やってきたよ。`);
   storyScene(api, a, b, '+', thing, () => {
     api.setPrompt('ぜんぶで いくつ？', '全部でいくつ？');
-    api.field.append(eqNode(a, b, '+'));
-    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, max + 2, 2))), ans);
+    const eq = eqNode(a, b, '+');
+    api.field.append(eq);
+    // the child's answer belongs inside the sentence, not next to it
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, max + 2, 2))), ans,
+      revealed(() => fillBlank($('.box', eq), ans)));
   });
 }
 
@@ -5398,8 +5508,10 @@ function subStory(api, max){
                 `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、いなくなるよ。`);
   storyScene(api, a, b, '-', thing, () => {
     api.setPrompt('のこりは いくつ？', '残りは、いくつ？');
-    api.field.append(eqNode(a, b, '-'));
-    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans);
+    const eq = eqNode(a, b, '-');
+    api.field.append(eq);
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans,
+      revealed(() => fillBlank($('.box', eq), ans)));
   });
 }
 
@@ -5416,9 +5528,11 @@ function symbolCalc(api, op, max, pad){
     a + (op === '+' ? ' ＋ ' : ' − ') + b);
   api.setPrompt('しきを みて こたえよう',
     `${numKana(a)}、${op === '+' ? 'たす' : 'ひく'}、${numKana(b)}は？`);
-  api.field.append(eqNode(a, b, op));
-  if (pad) api.buildPad(ans);
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 0, max + 2, 2))), ans);
+  const eq = eqNode(a, b, op);
+  api.field.append(eq);
+  const reveal = revealed(() => fillBlank($('.box', eq), ans));
+  if (pad) api.buildPad(ans, reveal);
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 0, max + 2, 2))), ans, reveal);
   api.onHint(() => {
     if ($('.tenframe', api.field)) return;
     const f = el('div.tenframe', { style: { '--cols': 5 } });
@@ -5442,17 +5556,23 @@ function differenceQ(api, max, pad){
   while (t2.e === t1.e) t2 = pick(THINGS);
   api.item('diff:' + a + '-' + b, a + ' と ' + b + ' の ちがい');
   api.setPrompt(`どちらが <b>いくつ</b> おおい？`, 'どちらが、いくつ多い？');
-  const board = el('div.measure');
+  /* No icon at the head of the row. `.mrow` was built for the bar chart, where the
+     cap is a pencil icon beside a bar; here the row *is* the objects, and a cap drawn
+     from the same emoji at the same size is simply one more of them — 「10 − 8」 sat
+     under eleven balloons and nine bunches of grapes. The row says what it is. */
+  const board = el('div.measure.countrows');
   [[t1, a], [t2, b]].forEach(([t, n]) => {
-    const row = el('div.mrow', { style: { cursor: 'default' } }, el('div.cap', { text: t.e }));
-    const g = el('div.row', { style: { gap: 'calc(var(--u)*.25)' } });
+    const row = el('div.mrow', { style: { cursor: 'default' } });
+    const g = el('div.row.pairline', { style: { gap: 'calc(var(--u)*.25)' } });
     for (let i = 0; i < n; i++) g.append(el('span.item', { text: t.e, style: { fontSize: 'calc(var(--u)*2.4)' } }));
     row.append(g);
     board.append(row);
   });
-  api.field.append(board, eqNode(a, b, '-'));
-  if (pad) api.buildPad(ans);
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans);
+  const eq = eqNode(a, b, '-');
+  api.field.append(board, eq);
+  const reveal = revealed(() => fillBlank($('.box', eq), ans));
+  if (pad) api.buildPad(ans, reveal);
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans, reveal);
   api.onHint(() => {
     if ($('.hintline', api.field)) return;
     api.field.append(el('div.hintline', { text: 'うえと したを 1つずつ ペアに して、あまりを かぞえよう' }));
@@ -6166,7 +6286,7 @@ Games.add({
 /* ===========================================================
    14 — WORLD 5「1ねんせいの きょうしつ」 小学1年生・はじめの単元
    ===========================================================
-   This world is shut until the sticker book is full (see `Progress` in 05).
+   This world is shut until every 入学前 level has been cleared (see `Progress` in 05).
 
    What goes in it is not "next year's arithmetic brought forward". The first
    weeks of 小学1年生 go back over ground the child has already walked on — and
@@ -6270,9 +6390,14 @@ function groupChart(api){
   const wantN = asCount ? target.n
     : (most ? Math.max.apply(null, counts) : Math.min.apply(null, counts));
 
+  /* The row's label is a word, not another one of the things in the row. It used to
+     be the category's emoji at the same size as the items, so「くだものの なかまは
+     いくつ？」sat over seven fruit with 6 as the right answer — and the number the
+     child counted was not even on the buttons. A picture graph labels its rows;
+     it does not put a spare apple at the head of the apple row. */
   rows.forEach(r => {
     const row = el('div.mrow', { style: { cursor: asCount ? 'default' : 'pointer' } },
-      el('div.cap', { text: r.cat.e }));
+      el('div.cap.caplbl', { text: r.cat.lbl }));
     const g = el('div.row', { style: { gap: 'calc(var(--u)*.3)', justifyContent: 'flex-start' } });
     r.items.forEach(e => g.append(el('span.item', { text: e, style: { fontSize: 'calc(var(--u)*2.4)' } })));
     row.append(g);
@@ -6420,12 +6545,19 @@ Games.add({
    Pairing is never wrong. Any top with any bottom is a legitimate pair, so there
    is nothing to guess at here: the question only starts once the pairing runs out
    and the child can see what is left over. */
-function pairUp(api, na, nb, onSettled){
+function pairUp(api, na, nb, onSettled, opts){
   const t1 = pick(THINGS);
   let t2 = pick(THINGS);
   for (let g = 0; g < 40 && t2.e === t1.e; g++) t2 = pick(THINGS);
 
-  const board = el('div.pairboard');
+  /* One column per pair position, the same width in both rows, and no wrapping.
+     Centred wrapping rows made this game unreadable: seven stars under five fish
+     came out as five-and-two on a second line, and unequal rows that did fit were
+     centred against each other, so no pair stood above its partner. The leftover
+     — which is the answer to every question here — has to be the bit sticking out
+     at the right-hand end. */
+  const board = el('div.pairboard', {
+    style: { '--pn': String(Math.max(na, nb) + ((opts && opts.extra) || 0)) } });
   const rowA = el('div.pairrow'), rowB = el('div.pairrow');
   const made = { a: t1, b: t2, na, nb, pairs: 0, rowA, rowB, board };
   let marked = null, settled = false;
@@ -6523,10 +6655,17 @@ function pairHowManyMore(api){
     const A = made.na, B = made.nb;
     const big = A > B ? made.a : made.b, ans = Math.abs(A - B);
     api.setPrompt(`${big.e} は いくつ <b>おおい</b>？`, `${big.n}は、いくつ多い？`);
+    const box = el('span.box', { text: '?' });
     api.field.append(el('div.eq', null,
       String(Math.max(A, B)), el('span.op', { text: '−' }), String(Math.min(A, B)),
-      el('span.op', { text: '＝' }), el('span.box', { text: '?' })));
-    api.buildPad(ans);
+      el('span.op', { text: '＝' }), box));
+    api.buildPad(ans, revealed(() => {
+      fillBlank(box, ans);
+      // the leftovers are the answer: number them so the sentence and the board agree
+      $$('.pairitem.leftover', made.board).forEach((x, i) => {
+        if (!$('.tag', x)) x.append(el('span.tag.left', { text: String(i + 1) }));
+      });
+    }, { delay: 1500 }));
     api.onHint(() => {
       const left = $$('.pairitem.leftover', made.board);
       left.forEach((x, i) => { if (!$('.tag', x)) x.append(el('span.tag.left', { text: String(i + 1) })); });
@@ -6544,6 +6683,7 @@ function pairMakeSame(api){
   const na = flip ? small : big, nb = flip ? big : small;
   const byTapping = chance(.5);
   api.item('same1to1:' + big + '-' + small, small + ' を ' + big + ' に そろえる');
+  // the tapping version grows the short row past the long one, so hold the columns
   pairUp(api, na, nb, made => {
     const A = made.na, B = made.nb;
     const short = A < B ? made.rowA : made.rowB;
@@ -6594,7 +6734,7 @@ function pairMakeSame(api){
         $$('.pairitem.leftover', made.board).forEach(x => x.classList.add('marked'));
       });
     }
-  });
+  }, { extra: byTapping ? 2 : 0 });
 }
 
 Games.add({
@@ -6634,10 +6774,11 @@ function tenAndSome(api){
   const ones = ri(1, 9), total = 10 + ones;
   api.item('teen:' + total, '10と ' + ones + ' で ' + total);
   api.setPrompt(`<b>10</b> と <b>${ones}</b> で いくつ？`, `10と${numKana(ones)}で、いくつ？`);
+  const box = el('span.box', { text: '?' });
   api.field.append(teenFrames(total),
     el('div.eq', null, '10', el('span.op', { text: 'と' }), String(ones),
-      el('span.op', { text: 'で' }), el('span.box', { text: '?' })));
-  api.buildPad(total, { lo: 10, hi: 20 });
+      el('span.op', { text: 'で' }), box));
+  api.buildPad(total, revealed(() => fillBlank(box, total), { lo: 10, hi: 20 }));
   api.onHint(() => {
     if ($('.hintline', api.field)) return;
     api.field.append(el('div.hintline', { text: 'ひだりは かぞえなくて いいよ。ぴったり 10だから、じゅう…' }));
@@ -6651,10 +6792,11 @@ function teenSplit(api){
   const total = ri(11, 19), ones = total - 10;
   api.item('teensplit:' + total, total + ' は 10と ' + ones);
   api.setPrompt(`<b>${total}</b> は 10と いくつ？`, `${numKana(total)}は、10といくつ？`);
+  const box = el('span.box', { text: '?' });
   api.field.append(teenFrames(total, { mute: true }),
     el('div.eq', null, String(total), el('span.op', { text: 'は' }), '10',
-      el('span.op', { text: 'と' }), el('span.box', { text: '?' })));
-  api.buildPad(ones, { lo: 0, hi: 10 });
+      el('span.op', { text: 'と' }), box));
+  api.buildPad(ones, revealed(() => fillBlank(box, ones), { lo: 0, hi: 10 }));
   api.onHint(() => {
     if ($('.hintline', api.field)) return;
     api.field.append(el('div.hintline', { text: 'みぎの わくの あかい ○を かぞえよう' }));
@@ -6672,10 +6814,11 @@ function teenCalc(api){
     a + (plus ? ' ＋ ' : ' − ') + b);
   api.setPrompt('しきを みて こたえよう',
                 `${numKana(a)}、${plus ? 'たす' : 'ひく'}、${numKana(b)}は？`);
+  const box = el('span.box', { text: '?' });
   api.field.append(el('div.eq', null,
     String(a), el('span.op', { text: plus ? '＋' : '−' }), String(b),
-    el('span.op', { text: '＝' }), el('span.box', { text: '?' })));
-  api.buildPad(ans, { lo: 10, hi: 20 });
+    el('span.op', { text: '＝' }), box));
+  api.buildPad(ans, revealed(() => fillBlank(box, ans), { lo: 10, hi: 20 }));
   api.onHint(() => {
     if ($('.frameset', api.field)) return;
     api.field.prepend(teenFrames(a, { mute: true }));
@@ -6773,7 +6916,7 @@ function plusOrMinus(api){
       Sound.sfx.place();
       api.later(() => {
         api.setPrompt(st.q, st.q);
-        api.buildPad(ans);
+        api.buildPad(ans, revealed(() => fillBlank($('.box', eq), ans)));
       }, 420);
       return false;                    // the operation was only half the question
     }
@@ -7152,13 +7295,17 @@ const Home = (() => {
      — and this one has four named games behind it. Seeing 「なかまづくり」 and
      「20までの かず」 sitting there, greyed out, is the reason to fill the shelf;
      an empty space where they would be is not. Tapping one says how to get in and
-     goes to the sticker book, which is where the count lives. */
+     goes to the sticker book, which is where the count lives.
+
+     What opens it is clearing all 48 入学前 levels — the plain stickers. The gold
+     ones (a run with every answer right first time) stay a thing worth going back
+     for; they are not part of the key. */
   function lockedCard(g){
     return el('button.gamecard.locked', {
-      type: 'button', title: g.name + '　シールを ぜんぶ あつめると あそべるよ',
+      type: 'button', title: g.name + '　ぜんぶの レベルを クリアすると あそべるよ',
       onclick(){
         Sound.sfx.tap();
-        Sound.say('シールが全部そろうと、遊べるようになるよ。', { delay: 120 });
+        Sound.say('入学前のレベルを全部クリアすると、遊べるようになるよ。', { delay: 120 });
         Book.render();
         UI.show('book');
       }
@@ -7269,7 +7416,7 @@ const Home = (() => {
         + (shut ? '.shut' : ''),
         { style: { '--wc': w.color } },
         el('h3', null, el('span.chip', { text: w.name }),
-          el('span.sub', { text: shut ? 'シールが ぜんぶ そろうと ひらくよ' : w.sub })), grid));
+          el('span.sub', { text: shut ? 'ぜんぶ クリアすると ひらくよ' : w.sub })), grid));
     });
   }
   return { build, render };
@@ -7337,7 +7484,7 @@ const Result = (() => {
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
-    const spoken = (r.unlockedG1 ? 'シールが全部そろったね！小学校一年生の問題ができるよ！'
+    const spoken = (r.unlockedG1 ? 'レベルを全部クリアしたね！小学校一年生の問題ができるよ！'
                  : r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
                  : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
@@ -7353,16 +7500,17 @@ const Result = (() => {
       el('div.result-sub', { text: r.mode === 'diagnostic'
         ? 'ぴったりの はじまりを みつけたよ'
         : `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
-    /* Every sticker is now a step towards a door the child can already see on the
-       home screen. Saying how many are left, at the moment one is earned, is what
-       turns「シールを もらった」into「あと 3まい」. */
+    /* Every level cleared is a step towards a door the child can already see on
+       the home screen. Saying how many are left, at the moment one is earned, is
+       what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
+       ones no longer move this number, so counting stickers here would stall. */
     if (r.sticker && !r.unlockedG1 && !Progress.g1Open()){
       const st = Progress.preStickers();
       const left = Math.max(0, st.total - st.got);
       if (left) inner.append(el('div.stagenext' + (left <= 6 ? '.nearly' : ''), null,
         el('span.mk', { text: '🔒' }),
         '1ねんせいの きょうしつまで ',
-        el('b', { text: 'あと ' + left + 'まい' })));
+        el('b', { text: 'あと ' + left + 'レベル' })));
     }
     /* The last sticker. This is the one screen in the app that says the child has
        finished 入学前 — it has to say it in words a six-year-old reads, on the
@@ -7372,7 +7520,7 @@ const Result = (() => {
     if (r.unlockedG1){
       inner.append(el('div.unlocked', null,
         el('div.e', { text: '🎓' }),
-        el('div.l', { text: 'シールが ぜんぶ そろった！' }),
+        el('div.l', { text: 'レベルを ぜんぶ クリアした！' }),
         el('b', { text: 'しょうがっこう 1ねんせいの もんだいが できるよ！' }),
         el('div.l', { text: '「1ねんせいの きょうしつ」が ホームに ふえたよ' })));
     }
@@ -7502,14 +7650,18 @@ const Book = (() => {
     } else {
       /* Shown, but plainly not part of the count above: a shelf a child can see
          waiting for them is the reason to fill the one they are on. */
-      grid.append(el('div.bookgroup.shut', { text: '🔒　1ねんせいの きょうしつ　ぜんぶ そろうと ここが ひらくよ' }));
+      grid.append(el('div.bookgroup.shut', { text: '🔒　1ねんせいの きょうしつ　レベルを ぜんぶ クリアすると ここが ひらくよ' }));
       Progress.slots('g1').forEach(() => grid.append(el('div.sticker.shut', { text: '🔒' })));
     }
+    /* Two numbers, and they count different things on purpose: the stickers are
+       the shelf (96 of them, gold included), the levels are the door (48). Saying
+       「あと ◯まい」for the door would stall the moment a gold sticker was earned
+       for a level that was already cleared. */
     const left = Math.max(0, pre.total - pre.got);
     count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
       + (left
-        ? `<br><b>あと ${left}まい</b> で しょうがっこう 1ねんせいの もんだいが ひらくよ（${pre.got}／${pre.total}）`
-        : '<br><b>ぜんぶ そろったね！</b> しょうがっこう 1ねんせいの もんだいが できるよ');
+        ? `<br><b>あと ${left}レベル</b> クリアすると しょうがっこう 1ねんせいの もんだいが ひらくよ（${pre.got}／${pre.total}）`
+        : '<br><b>レベルを ぜんぶ クリアしたね！</b> しょうがっこう 1ねんせいの もんだいが できるよ');
   }
   return { build, render };
 })();
@@ -7766,15 +7918,15 @@ const Parent = (() => {
       row('今日といた問題', Store.todayCount() + '問'),
       row('集めた ★', Store.totalStars() + ' / ' + levels * 3),
       row('集めたシール', Store.data.stickers.length + '枚'),
-      row('入学前のシール（1年生が開く条件）', pre.got + ' / ' + pre.total),
+      row('クリアした入学前のレベル（1年生が開く条件）', pre.got + ' / ' + pre.total),
       row('「きょうの れんしゅう」初回正答率', pct(Store.practiceAccuracy())));
     return s;
   }
 
   /* ---- 小学1年生の問題 ----
      The one thing on this page a parent has to be able to decide: the door opens
-     itself when the sticker book is full, and it can be opened by hand when the
-     child is plainly ready and the book is not. */
+     itself when every 入学前 level has been cleared, and it can be opened by hand
+     when the child is plainly ready and the shelf is not finished. */
   function stageSection(){
     const s = el('section');
     const pre = Progress.preStickers();
@@ -7782,10 +7934,15 @@ const Parent = (() => {
     const byHand = !!Store.data.g1Open;
     s.append(el('div.eyebrow', { text: 'next stage' }),
       el('h3', { text: '小学1年生の問題について' }));
-    s.append(el('p', { html: '入学前の48レベルのシールを<b>すべて集めると</b>、ホームに'
-      + '<b>「1ねんせいの きょうしつ」</b>が増えます。シールはレベルごとに2枚（クリアで1枚、'
-      + '全問1回目で正解するともう1枚・金色）で、全部で' + pre.total + '枚。'
-      + 'いまは <b>' + pre.got + ' / ' + pre.total + '</b> 枚です。' }));
+    s.append(el('p', { html: '入学前の' + pre.total + 'レベルを<b>すべてクリアすると</b>、ホームに'
+      + '<b>「1ねんせいの きょうしつ」</b>が増えます。いまは <b>' + pre.got + ' / ' + pre.total
+      + '</b> レベルです。クリアは★1つ以上（8問中4問を1回目で正解）で、'
+      + '3回まじめに挑戦すれば次のレベルは開くので、どこかで止まったままにはなりません。' }));
+    s.append(el('p', { text: '金色のシール（全問1回目で正解）は条件に入れていません。'
+      + '48レベルすべてで一発全問正解を出すには、このアプリの推奨ペース（1日1レベル）で'
+      + '半年をはるかに超えます。1年生の1学期の内容が1学期に間に合わないのでは意味がないので、'
+      + '扉の鍵は「クリアのシール48枚」だけにしてあります。金色のシールはシールブックに残り、'
+      + 'あとから取りに戻れる目標のままです。' }));
     s.append(el('p', { text: '中身は「先取りの計算」ではありません。1年生の1学期は、'
       + '入学前にやったことをもう一度、ちがう聞き方でたどり直します。'
       + '「同じものの集まり」（自分でまとまりを決めてから数える）と'

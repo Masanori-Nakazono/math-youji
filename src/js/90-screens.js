@@ -118,13 +118,17 @@ const Home = (() => {
      — and this one has four named games behind it. Seeing 「なかまづくり」 and
      「20までの かず」 sitting there, greyed out, is the reason to fill the shelf;
      an empty space where they would be is not. Tapping one says how to get in and
-     goes to the sticker book, which is where the count lives. */
+     goes to the sticker book, which is where the count lives.
+
+     What opens it is clearing all 48 入学前 levels — the plain stickers. The gold
+     ones (a run with every answer right first time) stay a thing worth going back
+     for; they are not part of the key. */
   function lockedCard(g){
     return el('button.gamecard.locked', {
-      type: 'button', title: g.name + '　シールを ぜんぶ あつめると あそべるよ',
+      type: 'button', title: g.name + '　ぜんぶの レベルを クリアすると あそべるよ',
       onclick(){
         Sound.sfx.tap();
-        Sound.say('シールが全部そろうと、遊べるようになるよ。', { delay: 120 });
+        Sound.say('入学前のレベルを全部クリアすると、遊べるようになるよ。', { delay: 120 });
         Book.render();
         UI.show('book');
       }
@@ -235,7 +239,7 @@ const Home = (() => {
         + (shut ? '.shut' : ''),
         { style: { '--wc': w.color } },
         el('h3', null, el('span.chip', { text: w.name }),
-          el('span.sub', { text: shut ? 'シールが ぜんぶ そろうと ひらくよ' : w.sub })), grid));
+          el('span.sub', { text: shut ? 'ぜんぶ クリアすると ひらくよ' : w.sub })), grid));
     });
   }
   return { build, render };
@@ -303,7 +307,7 @@ const Result = (() => {
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
-    const spoken = (r.unlockedG1 ? 'シールが全部そろったね！小学校一年生の問題ができるよ！'
+    const spoken = (r.unlockedG1 ? 'レベルを全部クリアしたね！小学校一年生の問題ができるよ！'
                  : r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
                  : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
@@ -319,16 +323,17 @@ const Result = (() => {
       el('div.result-sub', { text: r.mode === 'diagnostic'
         ? 'ぴったりの はじまりを みつけたよ'
         : `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
-    /* Every sticker is now a step towards a door the child can already see on the
-       home screen. Saying how many are left, at the moment one is earned, is what
-       turns「シールを もらった」into「あと 3まい」. */
+    /* Every level cleared is a step towards a door the child can already see on
+       the home screen. Saying how many are left, at the moment one is earned, is
+       what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
+       ones no longer move this number, so counting stickers here would stall. */
     if (r.sticker && !r.unlockedG1 && !Progress.g1Open()){
       const st = Progress.preStickers();
       const left = Math.max(0, st.total - st.got);
       if (left) inner.append(el('div.stagenext' + (left <= 6 ? '.nearly' : ''), null,
         el('span.mk', { text: '🔒' }),
         '1ねんせいの きょうしつまで ',
-        el('b', { text: 'あと ' + left + 'まい' })));
+        el('b', { text: 'あと ' + left + 'レベル' })));
     }
     /* The last sticker. This is the one screen in the app that says the child has
        finished 入学前 — it has to say it in words a six-year-old reads, on the
@@ -338,7 +343,7 @@ const Result = (() => {
     if (r.unlockedG1){
       inner.append(el('div.unlocked', null,
         el('div.e', { text: '🎓' }),
-        el('div.l', { text: 'シールが ぜんぶ そろった！' }),
+        el('div.l', { text: 'レベルを ぜんぶ クリアした！' }),
         el('b', { text: 'しょうがっこう 1ねんせいの もんだいが できるよ！' }),
         el('div.l', { text: '「1ねんせいの きょうしつ」が ホームに ふえたよ' })));
     }
@@ -468,14 +473,18 @@ const Book = (() => {
     } else {
       /* Shown, but plainly not part of the count above: a shelf a child can see
          waiting for them is the reason to fill the one they are on. */
-      grid.append(el('div.bookgroup.shut', { text: '🔒　1ねんせいの きょうしつ　ぜんぶ そろうと ここが ひらくよ' }));
+      grid.append(el('div.bookgroup.shut', { text: '🔒　1ねんせいの きょうしつ　レベルを ぜんぶ クリアすると ここが ひらくよ' }));
       Progress.slots('g1').forEach(() => grid.append(el('div.sticker.shut', { text: '🔒' })));
     }
+    /* Two numbers, and they count different things on purpose: the stickers are
+       the shelf (96 of them, gold included), the levels are the door (48). Saying
+       「あと ◯まい」for the door would stall the moment a gold sticker was earned
+       for a level that was already cleared. */
     const left = Math.max(0, pre.total - pre.got);
     count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
       + (left
-        ? `<br><b>あと ${left}まい</b> で しょうがっこう 1ねんせいの もんだいが ひらくよ（${pre.got}／${pre.total}）`
-        : '<br><b>ぜんぶ そろったね！</b> しょうがっこう 1ねんせいの もんだいが できるよ');
+        ? `<br><b>あと ${left}レベル</b> クリアすると しょうがっこう 1ねんせいの もんだいが ひらくよ（${pre.got}／${pre.total}）`
+        : '<br><b>レベルを ぜんぶ クリアしたね！</b> しょうがっこう 1ねんせいの もんだいが できるよ');
   }
   return { build, render };
 })();

@@ -97,14 +97,16 @@ function compose(api, maxWhole, pad){
   }
   const frameset = el('div.frameset', null, f);
   if (!pad) api.field.append(frameset);          // countable at the top level: see decompose
+  const box = el('span.box', { text: '?' });
   api.field.append(
-    el('div.eq', null, String(a), el('span.op', { text: 'と' }), String(b), el('span.op', { text: 'で' }), el('span.box', { text: '?' })));
+    el('div.eq', null, String(a), el('span.op', { text: 'と' }), String(b), el('span.op', { text: 'で' }), box));
   const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
+  const reveal = revealed(() => { fillBlank(box, ans); showFrame(); }, { delay: 1400 });
   if (pad){
-    api.buildPad(ans, { correctOpts: { delay: 1200 }, onPick(){ showFrame(); } });
+    api.buildPad(ans, reveal);
     api.onHint(showFrame);
   } else {
-    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans);
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans, reveal);
   }
 }
 
@@ -233,24 +235,24 @@ function partnerOfTen(api, pad){
      The equation stays — that is the question; the frame is the answer. */
   const frameset = el('div.frameset', null, f);
   if (!pad) api.field.append(frameset);
+  const box = el('span.box', { text: '?' });
   api.field.append(
-    el('div.eq', null, String(a), el('span.op', { text: 'と' }), el('span.box', { text: '?' }), el('span.op', { text: 'で' }), '10'));
+    el('div.eq', null, String(a), el('span.op', { text: 'と' }), box, el('span.op', { text: 'で' }), '10'));
   const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
+  const fillIn = () => {
+    fillBlank(box, ans);
+    showFrame();
+    for (let i = a; i < 10; i++){
+      api.later(() => {
+        if (!cells[i].firstChild){ cells[i].classList.remove('hole'); cells[i].append(el('div.dot.b')); Sound.sfx.place(); }
+      }, (i - a) * 150 + 200);
+    }
+  };
   if (pad){
-    api.buildPad(ans, {
-      correctOpts: { delay: 1500 },
-      onPick(){
-        showFrame();
-        for (let i = a; i < 10; i++){
-          api.later(() => {
-            if (!cells[i].firstChild){ cells[i].classList.remove('hole'); cells[i].append(el('div.dot.b')); Sound.sfx.place(); }
-          }, (i - a) * 150 + 200);
-        }
-      }
-    });
+    api.buildPad(ans, revealed(fillIn, { delay: 1500 }));
     api.onHint(showFrame);
   } else {
-    api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans);
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans, revealed(fillIn, { delay: 1500 }));
   }
 }
 
@@ -421,8 +423,11 @@ function addStory(api, max){
                 `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、やってきたよ。`);
   storyScene(api, a, b, '+', thing, () => {
     api.setPrompt('ぜんぶで いくつ？', '全部でいくつ？');
-    api.field.append(eqNode(a, b, '+'));
-    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, max + 2, 2))), ans);
+    const eq = eqNode(a, b, '+');
+    api.field.append(eq);
+    // the child's answer belongs inside the sentence, not next to it
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, max + 2, 2))), ans,
+      revealed(() => fillBlank($('.box', eq), ans)));
   });
 }
 
@@ -437,8 +442,10 @@ function subStory(api, max){
                 `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、いなくなるよ。`);
   storyScene(api, a, b, '-', thing, () => {
     api.setPrompt('のこりは いくつ？', '残りは、いくつ？');
-    api.field.append(eqNode(a, b, '-'));
-    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans);
+    const eq = eqNode(a, b, '-');
+    api.field.append(eq);
+    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans,
+      revealed(() => fillBlank($('.box', eq), ans)));
   });
 }
 
@@ -455,9 +462,11 @@ function symbolCalc(api, op, max, pad){
     a + (op === '+' ? ' ＋ ' : ' − ') + b);
   api.setPrompt('しきを みて こたえよう',
     `${numKana(a)}、${op === '+' ? 'たす' : 'ひく'}、${numKana(b)}は？`);
-  api.field.append(eqNode(a, b, op));
-  if (pad) api.buildPad(ans);
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 0, max + 2, 2))), ans);
+  const eq = eqNode(a, b, op);
+  api.field.append(eq);
+  const reveal = revealed(() => fillBlank($('.box', eq), ans));
+  if (pad) api.buildPad(ans, reveal);
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 0, max + 2, 2))), ans, reveal);
   api.onHint(() => {
     if ($('.tenframe', api.field)) return;
     const f = el('div.tenframe', { style: { '--cols': 5 } });
@@ -481,17 +490,23 @@ function differenceQ(api, max, pad){
   while (t2.e === t1.e) t2 = pick(THINGS);
   api.item('diff:' + a + '-' + b, a + ' と ' + b + ' の ちがい');
   api.setPrompt(`どちらが <b>いくつ</b> おおい？`, 'どちらが、いくつ多い？');
-  const board = el('div.measure');
+  /* No icon at the head of the row. `.mrow` was built for the bar chart, where the
+     cap is a pencil icon beside a bar; here the row *is* the objects, and a cap drawn
+     from the same emoji at the same size is simply one more of them — 「10 − 8」 sat
+     under eleven balloons and nine bunches of grapes. The row says what it is. */
+  const board = el('div.measure.countrows');
   [[t1, a], [t2, b]].forEach(([t, n]) => {
-    const row = el('div.mrow', { style: { cursor: 'default' } }, el('div.cap', { text: t.e }));
-    const g = el('div.row', { style: { gap: 'calc(var(--u)*.25)' } });
+    const row = el('div.mrow', { style: { cursor: 'default' } });
+    const g = el('div.row.pairline', { style: { gap: 'calc(var(--u)*.25)' } });
     for (let i = 0; i < n; i++) g.append(el('span.item', { text: t.e, style: { fontSize: 'calc(var(--u)*2.4)' } }));
     row.append(g);
     board.append(row);
   });
-  api.field.append(board, eqNode(a, b, '-'));
-  if (pad) api.buildPad(ans);
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans);
+  const eq = eqNode(a, b, '-');
+  api.field.append(board, eq);
+  const reveal = revealed(() => fillBlank($('.box', eq), ans));
+  if (pad) api.buildPad(ans, reveal);
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans, reveal);
   api.onHint(() => {
     if ($('.hintline', api.field)) return;
     api.field.append(el('div.hintline', { text: 'うえと したを 1つずつ ペアに して、あまりを かぞえよう' }));

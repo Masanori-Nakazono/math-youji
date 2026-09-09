@@ -11,7 +11,7 @@ const Games = {
 
 /* `stage` says which half of the app a world belongs to. Everything the app
    shipped with is 入学前 ('pre'); 'g1' is the 小学1年生 classroom, which stays shut
-   until the sticker book is full. A world with no stage is 'pre', so nothing that
+   until every 入学前 level is cleared. A world with no stage is 'pre', so nothing that
    existed before has to say so. */
 const WORLDS = [
   { id: 'shima', name: 'かずの しま',    sub: 'かぞえる・すうじ',       color: 'var(--c-blue)' },
@@ -51,9 +51,17 @@ function stickerFor(key){
    ===========================================================
    The 入学前 half of the app is 48 levels and 96 sticker slots: one sticker for
    clearing a level, a gold one for clearing it with every answer right first time.
-   Filling that shelf is the whole of the 小1 classroom's entrance requirement, so
-   the goal a child is already working towards is the same goal that opens the next
-   room — no separate test, no adult judgement.
+   Clearing all 48 — the plain stickers — is the 小1 classroom's entrance
+   requirement, so the goal a child is already working towards is the same goal
+   that opens the next room: no separate test, no adult judgement.
+
+   The gold stickers are NOT part of the key. Each one needs a run with every
+   answer right first time, and needing forty-eight of those put the classroom
+   somewhere around the three-hundredth day of use for a child working at the
+   pace this app recommends (one level a day) — which is to say, after 1年生 had
+   already started, and after the material in the classroom had stopped being
+   preparation. They stay on the shelf as something to come back for; they are
+   not a door the child has to get through.
 
    Two things this deliberately does NOT do. It never counts 小1's own stickers
    (that would be circular), and it never *closes* again: a shelf cannot lose a
@@ -62,7 +70,7 @@ function stickerFor(key){
 const Progress = (() => {
   const stageOf = g => g.stage || 'pre';
 
-  /** every sticker slot belonging to one stage, plain and gold */
+  /** every sticker slot belonging to one stage, plain and gold — what the book draws */
   function slots(stage){
     const out = [];
     Games.list.forEach(g => {
@@ -72,14 +80,24 @@ const Progress = (() => {
     return out;
   }
 
+  /** the slots the door actually counts: one per level, earned by clearing it */
+  function gateSlots(stage){
+    const out = [];
+    Games.list.forEach(g => {
+      if (stageOf(g) !== stage) return;
+      g.levels.forEach((lv, i) => out.push(g.id + ':' + i));
+    });
+    return out;
+  }
+
   function count(stage){
-    const all = slots(stage);
+    const all = gateSlots(stage);
     let got = 0;
     all.forEach(k => { if (Store.hasSticker(k)) got++; });
     return { got, total: all.length };
   }
 
-  /** true once the shelf is full — or once a parent has opened the door by hand */
+  /** true once every 入学前 level is cleared — or once a parent opened the door by hand */
   function g1Open(){
     if (Store.data.g1Open) return true;
     const c = count('pre');
@@ -89,6 +107,8 @@ const Progress = (() => {
   return {
     stageOf,
     slots,
+    gateSlots,
+    /** { got, total } over the levels the door counts — cleared levels, not stickers */
     preStickers: () => count('pre'),
     g1Open,
     /** opened by hand from the parent page; never reversible */
@@ -108,6 +128,11 @@ const Session = (() => {
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
   let locked = false, mode = 'level', curGame = null, curLevelIdx = 0;
   let hintBtns = [], hintFn = null, hintExtras = [], hintShown = false, lastSpeech = '';
+  /* Most questions keep their hint back until a second mistake, so the child
+     gets a real second try first. A question whose picture is already hidden
+     (ぱっと みて いくつ) has nothing to try with: 「もういちど」 over a covered
+     board is an invitation to guess. Those games ask for their hint at 1. */
+  let hintAfter = 2, extrasShown = false;
   /* What this question is *about*. Every generator names its item, so the app can
      avoid asking the same fact twice in one sitting, steer toward the facts this
      child keeps missing, and tell the parent which ones they are. */
@@ -431,7 +456,8 @@ const Session = (() => {
         const p = a.game.id + ':';
         return w.indexOf(p) === 0 ? w.slice(p.length) : null;
       },
-      onHint(fn){ if (!stale()) hintFn = fn; },
+      /** `after` = how many mistakes before it fires (default 2, minimum 1). */
+      onHint(fn, after){ if (stale()) return; hintFn = fn; if (after) hintAfter = Math.max(1, after); },
       correct(o){ if (!stale()) onCorrect(o || {}); },
       wrong(target){ if (!stale()) onWrong(target); },
       /** delayed work that dies with the question */
@@ -544,6 +570,7 @@ const Session = (() => {
 
   function resetSurface(){
     locked = false; hintBtns = []; hintFn = null; hintExtras = []; hintShown = false;
+    hintAfter = 2; extrasShown = false;
     askedAt = 0; respondedMs = null;
     curItem = null; curLabel = null;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
@@ -628,17 +655,20 @@ const Session = (() => {
       target.classList.add('wrong');
       later(() => target.classList.remove('wrong'), 460);
     }
-    if (wrongThisQ === 1){
+    if (wrongThisQ >= hintAfter && !hintShown){
+      hintShown = true;
+      showFeedback('hint', 'ヒントを だすね');
+      Sound.say('ヒントを出すね。', { delay: 260 });
+      if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
+    } else if (wrongThisQ === 1){
       showFeedback('oops', 'もういちど やってみよう');
       Sound.say('惜しいね。もう一度やってみよう。', { delay: 260 });
-    } else if (wrongThisQ >= 2){
+    }
+    if (wrongThisQ >= 2){
       // The game's own hint is preferred, but the choice-dimming fallback runs too:
       // a hint that only speaks would leave a muted device with no feedback at all.
-      if (!hintShown){
-        hintShown = true;
-        showFeedback('hint', 'ヒントを だすね');
-        Sound.say('ヒントを出すね。', { delay: 260 });
-        if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
+      if (!extrasShown){
+        extrasShown = true;
         hintExtras.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
       }
       const live = hintBtns.filter(b => !b.classList.contains('dim'));

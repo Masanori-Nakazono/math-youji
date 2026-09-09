@@ -1150,6 +1150,16 @@ body::before{
 .mrow.wrong{ border-color: var(--oops); background: var(--oops-soft); animation: shake .4s; }
 .mrow.picked{ border-color: var(--accent); }
 .mrow .cap{ font-size: calc(var(--u)*2.4); flex: 0 0 auto; }
+/* A picture-graph row is labelled with a word, at a fixed width so every row's
+   items still start on the same line. An emoji here would be one more of the very
+   things the child has been asked to count. */
+.mrow .cap.caplbl{
+  width: calc(var(--u)*7); text-align: right;
+  font-size: calc(var(--u)*1.5); font-weight: 800; line-height: 1.15;
+  color: var(--ink-soft);
+}
+/* two rows a child pairs off by eye: a line break destroys the correspondence */
+.row.pairline{ flex-wrap: nowrap; justify-content: flex-start; }
 .mrow .track{ flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
 .mrow .track .gap{ flex: 0 0 auto; }
 .mrow .stickbar{
@@ -1297,6 +1307,8 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   transform: scale(1.12);
 }
 .nn.near{ box-shadow: 0 0 0 calc(var(--u)*.24) color-mix(in srgb, var(--accent) 55%, transparent); }
+/* the hole the child just filled: their answer, written into the run of numbers */
+.nn.filled{ border-color: var(--good); background: var(--good-soft); }
 
 /* the basket the prompt keeps talking about */
 .basket{
@@ -1697,16 +1709,24 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 
 /* ---- 1たい1で くらべる ---- */
 .pairboard{
-  display: flex; flex-direction: column; align-items: center;
-  gap: calc(var(--u)*.5); width: 100%;
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: calc(var(--u)*.5);
+  width: fit-content; max-width: 100%; margin-inline: auto;
 }
+/* One column per pair position, the same width in both rows, and no wrapping.
+   Centred flex rows put five stars over five fish and the other two on a second
+   line, and centred rows of different lengths never stood one item above its
+   partner — so the thing this whole game is about, the bit left over at the end,
+   was the one thing the picture could not show. */
 .pairrow{
-  display: flex; align-items: center; justify-content: center;
-  flex-wrap: wrap; gap: calc(var(--u)*.7);
+  display: grid;
+  grid-template-columns: repeat(var(--pn, 5), calc(var(--u)*6));
+  gap: calc(var(--u)*.7);
+  justify-content: start; align-items: center;
 }
 /* the line the textbook draws between the two rows */
 .pairgap{
-  width: min(100%, calc(var(--u)*40)); height: 0;
+  width: 100%; height: 0;
   border-top: calc(var(--u)*.2) dashed var(--card-edge);
 }
 .pairitem{

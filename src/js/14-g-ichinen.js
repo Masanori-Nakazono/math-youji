@@ -1,7 +1,7 @@
 /* ===========================================================
    14 — WORLD 5「1ねんせいの きょうしつ」 小学1年生・はじめの単元
    ===========================================================
-   This world is shut until the sticker book is full (see `Progress` in 05).
+   This world is shut until every 入学前 level has been cleared (see `Progress` in 05).
 
    What goes in it is not "next year's arithmetic brought forward". The first
    weeks of 小学1年生 go back over ground the child has already walked on — and
@@ -105,9 +105,14 @@ function groupChart(api){
   const wantN = asCount ? target.n
     : (most ? Math.max.apply(null, counts) : Math.min.apply(null, counts));
 
+  /* The row's label is a word, not another one of the things in the row. It used to
+     be the category's emoji at the same size as the items, so「くだものの なかまは
+     いくつ？」sat over seven fruit with 6 as the right answer — and the number the
+     child counted was not even on the buttons. A picture graph labels its rows;
+     it does not put a spare apple at the head of the apple row. */
   rows.forEach(r => {
     const row = el('div.mrow', { style: { cursor: asCount ? 'default' : 'pointer' } },
-      el('div.cap', { text: r.cat.e }));
+      el('div.cap.caplbl', { text: r.cat.lbl }));
     const g = el('div.row', { style: { gap: 'calc(var(--u)*.3)', justifyContent: 'flex-start' } });
     r.items.forEach(e => g.append(el('span.item', { text: e, style: { fontSize: 'calc(var(--u)*2.4)' } })));
     row.append(g);
@@ -255,12 +260,19 @@ Games.add({
    Pairing is never wrong. Any top with any bottom is a legitimate pair, so there
    is nothing to guess at here: the question only starts once the pairing runs out
    and the child can see what is left over. */
-function pairUp(api, na, nb, onSettled){
+function pairUp(api, na, nb, onSettled, opts){
   const t1 = pick(THINGS);
   let t2 = pick(THINGS);
   for (let g = 0; g < 40 && t2.e === t1.e; g++) t2 = pick(THINGS);
 
-  const board = el('div.pairboard');
+  /* One column per pair position, the same width in both rows, and no wrapping.
+     Centred wrapping rows made this game unreadable: seven stars under five fish
+     came out as five-and-two on a second line, and unequal rows that did fit were
+     centred against each other, so no pair stood above its partner. The leftover
+     — which is the answer to every question here — has to be the bit sticking out
+     at the right-hand end. */
+  const board = el('div.pairboard', {
+    style: { '--pn': String(Math.max(na, nb) + ((opts && opts.extra) || 0)) } });
   const rowA = el('div.pairrow'), rowB = el('div.pairrow');
   const made = { a: t1, b: t2, na, nb, pairs: 0, rowA, rowB, board };
   let marked = null, settled = false;
@@ -358,10 +370,17 @@ function pairHowManyMore(api){
     const A = made.na, B = made.nb;
     const big = A > B ? made.a : made.b, ans = Math.abs(A - B);
     api.setPrompt(`${big.e} は いくつ <b>おおい</b>？`, `${big.n}は、いくつ多い？`);
+    const box = el('span.box', { text: '?' });
     api.field.append(el('div.eq', null,
       String(Math.max(A, B)), el('span.op', { text: '−' }), String(Math.min(A, B)),
-      el('span.op', { text: '＝' }), el('span.box', { text: '?' })));
-    api.buildPad(ans);
+      el('span.op', { text: '＝' }), box));
+    api.buildPad(ans, revealed(() => {
+      fillBlank(box, ans);
+      // the leftovers are the answer: number them so the sentence and the board agree
+      $$('.pairitem.leftover', made.board).forEach((x, i) => {
+        if (!$('.tag', x)) x.append(el('span.tag.left', { text: String(i + 1) }));
+      });
+    }, { delay: 1500 }));
     api.onHint(() => {
       const left = $$('.pairitem.leftover', made.board);
       left.forEach((x, i) => { if (!$('.tag', x)) x.append(el('span.tag.left', { text: String(i + 1) })); });
@@ -379,6 +398,7 @@ function pairMakeSame(api){
   const na = flip ? small : big, nb = flip ? big : small;
   const byTapping = chance(.5);
   api.item('same1to1:' + big + '-' + small, small + ' を ' + big + ' に そろえる');
+  // the tapping version grows the short row past the long one, so hold the columns
   pairUp(api, na, nb, made => {
     const A = made.na, B = made.nb;
     const short = A < B ? made.rowA : made.rowB;
@@ -429,7 +449,7 @@ function pairMakeSame(api){
         $$('.pairitem.leftover', made.board).forEach(x => x.classList.add('marked'));
       });
     }
-  });
+  }, { extra: byTapping ? 2 : 0 });
 }
 
 Games.add({
@@ -469,10 +489,11 @@ function tenAndSome(api){
   const ones = ri(1, 9), total = 10 + ones;
   api.item('teen:' + total, '10と ' + ones + ' で ' + total);
   api.setPrompt(`<b>10</b> と <b>${ones}</b> で いくつ？`, `10と${numKana(ones)}で、いくつ？`);
+  const box = el('span.box', { text: '?' });
   api.field.append(teenFrames(total),
     el('div.eq', null, '10', el('span.op', { text: 'と' }), String(ones),
-      el('span.op', { text: 'で' }), el('span.box', { text: '?' })));
-  api.buildPad(total, { lo: 10, hi: 20 });
+      el('span.op', { text: 'で' }), box));
+  api.buildPad(total, revealed(() => fillBlank(box, total), { lo: 10, hi: 20 }));
   api.onHint(() => {
     if ($('.hintline', api.field)) return;
     api.field.append(el('div.hintline', { text: 'ひだりは かぞえなくて いいよ。ぴったり 10だから、じゅう…' }));
@@ -486,10 +507,11 @@ function teenSplit(api){
   const total = ri(11, 19), ones = total - 10;
   api.item('teensplit:' + total, total + ' は 10と ' + ones);
   api.setPrompt(`<b>${total}</b> は 10と いくつ？`, `${numKana(total)}は、10といくつ？`);
+  const box = el('span.box', { text: '?' });
   api.field.append(teenFrames(total, { mute: true }),
     el('div.eq', null, String(total), el('span.op', { text: 'は' }), '10',
-      el('span.op', { text: 'と' }), el('span.box', { text: '?' })));
-  api.buildPad(ones, { lo: 0, hi: 10 });
+      el('span.op', { text: 'と' }), box));
+  api.buildPad(ones, revealed(() => fillBlank(box, ones), { lo: 0, hi: 10 }));
   api.onHint(() => {
     if ($('.hintline', api.field)) return;
     api.field.append(el('div.hintline', { text: 'みぎの わくの あかい ○を かぞえよう' }));
@@ -507,10 +529,11 @@ function teenCalc(api){
     a + (plus ? ' ＋ ' : ' − ') + b);
   api.setPrompt('しきを みて こたえよう',
                 `${numKana(a)}、${plus ? 'たす' : 'ひく'}、${numKana(b)}は？`);
+  const box = el('span.box', { text: '?' });
   api.field.append(el('div.eq', null,
     String(a), el('span.op', { text: plus ? '＋' : '−' }), String(b),
-    el('span.op', { text: '＝' }), el('span.box', { text: '?' })));
-  api.buildPad(ans, { lo: 10, hi: 20 });
+    el('span.op', { text: '＝' }), box));
+  api.buildPad(ans, revealed(() => fillBlank(box, ans), { lo: 10, hi: 20 }));
   api.onHint(() => {
     if ($('.frameset', api.field)) return;
     api.field.prepend(teenFrames(a, { mute: true }));
@@ -608,7 +631,7 @@ function plusOrMinus(api){
       Sound.sfx.place();
       api.later(() => {
         api.setPrompt(st.q, st.q);
-        api.buildPad(ans);
+        api.buildPad(ans, revealed(() => fillBlank($('.box', eq), ans)));
       }, 420);
       return false;                    // the operation was only half the question
     }

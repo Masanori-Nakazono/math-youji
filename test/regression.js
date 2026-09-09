@@ -1003,10 +1003,17 @@
     }
     const stayedOut = g1Games.every(g => !tally[g.id]);
 
-    // one sticker short is still shut
-    pre.slice(0, -1).forEach(k => K.Store.addSticker(k));
+    /* Gold stickers are not part of the key. Every one of them needs a run with
+       every answer right first time, and needing 48 of those put the classroom
+       past the start of 1年生 for a child working at the pace the app recommends. */
+    const gate = K.Progress.gateSlots('pre');
+    K.Progress.slots('pre').filter(k => k.endsWith(':g')).forEach(k => K.Store.addSticker(k));
+    const goldAloneShut = !K.Progress.g1Open();
+
+    // one cleared level short is still shut
+    gate.slice(0, -1).forEach(k => K.Store.addSticker(k));
     const shutOneShort = !K.Progress.g1Open();
-    K.Store.addSticker(pre[pre.length - 1]);
+    K.Store.addSticker(gate[gate.length - 1]);
     const openedOnLast = K.Progress.g1Open();
 
     // and now the 小1 levels are reachable, and Home swaps the padlocks for games
@@ -1021,22 +1028,25 @@
       }
       return g1Games.some(g => seen[g.id]);
     })();
-    check('小学1年生 opens on the last sticker of the 入学前 shelf, never before',
-      shutAtStart && seenOnDayOne && noneOpen && stayedOut && shutOneShort && openedOnLast
-        && worldOnHome && nowInPool && g1.length === 24,
+    check('小学1年生 opens on the last cleared level, never before, and gold is not the key',
+      shutAtStart && seenOnDayOne && noneOpen && stayedOut && goldAloneShut
+        && shutOneShort && openedOnLast
+        && worldOnHome && nowInPool && g1.length === 24
+        && gate.length === pre.length / 2 && gate.every(k => !k.endsWith(':g')),
       'shut=' + shutAtStart + ' visibleDay1=' + seenOnDayOne + ' hidden=' + noneOpen + ' outOfDaily=' + stayedOut
-        + ' oneShort=' + shutOneShort + ' opened=' + openedOnLast
-        + ' onHome=' + worldOnHome + ' inDaily=' + nowInPool + ' g1slots=' + g1.length);
+        + ' goldAloneShut=' + goldAloneShut + ' oneShort=' + shutOneShort + ' opened=' + openedOnLast
+        + ' onHome=' + worldOnHome + ' inDaily=' + nowInPool + ' g1slots=' + g1.length
+        + ' gate=' + gate.length + '/' + pre.length);
     K.Store.reset();
   })();
 
   /* ---------- 32. finishing the shelf tells the child so, in words they read ---------- */
   (function unlockMessage(){
     K.Store.reset();
-    /* One slot short of a full shelf, and the missing one is the gold sticker for
-       a level the suite can actually play: the last slot in registration order
-       belongs to 「はりを うごかす」, which needs a hand on a clock face. */
-    const missing = 'bond:0:g';
+    /* One cleared level short of the door, and the missing one belongs to a level
+       the suite can actually play: the last level in registration order is
+       「はりを うごかす」, which needs a hand on a clock face. */
+    const missing = 'bond:0';
     K.Progress.slots('pre').forEach(k => { if (k !== missing) K.Store.addSticker(k); });
     const shutBefore = !K.Progress.g1Open();
     K.Session.startLevel(K.Games.byId.bond, 0);
@@ -1049,16 +1059,15 @@
     check('the last sticker says「1ねんせいの もんだいが できるよ」on the result screen',
       shutBefore && K.Store.hasSticker(missing) && K.Progress.g1Open()
         && said.indexOf('1ねんせいの もんだいが できる') >= 0,
-      'shutBefore=' + shutBefore + ' gold=' + K.Store.hasSticker(missing)
+      'shutBefore=' + shutBefore + ' cleared=' + K.Store.hasSticker(missing)
         + ' open=' + K.Progress.g1Open() + ' text=' + said.slice(0, 60));
     K.Store.reset();
   })();
 
   /* ---------- 33. a child who is ready must never be stuck behind the padlock ----------
-     Every gold sticker needs a run with every answer right first time. That is a
-     real goal, and it is also a wall a ready child can fail to clear on とけい
-     alone — so the parent page can open the door by hand, exactly like the three
-     attempts that open a level nobody can pass. */
+     Clearing 48 levels is reachable, but a child can still stall on とけい or
+     かたちづくり — so the parent page can open the door by hand, exactly like the
+     three attempts that open a level nobody can pass. */
   (function parentOverride(){
     K.Store.reset();
     const before = K.Progress.g1Open();
@@ -1101,6 +1110,165 @@
       'h1=' + Math.round(oneUp) + ' h4=' + Math.round(allUp) + ' tops=' + tops.join(',')
         + ' stageBanner=' + !noStageBanner);
     K.Home.render();
+    K.Store.reset();
+  })();
+
+  /* ---------- 35. a row of things to count holds exactly what the answer says ----------
+     `.mrow` was built for the bar chart, where the cap at the head of the row is a
+     pencil icon beside a bar. Two later games reused the row for actual countable
+     objects and inherited the cap — drawn from the same emoji at the same size. So
+     「くだものの なかまは いくつ？」 stood over seven fruit with 6 as the right answer
+     (and 6 was often not even on the buttons), and 「10 − 8」 sat under eleven
+     balloons and nine bunches of grapes. A child who counts what is on the screen
+     must never be told they are wrong. */
+  (function countedRowsMatch(){
+    K.Store.reset();
+    K.Store.setPref('g1Open', true);
+    const bad = [];
+
+    // every picture in the row, label included: what a child's finger would land on
+    const pics = n => (n.textContent.match(/\p{Extended_Pictographic}/gu) || []).length;
+
+    for (let t = 0; t < 120; t++){
+      K.Session.startLevel(K.Games.byId.g1set, 1);
+      const asCount = /なかまは いくつ/.test(q('#play .prompt .txt').textContent);
+      if (!asCount) continue;
+      const answer = Number((S.item || '').split(':').pop());
+      qa('#play .mrow').forEach(r => {
+        const items = r.querySelectorAll('.row .item').length;
+        if (pics(r) !== items) bad.push('g1set/L1 row shows ' + pics(r) + ' pictures for ' + items);
+      });
+      const offered = qa('#play .choices .choice').map(b => Number(b.textContent));
+      if (offered.length && offered.indexOf(answer) < 0) bad.push('g1set/L1 answer ' + answer + ' not offered');
+    }
+
+    for (let t = 0; t < 120; t++){
+      K.Session.startLevel(K.Games.byId.sub, 2);
+      const board = q('#play .measure');
+      if (!board) continue;                                   // symbolCalc draw
+      const eq = q('#play .eq').textContent.match(/(\d+)−(\d+)/);
+      if (!eq) continue;
+      const rows = qa('#play .measure .mrow');
+      const shown = rows.map(pics);
+      if (shown[0] !== Number(eq[1]) || shown[1] !== Number(eq[2])){
+        bad.push('sub/L2 shows ' + shown.join(',') + ' for ' + eq[1] + '−' + eq[2]);
+      }
+      // and the two rows must start on the same line, so a pair stands over a pair
+      const lefts = rows.map(r => Math.round(r.querySelector('.row').getBoundingClientRect().left));
+      const wrapped = rows.some(r => new Set(Array.from(r.querySelectorAll('.item'))
+        .map(i => Math.round(i.getBoundingClientRect().top))).size > 1);
+      if (lefts[0] !== lefts[1] || wrapped) bad.push('sub/L2 rows not pairable: ' + lefts.join(',') + ' wrapped=' + wrapped);
+    }
+
+    check('a row of things to count holds exactly the number the answer names',
+      !bad.length, bad.slice(0, 4).join(' | '));
+    K.Store.reset();
+  })();
+
+  /* ---------- 36. one-to-one really looks like one-to-one ----------
+     This game's whole answer — which row has something left over, and how much —
+     is supposed to be read off the picture. Centred flex rows put five stars over
+     five fish and the other two on a second line, and unequal rows that did fit
+     were centred against each other, so no item stood above its partner. */
+  (function pairingLinesUp(){
+    K.Store.reset();
+    K.Store.setPref('g1Open', true);
+    const bad = [];
+    const seen = {};
+    for (let t = 0; t < 260; t++){
+      K.Session.startLevel(K.Games.byId.g1pair, t % 3);
+      const rows = qa('#play .pairrow');
+      if (rows.length < 2) continue;
+      const items = rows.map(r => Array.from(r.querySelectorAll('.pairitem')));
+      if (!items[0].length || !items[1].length) continue;
+      seen[items[0].length + 'v' + items[1].length] = 1;
+      const lefts = items.map(xs => Math.round(xs[0].getBoundingClientRect().left));
+      const lines = items.map(xs => new Set(xs.map(x => Math.round(x.getBoundingClientRect().top))).size);
+      if (lefts[0] !== lefts[1]) bad.push('rows start at ' + lefts.join(' / '));
+      if (lines[0] > 1 || lines[1] > 1) bad.push('a row wrapped onto ' + Math.max.apply(null, lines) + ' lines');
+      // pair k of the top row stands over pair k of the bottom row
+      const n = Math.min(items[0].length, items[1].length);
+      for (let i = 0; i < n; i++){
+        const a = Math.round(items[0][i].getBoundingClientRect().left);
+        const b = Math.round(items[1][i].getBoundingClientRect().left);
+        if (Math.abs(a - b) > 1){ bad.push('pair ' + i + ' offset by ' + (a - b)); break; }
+      }
+      if (bad.length > 3) break;
+    }
+    const unequalSeen = Object.keys(seen).filter(k => k.split('v')[0] !== k.split('v')[1]).length;
+    check('the 1たい1 rows line up column by column, whatever the two counts are',
+      !bad.length && unequalSeen >= 5,
+      bad.slice(0, 3).join(' | ') + ' unequalCases=' + unequalSeen);
+    K.Store.reset();
+  })();
+
+  /* ---------- 37. the answer goes back into the question ----------
+     A question that ends with「?」still on screen never lets the child see what
+     they said inside the sentence they said it about. 「9 ＋ 1 ＝ ?」 with a green
+     tick over it is not the same thing as 「9 ＋ 1 ＝ 10」. */
+  (function answerWrittenBack(){
+    K.Store.reset();
+    K.Store.setPref('g1Open', true);
+    const bad = [];
+    // one level per shape of blank: an equation box, and a hole in a number line
+    const cases = [
+      ['add', 2, '.eq .box'], ['sub', 2, '.eq .box'], ['bond', 2, '.eq .box, .part.unknown'],
+      ['ten', 1, '.eq .box'], ['g1teen', 0, '.eq .box'], ['g1teen', 2, '.eq .box'],
+      ['seq', 2, '.nn.gap']
+    ];
+    cases.forEach(([id, li, sel]) => {
+      for (let t = 0; t < 30; t++){
+        K.Session.startLevel(K.Games.byId[id], li);
+        const before = qa('#play .playfield').length && q('#play ' + sel.split(',')[0]);
+        if (!before || before.textContent.indexOf('?') < 0) continue;
+        if (!answerOnce()) break;
+        if (!S.locked) continue;                       // that tap was wrong; try again
+        const after = q('#play ' + sel.split(',')[0]);
+        if (after && after.textContent.indexOf('?') >= 0){
+          bad.push(id + '/L' + li + ' still shows ? after a right answer');
+        }
+        return;
+      }
+    });
+    check('a right answer is written into the blank the question left open',
+      !bad.length, bad.slice(0, 4).join(' | '));
+    K.Store.reset();
+  })();
+
+  /* ---------- 38. ぱっと みて いくつ shows the dots again ----------
+     The game exists to make 7 *look* like「5と2」. Hiding the board, taking the
+     answer and moving on never shows the child the arrangement their number was
+     about — and after a first wrong answer 「もういちど やってみよう」 over a covered
+     board is an invitation to guess, not a second try. */
+  (function flashRevealsWhatItAsked(){
+    K.Store.reset();
+    let coveredAfterRight = 0, coveredAfterMiss = 0, runs = 0;
+    for (let t = 0; t < 24; t++){
+      K.Session.startLevel(K.Games.byId.flash, t % 2);
+      const go = q('#play .flashgo');
+      if (!go) continue;
+      go.click();
+      S.flushTimers();                                   // the flash, then the question
+      const board = q('#play .flashboard');
+      const answer = Number((S.item || '').split(':').pop());
+      const btns = qa('#play .choices .choice');
+      if (!btns.length || !board) continue;
+      runs++;
+      // a wrong answer first: the child has to be given something to look at
+      const wrong = btns.find(b => Number(b.textContent) !== answer);
+      if (wrong){
+        wrong.click();
+        if (!board.classList.contains('open')) coveredAfterMiss++;
+      }
+      const right = qa('#play .choices .choice').find(b => Number(b.textContent) === answer);
+      if (right){
+        right.click();
+        if (!board.classList.contains('open')) coveredAfterRight++;
+      }
+    }
+    check('ぱっと みて いくつ shows the dots again, on a miss and on a right answer',
+      runs >= 6 && !coveredAfterRight && !coveredAfterMiss,
+      'runs=' + runs + ' hiddenAfterRight=' + coveredAfterRight + ' hiddenAfterMiss=' + coveredAfterMiss);
     K.Store.reset();
   })();
 

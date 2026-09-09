@@ -104,6 +104,37 @@ const jiKana = (h, half) => (JI[h] || numKana(h) + 'じ') + (half ? 'はん' : '
 /** hiragana display text; digits get the numeral face via <b> */
 const numTag = n => `<b>${n}</b>`;
 
+/* ---- showing the child their own answer ----
+   A question that ends with「?」still on screen never lets the child see what they
+   said inside the sentence they said it about. 「7 と 1 で ?」 only finishes meaning
+   something when it reads 「7 と 1 で 8」, and the beat where it does is the whole
+   of what a five-year-old takes away from getting it right. Two levels already did
+   this by hand (いくつと いくつ L3, 10の おともだち L2); these make it the default. */
+
+/** Write the answer into the blank a question left open. Works for the「?」box in
+    an equation and for a hole in a number line. */
+function fillBlank(node, value){
+  if (!node) return;
+  node.textContent = String(value);
+  node.classList.remove('gap', 'now');
+  node.classList.add('filled');
+}
+
+/** buildChoices / buildPad options that run `show` on the correct answer and hold
+    the screen long enough to read what it wrote. Any other options are passed
+    through, and an existing `onPick` still decides whether the question ends. */
+function revealed(show, opts){
+  const o = opts || {};
+  const out = Object.assign({}, o);
+  delete out.delay;
+  out.correctOpts = Object.assign({ delay: o.delay || 1300 }, o.correctOpts);
+  out.onPick = (v, b) => {
+    try{ show(v, b); }catch(e){ console.error('reveal failed', e); }
+    return o.onPick ? o.onPick(v, b) : undefined;
+  };
+  return out;
+}
+
 /** Make a node behave like a button for both finger and keyboard. */
 function tappable(node, fn){
   node.setAttribute('role', 'button');

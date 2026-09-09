@@ -249,15 +249,15 @@ const Parent = (() => {
       row('今日といた問題', Store.todayCount() + '問'),
       row('集めた ★', Store.totalStars() + ' / ' + levels * 3),
       row('集めたシール', Store.data.stickers.length + '枚'),
-      row('入学前のシール（1年生が開く条件）', pre.got + ' / ' + pre.total),
+      row('クリアした入学前のレベル（1年生が開く条件）', pre.got + ' / ' + pre.total),
       row('「きょうの れんしゅう」初回正答率', pct(Store.practiceAccuracy())));
     return s;
   }
 
   /* ---- 小学1年生の問題 ----
      The one thing on this page a parent has to be able to decide: the door opens
-     itself when the sticker book is full, and it can be opened by hand when the
-     child is plainly ready and the book is not. */
+     itself when every 入学前 level has been cleared, and it can be opened by hand
+     when the child is plainly ready and the shelf is not finished. */
   function stageSection(){
     const s = el('section');
     const pre = Progress.preStickers();
@@ -265,10 +265,15 @@ const Parent = (() => {
     const byHand = !!Store.data.g1Open;
     s.append(el('div.eyebrow', { text: 'next stage' }),
       el('h3', { text: '小学1年生の問題について' }));
-    s.append(el('p', { html: '入学前の48レベルのシールを<b>すべて集めると</b>、ホームに'
-      + '<b>「1ねんせいの きょうしつ」</b>が増えます。シールはレベルごとに2枚（クリアで1枚、'
-      + '全問1回目で正解するともう1枚・金色）で、全部で' + pre.total + '枚。'
-      + 'いまは <b>' + pre.got + ' / ' + pre.total + '</b> 枚です。' }));
+    s.append(el('p', { html: '入学前の' + pre.total + 'レベルを<b>すべてクリアすると</b>、ホームに'
+      + '<b>「1ねんせいの きょうしつ」</b>が増えます。いまは <b>' + pre.got + ' / ' + pre.total
+      + '</b> レベルです。クリアは★1つ以上（8問中4問を1回目で正解）で、'
+      + '3回まじめに挑戦すれば次のレベルは開くので、どこかで止まったままにはなりません。' }));
+    s.append(el('p', { text: '金色のシール（全問1回目で正解）は条件に入れていません。'
+      + '48レベルすべてで一発全問正解を出すには、このアプリの推奨ペース（1日1レベル）で'
+      + '半年をはるかに超えます。1年生の1学期の内容が1学期に間に合わないのでは意味がないので、'
+      + '扉の鍵は「クリアのシール48枚」だけにしてあります。金色のシールはシールブックに残り、'
+      + 'あとから取りに戻れる目標のままです。' }));
     s.append(el('p', { text: '中身は「先取りの計算」ではありません。1年生の1学期は、'
       + '入学前にやったことをもう一度、ちがう聞き方でたどり直します。'
       + '「同じものの集まり」（自分でまとまりを決めてから数える）と'

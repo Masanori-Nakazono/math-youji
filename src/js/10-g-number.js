@@ -191,19 +191,34 @@ function flashQuestion(api, o){
   api.choices.append(go);
 
   function ask(){
+    /* Getting it right and never seeing the dots again is half a lesson. This game
+       exists to make 7 *look* like「5と2」, so the arrangement has to come back at
+       the moment the child is told they were right — that is when it gets attached
+       to the number they said. */
+    const said = o.two ? `${numKana(a)}と${numKana(b)}で、${numKana(n)}。`
+               : o.rows && n > 5 ? `${numKana(5)}と${numKana(n - 5)}で、${numKana(n)}。`
+               : `${numKana(n)}だったね。`;
+    /* The praise the engine speaks lands first; naming the arrangement comes after
+       it, over the uncovered board, and the question waits for both. */
+    const reveal = revealed(() => {
+      board.classList.add('open');
+      api.later(() => Sound.say(said), 1050);
+    }, { delay: 2300 });
     if (o.two){
       api.setPrompt('ぜんぶで いくつ だった？', '全部でいくつだった？');
-      api.buildPad(n);
+      api.buildPad(n, reveal);
     } else {
       api.setPrompt('いくつ だった？', 'いくつだった？');
-      api.buildChoices(shuffle([n].concat(distractors(n, 3, 1, o.hi + 2))), n);
+      api.buildChoices(shuffle([n].concat(distractors(n, 3, 1, o.hi + 2))), n, reveal);
     }
     /* The hint is another look, longer and left up. The child is not being asked to
-       guess better; they are being asked to see, and you cannot see what is covered. */
+       guess better; they are being asked to see, and you cannot see what is covered
+       — which is also why it comes after the *first* mistake here and not the
+       second: 「もういちど やってみよう」 over a covered board is only a guess. */
     api.onHint(() => {
       board.classList.add('open');
       if (!$('.hintline', api.field)) api.field.append(el('div.hintline', { text: 'もういちど みせるね' }));
-    });
+    }, 1);
   }
 }
 
@@ -367,11 +382,16 @@ function nextBefore(api, hi){
     mode === 'next' ? n + ' の つぎ' : mode === 'before' ? n + ' の まえ' : (n - 1) + ' と ' + (n + 1) + ' の あいだ');
   api.setPrompt(html, speech);
   const line = el('div.numline');
+  let hole = null;
   for (let v = Math.max(1, ans - 3); v <= Math.min(hi, ans + 3); v++){
-    line.append(el('div.nn' + (v === ans ? '.gap.now' : ''), { text: v === ans ? '?' : String(v) }));
+    const cell = el('div.nn' + (v === ans ? '.gap.now' : ''), { text: v === ans ? '?' : String(v) });
+    if (v === ans) hole = cell;
+    line.append(cell);
   }
   api.field.append(line);
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, hi))), ans);
+  // the answer belongs in the line, where the child can see the run read straight
+  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, hi))), ans,
+    revealed(() => fillBlank(hole, ans)));
 }
 
 function skipCount(api){
@@ -382,9 +402,11 @@ function skipCount(api){
   api.item('skip' + step + ':' + ans, step + 'ずつ ふえて ' + ans);
   api.setPrompt(`${step}ずつ ふえて いくよ。つぎは？`, `${numKana(step)}ずつ増えていくよ。次は？`);
   const line = el('div.numline');
-  seq.forEach((v, i) => line.append(el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) })));
+  const cells = seq.map((v, i) => el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) }));
+  cells.forEach(c => line.append(c));
   api.field.append(line);
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, ans + step * 2, step))), ans);
+  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, ans + step * 2, step))), ans,
+    revealed(() => fillBlank(cells[3], ans)));
 }
 
 /* 「10から逆に数える方が難しく、効果があります」— the parent page has said so from
@@ -398,9 +420,11 @@ function countBack(api){
   api.item('back:' + ans, start + ' から ぎゃくに かぞえて ' + ans);
   api.setPrompt('1ずつ へって いくよ。つぎは？', '1ずつ減っていくよ。次は？');
   const line = el('div.numline');
-  seq.forEach((v, i) => line.append(el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) })));
+  const cells = seq.map((v, i) => el('div.nn' + (i === 3 ? '.gap.now' : ''), { text: i === 3 ? '?' : String(v) }));
+  cells.forEach(c => line.append(c));
   api.field.append(line, el('div.hintline', { text: 'ぎゃくむきに かぞえて みよう' }));
-  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, start + 2))), ans);
+  api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, start + 2))), ans,
+    revealed(() => fillBlank(cells[3], ans)));
   api.onHint(() => {
     if ($('.hint2', api.field)) return;
     api.field.append(el('div.hintline.hint2', {
