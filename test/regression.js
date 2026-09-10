@@ -962,6 +962,23 @@
         + ' live=' + promptLive + '/' + feedbackLive + ' size=' + roundSize);
   })();
 
+  /** the adult gate's current question, answered right; null when there is none */
+  function gateAnswer(){
+    const f = (q('#gate .q') || {}).textContent;
+    const m = f && f.match(/(\d+) × (\d+)/);
+    const want = m ? Number(m[1]) * Number(m[2]) : -1;
+    return qa('#gate .choice').find(b => Number(b.textContent) === want) || null;
+  }
+  /** answer the gate the way an adult does: every question in the run, right */
+  function passGate(){
+    for (let i = 0; i < 2; i++){
+      const b = gateAnswer();
+      if (!b) return false;
+      b.click();
+    }
+    return true;
+  }
+
   /* ---------- 30. missions persist completion and next-day reflection ---------- */
   (function missions(){
     K.Store.reset();
@@ -974,10 +991,7 @@
     K.Missions.open(mission);
     q('#mission .btn-accent').click();
     const gated = K.UI.currentName() === 'gate' && !K.Store.mission(day).done;
-    const formula = q('#gate .q').textContent.match(/(\d+) × (\d+)/);
-    const answer = formula ? Number(formula[1]) * Number(formula[2]) : -1;
-    const adultAnswer = qa('#gate .choice').find(b => Number(b.textContent) === answer);
-    if (adultAnswer) adultAnswer.click();
+    const adultAnswer = passGate();
     const review = K.Missions.yesterdayReview();
     K.Store.reviewMission(day);
     const old = new Date(); old.setDate(old.getDate() - 2);
@@ -1686,6 +1700,55 @@
     check('tapping a padlocked 小1 card is heard, not cancelled by the screen change',
       spoken, log.join(' | '));
     K.UI.show('home');
+    K.Store.reset();
+  })();
+
+  /* ---------- 65. the adult gate is not a game a child can win by tapping ----------
+     One four-way question with no wait: 25% a tap, 94% inside ten taps — and
+     behind it,「記録をすべて消す」. */
+  (function gateTakesTwo(){
+    K.Store.reset();
+    let passed = false;
+    const done = () => { passed = true; };
+    K.Parent.open(done);
+    gateAnswer().click();
+    const oneIsNotEnough = !passed && K.UI.currentName() === 'gate';
+    // a miss starts the run over and holds every button for a while
+    const before = q('#gate .q').textContent;
+    const right = gateAnswer();
+    qa('#gate .choice').find(b => b !== right).click();
+    const held = qa('#gate .choice').every(b => b.disabled) && q('#gate .q').textContent === before
+      && /まって/.test(q('#gate .gatestep').textContent);
+    right.click();                                    // a disabled button does nothing
+    const noThroughTheWait = !passed;
+    // opening the gate again starts a fresh run: two right in a row gets through
+    K.Parent.open(done);
+    const twoInARow = passGate() && passed;
+    check('the adult gate takes two right answers in a row, and a miss means a wait',
+      oneIsNotEnough && held && noThroughTheWait && twoInARow,
+      'one=' + oneIsNotEnough + ' held=' + held + ' waitHolds=' + noThroughTheWait + ' two=' + twoInARow);
+    K.UI.show('home');
+    K.Store.reset();
+  })();
+
+  /* ---------- 66. 「いまの おすすめ」 lets go of a level the child has already cleared ----------
+     Rescue had no exit: a cleared level at 50% was named every day — a child at
+     40% stayed there for a median of 49 days in simulation — and nothing new came
+     up. A stuck level the child has not cleared is still worth going back to. */
+  (function rescueHasAnExit(){
+    K.Store.reset();
+    K.Store.recordLevel('count', 0, 1, 4, 8);
+    K.Store.addSticker('count:0');
+    K.Store.data.recent['count:0'] = '10101010';            // cleared, then half right
+    const afterClear = K.Diagnostic.current();
+    const movedOn = !(afterClear.gameId === 'count' && afterClear.levelIndex === 0);
+    K.Store.data.recent['ten:0'] = '10001000';              // not cleared, and stuck
+    const stuck = K.Diagnostic.current();
+    const rescued = stuck.gameId === 'ten' && stuck.levelIndex === 0;
+    check('おすすめ rescues a stuck level until it is cleared, and then moves on',
+      movedOn && rescued,
+      'after clear=' + afterClear.gameId + ':' + afterClear.levelIndex
+        + ' · stuck=' + stuck.gameId + ':' + stuck.levelIndex);
     K.Store.reset();
   })();
 

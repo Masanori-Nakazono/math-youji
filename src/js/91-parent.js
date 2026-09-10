@@ -9,38 +9,64 @@ const Parent = (() => {
   let lastBackupMsg = null;   // survives the re-render that a successful import triggers
   let a = 0, b = 0, want = 0;
 
-  /* ---- simple adult gate ---- */
+  /* ---- adult gate ----
+     One four-way question with no wait let a child through by tapping: 25% a tap,
+     94% within ten taps, and the mission's「できた」button gave them every reason to
+     try. Behind it are「記録をすべて消す」and「1年生を開く」. Two right answers in a
+     row, and a wait after a miss, put a random tapper at 1 in 16 per run and at
+     five seconds a run — slow enough to stop being a game. An adult who knows the
+     answer is through in two taps. */
+  const GATE_RUN = 2, GATE_WAIT_S = 5;
+  let streak = 0, waitTimer = null;
   function buildGate(){
     if (gateNode) return gateNode;
     const q = el('div.q');
     const choices = el('div.choices');
+    const step = el('div.hint.gatestep', { 'aria-live': 'polite' });
     function roll(){
+      clearTimeout(waitTimer); waitTimer = null;
       a = ri(12, 19); b = ri(3, 9); want = a * b;
       q.textContent = a + ' × ' + b + ' = ?';
+      step.textContent = (streak + 1) + ' / ' + GATE_RUN + ' もんめ';
       clear(choices);
       const opts = shuffle([want, want + ri(3, 9), want - ri(3, 9), want + ri(10, 20)]);
       opts.forEach(v => choices.append(el('button.choice', {
         type: 'button', text: String(v),
         onclick(e){
+          if (waitTimer) return;
           if (v === want){
             Sound.sfx.correct();
+            if (++streak < GATE_RUN){ roll(); return; }
+            streak = 0;
             const next = afterGate;
             afterGate = null;
             if (next) next();
             else { render(); UI.show('parent'); }
+            return;
           }
-          else { e.currentTarget.classList.add('wrong'); Sound.sfx.wrong(); setTimeout(roll, 500); }
+          streak = 0;
+          e.currentTarget.classList.add('wrong');
+          Sound.sfx.wrong();
+          $$('.choice', choices).forEach(x => { x.disabled = true; });
+          let left = GATE_WAIT_S;
+          const tick = () => {
+            if (left <= 0){ roll(); return; }
+            step.textContent = 'ちがいます。' + left + 'びょう まってください';
+            left--;
+            waitTimer = setTimeout(tick, 1000);
+          };
+          tick();
         }
       })));
     }
     gateNode = el('div#gate', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){ Sound.sfx.tap(); clearTimeout(waitTimer); waitTimer = null; UI.show('home', { replace: true }); } }, '←'),
         el('h2', { text: 'おうちの かたへ' })),
       el('div.gate', null,
-        el('div.hint', { text: 'おとなの かた だけが すすめます。けいさんの こたえを えらんで ください。' }),
-        q, choices));
+        el('div.hint', { text: 'おとなの かた だけが すすめます。けいさんの こたえを ' + GATE_RUN + 'もん つづけて えらんで ください。' }),
+        step, q, choices));
     UI.register('gate', gateNode);
     gateNode._roll = roll;
     return gateNode;
@@ -49,6 +75,7 @@ const Parent = (() => {
   function open(onSuccess){
     buildGate();
     afterGate = typeof onSuccess === 'function' ? onSuccess : null;
+    streak = 0;
     gateNode._roll();
     UI.show('gate');
   }

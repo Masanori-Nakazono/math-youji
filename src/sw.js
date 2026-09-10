@@ -64,8 +64,10 @@ self.addEventListener('fetch', e => {
     return res;
   });
   // the refreshed copy is written after the page has its answer: keep the worker
-  // alive until it lands, or iOS may stop it half-way
-  if (e.waitUntil) e.waitUntil(network.then(() => stored, () => {}));
+  // alive until it lands, or iOS may stop it half-way. Settled either way, so an
+  // offline refresh behind a cache hit is not an unhandled rejection.
+  const settled = network.then(() => stored, () => {});
+  if (e.waitUntil) e.waitUntil(settled);
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then(hit =>
       hit || network.catch(() => offlineAnswer(req)))   // cache first, network refreshes it behind us

@@ -60,11 +60,13 @@ const Diagnostic = (() => {
     return null;
   }
 
-  /** The weakest open level with enough evidence to say so, or null. */
-  function weakestLevel(){
+  /** The weakest open level with enough evidence to say so, or null.
+      `unclearedOnly` leaves out levels that already have their clear sticker. */
+  function weakestLevel(unclearedOnly){
     let weakest = null;
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
       if (!levelOpen(g, i)) return;
+      if (unclearedOnly && cleared(g.id, i)) return;
       const n = Store.recentCount(g.id, i);
       if (n < 4) return;
       const acc = Store.recentAccuracy(g.id, i);
@@ -80,8 +82,13 @@ const Diagnostic = (() => {
   const STUCK = 0.60;
 
   function current(){
-    const weakest = weakestLevel();
-    if (weakest && weakest.acc < STUCK) return weakest;
+    /* Rescue is for a level the child has not got past yet. A cleared level that
+       has gone shaky is what きょうの れんしゅう and にがて あつめ are for — rescuing it
+       here had no exit: a child at 40% on a cleared level was named it day after day
+       (a median of 49 days in simulation) while nothing new came up. An uncleared
+       level does have one: clearing it takes it out of here. */
+    const stuck = weakestLevel(true);
+    if (stuck && stuck.acc < STUCK) return stuck;
 
     /* はじめの ぼうけん picked a starting point; honour it until it is cleared. */
     const first = Store.data.diagnostic && Store.data.diagnostic.recommended;
@@ -94,6 +101,7 @@ const Diagnostic = (() => {
 
     // everything open is cleared: go back to whatever is shakiest rather than
     // naming a level that has nothing left to give
+    const weakest = weakestLevel();
     if (weakest) return weakest;
     let lowest = null;
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
