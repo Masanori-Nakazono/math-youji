@@ -587,11 +587,33 @@
       const left = await caches.keys();
       if (left.length !== 1) problems.push('old caches survived: ' + left.join(','));
 
+      const swGet = async req => {
+        let p = null; const w = [];
+        await H.fetch({ request: typeof req === 'string' ? new Request(req) : req,
+                        respondWith: x => { p = x; }, waitUntil: x => w.push(x) });
+        const res = p && await p;
+        await Promise.all(w);
+        return res;
+      };
+      const isApp = async res => !!res && res.status === 200 && (await res.text()).indexOf('KazuApp') >= 0;
+
+      /* The deploy right after this one: its worker has just installed and thrown
+         the old cache away, and the page has not been opened online since. The app
+         has to be there from the precache alone — Pages serves it under
+         kazu-no-bouken.html as well as index.html, and only one of those was listed. */
+      const appUrl = location.href.split('?')[0];
+      offline = true;
+      if (!await isApp(await swGet(appUrl))) problems.push('the app page is not in the precache');
+      // a start URL the worker has never seen is still the one app, offline
+      const nav = new Request(new URL('from-the-home-screen.html', appUrl).href);
+      Object.defineProperty(nav, 'mode', { value: 'navigate' });
+      if (!await isApp(await swGet(nav))) problems.push('an unseen page load gets no app offline');
+      offline = false;
+
       /* Now the path a child actually takes: the app has been opened once, so the
          worker has seen and kept it. (Asking for './' instead would only prove the
          precache, and under the test server './' is a directory listing rather
          than the app it is on a real deploy.) */
-      const appUrl = location.href.split('?')[0];
       let warm = null;
       await H.fetch({ request: new Request(appUrl), respondWith: p => { warm = p; } });
       await warm;
@@ -1541,14 +1563,247 @@
     K.Store.reset();
   })();
 
+  /* ---------- 58. the words for a mistake fit the question it was made on ----------
+     A sum has two parts and no「ぜんぶ」on the screen, so 8+2 に 8 was being told
+     「それは ぜんぶの かずだね」; and 2+4 に 2 — the part the child could see — was
+     read as「＋か −か」because 4−2 is also 2. 「おなじ かずに しよう」 shows no sign
+     at all, and was told the same. */
+  (function missWordsFit(){
+    const cases = [
+      ['add:sum:8+2', 10, 8, 'part'],  ['add:sum:3+5', 8, 5, 'part'],
+      ['add:teensum:12+3', 15, 12, 'part'],
+      ['add:sum:2+4', 6, 2, 'part'],   ['add:sum:3+6', 9, 3, 'part'],
+      ['add:sum:7+2', 9, 5, 'opp'],    ['bond:com:3+2', 5, 3, 'part'],
+      ['bond:com:3+2', 5, 4, 'down'],  ['bond:dec:10-4', 6, 10, 'whole'],
+      ['bond:dec:10-4', 6, 4, 'part'], ['ten:ten:3', 7, 10, 'whole'],
+      ['sub:rest:9-4', 5, 9, 'whole'], ['sub:rest:9-4', 5, 13, 'opp'],
+      ['g1pair:diff1to1:7-4', 3, 11, 'opp'],
+      ['g1pair:same1to1:6-4', 2, 10, 'far'], ['g1pair:same1to1:7-4', 3, 4, 'up'],
+      ['g1pair:same1to1:7-4', 3, 7, 'far']
+    ];
+    if (typeof K.classifyMiss !== 'function'){
+      check('a mistake is named for what the question actually showed', false, 'KazuApp.classifyMiss is not exposed');
+      return;
+    }
+    const wrong = cases.filter(c => K.classifyMiss(c[0], c[1], c[2]) !== c[3])
+      .map(c => c[0] + ' ' + c[2] + '→' + K.classifyMiss(c[0], c[1], c[2]) + ' (want ' + c[3] + ')');
+    check('a mistake is named for what the question actually showed', !wrong.length, wrong.join(' | '));
+  })();
+
+  /* ---------- 59. 「ゆびで さしながら」 only where there is something to point at ----------
+     The recall levels hide the ten-frame on purpose; telling a child to count on
+     their fingers across a bare「10は4と？」 points at nothing. */
+  (function pointOnlyAtThings(){
+    K.Store.reset();
+    let bare = null, pointed = null;
+    for (let t = 0; t < 40 && bare == null; t++){
+      K.Session.startLevel(K.Games.byId.bond, 2);
+      const m = /^bond:dec:(\d+)-(\d+)$/.exec(S.item || '');
+      if (!m) continue;
+      const press = (+m[1]) - (+m[2]) + 1;
+      if (press === +m[1] || press === +m[2]) continue;      // that would be 'part' / 'whole'
+      const key = qa('#play .padkey').find(k => Number(k.textContent) === press);
+      if (!key) continue;
+      key.click();
+      if (S.missType === 'up') bare = q('#play .feedback').textContent;
+    }
+    for (let t = 0; t < 40 && pointed == null; t++){
+      K.Session.startLevel(K.Games.byId.count, 0);
+      qa('#play .obj').forEach(o => o.click());
+      S.flushTimers();
+      const ans = Number((S.item || '').split(':').pop());
+      const b = qa('#play .choices .choice').find(x => Number(x.textContent) === ans + 1);
+      if (!b) continue;
+      b.click();
+      if (S.missType === 'up') pointed = q('#play .feedback').textContent;
+    }
+    check('「ゆびで さしながら」is said over things to count, never over a bare sum',
+      bare != null && !/ゆびで/.test(bare) && pointed != null && /ゆびで/.test(pointed),
+      'recall=' + bare + ' · counting=' + pointed);
+    leavePlay();
+    K.Store.reset();
+  })();
+
+  /* ---------- 60. a first ★★★ hands over the gold sticker it announces ----------
+     The screen said「きんの シール を ゲット！」and only the plain sticker was
+     stored: the gold slot stayed empty until a second perfect run. */
+  (function goldOnFirstPerfect(){
+    K.Store.reset();
+    const perfect = () => {
+      K.Session.startLevel(K.Games.byId.bond, 0);
+      let guard = 0;
+      while (!onResult() && guard++ < 40){ S.forceCorrect(); S.flushTimers(); }
+      return (q('#result .newsticker') || {}).textContent || '';
+    };
+    const first = perfect();
+    const both = K.Store.hasSticker('bond:0') && K.Store.hasSticker('bond:0:g');
+    const again = perfect();
+    check('the first ★★★ earns the clear sticker and the gold one, and says so',
+      both && /きんの/.test(first) && again === '',
+      'stored both=' + both + ' · first="' + first + '" · again="' + again + '"');
+    K.Store.reset();
+  })();
+
+  /* ---------- 61. the classroom door stays open through a release ----------
+     The door was worked out from the shelf every time. A release that added one
+     入学前 level would have shut it on a child who had already gone through. */
+  (function doorStaysOpen(){
+    K.Store.reset();
+    K.Progress.gateSlots('pre').forEach(k => K.Store.addSticker(k));
+    const opened = K.Progress.g1Open();
+    const pre = K.Games.list.find(g => (g.stage || 'pre') === 'pre');
+    pre.levels.push(Object.assign({}, pre.levels[0]));            // "the next release"
+    let stillOpen, notByHand, survives;
+    try{
+      stillOpen = K.Progress.g1Open() && K.Progress.preStickers().got < K.Progress.preStickers().total;
+      K.Parent.render();
+      notByHand = !/おうちの方の操作/.test(q('#parent').textContent);
+      const text = K.Store.exportText();
+      K.Store.reset();
+      K.Store.importText(text, 'replace');
+      survives = K.Progress.g1Open();
+    } finally { pre.levels.pop(); }
+    check('once 小学1年生 has opened, a new 入学前 level does not shut it again',
+      opened && stillOpen && notByHand && survives && !K.Store.data.g1Open,
+      'opened=' + opened + ' afterNewLevel=' + stillOpen + ' notByHand=' + notByHand + ' backup=' + survives);
+    K.Store.reset();
+  })();
+
+  /* ---------- 62. the padlocked 小1 card says why before it moves on ----------
+     It queued its sentence and then switched screens, and switching screens
+     hushes whatever is queued — so the card said nothing at all. */
+  (function lockedCardSpeaks(){
+    K.Store.reset();
+    K.Home.render();
+    K.UI.show('home');
+    const log = [], say = K.Sound.say, hush = K.Sound.hush;
+    K.Sound.say = t => log.push('say:' + t);
+    K.Sound.hush = () => log.push('hush');
+    try{ q('#home .gamecard.locked').click(); }
+    finally { K.Sound.say = say; K.Sound.hush = hush; }
+    const lastHush = log.lastIndexOf('hush');
+    const spoken = log.slice(lastHush + 1).some(x => /^say:.*入学前/.test(x));
+    check('tapping a padlocked 小1 card is heard, not cancelled by the screen change',
+      spoken, log.join(' | '));
+    K.UI.show('home');
+    K.Store.reset();
+  })();
+
+  /* ---------- 63. the question stays readable once the answers arrive ----------
+     かぞえよう asks only after every object is counted. The buttons took height
+     from the play area, the board was never re-fitted, and it spilled up over the
+     question and the hint — on the very first game a child plays. */
+  async function promptStaysVisible(){
+    // a background tab never paints: fall back to a timer so the suite cannot hang
+    const frame = () => new Promise(r => { requestAnimationFrame(() => r()); setTimeout(r, 120); });
+    const frames = async n => { while (n-- > 0) await frame(); };
+    const inside = (sel, host) => {
+      const n = q(sel);
+      if (!n || n.hidden) return null;
+      const r = n.getBoundingClientRect();
+      const hit = doc.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!hit && !!hit.closest(host);
+    };
+    const problems = [];
+    K.Store.reset();
+    /* The iPad sizes the bug was seen at. The suite's own frame is roomier, and
+       there the board only just fits either way. */
+    const host = window.frameElement;
+    const was = host ? [host.style.width, host.style.height] : null;
+    try{
+      for (const [w, h] of [[1024, 768], [768, 1024]]){
+        if (host){ host.style.width = w + 'px'; host.style.height = h + 'px'; }
+        await frames(4);
+        for (const li of [0, 1]){
+          const at = w + 'x' + h + ' L' + (li + 1);
+          K.Session.startLevel(K.Games.byId.count, li);
+          await frames(3);
+          /* In the order a child produces it: the last tap re-fits the board to the
+             tall room, and the answers arrive 620 ms later. Running both in one
+             task would let the single fit see the buttons and hide the bug. */
+          qa('#play .obj').forEach(o => o.click());
+          await frames(4);
+          S.flushTimers();
+          await frames(4);
+          // the board itself, not what it clips: a count badge may poke past its edge
+          const field = q('#play .playfield').getBoundingClientRect();
+          const spill = qa('#play .playfield > *').filter(n => {
+            const r = n.getBoundingClientRect();
+            return (r.width || r.height) && (r.top < field.top - 2 || r.bottom > field.bottom + 2);
+          }).length;
+          if (spill) problems.push(at + ': the board spills out of the play area');
+          if (!inside('#play .prompt .txt', '.prompt')) problems.push(at + ': question covered');
+          const wrong = qa('#play .choices .choice').find(b => !b.classList.contains('correct')
+            && Number(b.textContent) !== Number((S.item || '').split(':').pop()));
+          if (wrong){
+            wrong.click();
+            await frames(3);
+            if (inside('#play .feedback', '.prompt') === false) problems.push(at + ': hint covered');
+          }
+        }
+      }
+    } finally {
+      if (host){ host.style.width = was[0]; host.style.height = was[1]; }
+    }
+    leavePlay();
+    check('after counting, the question and the hint are not hidden under the board',
+      !problems.length, problems.join(' | '));
+    K.Store.reset();
+  }
+
+  /* ---------- 64. a record that will not parse does not stop the saving ----------
+     One unreadable byte used to switch saving off for good on that device, and
+     「消す」and「読み込む」reported success while writing nothing. And a full disk
+     is not forever: the next save has to try again. */
+  async function unreadableRecord(){
+    const KEY = 'kazu-no-bouken.v1', ASIDE = KEY + '.unreadable';
+    K.Store.flush();
+    const keep = localStorage.getItem(KEY);
+    const broken = '{"stars":{"count:0":3},"stickers":["count:0"';
+    localStorage.setItem(KEY, broken);
+    const f = doc.createElement('iframe');
+    f.style.cssText = 'position:fixed;left:-3000px;top:0;width:900px;height:640px;border:0';
+    await new Promise(r => { f.onload = r; f.src = location.href.split('?')[0] + '?unreadable=' + Date.now(); doc.body.append(f); });
+    const W = f.contentWindow, S2 = W.KazuApp.Store;
+    const read = () => { try{ return JSON.parse(localStorage.getItem(KEY)); }catch(e){ return null; } };
+    const detail = {};
+    try{
+      detail.started = S2.persists && S2.unreadable;
+      detail.aside = localStorage.getItem(ASIDE) === broken;
+      S2.addSticker('count:1'); S2.flush();
+      detail.saves = !!read() && read().stickers.indexOf('count:1') >= 0;
+      const backup = S2.exportText();
+      S2.reset(); S2.flush();
+      detail.reset = !!read() && read().stickers.length === 0;
+
+      // a write that does not land is reported, and the next one tries again
+      const real = W.Storage.prototype.setItem;
+      W.Storage.prototype.setItem = function(){ throw new W.DOMException('full', 'QuotaExceededError'); };
+      let r;
+      try{ r = S2.importText(backup, 'replace'); }
+      finally { W.Storage.prototype.setItem = real; }
+      detail.toldNotSaved = r.ok && r.saved === false && /保存できませんでした/.test(r.msg) && S2.storage === 'failed';
+      S2.addSticker('count:2'); S2.flush();
+      detail.retried = S2.storage === 'ok' && !!read() && read().stickers.indexOf('count:2') >= 0;
+    } finally {
+      f.remove();
+      localStorage.removeItem(ASIDE);
+      if (keep == null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, keep);
+    }
+    check('an unreadable record is set aside, and saving, 消す and 読み込む keep working',
+      Object.keys(detail).length === 6 && Object.values(detail).every(Boolean), JSON.stringify(detail));
+  }
+
   function finish(){
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();
     return { pass: results.filter(r => r.ok).length, fail: results.filter(r => !r.ok).length, results };
   }
 
-  // the only asynchronous check in the suite; everything above is synchronous
-  return serviceWorkerOffline()
-    .catch(e => check('the app still opens with no network', false, String(e && e.message || e)))
+  // everything above is synchronous; these three wait on the browser
+  const settle = (name, p) => p.catch(e => check(name, false, String(e && e.message || e)));
+  return settle('the app still opens with no network', serviceWorkerOffline())
+    .then(() => settle('after counting, the question and the hint are not hidden under the board', promptStaysVisible()))
+    .then(() => settle('an unreadable record is set aside, and saving, 消す and 読み込む keep working', unreadableRecord()))
     .then(finish);
 })();

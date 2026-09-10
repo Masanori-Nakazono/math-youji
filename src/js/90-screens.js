@@ -135,9 +135,10 @@ const Home = (() => {
       type: 'button', title: g.name + '　ぜんぶの レベルを クリアすると あそべるよ',
       onclick(){
         Sound.sfx.tap();
-        Sound.say('入学前のレベルを全部クリアすると、遊べるようになるよ。', { delay: 120 });
         Book.render();
         UI.show('book');
+        // after the switch: UI.show hushes anything queued before it
+        Sound.say('入学前のレベルを全部クリアすると、遊べるようになるよ。', { delay: 120 });
       }
     },
       el('div.ico', { text: g.ico }),
@@ -356,7 +357,8 @@ const Result = (() => {
        the home screen. Saying how many are left, at the moment one is earned, is
        what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
        ones no longer move this number, so counting stickers here would stall. */
-    if (r.sticker && !r.unlockedG1 && !Progress.g1Open()){
+    const stickers = r.stickers || [];
+    if (stickers.length && !r.unlockedG1 && !Progress.g1Open()){
       const st = Progress.preStickers();
       const left = Math.max(0, st.total - st.got);
       if (left) inner.append(el('div.stagenext' + (left <= 6 ? '.nearly' : ''), null,
@@ -404,10 +406,12 @@ const Result = (() => {
         el('div.l', { text: aimed.length ? 'つぎは これを もういちど（タップで れんしゅう）'
                                          : 'つぎは これを もういちど' }), list));
     }
-    if (r.sticker){
-      inner.append(el('div.newsticker' + (r.sticker.gold ? '.gold' : ''), null,
-        el('div.e', { text: r.sticker.emoji }),
-        el('div.l', { text: r.sticker.gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' })));
+    if (stickers.length){
+      const gold = stickers.some(x => x.gold);
+      inner.append(el('div.newsticker' + (gold ? '.gold' : ''), null,
+        el('div.e', { text: stickers.map(x => x.emoji).join(' ') }),
+        el('div.l', { text: stickers.length > 1 ? 'シール と きんの シール を ゲット！'
+                          : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' })));
     }
     if (r.mode === 'diagnostic' && r.recommended){
       const g = Games.byId[r.recommended.gameId];

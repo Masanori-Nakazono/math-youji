@@ -12,10 +12,15 @@
    less likely to throw away the localStorage the records live in. */
 'use strict';
 
-const VERSION = '9060aee24935';
+const VERSION = 'a0cecc21c522';
 const CACHE   = 'kazu-no-bouken-' + VERSION;
-const SHELL   = ['./', './index.html', './manifest.webmanifest',
-                 './icon-180.png', './icon-192.png', './icon-512.png'];
+/* Every name the app itself is served under. Pages publishes the one file twice
+   (index.html and kazu-no-bouken.html), and a name missing here was only cached
+   once it had been opened — so after the next deploy's worker cleared the old
+   cache, that name could not open offline until it had been visited online again. */
+const PAGES   = ['./kazu-no-bouken.html', './index.html', './'];
+const SHELL   = PAGES.concat(['./manifest.webmanifest',
+                 './icon-180.png', './icon-192.png', './icon-512.png']);
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -36,20 +41,33 @@ self.addEventListener('activate', e => {
   );
 });
 
+/* Offline, and this exact URL was never stored. A page load is always the app —
+   there is only one page — so answer it with whichever copy of the app is here,
+   rather than a blank error screen on a start URL the worker happens not to know. */
+function offlineAnswer(req){
+  if (req.mode !== 'navigate') return Response.error();
+  return caches.open(CACHE)
+    .then(c => PAGES.reduce((p, u) => p.then(r => r || c.match(u)), Promise.resolve(null)))
+    .then(r => r || Response.error(), () => Response.error());
+}
+
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  let stored = Promise.resolve();
+  const network = fetch(req).then(res => {
+    // opaque responses are the Google Fonts files; worth keeping too
+    if (res && (res.ok || res.type === 'opaque')){
+      const copy = res.clone();
+      stored = caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+    }
+    return res;
+  });
+  // the refreshed copy is written after the page has its answer: keep the worker
+  // alive until it lands, or iOS may stop it half-way
+  if (e.waitUntil) e.waitUntil(network.then(() => stored, () => {}));
   e.respondWith(
-    caches.match(req, { ignoreSearch: true }).then(hit => {
-      const fresh = fetch(req).then(res => {
-        // opaque responses are the Google Fonts files; worth keeping too
-        if (res && (res.ok || res.type === 'opaque')){
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
-        }
-        return res;
-      }).catch(() => hit || Response.error());
-      return hit || fresh;          // cache first, network refreshes it behind us
-    })
+    caches.match(req, { ignoreSearch: true }).then(hit =>
+      hit || network.catch(() => offlineAnswer(req)))   // cache first, network refreshes it behind us
   );
 });

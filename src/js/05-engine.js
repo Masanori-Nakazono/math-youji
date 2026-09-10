@@ -99,9 +99,15 @@ const Progress = (() => {
 
   /** true once every 入学前 level is cleared — or once a parent opened the door by hand */
   function g1Open(){
-    if (Store.data.g1Open) return true;
+    if (Store.data.g1Open || Store.data.g1Reached) return true;
     const c = count('pre');
-    return c.total > 0 && c.got >= c.total;
+    if (!(c.total > 0 && c.got >= c.total)) return false;
+    /* Written down the first time it is true. Computing it afresh every time is
+       what let a release that adds a 入学前 level lock a child out of a room they
+       had already walked into. Kept apart from `g1Open`, which is the parent's
+       hand on the door and is reported as such. */
+    Store.setPref('g1Reached', true);
+    return true;
   }
 
   return {
@@ -257,6 +263,21 @@ const Session = (() => {
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
   }
   function clearFeedback(){ feedbackEl.hidden = true; clear(feedbackEl); }
+
+  /** Is there anything on the board the child could count right now? The recall
+      levels keep the ten-frame back until the hint, and ぱっと みて hides its dots
+      on purpose — telling a child to point at things that are not there is noise. */
+  const COUNTABLE = '.obj, .dot, .item, .qi, .pairitem, .cell.tappable';
+  function hasCountables(){
+    return $$(COUNTABLE, fieldEl).some(n => {
+      /* Not opacity: the whole screen fades in, and a tap during that fade is
+         still a tap over things to count. ぱっと みて lays a cover over its dots. */
+      if (n.closest('.flashboard:not(.open)')) return false;
+      if (n.checkVisibility && !n.checkVisibility({ visibilityProperty: true })) return false;
+      const r = n.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+  }
   function disarmQuit(){
     quitArmed = false;
     clearTimeout(quitTimer);
@@ -790,7 +811,7 @@ const Session = (() => {
     }
     /* Before the hint: name the mistake if we can read it. 「1つ多く数えた」 and
        「見えている方を言った」 need different words, and the generic line said neither. */
-    const line = missChild(missType);
+    const line = missChild(missType, hasCountables());
     showFeedback('oops', line || 'もういちど やってみよう');
     Sound.say(line ? line.replace(/\s+/g, '') : '惜しいね。もう一度やってみよう。', { delay: 260 });
   }
@@ -864,7 +885,10 @@ const Session = (() => {
     // a session that did not pass should not get a party; it gets an invitation
     if (stars >= 1){ Sound.sfx.finish(); UI.confetti(60); }
     else Sound.sfx.place();
-    let newSticker = null;
+    /* A first clear with every answer right first time earns both stickers — the
+       clear and the gold — exactly as the book promises. Handing out only the
+       plain one while the screen said「きんの シール」left the gold slot empty. */
+    const newStickers = [];
     /* The last sticker on the shelf is the moment the 小1 classroom opens, and the
        child has to be told so on the screen they are already looking at. Read the
        gate before the sticker is handed out, so「もう開いていた」and「いま開いた」
@@ -875,11 +899,9 @@ const Session = (() => {
       Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
       if (swift) Store.recordSwift(curGame.id, curLevelIdx);
       // a sticker means "cleared", so it waits for a pass
-      if (stars >= 1){
-        if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
-        else if (stars === 3 && Store.addSticker(key + ':g')){
-          newSticker = { emoji: stickerFor(key + ':g'), gold: true };
-        }
+      if (stars >= 1 && Store.addSticker(key)) newStickers.push({ emoji: stickerFor(key), gold: false });
+      if (stars === 3 && Store.addSticker(key + ':g')){
+        newStickers.push({ emoji: stickerFor(key + ':g'), gold: true });
       }
     } else if (mode === 'diagnostic'){
       const recommended = Diagnostic.recommendFrom(sessionOutcomes);
@@ -889,7 +911,7 @@ const Session = (() => {
       else Store.recordFocus(firstTryRight, total);
       // one sticker per calendar day, per set
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
-      if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
+      if (Store.addSticker(key)) newStickers.push({ emoji: stickerFor(key), gold: stars === 3 });
     }
     const justOpenedG1 = !wasOpen && Progress.g1Open();
     if (justOpenedG1){
@@ -901,7 +923,7 @@ const Session = (() => {
     const primaryGameId = mode === 'level' && curGame ? curGame.id
       : Object.keys(gameCounts).sort((a, b) => gameCounts[b] - gameCounts[a])[0] || null;
     Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
-                  sticker: newSticker, shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
+                  stickers: newStickers, shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
                   focusKeys: focusKeys.slice(), swift, unlockedG1: justOpenedG1,
                   recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
                   lastGameId: primaryGameId });

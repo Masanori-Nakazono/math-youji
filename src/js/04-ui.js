@@ -171,6 +171,20 @@ const UI = (() => {
     if (window.MutationObserver){
       new MutationObserver(ping).observe(field, { childList: true, subtree: true, characterData: true });
     }
+    /* The room changes size too, not only its contents: answer buttons that arrive
+       after the question (かぞえよう asks only once everything is counted) take
+       height from the field, and a board still sized for the taller room spilled
+       up over the question and the hint. Fitting only resizes what is inside, so
+       the field's own box settles and this does not loop. */
+    if (window.ResizeObserver){
+      let w = 0, h = 0;
+      new ResizeObserver(entries => {
+        const r = entries[entries.length - 1].contentRect;
+        if (Math.abs(r.width - w) < 1 && Math.abs(r.height - h) < 1) return;
+        w = r.width; h = r.height;
+        ping();
+      }).observe(field);
+    }
     window.addEventListener('resize', ping);
     return ping;
   }

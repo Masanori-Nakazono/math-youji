@@ -600,9 +600,23 @@ const Parent = (() => {
       Home.render();
       render();
     });
-    if (!Store.persists){
-      s.append(el('p', { style: { color: 'var(--oops-ink)', fontWeight: 800 },
-        text: 'この開き方では記録が保存できません（ファイルを直接開いた場合やプライベートブラウズでは、iPad 側がデータの保存を許可しません）。Safari で開いてから 共有 → ホーム画面に追加 し、そのアイコンから起動してください。' }));
+    /* Three different problems, three different things for an adult to do. They
+       used to share one sentence about file:// and private browsing, which was
+       wrong for a full disk and wrong for a record that simply would not parse. */
+    const storageNote = [];
+    if (Store.unreadable){
+      storageNote.push('この端末に残っていた記録が読み取れなかったため、新しい記録で始めています。'
+        + '読み取れなかった記録は消さずに端末内に残してあります。書き出したファイルがあれば、'
+        + 'バックアップの欄から読み込んで戻せます。');
+    }
+    if (Store.storage === 'unavailable'){
+      storageNote.push('この開き方では記録が保存できません（ファイルを直接開いた場合やプライベートブラウズでは、iPad 側がデータの保存を許可しません）。Safari で開いてから 共有 → ホーム画面に追加 し、そのアイコンから起動してください。');
+    } else if (Store.storage === 'failed'){
+      storageNote.push('記録を書き込めませんでした（端末の空き容量が足りない可能性があります）。'
+        + '空きができれば、次に遊んだときから自動で保存が再開します。念のため、いまの記録を書き出しておいてください。');
+    }
+    if (storageNote.length){
+      s.append(el('p', { style: { color: 'var(--oops-ink)', fontWeight: 800 }, text: storageNote.join('') }));
     }
     s.append(el('p', { style: { marginTop: 'calc(var(--u)*.9)' },
       text: '記録はこの端末の中だけに保存されます。サーバーには何も送信されません。' }), reset);
@@ -640,7 +654,8 @@ const Parent = (() => {
       el('span', { text: k }),
       el('b', { text: v, style: { color: warn ? 'var(--oops-ink)' : 'var(--ink)', textAlign: 'right' } }));
     rows.append(row('いまの保存先', Store.origin, Store.origin === 'file://'));
-    rows.append(row('保存の可否', Store.persists ? '保存できます' : '保存できません', !Store.persists));
+    rows.append(row('保存の可否', Store.persists ? '保存できます'
+      : Store.storage === 'failed' ? '書き込みに失敗しています' : '保存できません', !Store.persists));
     rows.append(row('ブラウザが記録を保持する設定', persistState, false));
     s.append(rows);
     if (persistState !== '許可されています'){
@@ -651,7 +666,7 @@ const Parent = (() => {
         'iPadOS が自動的に消すことがあります。' }));
     }
 
-    const status = el('p', { style: { fontWeight: 800, color: lastBackupMsg && lastBackupMsg.ok ? 'var(--good-ink)' : 'var(--oops-ink)' },
+    const status = el('p', { style: { fontWeight: 800, color: lastBackupMsg && lastBackupMsg.ok && lastBackupMsg.saved !== false ? 'var(--good-ink)' : 'var(--oops-ink)' },
       text: lastBackupMsg ? lastBackupMsg.msg : '' });
     lastBackupMsg = null;
     const stamp = () => {

@@ -20,11 +20,16 @@
 'use strict';
 
 /* The vocabulary. `child` is read out at the first mistake, in the words a
-   five-year-old reads; `parent` is the sentence the dashboard writes. */
+   five-year-old reads; `parent` is the sentence the dashboard writes.
+   `bare` replaces `child` when the screen has nothing on it to count: the recall
+   levels hide the ten-frame on purpose, and「ゆびで さしながら」over a bare
+   「3と2で？」 points at something that is not there. */
 const MISS_KINDS = {
   up:    { child: 'もういちど、ゆびで さしながら かぞえて みよう',
+           bare:  'おしい！ もういちど かんがえて みよう',
            parent: '1つ多く数えています' },
   down:  { child: 'もういちど、ゆびで さしながら かぞえて みよう',
+           bare:  'おしい！ もういちど かんがえて みよう',
            parent: '1つ少なく数えています' },
   part:  { child: 'それは みえて いる ほうの かずだね',
            parent: '答えではなく、問題に出ている数をそのまま答えています' },
@@ -43,7 +48,12 @@ const MISS_KINDS = {
   far:   { child: null,
            parent: '見当がついていない答えが混じっています' }
 };
-const missChild  = t => (MISS_KINDS[t] && MISS_KINDS[t].child) || null;
+/** `countable`: is there anything on the screen the child could count right now? */
+const missChild  = (t, countable) => {
+  const k = MISS_KINDS[t];
+  if (!k) return null;
+  return (countable === false && k.bare) || k.child || null;
+};
 const missParent = t => (MISS_KINDS[t] && MISS_KINDS[t].parent) || null;
 /* `far` and `taught` are true, but neither is a *misconception*: naming them in a
    list headed「つまずきの型」would put noise where a parent looks for a lever. */
@@ -70,30 +80,39 @@ function classifyMiss(itemKey, answer, given){
   const g = Number(given), a = Number(answer);
   if (!Number.isFinite(g) || !Number.isFinite(a) || g === a) return null;
 
-  /* The numbers the question put on the screen: [the part that is shown, the whole].
-     Answering one of them back is not a slip, it is a reading of the question. */
-  let shown = null;
-  if ((m = /^dec:(\d+)-(\d+)$/.exec(rest)))                     shown = [+m[2], +m[1]];
-  else if ((m = /^ten:(\d+)$/.exec(rest)))                      shown = [+m[1], 10];
-  else if ((m = /^teensplit:(\d+)$/.exec(rest)))                shown = [10, +m[1]];
-  else if ((m = /^com:(\d+)\+(\d+)$/.exec(rest)))               shown = [+m[1], +m[2]];
+  /* The numbers the question put on the screen. Answering one of them back is not
+     a slip, it is a reading of the question — and it outranks every other reading
+     below: 2+4 に 2 is「見えている方を言った」even though 4−2 is also 2.
+
+     In a sum both numbers are parts, so neither is「ぜんぶ」: 8+2 に 8 is the part
+     the child could see, not the whole. `whole` only exists where the question
+     shows one — 10は4といくつ, 9−4. */
+  let shown = null, whole = null, opp = null;
+  if ((m = /^dec:(\d+)-(\d+)$/.exec(rest)))           { shown = [+m[2], +m[1]]; whole = +m[1]; }
+  else if ((m = /^ten:(\d+)$/.exec(rest)))            { shown = [+m[1], 10];    whole = 10; }
+  else if ((m = /^teensplit:(\d+)$/.exec(rest)))      { shown = [10, +m[1]];    whole = +m[1]; }
+  // 「3と2で」 has no sign on it, so there is no other operation to have picked
+  else if ((m = /^com:(\d+)\+(\d+)$/.exec(rest)))       shown = [+m[1], +m[2]];
   else if ((m = /^(?:sum|teensum):(\d+)\+(\d+)$/.exec(rest))){
-    if (g === Math.abs(+m[1] - +m[2])) return 'opp';            // subtracted instead
     shown = [+m[1], +m[2]];
+    opp = Math.abs(+m[1] - +m[2]);                              // subtracted instead
   }
-  else if ((m = /^(?:rest|diff|teenrest|diff1to1|same1to1):(\d+)-(\d+)$/.exec(rest))){
-    if (g === (+m[1]) + (+m[2])) return 'opp';                  // added instead
-    shown = [+m[1], +m[2]];
+  else if ((m = /^(?:rest|diff|teenrest|diff1to1):(\d+)-(\d+)$/.exec(rest))){
+    shown = [+m[1], +m[2]]; whole = +m[1];
+    opp = (+m[1]) + (+m[2]);                                    // added instead
   }
+  /* same1to1 (「おなじ かずに しよう」) shows two rows and no numbers or sign at all,
+     so neither「見えている数」nor「＋か −か」is something the child could have read.
+     It falls through to the count-slip reading. */
 
   if (shown){
-    const whole = Math.max(shown[0], shown[1]);
-    if (g === whole && whole !== a) return 'whole';
+    if (whole != null && g === whole && whole !== a) return 'whole';
     /* A value can be both「問題に出ている数」and「答えの1つ手前」(9−4 に 4 と答える).
        Read it as the first: at five, saying back a number you can see is the
        commoner move, and it is the one that changes what an adult says next. */
     if (g === shown[0] || g === shown[1]) return 'part';
   }
+  if (opp != null && g === opp) return 'opp';
 
   if (g === a + 1) return 'up';
   if (g === a - 1) return 'down';

@@ -40,6 +40,10 @@ const Store = (() => {
        not be held behind a padlock they cannot move — the same reason a level opens
        after three honest attempts. Once true it stays true. */
     g1Open: false,
+    /* Set by the app the first time every 入学前 level is cleared. The door is
+       worked out from the shelf, and a release that adds a 入学前 level would
+       otherwise shut it again on a child who had already gone through. */
+    g1Reached: false,
     /* Day number of the last export. Six months of records live in one localStorage
        key on a device whose OS is documented to throw them away, and the only
        defence — 書き出す — sat behind an adult gate that nobody had a reason to open.
@@ -53,22 +57,43 @@ const Store = (() => {
     createdAt: Date.now()
   });
 
-  let mem = blank(), ok = true;
+  /* Three different failures, kept apart because each needs a different sentence
+     on the parent page:
+       avail      — can this page use localStorage at all (blocked site data,
+                    some file:// origins). Nothing is written.
+       ok         — did the last write land. A full disk is not permanent, so the
+                    next save tries again instead of giving up for good.
+       unreadable — there was a record and it would not parse. It used to switch
+                    saving off for ever on that device, and「消す」and「読み込む」
+                    reported success while writing nothing. Now the bytes are set
+                    aside under their own key and a fresh record starts. */
+  let mem = blank(), avail = true, ok = true, unreadable = false;
+  const ASIDE = KEY + '.unreadable';
 
   try{
     const raw = localStorage.getItem(KEY);
-    if (raw) mem = Object.assign(blank(), JSON.parse(raw));
-  }catch(e){ ok = false; }
+    if (raw){
+      let parsed = null;
+      try{ parsed = JSON.parse(raw); }catch(e){}
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)){
+        mem = Object.assign(blank(), parsed);
+      } else {
+        unreadable = true;
+        // if the copy cannot be made, the original is the only one: leave it be
+        try{ localStorage.setItem(ASIDE, raw); }catch(e){ avail = false; }
+      }
+    }
+  }catch(e){ avail = false; }
 
   let pending = null;
   function writeNow(){
-    if (!ok) return;
+    if (!avail) return;
     clearTimeout(pending); pending = null;
-    try{ localStorage.setItem(KEY, JSON.stringify(mem)); }
-    catch(e){ ok = false; }          // quota, private mode, or a file:// origin
+    try{ localStorage.setItem(KEY, JSON.stringify(mem)); ok = true; }
+    catch(e){ ok = false; }          // quota or private mode: the next save tries again
   }
   function save(){
-    if (!ok) return;
+    if (!avail) return;
     clearTimeout(pending);
     pending = setTimeout(writeNow, 120);
   }
@@ -189,7 +214,7 @@ const Store = (() => {
       if (typeof data.name !== 'string') return null;
       out.name = data.name.slice(0, 12);
     }
-    for (const k of ['sfx', 'voice', 'g1Open']){
+    for (const k of ['sfx', 'voice', 'g1Open', 'g1Reached']){
       if (data[k] !== undefined){
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];
@@ -275,6 +300,7 @@ const Store = (() => {
     }
     // a stage that has been opened on either device stays open
     out.g1Open = !!(base.g1Open || add.g1Open);
+    out.g1Reached = !!(base.g1Reached || add.g1Reached);
     out.backupAt = maxNum(base.backupAt, add.backupAt);
     out.schoolYear = base.schoolYear || add.schoolYear || 0;
     out.name = base.name || add.name || '';
@@ -300,8 +326,14 @@ const Store = (() => {
     mem = next;
     writeNow();
     const after = Object.keys(mem.stars || {}).length;
-    return { ok: true, msg: `読み込みました（★のついたレベル ${before} → ${after}、シール ${mem.stickers.length} 枚）`,
-             savedAt: parsed.savedAt || null };
+    const summary = `（★のついたレベル ${before} → ${after}、シール ${mem.stickers.length} 枚）`;
+    // the record is in use either way; say plainly when it will not outlive the app
+    if (!(avail && ok)){
+      return { ok: true, saved: false, savedAt: parsed.savedAt || null,
+               msg: '読み込みましたが、この端末に保存できませんでした' + summary
+                  + '。アプリを閉じると元に戻ります。' };
+    }
+    return { ok: true, saved: true, msg: '読み込みました' + summary, savedAt: parsed.savedAt || null };
   }
 
   /** How much this fact is owed a turn: 0 (fresh and solid) … ~2 (missed, or long unseen).
@@ -340,7 +372,11 @@ const Store = (() => {
   return {
     get data(){ return mem; },
     /** false when this device/origin cannot persist — the parent page says so. */
-    get persists(){ return ok; },
+    get persists(){ return avail && ok; },
+    /** why not: 'ok' | 'unavailable' (no storage for this page) | 'failed' (a write did not land) */
+    get storage(){ return !avail ? 'unavailable' : ok ? 'ok' : 'failed'; },
+    /** the record on this device would not parse; its bytes were kept aside */
+    get unreadable(){ return unreadable; },
     get origin(){ return location.origin === 'null' ? 'file://' : location.origin; },
     exportText, importText,
     todayKey,

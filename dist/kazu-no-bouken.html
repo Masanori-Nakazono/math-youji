@@ -2423,6 +2423,10 @@ const Store = (() => {
        not be held behind a padlock they cannot move — the same reason a level opens
        after three honest attempts. Once true it stays true. */
     g1Open: false,
+    /* Set by the app the first time every 入学前 level is cleared. The door is
+       worked out from the shelf, and a release that adds a 入学前 level would
+       otherwise shut it again on a child who had already gone through. */
+    g1Reached: false,
     /* Day number of the last export. Six months of records live in one localStorage
        key on a device whose OS is documented to throw them away, and the only
        defence — 書き出す — sat behind an adult gate that nobody had a reason to open.
@@ -2436,22 +2440,43 @@ const Store = (() => {
     createdAt: Date.now()
   });
 
-  let mem = blank(), ok = true;
+  /* Three different failures, kept apart because each needs a different sentence
+     on the parent page:
+       avail      — can this page use localStorage at all (blocked site data,
+                    some file:// origins). Nothing is written.
+       ok         — did the last write land. A full disk is not permanent, so the
+                    next save tries again instead of giving up for good.
+       unreadable — there was a record and it would not parse. It used to switch
+                    saving off for ever on that device, and「消す」and「読み込む」
+                    reported success while writing nothing. Now the bytes are set
+                    aside under their own key and a fresh record starts. */
+  let mem = blank(), avail = true, ok = true, unreadable = false;
+  const ASIDE = KEY + '.unreadable';
 
   try{
     const raw = localStorage.getItem(KEY);
-    if (raw) mem = Object.assign(blank(), JSON.parse(raw));
-  }catch(e){ ok = false; }
+    if (raw){
+      let parsed = null;
+      try{ parsed = JSON.parse(raw); }catch(e){}
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)){
+        mem = Object.assign(blank(), parsed);
+      } else {
+        unreadable = true;
+        // if the copy cannot be made, the original is the only one: leave it be
+        try{ localStorage.setItem(ASIDE, raw); }catch(e){ avail = false; }
+      }
+    }
+  }catch(e){ avail = false; }
 
   let pending = null;
   function writeNow(){
-    if (!ok) return;
+    if (!avail) return;
     clearTimeout(pending); pending = null;
-    try{ localStorage.setItem(KEY, JSON.stringify(mem)); }
-    catch(e){ ok = false; }          // quota, private mode, or a file:// origin
+    try{ localStorage.setItem(KEY, JSON.stringify(mem)); ok = true; }
+    catch(e){ ok = false; }          // quota or private mode: the next save tries again
   }
   function save(){
-    if (!ok) return;
+    if (!avail) return;
     clearTimeout(pending);
     pending = setTimeout(writeNow, 120);
   }
@@ -2572,7 +2597,7 @@ const Store = (() => {
       if (typeof data.name !== 'string') return null;
       out.name = data.name.slice(0, 12);
     }
-    for (const k of ['sfx', 'voice', 'g1Open']){
+    for (const k of ['sfx', 'voice', 'g1Open', 'g1Reached']){
       if (data[k] !== undefined){
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];
@@ -2658,6 +2683,7 @@ const Store = (() => {
     }
     // a stage that has been opened on either device stays open
     out.g1Open = !!(base.g1Open || add.g1Open);
+    out.g1Reached = !!(base.g1Reached || add.g1Reached);
     out.backupAt = maxNum(base.backupAt, add.backupAt);
     out.schoolYear = base.schoolYear || add.schoolYear || 0;
     out.name = base.name || add.name || '';
@@ -2683,8 +2709,14 @@ const Store = (() => {
     mem = next;
     writeNow();
     const after = Object.keys(mem.stars || {}).length;
-    return { ok: true, msg: `読み込みました（★のついたレベル ${before} → ${after}、シール ${mem.stickers.length} 枚）`,
-             savedAt: parsed.savedAt || null };
+    const summary = `（★のついたレベル ${before} → ${after}、シール ${mem.stickers.length} 枚）`;
+    // the record is in use either way; say plainly when it will not outlive the app
+    if (!(avail && ok)){
+      return { ok: true, saved: false, savedAt: parsed.savedAt || null,
+               msg: '読み込みましたが、この端末に保存できませんでした' + summary
+                  + '。アプリを閉じると元に戻ります。' };
+    }
+    return { ok: true, saved: true, msg: '読み込みました' + summary, savedAt: parsed.savedAt || null };
   }
 
   /** How much this fact is owed a turn: 0 (fresh and solid) … ~2 (missed, or long unseen).
@@ -2723,7 +2755,11 @@ const Store = (() => {
   return {
     get data(){ return mem; },
     /** false when this device/origin cannot persist — the parent page says so. */
-    get persists(){ return ok; },
+    get persists(){ return avail && ok; },
+    /** why not: 'ok' | 'unavailable' (no storage for this page) | 'failed' (a write did not land) */
+    get storage(){ return !avail ? 'unavailable' : ok ? 'ok' : 'failed'; },
+    /** the record on this device would not parse; its bytes were kept aside */
+    get unreadable(){ return unreadable; },
     get origin(){ return location.origin === 'null' ? 'file://' : location.origin; },
     exportText, importText,
     todayKey,
@@ -3305,6 +3341,20 @@ const UI = (() => {
     if (window.MutationObserver){
       new MutationObserver(ping).observe(field, { childList: true, subtree: true, characterData: true });
     }
+    /* The room changes size too, not only its contents: answer buttons that arrive
+       after the question (かぞえよう asks only once everything is counted) take
+       height from the field, and a board still sized for the taller room spilled
+       up over the question and the hint. Fitting only resizes what is inside, so
+       the field's own box settles and this does not loop. */
+    if (window.ResizeObserver){
+      let w = 0, h = 0;
+      new ResizeObserver(entries => {
+        const r = entries[entries.length - 1].contentRect;
+        if (Math.abs(r.width - w) < 1 && Math.abs(r.height - h) < 1) return;
+        w = r.width; h = r.height;
+        ping();
+      }).observe(field);
+    }
     window.addEventListener('resize', ping);
     return ping;
   }
@@ -3522,9 +3572,15 @@ const Progress = (() => {
 
   /** true once every 入学前 level is cleared — or once a parent opened the door by hand */
   function g1Open(){
-    if (Store.data.g1Open) return true;
+    if (Store.data.g1Open || Store.data.g1Reached) return true;
     const c = count('pre');
-    return c.total > 0 && c.got >= c.total;
+    if (!(c.total > 0 && c.got >= c.total)) return false;
+    /* Written down the first time it is true. Computing it afresh every time is
+       what let a release that adds a 入学前 level lock a child out of a room they
+       had already walked into. Kept apart from `g1Open`, which is the parent's
+       hand on the door and is reported as such. */
+    Store.setPref('g1Reached', true);
+    return true;
   }
 
   return {
@@ -3680,6 +3736,21 @@ const Session = (() => {
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
   }
   function clearFeedback(){ feedbackEl.hidden = true; clear(feedbackEl); }
+
+  /** Is there anything on the board the child could count right now? The recall
+      levels keep the ten-frame back until the hint, and ぱっと みて hides its dots
+      on purpose — telling a child to point at things that are not there is noise. */
+  const COUNTABLE = '.obj, .dot, .item, .qi, .pairitem, .cell.tappable';
+  function hasCountables(){
+    return $$(COUNTABLE, fieldEl).some(n => {
+      /* Not opacity: the whole screen fades in, and a tap during that fade is
+         still a tap over things to count. ぱっと みて lays a cover over its dots. */
+      if (n.closest('.flashboard:not(.open)')) return false;
+      if (n.checkVisibility && !n.checkVisibility({ visibilityProperty: true })) return false;
+      const r = n.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+  }
   function disarmQuit(){
     quitArmed = false;
     clearTimeout(quitTimer);
@@ -4213,7 +4284,7 @@ const Session = (() => {
     }
     /* Before the hint: name the mistake if we can read it. 「1つ多く数えた」 and
        「見えている方を言った」 need different words, and the generic line said neither. */
-    const line = missChild(missType);
+    const line = missChild(missType, hasCountables());
     showFeedback('oops', line || 'もういちど やってみよう');
     Sound.say(line ? line.replace(/\s+/g, '') : '惜しいね。もう一度やってみよう。', { delay: 260 });
   }
@@ -4287,7 +4358,10 @@ const Session = (() => {
     // a session that did not pass should not get a party; it gets an invitation
     if (stars >= 1){ Sound.sfx.finish(); UI.confetti(60); }
     else Sound.sfx.place();
-    let newSticker = null;
+    /* A first clear with every answer right first time earns both stickers — the
+       clear and the gold — exactly as the book promises. Handing out only the
+       plain one while the screen said「きんの シール」left the gold slot empty. */
+    const newStickers = [];
     /* The last sticker on the shelf is the moment the 小1 classroom opens, and the
        child has to be told so on the screen they are already looking at. Read the
        gate before the sticker is handed out, so「もう開いていた」and「いま開いた」
@@ -4298,11 +4372,9 @@ const Session = (() => {
       Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
       if (swift) Store.recordSwift(curGame.id, curLevelIdx);
       // a sticker means "cleared", so it waits for a pass
-      if (stars >= 1){
-        if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
-        else if (stars === 3 && Store.addSticker(key + ':g')){
-          newSticker = { emoji: stickerFor(key + ':g'), gold: true };
-        }
+      if (stars >= 1 && Store.addSticker(key)) newStickers.push({ emoji: stickerFor(key), gold: false });
+      if (stars === 3 && Store.addSticker(key + ':g')){
+        newStickers.push({ emoji: stickerFor(key + ':g'), gold: true });
       }
     } else if (mode === 'diagnostic'){
       const recommended = Diagnostic.recommendFrom(sessionOutcomes);
@@ -4312,7 +4384,7 @@ const Session = (() => {
       else Store.recordFocus(firstTryRight, total);
       // one sticker per calendar day, per set
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
-      if (Store.addSticker(key)) newSticker = { emoji: stickerFor(key), gold: stars === 3 };
+      if (Store.addSticker(key)) newStickers.push({ emoji: stickerFor(key), gold: stars === 3 });
     }
     const justOpenedG1 = !wasOpen && Progress.g1Open();
     if (justOpenedG1){
@@ -4324,7 +4396,7 @@ const Session = (() => {
     const primaryGameId = mode === 'level' && curGame ? curGame.id
       : Object.keys(gameCounts).sort((a, b) => gameCounts[b] - gameCounts[a])[0] || null;
     Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
-                  sticker: newSticker, shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
+                  stickers: newStickers, shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
                   focusKeys: focusKeys.slice(), swift, unlockedG1: justOpenedG1,
                   recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
                   lastGameId: primaryGameId });
@@ -4379,11 +4451,16 @@ const Session = (() => {
 'use strict';
 
 /* The vocabulary. `child` is read out at the first mistake, in the words a
-   five-year-old reads; `parent` is the sentence the dashboard writes. */
+   five-year-old reads; `parent` is the sentence the dashboard writes.
+   `bare` replaces `child` when the screen has nothing on it to count: the recall
+   levels hide the ten-frame on purpose, and「ゆびで さしながら」over a bare
+   「3と2で？」 points at something that is not there. */
 const MISS_KINDS = {
   up:    { child: 'もういちど、ゆびで さしながら かぞえて みよう',
+           bare:  'おしい！ もういちど かんがえて みよう',
            parent: '1つ多く数えています' },
   down:  { child: 'もういちど、ゆびで さしながら かぞえて みよう',
+           bare:  'おしい！ もういちど かんがえて みよう',
            parent: '1つ少なく数えています' },
   part:  { child: 'それは みえて いる ほうの かずだね',
            parent: '答えではなく、問題に出ている数をそのまま答えています' },
@@ -4402,7 +4479,12 @@ const MISS_KINDS = {
   far:   { child: null,
            parent: '見当がついていない答えが混じっています' }
 };
-const missChild  = t => (MISS_KINDS[t] && MISS_KINDS[t].child) || null;
+/** `countable`: is there anything on the screen the child could count right now? */
+const missChild  = (t, countable) => {
+  const k = MISS_KINDS[t];
+  if (!k) return null;
+  return (countable === false && k.bare) || k.child || null;
+};
 const missParent = t => (MISS_KINDS[t] && MISS_KINDS[t].parent) || null;
 /* `far` and `taught` are true, but neither is a *misconception*: naming them in a
    list headed「つまずきの型」would put noise where a parent looks for a lever. */
@@ -4429,30 +4511,39 @@ function classifyMiss(itemKey, answer, given){
   const g = Number(given), a = Number(answer);
   if (!Number.isFinite(g) || !Number.isFinite(a) || g === a) return null;
 
-  /* The numbers the question put on the screen: [the part that is shown, the whole].
-     Answering one of them back is not a slip, it is a reading of the question. */
-  let shown = null;
-  if ((m = /^dec:(\d+)-(\d+)$/.exec(rest)))                     shown = [+m[2], +m[1]];
-  else if ((m = /^ten:(\d+)$/.exec(rest)))                      shown = [+m[1], 10];
-  else if ((m = /^teensplit:(\d+)$/.exec(rest)))                shown = [10, +m[1]];
-  else if ((m = /^com:(\d+)\+(\d+)$/.exec(rest)))               shown = [+m[1], +m[2]];
+  /* The numbers the question put on the screen. Answering one of them back is not
+     a slip, it is a reading of the question — and it outranks every other reading
+     below: 2+4 に 2 is「見えている方を言った」even though 4−2 is also 2.
+
+     In a sum both numbers are parts, so neither is「ぜんぶ」: 8+2 に 8 is the part
+     the child could see, not the whole. `whole` only exists where the question
+     shows one — 10は4といくつ, 9−4. */
+  let shown = null, whole = null, opp = null;
+  if ((m = /^dec:(\d+)-(\d+)$/.exec(rest)))           { shown = [+m[2], +m[1]]; whole = +m[1]; }
+  else if ((m = /^ten:(\d+)$/.exec(rest)))            { shown = [+m[1], 10];    whole = 10; }
+  else if ((m = /^teensplit:(\d+)$/.exec(rest)))      { shown = [10, +m[1]];    whole = +m[1]; }
+  // 「3と2で」 has no sign on it, so there is no other operation to have picked
+  else if ((m = /^com:(\d+)\+(\d+)$/.exec(rest)))       shown = [+m[1], +m[2]];
   else if ((m = /^(?:sum|teensum):(\d+)\+(\d+)$/.exec(rest))){
-    if (g === Math.abs(+m[1] - +m[2])) return 'opp';            // subtracted instead
     shown = [+m[1], +m[2]];
+    opp = Math.abs(+m[1] - +m[2]);                              // subtracted instead
   }
-  else if ((m = /^(?:rest|diff|teenrest|diff1to1|same1to1):(\d+)-(\d+)$/.exec(rest))){
-    if (g === (+m[1]) + (+m[2])) return 'opp';                  // added instead
-    shown = [+m[1], +m[2]];
+  else if ((m = /^(?:rest|diff|teenrest|diff1to1):(\d+)-(\d+)$/.exec(rest))){
+    shown = [+m[1], +m[2]]; whole = +m[1];
+    opp = (+m[1]) + (+m[2]);                                    // added instead
   }
+  /* same1to1 (「おなじ かずに しよう」) shows two rows and no numbers or sign at all,
+     so neither「見えている数」nor「＋か −か」is something the child could have read.
+     It falls through to the count-slip reading. */
 
   if (shown){
-    const whole = Math.max(shown[0], shown[1]);
-    if (g === whole && whole !== a) return 'whole';
+    if (whole != null && g === whole && whole !== a) return 'whole';
     /* A value can be both「問題に出ている数」and「答えの1つ手前」(9−4 に 4 と答える).
        Read it as the first: at five, saying back a number you can see is the
        commoner move, and it is the one that changes what an adult says next. */
     if (g === shown[0] || g === shown[1]) return 'part';
   }
+  if (opp != null && g === opp) return 'opp';
 
   if (g === a + 1) return 'up';
   if (g === a - 1) return 'down';
@@ -7908,9 +7999,10 @@ const Home = (() => {
       type: 'button', title: g.name + '　ぜんぶの レベルを クリアすると あそべるよ',
       onclick(){
         Sound.sfx.tap();
-        Sound.say('入学前のレベルを全部クリアすると、遊べるようになるよ。', { delay: 120 });
         Book.render();
         UI.show('book');
+        // after the switch: UI.show hushes anything queued before it
+        Sound.say('入学前のレベルを全部クリアすると、遊べるようになるよ。', { delay: 120 });
       }
     },
       el('div.ico', { text: g.ico }),
@@ -8129,7 +8221,8 @@ const Result = (() => {
        the home screen. Saying how many are left, at the moment one is earned, is
        what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
        ones no longer move this number, so counting stickers here would stall. */
-    if (r.sticker && !r.unlockedG1 && !Progress.g1Open()){
+    const stickers = r.stickers || [];
+    if (stickers.length && !r.unlockedG1 && !Progress.g1Open()){
       const st = Progress.preStickers();
       const left = Math.max(0, st.total - st.got);
       if (left) inner.append(el('div.stagenext' + (left <= 6 ? '.nearly' : ''), null,
@@ -8177,10 +8270,12 @@ const Result = (() => {
         el('div.l', { text: aimed.length ? 'つぎは これを もういちど（タップで れんしゅう）'
                                          : 'つぎは これを もういちど' }), list));
     }
-    if (r.sticker){
-      inner.append(el('div.newsticker' + (r.sticker.gold ? '.gold' : ''), null,
-        el('div.e', { text: r.sticker.emoji }),
-        el('div.l', { text: r.sticker.gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' })));
+    if (stickers.length){
+      const gold = stickers.some(x => x.gold);
+      inner.append(el('div.newsticker' + (gold ? '.gold' : ''), null,
+        el('div.e', { text: stickers.map(x => x.emoji).join(' ') }),
+        el('div.l', { text: stickers.length > 1 ? 'シール と きんの シール を ゲット！'
+                          : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' })));
     }
     if (r.mode === 'diagnostic' && r.recommended){
       const g = Games.byId[r.recommended.gameId];
@@ -8933,9 +9028,23 @@ const Parent = (() => {
       Home.render();
       render();
     });
-    if (!Store.persists){
-      s.append(el('p', { style: { color: 'var(--oops-ink)', fontWeight: 800 },
-        text: 'この開き方では記録が保存できません（ファイルを直接開いた場合やプライベートブラウズでは、iPad 側がデータの保存を許可しません）。Safari で開いてから 共有 → ホーム画面に追加 し、そのアイコンから起動してください。' }));
+    /* Three different problems, three different things for an adult to do. They
+       used to share one sentence about file:// and private browsing, which was
+       wrong for a full disk and wrong for a record that simply would not parse. */
+    const storageNote = [];
+    if (Store.unreadable){
+      storageNote.push('この端末に残っていた記録が読み取れなかったため、新しい記録で始めています。'
+        + '読み取れなかった記録は消さずに端末内に残してあります。書き出したファイルがあれば、'
+        + 'バックアップの欄から読み込んで戻せます。');
+    }
+    if (Store.storage === 'unavailable'){
+      storageNote.push('この開き方では記録が保存できません（ファイルを直接開いた場合やプライベートブラウズでは、iPad 側がデータの保存を許可しません）。Safari で開いてから 共有 → ホーム画面に追加 し、そのアイコンから起動してください。');
+    } else if (Store.storage === 'failed'){
+      storageNote.push('記録を書き込めませんでした（端末の空き容量が足りない可能性があります）。'
+        + '空きができれば、次に遊んだときから自動で保存が再開します。念のため、いまの記録を書き出しておいてください。');
+    }
+    if (storageNote.length){
+      s.append(el('p', { style: { color: 'var(--oops-ink)', fontWeight: 800 }, text: storageNote.join('') }));
     }
     s.append(el('p', { style: { marginTop: 'calc(var(--u)*.9)' },
       text: '記録はこの端末の中だけに保存されます。サーバーには何も送信されません。' }), reset);
@@ -8973,7 +9082,8 @@ const Parent = (() => {
       el('span', { text: k }),
       el('b', { text: v, style: { color: warn ? 'var(--oops-ink)' : 'var(--ink)', textAlign: 'right' } }));
     rows.append(row('いまの保存先', Store.origin, Store.origin === 'file://'));
-    rows.append(row('保存の可否', Store.persists ? '保存できます' : '保存できません', !Store.persists));
+    rows.append(row('保存の可否', Store.persists ? '保存できます'
+      : Store.storage === 'failed' ? '書き込みに失敗しています' : '保存できません', !Store.persists));
     rows.append(row('ブラウザが記録を保持する設定', persistState, false));
     s.append(rows);
     if (persistState !== '許可されています'){
@@ -8984,7 +9094,7 @@ const Parent = (() => {
         'iPadOS が自動的に消すことがあります。' }));
     }
 
-    const status = el('p', { style: { fontWeight: 800, color: lastBackupMsg && lastBackupMsg.ok ? 'var(--good-ink)' : 'var(--oops-ink)' },
+    const status = el('p', { style: { fontWeight: 800, color: lastBackupMsg && lastBackupMsg.ok && lastBackupMsg.saved !== false ? 'var(--good-ink)' : 'var(--oops-ink)' },
       text: lastBackupMsg ? lastBackupMsg.msg : '' });
     lastBackupMsg = null;
     const stamp = () => {
@@ -9160,6 +9270,7 @@ const Parent = (() => {
 window.KazuApp = {
   Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent,
   Diagnostic, Missions, Progress, stageOpen, levelOpen,
+  classifyMiss, missChild,
   el, svg, clear, $, $$,
   STICKER_POOL, stickerFor,
   numKana, koKana, tsuKana, banmeKana, jiKana, distractors
