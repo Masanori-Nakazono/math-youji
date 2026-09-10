@@ -19,7 +19,12 @@ const Store = (() => {
     /* Per-game aggregates can only ever say "this game is shaky". These two say
        *what* is shaky and *when* — which is what lets the app come back to the
        exact fact the child missed, and lets the parent page name it. */
-    facts: {},        // item key -> [asked, firstTryRight, lastDayNumber, label, "gameId:levelIndex", typicalMs]
+    /* facts: item key -> [asked, firstTryRight, lastDayNumber, label,
+                           "gameId:levelIndex", typicalMs, {missKind: count}]
+       The last slot is *what kind* of wrong it was. Right/wrong is one bit and it
+       cannot separate a child who read back the part they could see from one who
+       was a single count out — see 06-miss.js. */
+    facts: {},
     recent: {},       // "gameId:levelIndex" -> last 30 first-try outcomes, "1011…"
     last:  {},        // "gameId:levelIndex" -> day number last played
     swift: {},        // "gameId:levelIndex" -> 1 when cleared without counting
@@ -35,6 +40,16 @@ const Store = (() => {
        not be held behind a padlock they cannot move — the same reason a level opens
        after three honest attempts. Once true it stays true. */
     g1Open: false,
+    /* Day number of the last export. Six months of records live in one localStorage
+       key on a device whose OS is documented to throw them away, and the only
+       defence — 書き出す — sat behind an adult gate that nobody had a reason to open.
+       Nothing here backs anything up by itself; it just knows when to ask. */
+    backupAt: 0,
+    /* The April the child starts school. Guessed from the first day of use and
+       overridable, because「入学までの半年」is the premise of the whole app and until
+       now the app had no idea when that was: the roadmap on the parent page was
+       fixed prose that could not say which month this child is actually in. */
+    schoolYear: 0,
     createdAt: Date.now()
   });
 
@@ -84,6 +99,9 @@ const Store = (() => {
   const isRecord = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const isCount = v => Number.isFinite(v) && v >= 0;
   const safeKey = k => k !== '__proto__' && k !== 'prototype' && k !== 'constructor';
+  /** {missKind: count} — a small tally, and every key has to be one we know */
+  const isMissMap = v => isRecord(v) && Object.keys(v).every(
+    k => safeKey(k) && MISS_KINDS[k] && isCount(v[k]));
 
   /** Validate into a fresh object before touching the live record. Older backups
       may omit newer fields, but a field that is present must have the shape the
@@ -116,7 +134,8 @@ const Store = (() => {
           && isCount(v[0]) && isCount(v[1]) && v[1] <= v[0] && isCount(v[2])
           && (v[3] == null || typeof v[3] === 'string')
           && (v[4] == null || typeof v[4] === 'string')
-          && (v[5] == null || isCount(v[5])))) return null;
+          && (v[5] == null || isCount(v[5]))
+          && (v[6] == null || isMissMap(v[6])))) return null;
 
     if (data.stickers !== undefined){
       if (!Array.isArray(data.stickers) || data.stickers.some(v => typeof v !== 'string')) return null;
@@ -168,7 +187,7 @@ const Store = (() => {
     }
     if (data.name !== undefined){
       if (typeof data.name !== 'string') return null;
-      out.name = data.name;
+      out.name = data.name.slice(0, 12);
     }
     for (const k of ['sfx', 'voice', 'g1Open']){
       if (data[k] !== undefined){
@@ -180,9 +199,11 @@ const Store = (() => {
       if (data.voiceId !== null && typeof data.voiceId !== 'string') return null;
       out.voiceId = data.voiceId;
     }
-    if (data.createdAt !== undefined){
-      if (!isCount(data.createdAt)) return null;
-      out.createdAt = data.createdAt;
+    for (const k of ['backupAt', 'schoolYear', 'createdAt']){
+      if (data[k] !== undefined){
+        if (!isCount(data[k])) return null;
+        out[k] = data[k];
+      }
     }
     return out;
   }
@@ -207,10 +228,21 @@ const Store = (() => {
     const af2 = add.facts || {};
     for (const k in af2){
       const cur = out.facts[k];
+      const mine = (base.facts && base.facts[k] && base.facts[k][6]) || null;
+      const theirs = af2[k][6] || null;
       if (!cur || (af2[k][0] || 0) > (cur[0] || 0)) out.facts[k] = af2[k].slice();
       else if (cur){
         cur[2] = maxNum(cur[2], af2[k][2]);
         if (!cur[4] && af2[k][4]) cur[4] = af2[k][4];   // keep whichever side knows where to ask it
+      }
+      // miss tallies: max per kind, never sum — the same rule the rest of the
+      // merge follows, so importing one backup twice cannot invent mistakes
+      if (mine || theirs){
+        const m = {};
+        if (mine) for (const t in mine) m[t] = mine[t];
+        if (theirs) for (const t in theirs) m[t] = maxNum(m[t], theirs[t]);
+        out.facts[k] = out.facts[k].slice();
+        out.facts[k][6] = m;
       }
     }
     // recent / last: follow whichever side actually played that level more
@@ -243,6 +275,9 @@ const Store = (() => {
     }
     // a stage that has been opened on either device stays open
     out.g1Open = !!(base.g1Open || add.g1Open);
+    out.backupAt = maxNum(base.backupAt, add.backupAt);
+    out.schoolYear = base.schoolYear || add.schoolYear || 0;
+    out.name = base.name || add.name || '';
     out.createdAt = Math.min(base.createdAt || Date.now(), add.createdAt || Date.now());
     return out;
   }
@@ -397,6 +432,34 @@ const Store = (() => {
       return (p && p[1]) ? p[0] / p[1] : null;
     },
     todayCount(){ return mem.daily[todayKey()] || 0; },
+    /** calendar days this app has actually been used on — how much there is to lose */
+    usedDays(){ return Object.keys(mem.daily || {}).length; },
+    /** calendar days since the app was first opened on this device */
+    daysSinceStart(){
+      return Math.max(0, dayNo() - Math.floor((mem.createdAt || Date.now()) / DAY));
+    },
+    /** 1 April of the year this child starts school — set, or guessed from day one.
+        School starts in April, so a first run in April or later belongs to next April. */
+    schoolDate(){
+      if (mem.schoolYear) return new Date(mem.schoolYear, 3, 1);
+      const d = new Date(mem.createdAt || Date.now());
+      return new Date(d.getFullYear() + (d.getMonth() >= 3 ? 1 : 0), 3, 1);
+    },
+    setSchoolYear(y){ mem.schoolYear = y || 0; save(); },
+    /** whole days from today to 入学 (negative once it has passed) */
+    daysToSchool(){
+      return Math.round((this.schoolDate().getTime() - Date.now()) / DAY);
+    },
+    noteBackup(){ mem.backupAt = dayNo(); writeNow(); },
+    lastBackupDays(){ return mem.backupAt ? Math.max(0, dayNo() - mem.backupAt) : null; },
+    /** { never, days } when it is time to ask again, otherwise null.
+        Never on the first days: there is nothing yet worth the interruption. */
+    backupDue(){
+      if (this.usedDays() < 10) return null;
+      const d = this.lastBackupDays();
+      if (d == null) return { never: true, days: null };
+      return d >= 30 ? { never: false, days: d } : null;
+    },
     streak(){
       let n = 0; const d = new Date();
       for (;;){
@@ -414,7 +477,7 @@ const Store = (() => {
     },
 
     /* ---- item-level memory ---- */
-    noteFact(k, firstTryOk, label, from, ms){
+    noteFact(k, firstTryOk, label, from, ms, miss){
       if (!k) return;
       const f = mem.facts[k] || (mem.facts[k] = [0, 0, 0]);
       f[0]++;
@@ -433,9 +496,33 @@ const Store = (() => {
         const capped = Math.min(ms, 20000);
         f[5] = f[5] ? Math.round(f[5] * 0.65 + capped * 0.35) : capped;
       }
+      /* What kind of wrong it was, from the first mistake on this question. A
+         percentage says how often; this says what to do about it. */
+      if (miss && MISS_KINDS[miss]){
+        const m = f[6] || (f[6] = {});
+        m[miss] = (m[miss] || 0) + 1;
+      }
       save();
     },
     fact: k => mem.facts[k] || null,
+    /** The mistake this child keeps making on this fact: { kind, n, of } or null.
+        Only the diagnostic kinds, only when it has happened more than once, and
+        only when it is actually the dominant reading — one stray tap is not a
+        pattern, and naming the wrong pattern is worse than naming none. */
+    factMiss(k){
+      const f = mem.facts[k];
+      const m = f && f[6];
+      if (!m) return null;
+      let best = null, total = 0;
+      for (const t in m){
+        total += m[t];
+        if (MISS_DIAGNOSTIC.indexOf(t) < 0) continue;
+        if (!best || m[t] > best.n) best = { kind: t, n: m[t] };
+      }
+      if (!best || best.n < 2 || best.n * 2 < total) return null;
+      best.of = total;
+      return best;
+    },
     factOrigin(k){ const f = mem.facts[k]; return f && f[4] || null; },
     factSpeed(k){ const f = mem.facts[k]; return f && f[5] || null; },
     /** Typical time to answer this game's facts, in ms — null until something has
@@ -489,6 +576,9 @@ const Store = (() => {
     },
     hasSticker: k => mem.stickers.indexOf(k) >= 0,
     setPref(k, v){ mem[k] = v; save(); },
+    /** What to call this child. Kept short: it is spoken and it goes in a heading. */
+    get name(){ return mem.name || ''; },
+    setName(v){ mem.name = String(v || '').trim().slice(0, 12); save(); },
     reset(){ mem = blank(); save(); }
   };
 })();

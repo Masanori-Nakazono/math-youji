@@ -22,7 +22,46 @@ const Diagnostic = (() => {
     return { gameId: 'flash', levelIndex: 0 };
   }
 
-  function current(){
+  /* The order the six-month roadmap actually walks. 「いまの おすすめ」 used to know
+     only five of the sixteen 入学前 games, so a child who followed it every day was
+     told to replay いくつと いくつ L1 for the rest of the year: 180 simulated days of
+     きょうの れんしゅう + おすすめ cleared 15 of the 48 levels at 95% accuracy and 33 at
+     75% — the door that opens 小学1年生 never opened, and the *more* accurate the
+     child, the less they were moved on, because the only way past those five games
+     was the「struggling」rescue below, which an accurate child never trips.
+
+     Everything registered is walked, in curriculum order; a game added later and
+     not named here still lands at the end rather than dropping out. */
+  const ROADMAP = ['count', 'flash', 'numeral', 'seq', 'trace',
+                   'compare', 'ordinal', 'measure',
+                   'bond', 'ten', 'add', 'sub',
+                   'shape', 'sort', 'pattern', 'clock',
+                   'g1set', 'g1pair', 'g1teen', 'g1shiki'];
+  function roadmap(){
+    const seen = new Set(), out = [];
+    ROADMAP.forEach(id => { if (Games.byId[id]){ out.push(id); seen.add(id); } });
+    Games.list.forEach(g => { if (!seen.has(g.id)) out.push(g.id); });
+    return out;
+  }
+
+  /* Done with a level = it has its clear sticker. Deliberately the same thing the
+     door counts, so the level おすすめ names is always a level the door is waiting
+     for — and a ★★★ level can never be recommended again. */
+  const cleared = (id, i) => Store.hasSticker(id + ':' + i);
+
+  function nextUncleared(){
+    for (const id of roadmap()){
+      const g = Games.byId[id];
+      if (!g) continue;
+      for (let i = 0; i < g.levels.length; i++){
+        if (levelOpen(g, i) && !cleared(id, i)) return { gameId: id, levelIndex: i };
+      }
+    }
+    return null;
+  }
+
+  /** The weakest open level with enough evidence to say so, or null. */
+  function weakestLevel(){
     let weakest = null;
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
       if (!levelOpen(g, i)) return;
@@ -31,26 +70,38 @@ const Diagnostic = (() => {
       const acc = Store.recentAccuracy(g.id, i);
       if (!weakest || acc < weakest.acc) weakest = { gameId: g.id, levelIndex: i, acc };
     }));
-    if (weakest && weakest.acc < .75) return weakest;
+    return weakest;
+  }
 
+  /* Below this, the child is not making progress and the day is better spent going
+     back. It used to be .75 — but 75% first-try is a pass (★★), so an ordinary child
+     was held on the same level instead of being shown the next one. Rescue is for
+     being stuck, not for being imperfect. */
+  const STUCK = 0.60;
+
+  function current(){
+    const weakest = weakestLevel();
+    if (weakest && weakest.acc < STUCK) return weakest;
+
+    /* はじめの ぼうけん picked a starting point; honour it until it is cleared. */
     const first = Store.data.diagnostic && Store.data.diagnostic.recommended;
     if (first && Games.byId[first.gameId]
         && levelOpen(Games.byId[first.gameId], first.levelIndex || 0)
-        && Store.stars(first.gameId, first.levelIndex || 0) < 2) return first;
+        && !cleared(first.gameId, first.levelIndex || 0)) return first;
 
-    /* Once the 入学前 half is finished there is nothing left under 2 stars to
-       recommend there, so the queue continues into the classroom. */
-    const order = Progress.g1Open()
-      ? ['count', 'flash', 'numeral', 'seq', 'bond', 'g1set', 'g1pair', 'g1teen', 'g1shiki']
-      : ['count', 'flash', 'numeral', 'seq', 'bond'];
-    for (const id of order){
-      const g = Games.byId[id];
-      if (!g) continue;
-      for (let i = 0; i < g.levels.length; i++){
-        if (levelOpen(g, i) && Store.stars(id, i) < 2) return { gameId: id, levelIndex: i };
-      }
-    }
-    return { gameId: 'bond', levelIndex: 0 };
+    const next = nextUncleared();
+    if (next) return next;
+
+    // everything open is cleared: go back to whatever is shakiest rather than
+    // naming a level that has nothing left to give
+    if (weakest) return weakest;
+    let lowest = null;
+    Games.list.forEach(g => g.levels.forEach((lv, i) => {
+      if (!levelOpen(g, i)) return;
+      const s = Store.stars(g.id, i);
+      if (!lowest || s < lowest.stars) lowest = { gameId: g.id, levelIndex: i, stars: s };
+    }));
+    return lowest || { gameId: 'count', levelIndex: 0 };
   }
 
   function startRecommended(){
@@ -59,7 +110,7 @@ const Diagnostic = (() => {
     else Session.startDaily(10);
   }
 
-  return { shouldRun, recommendFrom, current, startRecommended };
+  return { shouldRun, recommendFrom, current, startRecommended, nextUncleared };
 })();
 
 const Missions = (() => {

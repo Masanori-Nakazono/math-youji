@@ -89,7 +89,9 @@ function giveQuestion(api, lo, hi){
     if (api.locked) return;
     if (picked.size === target){ doneBtn.classList.add('choice', 'correct'); api.correct(); }
     else {
-      api.wrong(doneBtn);
+      // one too many / one too few is a counting slip, not "does not know 7"
+      api.wrong(doneBtn, picked.size === target + 1 ? 'up'
+                       : picked.size === target - 1 ? 'down' : null);
       Sound.say(picked.size > target ? 'ちょっと多いみたい。' : 'ちょっと足りないみたい。', { delay: 300 });
     }
   });
@@ -263,12 +265,17 @@ function numToQty(api, lo, hi){        // numeral shown → pick the matching gr
   clear(api.choices);
   opts.forEach(v => {
     const plate = el('div.plate.fixed', null, groupNode(v, thing));
+    plate.dataset.count = v;
     tappable(plate, () => {
       if (api.locked) return;
       if (v === n){ plate.classList.add('correct'); api.correct(); }
-      else { plate.classList.add('wrong'); api.later(() => plate.classList.remove('wrong'), 460); api.wrong(plate); }
+      else { plate.classList.add('wrong'); api.later(() => plate.classList.remove('wrong'), 460); api.wrong(plate, v); }
     });
     api.choices.append(plate);
+  });
+  api.onShow(() => {
+    const p = $$('.plate', api.choices).find(x => Number(x.dataset.count) === n);
+    if (p) p.click();
   });
 }
 

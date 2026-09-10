@@ -107,7 +107,13 @@ const UI = (() => {
   /* Grow to fill the room, but also shrink a little when a question is naturally
      too wide (a row of eight animals on a portrait iPad): a row the child has to
      count is worthless once it scrolls out of sight. */
-  const FIT_MAX = 2.4, FIT_MIN = 0.72;
+  /* 2.4 was leaving room on the table. かぞえよう L1 on a portrait iPad puts five
+     objects on one line: the row is capped by how wide the field is, the field is
+     751px tall, and the objects used 159px of it — 79% of the box empty while the
+     things a finger has to land on stayed at the cap. The search only ever grows to
+     where something would stick out, so a higher ceiling costs nothing on the
+     questions that were already filling their box. */
+  const FIT_MAX = 2.9, FIT_MIN = 0.72;
 
   function fitsInside(field, kids){
     const b = field.getBoundingClientRect();
@@ -145,7 +151,7 @@ const UI = (() => {
       return fitsInside(field, kids);
     };
     let lo = FIT_MIN, hi = FIT_MAX;
-    for (let i = 0; i < 6; i++){                        // ~1.5% precision
+    for (let i = 0; i < 7; i++){                        // ~1.5% precision over a wider range
       const m = (lo + hi) / 2;
       if (at(m)) lo = m; else hi = m;
     }

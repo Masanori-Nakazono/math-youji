@@ -133,10 +133,30 @@ const Session = (() => {
      (ぱっと みて いくつ) has nothing to try with: 「もういちど」 over a covered
      board is an invitation to guess. Those games ask for their hint at 1. */
   let hintAfter = 2, extrasShown = false;
+  /* ---------- the help ladder ----------
+     One hint used to be the whole of it. After that the screen stopped answering:
+     the game's own hint fires once, and the choice-dimming fallback only has
+     something to dim when the question was built with `buildChoices` — 28 of the
+     60 levels never build one (every keypad, every hand-made answer surface), so
+     the third, fourth and fifth mistake there changed nothing at all, down to the
+     pixel, with the speech bubble still reading「ヒントを だすね」.
+
+     Now every mistake past the first moves something, and the bottom of the ladder
+     is a way out: 「こたえを みる」 appears, and if it is not taken the app takes it
+     itself. Reaching the answer that way is recorded as `taught` — it is not a
+     first-try success, it does not earn ★, and 「にがて あつめ」 comes back for it.
+     Same reasoning as「3回まじめに挑戦すれば次のレベルは開く」: a five-year-old must
+     never be left in front of a door they cannot move. */
+  const STRONG_AFTER = 2, TEACH_AFTER = 4;   // mistakes past the game's own hint
+  let hintStrongFns = [], showFn = null, answerBtn = null, answerText = null, taught = false;
   /* What this question is *about*. Every generator names its item, so the app can
      avoid asking the same fact twice in one sitting, steer toward the facts this
      child keeps missing, and tell the parent which ones they are. */
   let curItem = null, curLabel = null;
+  /* What the answer was, and what kind of wrong the first mistake was. Right/wrong
+     is one bit; it cannot separate 「見えている方を言った」 from 「1つ ずれた」, and those
+     are different children. See 06-miss.js. */
+  let curAnswer = null, missType = null;
   let focusKeys = [];             // the facts a 集中練習 session is aimed at
   /* ---------- how long the answer took ----------
      けいさんの やま is named for「考えずに言える」— an answer that arrives rather than
@@ -227,11 +247,12 @@ const Session = (() => {
 
   /** Wrong answers have to be visible, not just audible: a device with no
       Japanese voice must still show the child that something happened. */
-  function showFeedback(kind, text){
+  function showFeedback(kind, text, extra){
     feedbackEl.hidden = false;
     feedbackEl.className = 'feedback ' + kind;
     clear(feedbackEl);
     feedbackEl.append(el('span.mk', { text: kind === 'oops' ? '？' : '💡' }), text);
+    if (extra) feedbackEl.append(extra);
     feedbackEl.animate
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
   }
@@ -458,8 +479,19 @@ const Session = (() => {
       },
       /** `after` = how many mistakes before it fires (default 2, minimum 1). */
       onHint(fn, after){ if (stale()) return; hintFn = fn; if (after) hintAfter = Math.max(1, after); },
+      /** Show (and take) the correct action, for the bottom rung of the ladder.
+          `buildChoices` / `buildPad` questions need nothing: the engine presses the
+          right button, which runs the question's own reveal. A hand-made answer
+          surface has to say how — usually one line, tapping its own right element.
+          Optional: without it the engine still ends the question rather than
+          leaving the child pressing wrong things forever. */
+      onShow(fn){ if (!stale()) showFn = fn; },
       correct(o){ if (!stale()) onCorrect(o || {}); },
-      wrong(target){ if (!stale()) onWrong(target); },
+      /** `given` is what the child actually chose: a value the engine can read
+          against the answer, or a tag a generator supplies for something the item
+          key cannot say ('looks', 'rev'). Optional — omitting it only costs the
+          diagnosis, never the behaviour. */
+      wrong(target, given){ if (!stale()) onWrong(target, given); },
       /** delayed work that dies with the question */
       later(fn, ms){ return later(fn, ms); },
       get locked(){ return locked; },
@@ -481,6 +513,8 @@ const Session = (() => {
         const lo = o.lo == null ? 0 : o.lo, hi = o.hi == null ? 10 : o.hi;
         clear(choicesEl);
         askedAt = performance.now();     // a story animation is not thinking time
+        curAnswer = answer;
+        newSurface();
         choicesEl.classList.add('pad');
         choicesEl.dataset.built = '1';
         /* No hintBtns: the engine's fallback dims one more wrong answer on every
@@ -506,15 +540,22 @@ const Session = (() => {
             } else {
               b.classList.add('wrong', 'tried');
               later(() => b.classList.remove('wrong'), 460);
-              a.wrong(b);
+              a.wrong(b, val);
             }
           });
+          if (v === answer){ answerBtn = b; answerText = String(v); }
           keys.push(b);
           choicesEl.append(b);
         }
         hintExtras.push(() => {
           keys.forEach(b => {
             if (Math.abs(Number(b.textContent) - answer) > 2) b.classList.add('dim');
+          });
+        });
+        // one more rung: eleven keys → five → three. Still a choice, not a coin flip.
+        hintStrongFns.push(() => {
+          keys.forEach(b => {
+            if (Math.abs(Number(b.textContent) - answer) > 1) b.classList.add('dim');
           });
         });
         return choicesEl;
@@ -528,6 +569,8 @@ const Session = (() => {
         const o = opts || {};
         clear(choicesEl);
         askedAt = performance.now();
+        curAnswer = answer;
+        newSurface();
         choicesEl.dataset.built = '1';
         hintBtns = [];
         let settled = false;              // one accepted answer per set of buttons
@@ -556,9 +599,10 @@ const Session = (() => {
             } else {
               b.classList.add('wrong', 'tried');
               later(() => b.classList.remove('wrong'), 460);
-              a.wrong(b);
+              a.wrong(b, val);
             }
           });
+          if (hit && !answerBtn){ answerBtn = b; answerText = typeof content === 'string' ? content : String(val); }
           if (!hit) hintBtns.push(b);
           choicesEl.append(b);
         });
@@ -568,11 +612,21 @@ const Session = (() => {
     return a;
   }
 
+  /* A question with several blanks builds a new set of buttons for each one. The
+     rungs of the ladder belong to the *surface*, not the question: pointing
+     「こたえを みる」 at the button that answered the previous blank leaves the child
+     on a board where nothing works. Mistakes keep accumulating across the blanks,
+     so a child who needed showing on the first one is shown the next one quickly. */
+  function newSurface(){
+    answerBtn = null; answerText = null; hintStrongFns = []; taught = false;
+  }
+
   function resetSurface(){
     locked = false; hintBtns = []; hintFn = null; hintExtras = []; hintShown = false;
     hintAfter = 2; extrasShown = false;
     askedAt = 0; respondedMs = null;
-    curItem = null; curLabel = null;
+    curItem = null; curLabel = null; curAnswer = null; missType = null;
+    hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
     choicesEl.classList.remove('pad');
     clearFeedback();
@@ -644,36 +698,101 @@ const Session = (() => {
     refit();                      // and again next frame, once fonts/SVGs have settled
   }
 
-  function onWrong(target){
-    if (locked) return;
+  /** Dim one more wrong choice, so a repeated mistake is never met by a still screen. */
+  function dimOne(){
+    const live = hintBtns.filter(b => !b.classList.contains('dim'));
+    if (live.length > 1) live[ri(0, live.length - 1)].classList.add('dim');
+  }
+
+  function runExtras(){
+    if (extrasShown) return;
+    extrasShown = true;
+    hintExtras.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
+  }
+
+  /** Second rung: narrow much harder, and put the way out on screen. */
+  function strongHint(){
+    runExtras();
+    hintStrongFns.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
+    // leave exactly one wrong answer standing beside the right one
+    for (let i = 0; i < 12 && hintBtns.filter(b => !b.classList.contains('dim')).length > 1; i++) dimOne();
+    showFeedback('hint', 'もう ちょっと ヒントを だすね', teachButton());
+    Sound.say('もう少し、ヒントを出すね。', { delay: 260 });
+  }
+
+  /** The way out, offered before it is taken. */
+  function teachButton(){
+    return el('button.btn.btn-ghost.teachbtn', {
+      type: 'button', text: 'こたえを みる',
+      onclick(e){ e.stopPropagation(); teach(); }
+    });
+  }
+
+  /** Bottom rung. Press the right button if there is one — that runs the question's
+      own reveal, so the answer lands inside the sentence the child was reading —
+      otherwise let the game show it, and end the question either way. */
+  function teach(){
+    if (locked || taught) return;
+    taught = true;
+    // stop the child racking up misses on a board that is already being answered
+    $$('.choice', choicesEl).forEach(b => { if (b !== answerBtn) b.disabled = true; });
+    clearFeedback();
+    showFeedback('hint', 'いっしょに やってみよう');
+    Sound.say(answerText != null ? `こたえは、${answerText}。いっしょに見てみよう。`
+                                 : 'いっしょに、やってみよう。', { delay: 200 });
+    if (answerBtn && answerBtn.isConnected && !answerBtn.disabled){
+      answerBtn.classList.add('showme');
+      later(() => { if (!locked) answerBtn.click(); }, 900);
+      return;
+    }
+    if (showFn){ try{ showFn(); }catch(e){ console.error('show failed', e); } }
+    later(() => { if (!locked) onCorrect({ quiet: true, delay: 1400 }); }, 1000);
+  }
+
+  function onWrong(target, given){
+    // once the answer is being shown, taps on the old surface are not attempts
+    if (locked || taught) return;
     markResponse();
     wrongThisQ++;
     mistakes++;
+    /* The first mistake is the diagnostic one — later ones are increasingly guided,
+       so they say less about what the child was thinking. */
+    if (!missType){
+      missType = (typeof given === 'string' && MISS_KINDS[given])
+        ? given
+        : classifyMiss(curItem, curAnswer, given);
+    }
     Sound.sfx.wrong();
     setMood('soft');
     if (target && target.classList){
       target.classList.add('wrong');
       later(() => target.classList.remove('wrong'), 460);
     }
-    if (wrongThisQ >= hintAfter && !hintShown){
+
+    if (wrongThisQ >= 2) runExtras();
+
+    if (wrongThisQ === hintAfter && !hintShown){
       hintShown = true;
       showFeedback('hint', 'ヒントを だすね');
       Sound.say('ヒントを出すね。', { delay: 260 });
       if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
-    } else if (wrongThisQ === 1){
-      showFeedback('oops', 'もういちど やってみよう');
-      Sound.say('惜しいね。もう一度やってみよう。', { delay: 260 });
+      if (wrongThisQ >= 2) dimOne();
+      return;
     }
-    if (wrongThisQ >= 2){
-      // The game's own hint is preferred, but the choice-dimming fallback runs too:
-      // a hint that only speaks would leave a muted device with no feedback at all.
-      if (!extrasShown){
-        extrasShown = true;
-        hintExtras.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
-      }
-      const live = hintBtns.filter(b => !b.classList.contains('dim'));
-      if (live.length > 1) live[ri(0, live.length - 1)].classList.add('dim');
+    if (wrongThisQ >= hintAfter + TEACH_AFTER){ teach(); return; }
+    if (wrongThisQ === hintAfter + STRONG_AFTER){ strongHint(); return; }
+    if (wrongThisQ > hintAfter){
+      // between the rungs: still say something new, and keep narrowing
+      dimOne();
+      showFeedback('hint', 'まだ ちがうね。よく みて みよう',
+        wrongThisQ > hintAfter + STRONG_AFTER ? teachButton() : null);
+      return;
     }
+    /* Before the hint: name the mistake if we can read it. 「1つ多く数えた」 and
+       「見えている方を言った」 need different words, and the generic line said neither. */
+    const line = missChild(missType);
+    showFeedback('oops', line || 'もういちど やってみよう');
+    Sound.say(line ? line.replace(/\s+/g, '') : '惜しいね。もう一度やってみよう。', { delay: 260 });
   }
 
   function onCorrect(o){
@@ -692,7 +811,10 @@ const Session = (() => {
     if (mode !== 'diagnostic'){
       Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
       if (curItem){
-        Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed);
+        /* 'taught' outranks the reading of the first mistake: what matters about
+           this question is that the child did not get there on their own. */
+        Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed,
+                       taught ? 'taught' : missType);
         if (!clean && !shaky.some(x => x.key === curItem)){
           shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
         }
@@ -803,6 +925,9 @@ const Session = (() => {
       get pending(){ return timers.size; },
       get mode(){ return mode; },
       get responseMs(){ return respondedMs; },
+      get missType(){ return missType; },
+      get taught(){ return taught; },
+      get wrongThisQ(){ return wrongThisQ; },
       get planItems(){ return plan.map(p => p.want || null); }
     }
   };

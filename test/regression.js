@@ -1272,6 +1272,275 @@
     K.Store.reset();
   })();
 
+  /* ---------- 51. 「いまの おすすめ」 has to walk the whole curriculum ----------
+     It used to know five of the sixteen 入学前 games. Everything else could only be
+     reached by the「struggling」rescue — i.e. after the child had already found it
+     alone and failed there — so a child who followed the app's own advice every day
+     cleared 15 of the 48 levels in 180 simulated days at 95% accuracy, the door to
+     小学1年生 never opened, and the *more* accurate the child the less they moved on.
+     Two properties keep that from coming back. */
+  (function recommendationWalksTheCurriculum(){
+    K.Store.reset();
+    const starsFor = (r, t) => { const x = r / t; return x >= 1 ? 3 : x >= .75 ? 2 : x >= .5 ? 1 : 0; };
+    const seen = {}, repeats = {};
+    let namedACleared = 0, days = 0, opened = 0;
+    for (let d = 0; d < 200; d++){
+      days++;
+      const r = K.Diagnostic.current();
+      const g = K.Games.byId[r.gameId];
+      if (!g || !g.levels[r.levelIndex]) break;
+      const key = r.gameId + ':' + r.levelIndex;
+      // a level that already has its clear sticker has nothing left to offer
+      if (K.Store.hasSticker(key)) namedACleared++;
+      seen[r.gameId] = true;
+      repeats[key] = (repeats[key] || 0) + 1;
+      const n = g.levels[r.levelIndex].n || 8;
+      const right = 8;                                    // a child who passes cleanly
+      for (let i = 0; i < n; i++) K.Store.noteOutcome(g.id, r.levelIndex, true);
+      K.Store.recordLevel(g.id, r.levelIndex, starsFor(Math.min(right, n), n), Math.min(right, n), n);
+      K.Store.addSticker(key);
+      if (K.Progress.preStickers().got >= 48){ opened = days; break; }
+    }
+    const preGames = K.Games.list.filter(g => (g.stage || 'pre') === 'pre').map(g => g.id);
+    const missed = preGames.filter(id => !seen[id]);
+    const stuck = Object.keys(repeats).filter(k => repeats[k] > 2);
+    check('「いまの おすすめ」 walks every 入学前 game, and opens 小学1年生 well inside the six months',
+      !missed.length && opened > 0 && opened <= 90 && !namedACleared && !stuck.length,
+      'never recommended: ' + (missed.join(',') || '-') + ' · opened on day ' + opened
+      + ' · re-offered a cleared level ' + namedACleared + '× · looped on ' + (stuck.join(',') || '-'));
+    K.Store.reset();
+  })();
+
+  /* ---------- 52. a mistake is more than one bit ----------
+     Right/wrong cannot separate a child who read back the part they could see
+     (「10は4といくつ」→ 4) from one who was a single count out (→ 5) from one who had
+     no idea (→ 7). The value pressed is classified and counted, and the child is
+     answered in words that fit the mistake instead of a generic「もういちど」. */
+  (function missKinds(){
+    K.Store.reset();
+    let part = null;
+    for (let t = 0; t < 40 && !part; t++){
+      K.Session.startLevel(K.Games.byId.bond, 2);
+      const m = /^bond:dec:(\d+)-(\d+)$/.exec(S.item || '');
+      // 10は5といくつ: the part shown and the part asked for are the same number,
+      // so pressing it is not a mistake at all
+      if (!m || (+m[1]) - (+m[2]) === +m[2]) continue;
+      const key = qa('#play .padkey').find(k => k.textContent === m[2]);
+      if (!key) continue;
+      key.click();
+      if (S.wrongThisQ !== 1) continue;
+      part = { kind: S.missType, said: q('#play .feedback').textContent };
+    }
+    check('a wrong answer is read for what kind of wrong it was',
+      !!part && part.kind === 'part' && /みえて いる/.test(part.said),
+      part ? part.kind + ' / ' + part.said : 'never drew a decomposition');
+
+    /* 「ちかい かず」 draws the smaller group with bigger icons on purpose. Whether the
+       child fell for that is the one thing the level is asking, and it used to be
+       thrown away with every other wrong tap. */
+    let looks = null;
+    for (let t = 0; t < 30 && !looks; t++){
+      K.Session.startLevel(K.Games.byId.compare, 1);
+      const plates = qa('#play .plate');
+      if (plates.length < 2) continue;
+      const size = p => { const i = p.querySelector('.item'); return i ? parseFloat(getComputedStyle(i).fontSize) : 0; };
+      const sizes = plates.map(size);
+      if (Math.abs(sizes[0] - sizes[1]) < 2) continue;
+      plates[sizes[0] > sizes[1] ? 0 : 1].click();
+      if (S.wrongThisQ === 1) looks = S.missType;
+    }
+    check('choosing by how big it looks is recorded as exactly that',
+      looks === 'looks', 'missType=' + looks);
+
+    // and it survives the round trip through a backup
+    K.Store.reset();
+    K.Store.noteFact('bond:dec:10-4', false, '10 は 4 と 6', 'bond:2', 0, 'part');
+    K.Store.noteFact('bond:dec:10-4', false, '10 は 4 と 6', 'bond:2', 0, 'part');
+    const text = K.Store.exportText();
+    const before = K.Store.factMiss('bond:dec:10-4');
+    K.Store.importText(text, 'replace');
+    const after = K.Store.factMiss('bond:dec:10-4');
+    K.Store.importText(text, 'merge');                 // twice must not inflate
+    const twice = K.Store.factMiss('bond:dec:10-4');
+    check('the kind of mistake survives a backup, and a double import does not inflate it',
+      !!before && before.kind === 'part' && before.n === 2
+      && !!after && after.n === 2 && !!twice && twice.n === 2,
+      JSON.stringify([before, after, twice]));
+    K.Store.reset();
+  })();
+
+  /* ---------- 53. the ladder always has another rung ----------
+     One hint was the whole of it: after it fired, the choice-dimming fallback only
+     had something to dim when the question was built with buildChoices, and 28 of
+     the 60 levels never build one. On those, the third, fourth and fifth mistake
+     changed nothing on screen — same pixels, same speech bubble. */
+  (function helpLadder(){
+    K.Store.reset();
+    const stillSilent = [], neverEnds = [];
+    eachLevel((g, li) => {
+      K.Session.startLevel(g, li);
+      let silent = 0;
+      for (let i = 0; i < 8 && !S.locked && !S.taught; i++){
+        const wrong = candidates();
+        if (!wrong.length) break;
+        const missesBefore = S.wrongThisQ;
+        const before = q('#play').innerHTML + '|' + q('#play .feedback').textContent;
+        wrong[0].click();
+        if (S.locked) break;
+        // a tap on scenery is not an attempt; only judge what the engine counted
+        if (S.wrongThisQ === missesBefore) continue;
+        if (q('#play').innerHTML + '|' + q('#play .feedback').textContent === before) silent++;
+      }
+      if (silent) stillSilent.push(g.id + '/L' + (li + 1));
+    });
+    check('a repeated mistake is never met by an unchanged screen',
+      !stillSilent.length, stillSilent.slice(0, 6).join(' | '));
+
+    /* And the bottom rung is a way out. Six mistakes on a keypad — eleven keys, no
+       idea — used to leave the child pressing keys forever; now the app shows the
+       answer, finishes the question, and records that it had to. */
+    K.Store.reset();
+    K.Session.startLevel(K.Games.byId.ten, 1);
+    let sawEscape = false;
+    for (let i = 0; i < 6; i++){
+      const wrong = qa('#play .padkey').filter(k => !k.classList.contains('correct') && !k.disabled);
+      if (!wrong.length) break;
+      wrong[0].click();
+      if (q('#play .teachbtn')) sawEscape = true;
+    }
+    const taught = S.taught;
+    S.flushTimers(8);
+    const facts = K.Store.data.facts;
+    const marked = Object.keys(facts).some(k => facts[k][6] && facts[k][6].taught);
+    const clean = Object.keys(facts).every(k => facts[k][1] === 0);   // never scored as known
+    check('six mistakes end in「こたえを みる」, not in a child pressing keys forever',
+      sawEscape && taught && marked && clean && S.idx >= 1,
+      'escape=' + sawEscape + ' taught=' + taught + ' recorded=' + marked + ' idx=' + S.idx);
+    K.Store.reset();
+  })();
+
+  /* ---------- 54. the shelf and the book say which levels are left ----------
+     「あと 4レベル」 without naming the four is a number a child cannot act on and a
+     parent cannot help with: the empty slots were anonymous dots, and the count
+     lived two screens away from the map. */
+  (function whatIsLeft(){
+    K.Store.reset();
+    // clear everything except the last game, so the remaining levels are known
+    const pre = K.Games.list.filter(g => (g.stage || 'pre') === 'pre');
+    pre.slice(0, pre.length - 1).forEach(g => g.levels.forEach((lv, i) => {
+      K.Store.recordLevel(g.id, i, 2, 6, 8);
+      K.Store.addSticker(g.id + ':' + i);
+    }));
+    const lastGame = pre[pre.length - 1];
+    K.Book.render();
+    const chips = qa('#book .todochip');
+    const names = chips.map(c => c.textContent);
+    K.Home.render();
+    const shelf = q('#home .shelf').textContent;
+    check('the book names the levels still missing, and the shelf says how many',
+      chips.length === lastGame.levels.length
+      && names.every(t => t.indexOf(lastGame.name) >= 0)   // the chip leads with the game's icon
+      && /あと 3レベル/.test(shelf),
+      'chips=' + chips.length + ' shelf=' + shelf);
+
+    // and the first one is a way in, not just a label
+    const before = K.UI.currentName();
+    chips[0].click();
+    check('tapping a missing level starts it',
+      K.UI.currentName() === 'play' && S.planGames[0] === lastGame.id + ':0',
+      'from ' + before + ' to ' + K.UI.currentName() + ' / ' + S.planGames[0]);
+    K.Store.reset();
+  })();
+
+  /* ---------- 55. the records ask to be written out ----------
+     Six months of records live in one localStorage key on a device whose own
+     documentation says it will discard them, and the only defence was a button
+     behind an adult gate that nobody had a reason to open. */
+  (function backupNudge(){
+    K.Store.reset();
+    check('a brand-new record does not nag', K.Store.backupDue() === null,
+      JSON.stringify(K.Store.backupDue()));
+
+    const d = new Date();
+    for (let i = 0; i < 12; i++){
+      const day = new Date(d.getFullYear(), d.getMonth(), d.getDate() - i);
+      K.Store.data.daily[day.getFullYear() + '-' + String(day.getMonth() + 1).padStart(2, '0')
+        + '-' + String(day.getDate()).padStart(2, '0')] = 8;
+    }
+    const due = K.Store.backupDue();
+    K.Home.render();
+    const marked = q('#home .btn-round.due');
+    K.Store.noteBackup();
+    const after = K.Store.backupDue();
+    K.Home.render();
+    check('after a fortnight of use it asks once, and stops asking when it is done',
+      !!due && due.never === true && !!marked && after === null && !q('#home .btn-round.due'),
+      'due=' + JSON.stringify(due) + ' marked=' + !!marked + ' after=' + JSON.stringify(after));
+
+    // and the date it was done survives the round trip
+    const text = K.Store.exportText();
+    K.Store.reset();
+    K.Store.importText(text, 'replace');
+    check('when the last backup happened is itself backed up',
+      K.Store.lastBackupDays() === 0, String(K.Store.lastBackupDays()));
+    K.Store.reset();
+  })();
+
+  /* ---------- 56. the app knows when 入学 is ----------
+     「入学までの半年で」 is the premise, and `createdAt` was stored and never read:
+     the roadmap could describe the third month without knowing whether this child
+     was in it. */
+  (function calendar(){
+    K.Store.reset();
+    // first opened in September: school is the April after it
+    K.Store.data.createdAt = new Date(2026, 8, 10).getTime();
+    const autumn = K.Store.schoolDate();
+    // first opened in February: school is the April of that same year
+    K.Store.data.createdAt = new Date(2027, 1, 10).getTime();
+    const winter = K.Store.schoolDate();
+    K.Store.setSchoolYear(2028);
+    const fixed = K.Store.schoolDate();
+    check('入学 is guessed as the next April, and can be moved by hand',
+      autumn.getFullYear() === 2027 && autumn.getMonth() === 3
+      && winter.getFullYear() === 2027 && fixed.getFullYear() === 2028,
+      [autumn, winter, fixed].map(x => x.getFullYear() + '/' + (x.getMonth() + 1)).join(' '));
+
+    // the parent page turns that into a plan, and marks where the child is now
+    K.Store.reset();
+    K.Store.data.createdAt = Date.now() - 40 * 86400000;
+    K.Games.list.filter(g => (g.stage || 'pre') === 'pre').slice(0, 4)
+      .forEach(g => g.levels.forEach((lv, i) => {
+        K.Store.recordLevel(g.id, i, 2, 6, 8);
+        K.Store.addSticker(g.id + ':' + i);
+      }));
+    K.Parent.render();
+    const sched = q('#parent .schedule');
+    const here = qa('#parent .skilltable tr.now td').length;
+    check('the parent page says how far away 入学 is and whether this pace reaches it',
+      !!sched && /あと \d+日/.test(sched.textContent) && /12 \/ 48/.test(sched.textContent)
+      && qa('#parent .todo').length > 0 && here > 0,
+      sched ? sched.textContent.slice(0, 60) + ' · roadmapMark=' + here : 'no schedule section');
+    K.Store.reset();
+  })();
+
+  /* ---------- 57. the name field finally does something ---------- */
+  (function childName(){
+    K.Store.reset();
+    K.Store.setName('  みお  ');
+    K.Book.render();
+    const head = q('#book .topbar h2').textContent;
+    K.Store.setName('あいうえおかきくけこさしすせそ');   // 12 characters, no more
+    const capped = K.Store.name.length;
+    K.Store.setName('みお');
+    const text = K.Store.exportText();
+    K.Store.reset();
+    K.Store.importText(text, 'replace');
+    check('the child can be called by name, and the name survives a backup',
+      /みおの シールブック/.test(head) && capped === 12 && K.Store.name === 'みお',
+      head + ' · capped=' + capped + ' · restored=' + K.Store.name);
+    K.Store.reset();
+  })();
+
   function finish(){
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();

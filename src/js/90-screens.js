@@ -39,7 +39,13 @@ const Title = (() => {
     node = el('div#title', null,
       mascotSVG('happy', 'talk'),
       logo,
-      el('div.tag', { text: Progress.g1Open()
+      /* A five-year-old being called by name is not decoration — it is the
+         difference between「アプリを開いた」and「わたしの ぼうけん」. The field was in
+         Store from the first version, validated in every backup, and read by
+         nothing. */
+      el('div.tag', { text: Store.name
+        ? Store.name + 'の ぼうけん、はじまるよ'
+        : Progress.g1Open()
         ? 'しょうがっこう 1ねんせいの もんだいも あるよ'
         : 'しょうがっこうへ いく まえに　さんすうの ちからを あそんで つける' }),
       start,
@@ -52,6 +58,7 @@ const Title = (() => {
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl;
+  let parentBtn;
 
   function build(){
     if (node) return node;
@@ -73,7 +80,7 @@ const Home = (() => {
         el('div.starcount', null, starSVG(true), starEl),
         el('button.btn.btn-round', { 'aria-label': 'シールブック', title: 'シールブック',
           onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } }, '📖'),
-        el('button.btn.btn-round', { 'aria-label': 'おうちのかたへ', title: 'おうちのかたへ',
+        parentBtn = el('button.btn.btn-round', { 'aria-label': 'おうちのかたへ', title: 'おうちのかたへ',
           onclick(){ Sound.sfx.tap(); Parent.open(); } }, '👤')));
     /* きょうの れんしゅう reviews everything the child has unlocked, which means a
        single weak fact comes round about once a fortnight. This is the aimed set:
@@ -141,6 +148,13 @@ const Home = (() => {
   function render(){
     build();
     starEl.textContent = String(Store.totalStars());
+    /* A quiet mark for the adult, on the button only they press. The child sees a
+       dot; the parent sees that the records have not been written out in a month.
+       Nothing on the child's half of the screen changes, and nothing is spoken. */
+    const due = Store.backupDue();
+    parentBtn.classList.toggle('due', !!due);
+    parentBtn.setAttribute('title', due
+      ? 'おうちのかたへ（記録の書き出しを おすすめします）' : 'おうちのかたへ');
     const n = Store.todayCount(), streak = Store.streak();
     const firstRun = Diagnostic.shouldRun();
     const rec = Diagnostic.current();
@@ -214,9 +228,21 @@ const Home = (() => {
     } else {
       strip.append(el('span.empty', { text: 'レベルを クリアすると シールが たまるよ' }));
     }
+    /* The padlocked 1ねんせい cards are meant to be the reason to fill the shelf, but
+       on a 1024×768 iPad the world list scrolls: 509px of window over 1079px of map,
+       so those cards sit at y≈900 and a child has to scroll two thirds of the way
+       down to meet them. Rather than move the map around, the count goes on the one
+       strip that is on screen whatever happens — the shelf the child already taps. */
+    const gate = Progress.preStickers();
+    const toGo = Progress.g1Open() ? 0 : Math.max(0, gate.total - gate.got);
+    shelfEl.classList.toggle('nearly', toGo > 0 && toGo <= 6);
     shelfEl.append(
       el('span.bk', { text: '📖' }),
-      el('div.lbl', null, 'シール ' + got.length + 'まい', el('small', { text: 'タップで シールブック' })),
+      el('div.lbl', null, 'シール ' + got.length + 'まい',
+        el('small', { text: toGo
+          ? '1ねんせいの きょうしつまで あと ' + toGo + 'レベル'
+          : Progress.g1Open() ? '1ねんせいの きょうしつが ひらいて いるよ'
+                              : 'タップで シールブック' })),
       strip);
 
     /* how many banners share the row decides how much of each one fits: with three
@@ -314,6 +340,9 @@ const Result = (() => {
                  : r.stars === 2 ? 'よくできました！'
                  : r.stars === 1 ? 'クリア！'
                  : '惜しい！もう一度やってみよう。');
+    // 「やったね」 and 「やったね、みおちゃん」 are not the same sentence to a five-year-old
+    const called = Store.name && r.stars >= 2 && r.mode !== 'diagnostic'
+      ? Store.name + '、' : '';
     inner.append(
       mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
       r.mode === 'diagnostic'
@@ -426,7 +455,7 @@ const Result = (() => {
         onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
     inner.append(actions);
     UI.show('result', { replace: true });
-    Sound.say(spoken, { delay: 700 });
+    Sound.say(called + spoken, { delay: 700 });
     for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
   return { show, build };
@@ -434,21 +463,26 @@ const Result = (() => {
 
 /* ---------------------------------------------------------- STICKER BOOK */
 const Book = (() => {
-  let node, grid, count;
+  let node, grid, count, missing, headEl;
   function build(){
     if (node) return node;
     grid = el('div.book');
     count = el('div.aim');
+    /* 「あと 4レベル」 without saying *which* four is a number a child cannot act on
+       and a parent cannot help with: the shelf's empty slots are anonymous dots, and
+       working out which level each one belongs to means counting slot positions. */
+    missing = el('div.book-todo');
     node = el('div#book', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); UI.show('home', { replace: true }); } }, '←'),
-        el('h2', { text: '📖　シールブック' })),
-      count, grid);
+        headEl = el('h2')),
+      count, missing, grid);
     return UI.register('book', node);
   }
   function render(){
     build();
+    headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
     clear(grid);
     let got = 0;
     const drawSlots = keys => keys.forEach(key => {
@@ -480,6 +514,40 @@ const Book = (() => {
        the shelf (96 of them, gold included), the levels are the door (48). Saying
        「あと ◯まい」for the door would stall the moment a gold sticker was earned
        for a level that was already cleared. */
+    /* Name the levels the door is still waiting for, and make each one a way in.
+       The same list the「いまの おすすめ」walks, shown all at once. */
+    clear(missing);
+    const todo = Progress.gateSlots('pre')
+      .filter(k => !Store.hasSticker(k))
+      .map(k => {
+        const cut = k.lastIndexOf(':');
+        const g = Games.byId[k.slice(0, cut)], i = Number(k.slice(cut + 1));
+        return g && g.levels[i] ? { g, i, lv: g.levels[i] } : null;
+      })
+      .filter(Boolean);
+    if (todo.length){
+      const row = el('div.todorow');
+      todo.slice(0, 10).forEach(({ g, i, lv }) => {
+        const open = Store.levelUnlocked(g.id, i);
+        row.append(el('button.todochip' + (open ? '' : '.shut'), {
+          type: 'button', style: { '--lc': g.color },
+          title: g.name + '　' + lv.t,
+          onclick(){
+            Sound.sfx.tap();
+            if (open){ Session.startLevel(g, i); return; }
+            // not open yet: show the child where it lives, and what comes first
+            Levels.render(g);
+            UI.show('levels');
+          }
+        },
+          el('span.i', { text: open ? g.ico : '🔒' }),
+          el('span.t', null, g.name, el('small', { text: lv.t }))));
+      });
+      missing.append(
+        el('div.l', { text: 'のこりの レベル' + (todo.length > 10 ? '（さいしょの 10こ）' : '') }),
+        row);
+    }
+
     const left = Math.max(0, pre.total - pre.got);
     count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
       + (left

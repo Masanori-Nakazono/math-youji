@@ -175,20 +175,24 @@ const Parent = (() => {
       const acc = f[1] / f[0];
       if (acc >= .6) continue;
       const gid = k.slice(0, k.indexOf(':'));
-      weak.push({ acc, n: f[0], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid });
+      weak.push({ acc, n: f[0], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid,
+                  miss: Store.factMiss(k) });
     }
     weak.sort((a, b) => a.acc - b.acc || b.n - a.n);
     if (weak.length){
       sec.append(el('h4', { text: 'つまずいている中身' }));
       const chips = el('div.factchips');
       weak.slice(0, 8).forEach(w => chips.append(
-        el('span.factchip', null, el('small', { text: w.game }), w.label)));
+        el('span.factchip', null, el('small', { text: w.game }), w.label,
+          w.miss ? el('em', { text: missParent(w.miss.kind) }) : null)));
       sec.append(chips);
       sec.append(el('p', { text: 'ここに出た項目は「きょうの れんしゅう」が自動で多めに出します。声かけに使うなら、答えを教えるより、おはじきやお菓子で同じ数を作ってみせるほうが早いです。' }));
     } else {
       sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
         text: '取りこぼしている項目はいまのところありません。' }));
     }
+
+    sec.append(missSection());
 
     /* Right every time, and still counted out. Invisible to every number on this
        page until answers were timed, and the single most useful thing to work on
@@ -211,6 +215,57 @@ const Parent = (() => {
       sec.append(el('p', { text: '正解はしていますが、答えが出るまでに時間がかかっています。指を折る、枠のマスを数える、というやり方で合わせている状態です。まちがいではないので放っておかれがちですが、くり上がりのたし算は「9+4 を 9+1+3 にする」途中でこの答えを即座に使うので、ここが遅いとその先が進みません。「にがて あつめ」はこれらも拾います。家では、答えを急がせるより、おはじきを5と5、6と4 のように置いて見せて「かたまりで見る」経験を足すほうが早いです。' }));
     }
     return sec;
+  }
+
+  /* ---- まちがえ方の型 ----
+     A percentage says how often. It cannot say that the same child answers「10は4と
+     いくつ」with 4 — reading back the part they can see — and that the fix is to
+     cover the four rather than to drill the fact. The app throws away nothing now:
+     the value pressed on the first mistake is classified and counted (06-miss.js),
+     so this is the one place on the page that says what to actually do. */
+  function missSection(){
+    const facts = Store.data.facts || {};
+    const tally = {};                   // kind -> { n, games:Set, examples:[] }
+    let taught = 0;
+    for (const k in facts){
+      const m = facts[k] && facts[k][6];
+      if (!m) continue;
+      const gid = k.slice(0, k.indexOf(':'));
+      const gname = (Games.byId[gid] || {}).name || gid;
+      for (const kind in m){
+        if (kind === 'taught'){ taught += m[kind]; continue; }
+        if (MISS_DIAGNOSTIC.indexOf(kind) < 0) continue;
+        const t = tally[kind] || (tally[kind] = { n: 0, games: {}, examples: [] });
+        t.n += m[kind];
+        t.games[gname] = true;
+        if (t.examples.length < 3) t.examples.push(facts[k][3] || k);
+      }
+    }
+    const kinds = Object.keys(tally).filter(k => tally[k].n >= 3)
+      .sort((a, b) => tally[b].n - tally[a].n);
+    if (!kinds.length && !taught) return el('span', { hidden: true });
+
+    const s = el('div');
+    s.append(el('h4', { text: 'まちがえ方の型' }));
+    if (kinds.length){
+      s.append(el('p', { text: '同じ「不正解」でも中身は違います。1回目に押した答えを分類して数えたものです。正答率だけを見ていても出てこない情報で、家庭での声かけを変えられるのはここです。' }));
+      const list = el('div.misslist');
+      kinds.forEach(k => {
+        const t = tally[k];
+        list.append(el('div.missrow', null,
+          el('b', { text: missParent(k) }),
+          el('span.n', { text: 'のべ ' + t.n + '回' }),
+          el('small', { text: Object.keys(t.games).join('・') + '　例：' + t.examples.join('、') })));
+      });
+      s.append(list);
+    }
+    if (taught){
+      s.append(el('p', { style: { marginTop: 'calc(var(--u)*.7)' },
+        text: '※ 自力では届かず、アプリが答えを見せて終えた回が ' + taught
+            + ' 回あります（6回まちがえると出ます）。★にも「1回目で正解」にも数えていません。'
+            + 'この回の項目は「にがて あつめ」が必ず拾います。' }));
+    }
+    return s;
   }
 
   /* ---- なぜこの遊びなのか ----
@@ -351,6 +406,77 @@ const Parent = (() => {
     return s;
   }
 
+  /* ---- 入学まで ----
+     「入学までの半年で」 is the premise of the app, and the app had no idea when that
+     was. `createdAt` was stored and never read, there was no 入学日, and the roadmap
+     below was fixed prose: it could tell a parent what the third month should look
+     like without knowing whether this child is in it. This is the same numbers the
+     app already has, put on a calendar. */
+  function scheduleSection(){
+    const s = el('section');
+    const school = Store.schoolDate();
+    const toSchool = Store.daysToSchool();
+    const elapsed = Store.daysSinceStart();
+    const pre = Progress.preStickers();
+    const left = Math.max(0, pre.total - pre.got);
+    s.append(el('div.eyebrow', { text: 'calendar' }), el('h3', { text: '入学まで' }));
+
+    const fmt = d => d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    const head = el('div.schedule');
+    head.append(
+      el('div.big', null, toSchool > 0 ? el('b', { text: 'あと ' + toSchool + '日' })
+                                       : el('b', { text: '入学しています' }),
+        el('small', { text: fmt(school) + ' 入学の予定' })),
+      el('div.big', null, el('b', { text: pre.got + ' / ' + pre.total + ' レベル' }),
+        el('small', { text: left ? 'のこり ' + left + 'レベルで 1ねんせいの きょうしつが開きます' : 'すべてクリア済み' })));
+    s.append(head);
+
+    /* Pace, stated plainly enough that a parent can check it: levels cleared,
+       divided by the days since this app was first opened. It is a blunt average
+       and it says so — but it is the difference between a roadmap and a plan. */
+    if (!left){
+      s.append(el('p', { text: '入学前の48レベルはすべてクリア済みです。あとは「きょうの れんしゅう」と'
+        + '「にがて あつめ」で保つのと、「1ねんせいの きょうしつ」を進めるので十分です。' }));
+    } else if (elapsed < 7 || pre.got === 0){
+      s.append(el('p', { text: 'ペースを見積もれるだけの日数がまだありません（1週間ほど使うと出ます）。'
+        + '目安は1日1レベル・10分です。48レベルなら、休む日を入れても2〜3か月で終わる分量です。' }));
+    } else {
+      const rate = pre.got / Math.max(1, elapsed);            // levels per calendar day
+      const eta = Math.ceil(left / rate);
+      const done = new Date(Date.now() + eta * 86400000);
+      const inTime = toSchool <= 0 ? false : eta <= toSchool;
+      const perWeek = (rate * 7).toFixed(1);
+      s.append(el('div.todo' + (inTime ? '' : '.warn'), null,
+        el('div.mk', { text: inTime ? '◎' : '！' }),
+        el('div', null,
+          el('b', { text: inTime
+            ? 'このペースなら ' + fmt(done) + 'ごろ、入学に間に合います'
+            : 'このペースだと ' + fmt(done) + 'ごろ' + (toSchool > 0 ? '——入学に ' + (eta - toSchool) + '日ほど足りません' : '') }),
+          el('div', { text: '使い始めてから ' + elapsed + '日で ' + pre.got + 'レベル（週 ' + perWeek + 'レベル）。'
+            + 'のこり ' + left + 'レベルを同じペースで進めた場合の見込みです。' }))));
+      if (!inTime){
+        s.append(el('p', { text: '追いつき方は2つです。1つは「いまの おすすめ」を毎日1回、最後まで（8問）。'
+          + 'これがそのまま1日1レベルになります。もう1つは、間違いが多いレベルを繰り返すより'
+          + '「にがて あつめ」で該当する項目だけを10問回すほうが、同じ10分で進みます。'
+          + 'なお、間に合わなくても内容が消えるわけではありません——入学後も続けられます。' }));
+      }
+    }
+
+    /* The auto-guess is right for a 年長 and wrong for a 年中; one tap either way. */
+    const shift = n => el('button.btn', {
+      text: n < 0 ? '1年 早める' : '1年 遅らせる',
+      onclick(){
+        Store.setSchoolYear(school.getFullYear() + n);
+        render();
+      }
+    });
+    s.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
+      text: '入学の年は、はじめて使った日から推定しています。ちがうときは動かしてください。' }));
+    s.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap' } },
+      shift(-1), shift(1)));
+    return s;
+  }
+
   function planSection(){
     const s = el('section');
     s.append(el('div.eyebrow', { text: 'roadmap' }), el('h3', { text: '入学までの半年、どう進めるか' }),
@@ -359,8 +485,13 @@ const Parent = (() => {
     t.append(el('thead', null, el('tr', null,
       el('th', { text: '時期' }), el('th', { text: '中心にする世界' }), el('th', { text: 'ねらい' }))));
     const tb = el('tbody');
-    PLAN.forEach(([a2, b2, c]) => tb.append(el('tr', null,
-      el('td', { style: { whiteSpace: 'nowrap', fontWeight: 800 }, text: a2 }),
+    // which band this child is in today — the roadmap used to be prose that could
+    // not point at the reader
+    const month = Math.floor(Store.daysSinceStart() / 30) + 1;
+    const band = Progress.g1Open() ? 3 : month <= 2 ? 0 : month <= 4 ? 1 : 2;
+    PLAN.forEach(([a2, b2, c], i) => tb.append(el('tr' + (i === band ? '.now' : ''), null,
+      el('td', { style: { whiteSpace: 'nowrap', fontWeight: 800 },
+        text: a2 + (i === band ? '　← いまここ' : '') }),
       el('td', { style: { whiteSpace: 'nowrap' }, text: b2 }),
       el('td', { text: c }))));
     t.append(tb);
@@ -413,6 +544,32 @@ const Parent = (() => {
   function settingsSection(){
     const s = el('section');
     s.append(el('div.eyebrow', { text: 'settings' }), el('h3', { text: '設定' }));
+
+    /* One record per device. Naming it is worth doing for a five-year-old — the
+       title screen and the sticker book say it, and the result screen speaks it —
+       but it is a label, not a profile: two children sharing one iPad still share
+       one set of records, and the honest way to keep them apart today is one
+       backup file each (下の「書き出す／読み込む」). */
+    const nameIn = el('input.namein', {
+      type: 'text', value: Store.name, maxlength: '12', placeholder: 'なまえ（ひらがなでも）',
+      'aria-label': 'こどもの なまえ'
+    });
+    const saveName = el('button.btn', { text: '保存', onclick(){
+      Store.setName(nameIn.value);
+      Book.render();
+      nameHint.textContent = Store.name
+        ? '「' + Store.name + '」と呼びます（タイトル・シールブック・ほめ言葉）。'
+        : '名前は設定されていません。';
+    } });
+    const nameHint = el('p', { style: { marginTop: 'calc(var(--u)*.4)' },
+      text: Store.name
+        ? '「' + Store.name + '」と呼びます（タイトル・シールブック・ほめ言葉）。'
+        : 'お子さんの呼び名を入れると、タイトルとシールブックに出て、レベルをクリアしたときに名前で褒めます。空欄のままでも構いません。' });
+    s.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap', alignItems: 'center' } },
+      el('span', { text: 'なまえ：' }), nameIn, saveName), nameHint);
+    s.append(el('p', { style: { color: 'var(--ink-soft)' },
+      text: '※ 記録はこの端末に1人ぶんです。きょうだいで1台を使う場合は、名前を変えても記録は混ざります。'
+        + '分けるなら、下の「記録を書き出す」で1人ずつファイルを保管し、遊ぶ前に「おきかえる」で読み込んでください。' }));
     const toggle = (label, get, set) => {
       const b = el('button.btn', { text: label + '：' + (get() ? 'オン' : 'オフ') });
       b.addEventListener('click', () => {
@@ -456,6 +613,22 @@ const Parent = (() => {
     const s = el('section');
     s.append(el('div.eyebrow', { text: 'backup' }), el('h3', { text: '記録の保存とバックアップ' }));
 
+    /* Nothing on this page used to ask. Six months of records — including every
+       fact-level judgement the app makes about this child — live in one
+       localStorage key, on a device whose own documentation says it will discard
+       it, and the only defence was a button nobody had a reason to press. */
+    const due = Store.backupDue();
+    const last = Store.lastBackupDays();
+    if (due){
+      s.append(el('div.backup-due', null,
+        el('b', { text: due.never ? 'まだ一度も書き出していません' : last + '日間、書き出していません' }),
+        el('div', { text: 'この端末の記録が消えると、★もシールも、どの項目でつまずいているかの記録も、'
+          + 'まとめて失われます。下のボタンで書き出したファイルを、iCloud Drive などに置いておいてください（数KBです）。' })));
+    } else if (last != null){
+      s.append(el('p', { style: { color: 'var(--good-ink)', fontWeight: 800 },
+        text: last === 0 ? '✓ 今日、書き出しています。' : '✓ ' + last + '日前に書き出しています。' }));
+    }
+
     s.append(el('p', { html:
       '学習の記録は、<b>いま開いている URL ごとに、この端末のブラウザの中だけ</b>に保存されます。' +
       'ちがう URL で開くと、同じアプリでも記録は共有されません。' +
@@ -492,13 +665,19 @@ const Parent = (() => {
         const a = el('a', { href: URL.createObjectURL(blob), download: 'kazu-no-bouken-' + stamp() + '.json' });
         document.body.append(a); a.click();
         setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        Store.noteBackup();
+        Home.render();                       // clears the mark on the ホーム button
         status.textContent = '書き出しました。ファイルアプリや iCloud Drive に保管してください。';
       }catch(e){ status.textContent = 'この環境ではファイルに書き出せません。下の「コピー」を使ってください。'; }
     } });
 
     const copy = el('button.btn', { text: 'コピー（貼り付けで復元）', onclick(){
       const text = Store.exportText();
-      const done = () => { status.textContent = 'コピーしました。メモアプリなどに貼り付けて保管してください。'; };
+      const done = () => {
+        Store.noteBackup();
+        Home.render();
+        status.textContent = 'コピーしました。メモアプリなどに貼り付けて保管してください。';
+      };
       if (navigator.clipboard && navigator.clipboard.writeText){
         navigator.clipboard.writeText(text).then(done, () => { box.value = text; box.select(); status.textContent = '下の枠に出しました。長押しして「コピー」してください。'; });
       } else { box.value = text; box.select(); status.textContent = '下の枠に出しました。長押しして「コピー」してください。'; }
@@ -556,6 +735,7 @@ const Parent = (() => {
           + 'それを全部終えると、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
         el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると自動でヒントが出て、必ず自分で正解にたどり着いて終われるようにしてあります。' })),
       nextUpSection(),
+      scheduleSection(),
       statsSection(),
       stageSection(),
       progressSection(),

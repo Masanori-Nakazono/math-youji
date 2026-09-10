@@ -618,6 +618,75 @@ body::before{
 }
 .shelf .strip span{ flex: 0 0 auto; }
 .shelf .strip .empty{ font-size: calc(var(--u)*1.3); color: var(--ink-soft); font-weight: 500; }
+/* the last few levels before the classroom opens: the same colour the result
+   screen uses for「もうすぐ ひらくよ」, so the two say the same thing */
+.shelf.nearly{ border-color: var(--accent); }
+.shelf.nearly .lbl small{ color: var(--accent-ink); font-weight: 800; }
+
+#parent .namein{
+  font: inherit; font-size: calc(var(--u)*1.4);
+  padding: calc(var(--u)*.4) calc(var(--u)*.8);
+  min-height: max(calc(var(--u)*3.4), 40px);
+  border: calc(var(--u)*.18) solid var(--card-edge); border-radius: calc(var(--u)*.6);
+  background: var(--card); color: var(--ink); max-width: calc(var(--u)*18);
+}
+
+/* ---------- parent: where this child is on the calendar ---------- */
+#parent .schedule{
+  display: flex; flex-wrap: wrap; gap: calc(var(--u)*.8);
+  margin: calc(var(--u)*.6) 0 calc(var(--u)*.9);
+}
+#parent .schedule .big{
+  flex: 1 1 calc(var(--u)*18);
+  background: var(--paper-2); border-radius: calc(var(--u)*.6);
+  padding: calc(var(--u)*.7) calc(var(--u)*1);
+}
+#parent .schedule .big b{ display: block; font-family: var(--fs-num); font-size: calc(var(--u)*2.2); line-height: 1.2; }
+#parent .schedule .big small{ display: block; color: var(--ink-soft); font-size: calc(var(--u)*1.1); margin-top: .25em; }
+#parent .todo.warn .mk{ color: var(--oops-ink); }
+#parent .skilltable tr.now td{ background: color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* a mark only an adult reads: the records have not been written out in a while */
+.btn-round.due{ position: relative; }
+.btn-round.due::after{
+  content: ""; position: absolute; top: 6%; right: 6%;
+  width: calc(var(--u)*1.1); height: calc(var(--u)*1.1); border-radius: 50%;
+  background: var(--accent); border: calc(var(--u)*.18) solid var(--card);
+}
+#parent .backup-due{
+  background: var(--oops-soft); border-left: calc(var(--u)*.4) solid var(--oops);
+  border-radius: calc(var(--u)*.5);
+  padding: calc(var(--u)*.7) calc(var(--u)*1);
+  margin: calc(var(--u)*.6) 0;
+}
+#parent .backup-due b{ display: block; color: var(--oops-ink); margin-bottom: .2em; }
+
+/* ---------- sticker book: which levels are still missing ---------- */
+.book-todo{ flex: 0 0 auto; margin: calc(var(--u)*.2) 0 calc(var(--u)*.6); }
+.book-todo .l{
+  font-size: calc(var(--u)*1.2); font-weight: 800; color: var(--ink-soft);
+  margin-bottom: calc(var(--u)*.35);
+}
+.book-todo .todorow{
+  display: flex; gap: calc(var(--u)*.5); overflow-x: auto;
+  padding-bottom: calc(var(--u)*.3);
+}
+.todochip{
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: calc(var(--u)*.45);
+  font: inherit; text-align: left; color: var(--ink); cursor: pointer;
+  background: var(--card);
+  border: calc(var(--u)*.2) solid var(--lc, var(--card-edge));
+  border-radius: var(--wob-b);
+  padding: calc(var(--u)*.4) calc(var(--u)*.8);
+  min-height: max(calc(var(--u)*4), var(--tap));
+  transition: transform .14s cubic-bezier(.2,.9,.3,1.4);
+}
+.todochip:active{ transform: translateY(.15em); }
+.todochip.shut{ border-color: var(--card-edge); opacity: .62; }
+.todochip .i{ font-size: calc(var(--u)*2); line-height: 1; }
+.todochip .t{ font-size: calc(var(--u)*1.25); font-weight: 800; white-space: nowrap; }
+.todochip .t small{ display: block; font-size: calc(var(--u)*1.05); font-weight: 500; color: var(--ink-soft); }
 
 .world h3 .sub{
   font-size: calc(var(--u)*1.15); font-weight: 500; color: var(--ink-soft);
@@ -1275,6 +1344,9 @@ body::before{
   background: var(--paper-2);
   border-radius: 999px;
   padding: calc(var(--u)*.3) calc(var(--u)*1.1);
+  /* the pill's own padding can push a long line a few pixels past the playfield,
+     which the auto-scaler then has to shrink the whole question to fix */
+  max-width: 100%; box-sizing: border-box; text-align: center;
   animation: pop .35s cubic-bezier(.2,.9,.3,1.5);
 }
 .sr{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -1304,6 +1376,26 @@ body::before{
 .feedback .mk{ font-size: 1.15em; }
 .feedback.oops{ background: var(--oops-soft); color: color-mix(in srgb, var(--oops) 55%, var(--ink)); }
 .feedback.hint{ background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: var(--accent-ink); }
+/* the way out, once the ladder has run out of rungs: offered, not forced */
+.feedback .teachbtn{
+  margin-left: calc(var(--u)*.6);
+  font-size: calc(var(--u)*1.35); font-weight: 800;
+  padding: calc(var(--u)*.3) calc(var(--u)*1.2);
+  /* a rescue a five-year-old has to be able to hit; the prompt bar is the only
+     place it can live, so it takes a floor of its own rather than --tap */
+  min-height: max(calc(var(--u)*3), 40px);
+  border-radius: 999px;
+  border: calc(var(--u)*.2) solid var(--accent); color: var(--accent-ink);
+  background: var(--card); box-shadow: var(--shadow-sm);
+}
+.feedback{ flex-wrap: wrap; }
+/* the answer, about to be pressed for the child — it has to be watchable */
+.choice.showme{
+  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 26%, var(--card));
+  animation: showme .7s ease-in-out 2;
+}
+@keyframes showme{ 0%,100%{ transform: none } 50%{ transform: scale(1.12) } }
+@media (prefers-reduced-motion: reduce){ .choice.showme{ animation: none } }
 
 /* a tried-and-wrong answer keeps a quiet mark, so the child can see what is ruled out */
 .choice.tried{ border-color: var(--oops); }
@@ -1567,6 +1659,17 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 /* right every time, and still counted out — a different thing from a wrong answer,
    so it must not wear the same colour as one */
 #parent .factchip.slow{ background:color-mix(in srgb, var(--c-yellow) 32%, var(--card)); }
+/* what kind of wrong it was — the sentence, not the percentage */
+#parent .factchip em{ font-style:normal; font-weight:500; color:var(--oops-ink); font-size:.78em }
+#parent .misslist{ display:grid; gap:calc(var(--u)*.4); margin:calc(var(--u)*.6) 0 }
+#parent .missrow{
+  display:grid; grid-template-columns:1fr auto; gap:0 calc(var(--u)*.8);
+  background:var(--paper-2); border-radius:calc(var(--u)*.6);
+  padding:calc(var(--u)*.5) calc(var(--u)*.8);
+}
+#parent .missrow b{ font-weight:800 }
+#parent .missrow .n{ font-family:var(--fs-num); font-weight:800; color:var(--oops-ink); white-space:nowrap }
+#parent .missrow small{ grid-column:1 / -1; color:var(--ink-soft); font-size:.8em }
 
 /* ---------- floors for anything a finger has to hit ----------
    The question is scaled up to fill its box, but the smallest iPad in portrait
@@ -2299,7 +2402,12 @@ const Store = (() => {
     /* Per-game aggregates can only ever say "this game is shaky". These two say
        *what* is shaky and *when* — which is what lets the app come back to the
        exact fact the child missed, and lets the parent page name it. */
-    facts: {},        // item key -> [asked, firstTryRight, lastDayNumber, label, "gameId:levelIndex", typicalMs]
+    /* facts: item key -> [asked, firstTryRight, lastDayNumber, label,
+                           "gameId:levelIndex", typicalMs, {missKind: count}]
+       The last slot is *what kind* of wrong it was. Right/wrong is one bit and it
+       cannot separate a child who read back the part they could see from one who
+       was a single count out — see 06-miss.js. */
+    facts: {},
     recent: {},       // "gameId:levelIndex" -> last 30 first-try outcomes, "1011…"
     last:  {},        // "gameId:levelIndex" -> day number last played
     swift: {},        // "gameId:levelIndex" -> 1 when cleared without counting
@@ -2315,6 +2423,16 @@ const Store = (() => {
        not be held behind a padlock they cannot move — the same reason a level opens
        after three honest attempts. Once true it stays true. */
     g1Open: false,
+    /* Day number of the last export. Six months of records live in one localStorage
+       key on a device whose OS is documented to throw them away, and the only
+       defence — 書き出す — sat behind an adult gate that nobody had a reason to open.
+       Nothing here backs anything up by itself; it just knows when to ask. */
+    backupAt: 0,
+    /* The April the child starts school. Guessed from the first day of use and
+       overridable, because「入学までの半年」is the premise of the whole app and until
+       now the app had no idea when that was: the roadmap on the parent page was
+       fixed prose that could not say which month this child is actually in. */
+    schoolYear: 0,
     createdAt: Date.now()
   });
 
@@ -2364,6 +2482,9 @@ const Store = (() => {
   const isRecord = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const isCount = v => Number.isFinite(v) && v >= 0;
   const safeKey = k => k !== '__proto__' && k !== 'prototype' && k !== 'constructor';
+  /** {missKind: count} — a small tally, and every key has to be one we know */
+  const isMissMap = v => isRecord(v) && Object.keys(v).every(
+    k => safeKey(k) && MISS_KINDS[k] && isCount(v[k]));
 
   /** Validate into a fresh object before touching the live record. Older backups
       may omit newer fields, but a field that is present must have the shape the
@@ -2396,7 +2517,8 @@ const Store = (() => {
           && isCount(v[0]) && isCount(v[1]) && v[1] <= v[0] && isCount(v[2])
           && (v[3] == null || typeof v[3] === 'string')
           && (v[4] == null || typeof v[4] === 'string')
-          && (v[5] == null || isCount(v[5])))) return null;
+          && (v[5] == null || isCount(v[5]))
+          && (v[6] == null || isMissMap(v[6])))) return null;
 
     if (data.stickers !== undefined){
       if (!Array.isArray(data.stickers) || data.stickers.some(v => typeof v !== 'string')) return null;
@@ -2448,7 +2570,7 @@ const Store = (() => {
     }
     if (data.name !== undefined){
       if (typeof data.name !== 'string') return null;
-      out.name = data.name;
+      out.name = data.name.slice(0, 12);
     }
     for (const k of ['sfx', 'voice', 'g1Open']){
       if (data[k] !== undefined){
@@ -2460,9 +2582,11 @@ const Store = (() => {
       if (data.voiceId !== null && typeof data.voiceId !== 'string') return null;
       out.voiceId = data.voiceId;
     }
-    if (data.createdAt !== undefined){
-      if (!isCount(data.createdAt)) return null;
-      out.createdAt = data.createdAt;
+    for (const k of ['backupAt', 'schoolYear', 'createdAt']){
+      if (data[k] !== undefined){
+        if (!isCount(data[k])) return null;
+        out[k] = data[k];
+      }
     }
     return out;
   }
@@ -2487,10 +2611,21 @@ const Store = (() => {
     const af2 = add.facts || {};
     for (const k in af2){
       const cur = out.facts[k];
+      const mine = (base.facts && base.facts[k] && base.facts[k][6]) || null;
+      const theirs = af2[k][6] || null;
       if (!cur || (af2[k][0] || 0) > (cur[0] || 0)) out.facts[k] = af2[k].slice();
       else if (cur){
         cur[2] = maxNum(cur[2], af2[k][2]);
         if (!cur[4] && af2[k][4]) cur[4] = af2[k][4];   // keep whichever side knows where to ask it
+      }
+      // miss tallies: max per kind, never sum — the same rule the rest of the
+      // merge follows, so importing one backup twice cannot invent mistakes
+      if (mine || theirs){
+        const m = {};
+        if (mine) for (const t in mine) m[t] = mine[t];
+        if (theirs) for (const t in theirs) m[t] = maxNum(m[t], theirs[t]);
+        out.facts[k] = out.facts[k].slice();
+        out.facts[k][6] = m;
       }
     }
     // recent / last: follow whichever side actually played that level more
@@ -2523,6 +2658,9 @@ const Store = (() => {
     }
     // a stage that has been opened on either device stays open
     out.g1Open = !!(base.g1Open || add.g1Open);
+    out.backupAt = maxNum(base.backupAt, add.backupAt);
+    out.schoolYear = base.schoolYear || add.schoolYear || 0;
+    out.name = base.name || add.name || '';
     out.createdAt = Math.min(base.createdAt || Date.now(), add.createdAt || Date.now());
     return out;
   }
@@ -2677,6 +2815,34 @@ const Store = (() => {
       return (p && p[1]) ? p[0] / p[1] : null;
     },
     todayCount(){ return mem.daily[todayKey()] || 0; },
+    /** calendar days this app has actually been used on — how much there is to lose */
+    usedDays(){ return Object.keys(mem.daily || {}).length; },
+    /** calendar days since the app was first opened on this device */
+    daysSinceStart(){
+      return Math.max(0, dayNo() - Math.floor((mem.createdAt || Date.now()) / DAY));
+    },
+    /** 1 April of the year this child starts school — set, or guessed from day one.
+        School starts in April, so a first run in April or later belongs to next April. */
+    schoolDate(){
+      if (mem.schoolYear) return new Date(mem.schoolYear, 3, 1);
+      const d = new Date(mem.createdAt || Date.now());
+      return new Date(d.getFullYear() + (d.getMonth() >= 3 ? 1 : 0), 3, 1);
+    },
+    setSchoolYear(y){ mem.schoolYear = y || 0; save(); },
+    /** whole days from today to 入学 (negative once it has passed) */
+    daysToSchool(){
+      return Math.round((this.schoolDate().getTime() - Date.now()) / DAY);
+    },
+    noteBackup(){ mem.backupAt = dayNo(); writeNow(); },
+    lastBackupDays(){ return mem.backupAt ? Math.max(0, dayNo() - mem.backupAt) : null; },
+    /** { never, days } when it is time to ask again, otherwise null.
+        Never on the first days: there is nothing yet worth the interruption. */
+    backupDue(){
+      if (this.usedDays() < 10) return null;
+      const d = this.lastBackupDays();
+      if (d == null) return { never: true, days: null };
+      return d >= 30 ? { never: false, days: d } : null;
+    },
     streak(){
       let n = 0; const d = new Date();
       for (;;){
@@ -2694,7 +2860,7 @@ const Store = (() => {
     },
 
     /* ---- item-level memory ---- */
-    noteFact(k, firstTryOk, label, from, ms){
+    noteFact(k, firstTryOk, label, from, ms, miss){
       if (!k) return;
       const f = mem.facts[k] || (mem.facts[k] = [0, 0, 0]);
       f[0]++;
@@ -2713,9 +2879,33 @@ const Store = (() => {
         const capped = Math.min(ms, 20000);
         f[5] = f[5] ? Math.round(f[5] * 0.65 + capped * 0.35) : capped;
       }
+      /* What kind of wrong it was, from the first mistake on this question. A
+         percentage says how often; this says what to do about it. */
+      if (miss && MISS_KINDS[miss]){
+        const m = f[6] || (f[6] = {});
+        m[miss] = (m[miss] || 0) + 1;
+      }
       save();
     },
     fact: k => mem.facts[k] || null,
+    /** The mistake this child keeps making on this fact: { kind, n, of } or null.
+        Only the diagnostic kinds, only when it has happened more than once, and
+        only when it is actually the dominant reading — one stray tap is not a
+        pattern, and naming the wrong pattern is worse than naming none. */
+    factMiss(k){
+      const f = mem.facts[k];
+      const m = f && f[6];
+      if (!m) return null;
+      let best = null, total = 0;
+      for (const t in m){
+        total += m[t];
+        if (MISS_DIAGNOSTIC.indexOf(t) < 0) continue;
+        if (!best || m[t] > best.n) best = { kind: t, n: m[t] };
+      }
+      if (!best || best.n < 2 || best.n * 2 < total) return null;
+      best.of = total;
+      return best;
+    },
     factOrigin(k){ const f = mem.facts[k]; return f && f[4] || null; },
     factSpeed(k){ const f = mem.facts[k]; return f && f[5] || null; },
     /** Typical time to answer this game's facts, in ms — null until something has
@@ -2769,6 +2959,9 @@ const Store = (() => {
     },
     hasSticker: k => mem.stickers.indexOf(k) >= 0,
     setPref(k, v){ mem[k] = v; save(); },
+    /** What to call this child. Kept short: it is spoken and it goes in a heading. */
+    get name(){ return mem.name || ''; },
+    setName(v){ mem.name = String(v || '').trim().slice(0, 12); save(); },
     reset(){ mem = blank(); save(); }
   };
 })();
@@ -3048,7 +3241,13 @@ const UI = (() => {
   /* Grow to fill the room, but also shrink a little when a question is naturally
      too wide (a row of eight animals on a portrait iPad): a row the child has to
      count is worthless once it scrolls out of sight. */
-  const FIT_MAX = 2.4, FIT_MIN = 0.72;
+  /* 2.4 was leaving room on the table. かぞえよう L1 on a portrait iPad puts five
+     objects on one line: the row is capped by how wide the field is, the field is
+     751px tall, and the objects used 159px of it — 79% of the box empty while the
+     things a finger has to land on stayed at the cap. The search only ever grows to
+     where something would stick out, so a higher ceiling costs nothing on the
+     questions that were already filling their box. */
+  const FIT_MAX = 2.9, FIT_MIN = 0.72;
 
   function fitsInside(field, kids){
     const b = field.getBoundingClientRect();
@@ -3086,7 +3285,7 @@ const UI = (() => {
       return fitsInside(field, kids);
     };
     let lo = FIT_MIN, hi = FIT_MAX;
-    for (let i = 0; i < 6; i++){                        // ~1.5% precision
+    for (let i = 0; i < 7; i++){                        // ~1.5% precision over a wider range
       const m = (lo + hi) / 2;
       if (at(m)) lo = m; else hi = m;
     }
@@ -3357,10 +3556,30 @@ const Session = (() => {
      (ぱっと みて いくつ) has nothing to try with: 「もういちど」 over a covered
      board is an invitation to guess. Those games ask for their hint at 1. */
   let hintAfter = 2, extrasShown = false;
+  /* ---------- the help ladder ----------
+     One hint used to be the whole of it. After that the screen stopped answering:
+     the game's own hint fires once, and the choice-dimming fallback only has
+     something to dim when the question was built with `buildChoices` — 28 of the
+     60 levels never build one (every keypad, every hand-made answer surface), so
+     the third, fourth and fifth mistake there changed nothing at all, down to the
+     pixel, with the speech bubble still reading「ヒントを だすね」.
+
+     Now every mistake past the first moves something, and the bottom of the ladder
+     is a way out: 「こたえを みる」 appears, and if it is not taken the app takes it
+     itself. Reaching the answer that way is recorded as `taught` — it is not a
+     first-try success, it does not earn ★, and 「にがて あつめ」 comes back for it.
+     Same reasoning as「3回まじめに挑戦すれば次のレベルは開く」: a five-year-old must
+     never be left in front of a door they cannot move. */
+  const STRONG_AFTER = 2, TEACH_AFTER = 4;   // mistakes past the game's own hint
+  let hintStrongFns = [], showFn = null, answerBtn = null, answerText = null, taught = false;
   /* What this question is *about*. Every generator names its item, so the app can
      avoid asking the same fact twice in one sitting, steer toward the facts this
      child keeps missing, and tell the parent which ones they are. */
   let curItem = null, curLabel = null;
+  /* What the answer was, and what kind of wrong the first mistake was. Right/wrong
+     is one bit; it cannot separate 「見えている方を言った」 from 「1つ ずれた」, and those
+     are different children. See 06-miss.js. */
+  let curAnswer = null, missType = null;
   let focusKeys = [];             // the facts a 集中練習 session is aimed at
   /* ---------- how long the answer took ----------
      けいさんの やま is named for「考えずに言える」— an answer that arrives rather than
@@ -3451,11 +3670,12 @@ const Session = (() => {
 
   /** Wrong answers have to be visible, not just audible: a device with no
       Japanese voice must still show the child that something happened. */
-  function showFeedback(kind, text){
+  function showFeedback(kind, text, extra){
     feedbackEl.hidden = false;
     feedbackEl.className = 'feedback ' + kind;
     clear(feedbackEl);
     feedbackEl.append(el('span.mk', { text: kind === 'oops' ? '？' : '💡' }), text);
+    if (extra) feedbackEl.append(extra);
     feedbackEl.animate
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
   }
@@ -3682,8 +3902,19 @@ const Session = (() => {
       },
       /** `after` = how many mistakes before it fires (default 2, minimum 1). */
       onHint(fn, after){ if (stale()) return; hintFn = fn; if (after) hintAfter = Math.max(1, after); },
+      /** Show (and take) the correct action, for the bottom rung of the ladder.
+          `buildChoices` / `buildPad` questions need nothing: the engine presses the
+          right button, which runs the question's own reveal. A hand-made answer
+          surface has to say how — usually one line, tapping its own right element.
+          Optional: without it the engine still ends the question rather than
+          leaving the child pressing wrong things forever. */
+      onShow(fn){ if (!stale()) showFn = fn; },
       correct(o){ if (!stale()) onCorrect(o || {}); },
-      wrong(target){ if (!stale()) onWrong(target); },
+      /** `given` is what the child actually chose: a value the engine can read
+          against the answer, or a tag a generator supplies for something the item
+          key cannot say ('looks', 'rev'). Optional — omitting it only costs the
+          diagnosis, never the behaviour. */
+      wrong(target, given){ if (!stale()) onWrong(target, given); },
       /** delayed work that dies with the question */
       later(fn, ms){ return later(fn, ms); },
       get locked(){ return locked; },
@@ -3705,6 +3936,8 @@ const Session = (() => {
         const lo = o.lo == null ? 0 : o.lo, hi = o.hi == null ? 10 : o.hi;
         clear(choicesEl);
         askedAt = performance.now();     // a story animation is not thinking time
+        curAnswer = answer;
+        newSurface();
         choicesEl.classList.add('pad');
         choicesEl.dataset.built = '1';
         /* No hintBtns: the engine's fallback dims one more wrong answer on every
@@ -3730,15 +3963,22 @@ const Session = (() => {
             } else {
               b.classList.add('wrong', 'tried');
               later(() => b.classList.remove('wrong'), 460);
-              a.wrong(b);
+              a.wrong(b, val);
             }
           });
+          if (v === answer){ answerBtn = b; answerText = String(v); }
           keys.push(b);
           choicesEl.append(b);
         }
         hintExtras.push(() => {
           keys.forEach(b => {
             if (Math.abs(Number(b.textContent) - answer) > 2) b.classList.add('dim');
+          });
+        });
+        // one more rung: eleven keys → five → three. Still a choice, not a coin flip.
+        hintStrongFns.push(() => {
+          keys.forEach(b => {
+            if (Math.abs(Number(b.textContent) - answer) > 1) b.classList.add('dim');
           });
         });
         return choicesEl;
@@ -3752,6 +3992,8 @@ const Session = (() => {
         const o = opts || {};
         clear(choicesEl);
         askedAt = performance.now();
+        curAnswer = answer;
+        newSurface();
         choicesEl.dataset.built = '1';
         hintBtns = [];
         let settled = false;              // one accepted answer per set of buttons
@@ -3780,9 +4022,10 @@ const Session = (() => {
             } else {
               b.classList.add('wrong', 'tried');
               later(() => b.classList.remove('wrong'), 460);
-              a.wrong(b);
+              a.wrong(b, val);
             }
           });
+          if (hit && !answerBtn){ answerBtn = b; answerText = typeof content === 'string' ? content : String(val); }
           if (!hit) hintBtns.push(b);
           choicesEl.append(b);
         });
@@ -3792,11 +4035,21 @@ const Session = (() => {
     return a;
   }
 
+  /* A question with several blanks builds a new set of buttons for each one. The
+     rungs of the ladder belong to the *surface*, not the question: pointing
+     「こたえを みる」 at the button that answered the previous blank leaves the child
+     on a board where nothing works. Mistakes keep accumulating across the blanks,
+     so a child who needed showing on the first one is shown the next one quickly. */
+  function newSurface(){
+    answerBtn = null; answerText = null; hintStrongFns = []; taught = false;
+  }
+
   function resetSurface(){
     locked = false; hintBtns = []; hintFn = null; hintExtras = []; hintShown = false;
     hintAfter = 2; extrasShown = false;
     askedAt = 0; respondedMs = null;
-    curItem = null; curLabel = null;
+    curItem = null; curLabel = null; curAnswer = null; missType = null;
+    hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
     choicesEl.classList.remove('pad');
     clearFeedback();
@@ -3868,36 +4121,101 @@ const Session = (() => {
     refit();                      // and again next frame, once fonts/SVGs have settled
   }
 
-  function onWrong(target){
-    if (locked) return;
+  /** Dim one more wrong choice, so a repeated mistake is never met by a still screen. */
+  function dimOne(){
+    const live = hintBtns.filter(b => !b.classList.contains('dim'));
+    if (live.length > 1) live[ri(0, live.length - 1)].classList.add('dim');
+  }
+
+  function runExtras(){
+    if (extrasShown) return;
+    extrasShown = true;
+    hintExtras.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
+  }
+
+  /** Second rung: narrow much harder, and put the way out on screen. */
+  function strongHint(){
+    runExtras();
+    hintStrongFns.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
+    // leave exactly one wrong answer standing beside the right one
+    for (let i = 0; i < 12 && hintBtns.filter(b => !b.classList.contains('dim')).length > 1; i++) dimOne();
+    showFeedback('hint', 'もう ちょっと ヒントを だすね', teachButton());
+    Sound.say('もう少し、ヒントを出すね。', { delay: 260 });
+  }
+
+  /** The way out, offered before it is taken. */
+  function teachButton(){
+    return el('button.btn.btn-ghost.teachbtn', {
+      type: 'button', text: 'こたえを みる',
+      onclick(e){ e.stopPropagation(); teach(); }
+    });
+  }
+
+  /** Bottom rung. Press the right button if there is one — that runs the question's
+      own reveal, so the answer lands inside the sentence the child was reading —
+      otherwise let the game show it, and end the question either way. */
+  function teach(){
+    if (locked || taught) return;
+    taught = true;
+    // stop the child racking up misses on a board that is already being answered
+    $$('.choice', choicesEl).forEach(b => { if (b !== answerBtn) b.disabled = true; });
+    clearFeedback();
+    showFeedback('hint', 'いっしょに やってみよう');
+    Sound.say(answerText != null ? `こたえは、${answerText}。いっしょに見てみよう。`
+                                 : 'いっしょに、やってみよう。', { delay: 200 });
+    if (answerBtn && answerBtn.isConnected && !answerBtn.disabled){
+      answerBtn.classList.add('showme');
+      later(() => { if (!locked) answerBtn.click(); }, 900);
+      return;
+    }
+    if (showFn){ try{ showFn(); }catch(e){ console.error('show failed', e); } }
+    later(() => { if (!locked) onCorrect({ quiet: true, delay: 1400 }); }, 1000);
+  }
+
+  function onWrong(target, given){
+    // once the answer is being shown, taps on the old surface are not attempts
+    if (locked || taught) return;
     markResponse();
     wrongThisQ++;
     mistakes++;
+    /* The first mistake is the diagnostic one — later ones are increasingly guided,
+       so they say less about what the child was thinking. */
+    if (!missType){
+      missType = (typeof given === 'string' && MISS_KINDS[given])
+        ? given
+        : classifyMiss(curItem, curAnswer, given);
+    }
     Sound.sfx.wrong();
     setMood('soft');
     if (target && target.classList){
       target.classList.add('wrong');
       later(() => target.classList.remove('wrong'), 460);
     }
-    if (wrongThisQ >= hintAfter && !hintShown){
+
+    if (wrongThisQ >= 2) runExtras();
+
+    if (wrongThisQ === hintAfter && !hintShown){
       hintShown = true;
       showFeedback('hint', 'ヒントを だすね');
       Sound.say('ヒントを出すね。', { delay: 260 });
       if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
-    } else if (wrongThisQ === 1){
-      showFeedback('oops', 'もういちど やってみよう');
-      Sound.say('惜しいね。もう一度やってみよう。', { delay: 260 });
+      if (wrongThisQ >= 2) dimOne();
+      return;
     }
-    if (wrongThisQ >= 2){
-      // The game's own hint is preferred, but the choice-dimming fallback runs too:
-      // a hint that only speaks would leave a muted device with no feedback at all.
-      if (!extrasShown){
-        extrasShown = true;
-        hintExtras.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
-      }
-      const live = hintBtns.filter(b => !b.classList.contains('dim'));
-      if (live.length > 1) live[ri(0, live.length - 1)].classList.add('dim');
+    if (wrongThisQ >= hintAfter + TEACH_AFTER){ teach(); return; }
+    if (wrongThisQ === hintAfter + STRONG_AFTER){ strongHint(); return; }
+    if (wrongThisQ > hintAfter){
+      // between the rungs: still say something new, and keep narrowing
+      dimOne();
+      showFeedback('hint', 'まだ ちがうね。よく みて みよう',
+        wrongThisQ > hintAfter + STRONG_AFTER ? teachButton() : null);
+      return;
     }
+    /* Before the hint: name the mistake if we can read it. 「1つ多く数えた」 and
+       「見えている方を言った」 need different words, and the generic line said neither. */
+    const line = missChild(missType);
+    showFeedback('oops', line || 'もういちど やってみよう');
+    Sound.say(line ? line.replace(/\s+/g, '') : '惜しいね。もう一度やってみよう。', { delay: 260 });
   }
 
   function onCorrect(o){
@@ -3916,7 +4234,10 @@ const Session = (() => {
     if (mode !== 'diagnostic'){
       Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
       if (curItem){
-        Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed);
+        /* 'taught' outranks the reading of the first mistake: what matters about
+           this question is that the child did not get there on their own. */
+        Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed,
+                       taught ? 'taught' : missType);
         if (!clean && !shaky.some(x => x.key === curItem)){
           shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
         }
@@ -4027,10 +4348,116 @@ const Session = (() => {
       get pending(){ return timers.size; },
       get mode(){ return mode; },
       get responseMs(){ return respondedMs; },
+      get missType(){ return missType; },
+      get taught(){ return taught; },
+      get wrongThisQ(){ return wrongThisQ; },
       get planItems(){ return plan.map(p => p.want || null); }
     }
   };
 })();
+
+/* ---- 06-miss.js ---- */
+/* ===========================================================
+   06 — what kind of wrong it was
+   ===========================================================
+   Everything the app knew about a mistake used to be one bit. `noteFact` took
+   「一発で正解したか」 and the time, and `onWrong(target)` was handed the very button
+   the child pressed and threw the value away. So the record could say
+   「10は4といくつ、が62%」 and nothing more — and 62% is the same number whether the
+   child said **4** (they read back the part they could see), **5** (they were one
+   out), or **7** (they had no idea). Those are three different children and three
+   different things to say at the kitchen table.
+
+   This is the third axis, after 正誤 and 速さ, and it needs no new instrument: the
+   value is already in hand at the moment it is discarded.
+
+   Two ways a miss gets its name:
+     • the engine classifies it, from the item key and the answer (below), or
+     • the generator names it, by passing a tag to `api.wrong(el, 'looks')` —
+       for the things the key cannot say, like「大きく描いてある方を選んだ」.
+   =========================================================== */
+'use strict';
+
+/* The vocabulary. `child` is read out at the first mistake, in the words a
+   five-year-old reads; `parent` is the sentence the dashboard writes. */
+const MISS_KINDS = {
+  up:    { child: 'もういちど、ゆびで さしながら かぞえて みよう',
+           parent: '1つ多く数えています' },
+  down:  { child: 'もういちど、ゆびで さしながら かぞえて みよう',
+           parent: '1つ少なく数えています' },
+  part:  { child: 'それは みえて いる ほうの かずだね',
+           parent: '答えではなく、問題に出ている数をそのまま答えています' },
+  whole: { child: 'それは ぜんぶの かずだね',
+           parent: '全体の数を答えています（分けた片方ではなく）' },
+  opp:   { child: '＋か −か、もういちど みてね',
+           parent: 'たし算とひき算を取り違えています' },
+  rev:   { child: 'かぞえる むきを たしかめてね',
+           parent: '反対の端から数えています' },
+  hand:  { child: 'みじかい はりを みてね',
+           parent: '長針がさす数字を「何時」として読んでいます' },
+  looks: { child: 'おおきさ じゃなくて、かずを かぞえて みよう',
+           parent: '数ではなく、見た目の大きさで選んでいます' },
+  taught:{ child: null,
+           parent: '自力では届かず、答えを見せて終えた回があります' },
+  far:   { child: null,
+           parent: '見当がついていない答えが混じっています' }
+};
+const missChild  = t => (MISS_KINDS[t] && MISS_KINDS[t].child) || null;
+const missParent = t => (MISS_KINDS[t] && MISS_KINDS[t].parent) || null;
+/* `far` and `taught` are true, but neither is a *misconception*: naming them in a
+   list headed「つまずきの型」would put noise where a parent looks for a lever. */
+const MISS_DIAGNOSTIC = ['up', 'down', 'part', 'whole', 'opp', 'rev', 'hand', 'looks'];
+
+/** Name the mistake, or null when nothing can be said honestly.
+    `answer` is what buildChoices / buildPad was told is right; `given` is what the
+    child pressed. Hand-built answer surfaces pass a tag instead and never reach here. */
+function classifyMiss(itemKey, answer, given){
+  if (itemKey == null || given == null || answer == null) return null;
+  const key = String(itemKey);
+  const rest = key.slice(key.indexOf(':') + 1);
+
+  /* とけい. The commonest reading error at five is to read the hand that points at
+     a big clear number — the long one. 3じはん read off the long hand is 6じ; a
+     whole hour read off it is 12じ. Both answers here are 'h:m' strings. */
+  let m = /^(?:read|pick):(\d+):(\d+)$/.exec(rest);
+  if (m){
+    const gh = Number(String(given).split(':')[0]);
+    const longHand = Number(m[2]) === 30 ? 6 : 12;
+    if (Number.isFinite(gh) && gh === longHand && gh !== Number(m[1])) return 'hand';
+  }
+
+  const g = Number(given), a = Number(answer);
+  if (!Number.isFinite(g) || !Number.isFinite(a) || g === a) return null;
+
+  /* The numbers the question put on the screen: [the part that is shown, the whole].
+     Answering one of them back is not a slip, it is a reading of the question. */
+  let shown = null;
+  if ((m = /^dec:(\d+)-(\d+)$/.exec(rest)))                     shown = [+m[2], +m[1]];
+  else if ((m = /^ten:(\d+)$/.exec(rest)))                      shown = [+m[1], 10];
+  else if ((m = /^teensplit:(\d+)$/.exec(rest)))                shown = [10, +m[1]];
+  else if ((m = /^com:(\d+)\+(\d+)$/.exec(rest)))               shown = [+m[1], +m[2]];
+  else if ((m = /^(?:sum|teensum):(\d+)\+(\d+)$/.exec(rest))){
+    if (g === Math.abs(+m[1] - +m[2])) return 'opp';            // subtracted instead
+    shown = [+m[1], +m[2]];
+  }
+  else if ((m = /^(?:rest|diff|teenrest|diff1to1|same1to1):(\d+)-(\d+)$/.exec(rest))){
+    if (g === (+m[1]) + (+m[2])) return 'opp';                  // added instead
+    shown = [+m[1], +m[2]];
+  }
+
+  if (shown){
+    const whole = Math.max(shown[0], shown[1]);
+    if (g === whole && whole !== a) return 'whole';
+    /* A value can be both「問題に出ている数」and「答えの1つ手前」(9−4 に 4 と答える).
+       Read it as the first: at five, saying back a number you can see is the
+       commoner move, and it is the one that changes what an adult says next. */
+    if (g === shown[0] || g === shown[1]) return 'part';
+  }
+
+  if (g === a + 1) return 'up';
+  if (g === a - 1) return 'down';
+  return 'far';
+}
 
 /* ---- 10-g-number.js ---- */
 /* ===========================================================
@@ -4124,7 +4551,9 @@ function giveQuestion(api, lo, hi){
     if (api.locked) return;
     if (picked.size === target){ doneBtn.classList.add('choice', 'correct'); api.correct(); }
     else {
-      api.wrong(doneBtn);
+      // one too many / one too few is a counting slip, not "does not know 7"
+      api.wrong(doneBtn, picked.size === target + 1 ? 'up'
+                       : picked.size === target - 1 ? 'down' : null);
       Sound.say(picked.size > target ? 'ちょっと多いみたい。' : 'ちょっと足りないみたい。', { delay: 300 });
     }
   });
@@ -4298,12 +4727,17 @@ function numToQty(api, lo, hi){        // numeral shown → pick the matching gr
   clear(api.choices);
   opts.forEach(v => {
     const plate = el('div.plate.fixed', null, groupNode(v, thing));
+    plate.dataset.count = v;
     tappable(plate, () => {
       if (api.locked) return;
       if (v === n){ plate.classList.add('correct'); api.correct(); }
-      else { plate.classList.add('wrong'); api.later(() => plate.classList.remove('wrong'), 460); api.wrong(plate); }
+      else { plate.classList.add('wrong'); api.later(() => plate.classList.remove('wrong'), 460); api.wrong(plate, v); }
     });
     api.choices.append(plate);
+  });
+  api.onShow(() => {
+    const p = $$('.plate', api.choices).find(x => Number(x.dataset.count) === n);
+    if (p) p.click();
   });
 }
 
@@ -4656,6 +5090,11 @@ function platesCompare(api, opts){
   }
   const wrap = el('div.row', { style: { gap: 'calc(var(--u)*1.4)' } });
   const order = shuffle(counts.map((c, i) => ({ c, i })));
+  /* ちかい かず draws the *smaller* group with bigger icons on purpose. Choosing by
+     how much space a plate fills instead of by counting is the misconception this
+     level exists to catch — so when that is what happened, say which it was. */
+  const bigIcon = o.sizes ? Math.max.apply(null, o.sizes) : null;
+  const smallIcon = o.sizes ? Math.min.apply(null, o.sizes) : null;
   let solved = false;
   order.forEach(({ c, i }) => {
     const size = o.sizes ? o.sizes[i] : null;
@@ -4669,12 +5108,22 @@ function platesCompare(api, opts){
     tappable(plate, () => {
       if (api.locked || solved) return;
       if (c === answer){ solved = true; plate.classList.add('correct'); api.correct(); }
-      else { plate.classList.add('wrong'); api.later(() => plate.classList.remove('wrong'), 460); api.wrong(plate); }
+      else {
+        plate.classList.add('wrong');
+        api.later(() => plate.classList.remove('wrong'), 460);
+        const looks = o.sizes && bigIcon !== smallIcon
+          && size === (want === 'most' ? bigIcon : smallIcon);
+        api.wrong(plate, looks ? 'looks' : null);
+      }
     });
     wrap.append(plate);
     plate.dataset.count = c;
   });
   api.field.append(wrap);
+  api.onShow(() => {
+    const p = $$('.plate', wrap).find(x => Number(x.dataset.count) === answer);
+    if (p) p.click();
+  });
   api.onHint(() => {
     $$('.plate', wrap).forEach(p => {
       if (!$('.hintline', p)) p.append(el('div.hintline', { text: p.dataset.count + 'こ' }));
@@ -4767,15 +5216,21 @@ function ordinalRow(api, n, dir, target){
                 `${label}から${banmeKana(target)}の動物をタップ。`);
   const idxWanted = (dir === 'front' || dir === 'left') ? target - 1 : n - target;
   const q = el('div.queue');
+  const mirror = n - 1 - idxWanted;      // the same 「◯ばんめ」 counted from the other end
   critters.forEach((c, i) => {
     const item = el('div.qi', { text: c });
     tappable(item, () => {
       if (api.locked) return;
       if (i === idxWanted){ item.classList.add('correct'); api.correct(); }
-      else { item.classList.add('wrong'); api.later(() => item.classList.remove('wrong'), 460); api.wrong(item); }
+      else {
+        item.classList.add('wrong');
+        api.later(() => item.classList.remove('wrong'), 460);
+        api.wrong(item, i === mirror ? 'rev' : null);
+      }
     });
     q.append(item);
   });
+  api.onShow(() => { const it = $$('.qi', q)[idxWanted]; if (it) it.click(); });
   // the marker sits at the end you count from and points into the line
   const fromLeft = (dir === 'front' || dir === 'left');
   const marker = fromLeft
@@ -4820,10 +5275,19 @@ function ordinalVsCount(api, n){
         }
       } else {
         if (i === k - 1){ item.classList.add('correct'); api.correct(); }
-        else { item.classList.add('wrong'); api.later(() => item.classList.remove('wrong'), 460); api.wrong(item); }
+        else {
+          item.classList.add('wrong');
+          api.later(() => item.classList.remove('wrong'), 460);
+          api.wrong(item, i === n - k ? 'rev' : null);
+        }
       }
     });
     q.append(item);
+  });
+  api.onShow(() => {
+    const items = $$('.qi', q);
+    if (!countMode){ if (items[k - 1]) items[k - 1].click(); return; }
+    items.forEach((x, i) => { if (i < k && !x.classList.contains('marked')) x.click(); });
   });
   api.field.append(el('div.row', { style: { flexWrap: 'nowrap', gap: 'calc(var(--u)*.6)', maxWidth: '100%' } },
     el('div.dirmark', null, 'まえ', arrowSVG('right')), q));
@@ -4843,14 +5307,25 @@ function gridPosition(api, cols, rows){
   api.setPrompt(`うえから ${numTag(tr)}ばんめ、ひだりから ${numTag(tc)}ばんめ は だれ？`,
                 `上から${banmeKana(tr)}、左から${banmeKana(tc)}は、だれ？`);
   const g = el('div.qgrid', { style: { '--gc': cols } });
+  const items = [];
   cells.forEach((cell, i) => {
     const item = el('div.qi', { text: pool[i] });
+    items.push(item);
     tappable(item, () => {
       if (api.locked) return;
       if (cell.r === tr - 1 && cell.c === tc - 1){ item.classList.add('correct'); api.correct(); }
-      else { item.classList.add('wrong'); api.later(() => item.classList.remove('wrong'), 460); api.wrong(item); }
+      else {
+        item.classList.add('wrong');
+        api.later(() => item.classList.remove('wrong'), 460);
+        // read the two axes the other way round: 「うえから3・ひだりから2」→「うえから2・ひだりから3」
+        api.wrong(item, (cell.r === tc - 1 && cell.c === tr - 1) ? 'rev' : null);
+      }
     });
     g.append(item);
+  });
+  api.onShow(() => {
+    const at = cells.findIndex(c => c.r === tr - 1 && c.c === tc - 1);
+    if (items[at]) items[at].click();
   });
   // two axes at once is hard enough without having to guess where counting starts
   api.field.append(el('div.axes', null,
@@ -4911,17 +5386,31 @@ function lengthCompare(api, aligned){
                 longest ? '一番長いのは、どれ？' : '一番短いのは、どれ？');
   const wrap = el('div.measure');
   const colors = shuffle(['var(--c-red)','var(--c-blue)','var(--c-green)','var(--c-purple)']);
+  const ends = [];
   lens.forEach((L, i) => {
     const off = aligned ? 0 : ri(0, Math.max(0, Math.min(22, 97 - L)));
+    ends.push(off + L);
     const row = barRow(L, off, colors[i % colors.length], cap);
+    row.dataset.len = L;
     tappable(row, () => {
       if (api.locked) return;
       if (L === ans){ row.classList.add('correct'); api.correct(); }
-      else { row.classList.add('wrong'); api.later(() => row.classList.remove('wrong'), 460); api.wrong(row); }
+      else {
+        row.classList.add('wrong');
+        api.later(() => row.classList.remove('wrong'), 460);
+        // ragged starts: going by which bar reaches furthest right is the error
+        // this level is about, and it is not the same as「ながさ」
+        const furthest = !aligned && longest && (off + L) >= Math.max.apply(null, ends);
+        api.wrong(row, furthest ? 'looks' : null);
+      }
     });
     wrap.append(row);
   });
   api.field.append(wrap);
+  api.onShow(() => {
+    const r = $$('.mrow', wrap).find(x => Number(x.dataset.len) === ans);
+    if (r) r.click();
+  });
   if (!aligned) api.field.append(el('div.hintline', { text: 'はじまる ところが ちがうよ。ながさ だけを みてね' }));
   // sliding every bar back to a shared start line IS the lesson, so show it
   api.onHint(() => {
@@ -4994,14 +5483,25 @@ function capacityCompare(api){
                 more ? 'ジュースが多いのは、どれ？' : 'ジュースが少ないのは、どれ？');
   const colors = shuffle(['var(--c-orange)','var(--c-red)','var(--c-purple)']);
   const wrap = el('div.vessels');
+  const tallest = Math.max.apply(null, specs.map(s => s.rows));
   shuffle(specs).forEach((s, i) => {
     const v = el('div.vessel', null, vesselSVG(s.w, s.h, s.fill, colors[i % colors.length]));
+    v.dataset.cells = s.cells;
     tappable(v, () => {
       if (api.locked) return;
       if (s.cells === ans){ v.classList.add('correct'); api.correct(); }
-      else { v.classList.add('wrong'); api.later(() => v.classList.remove('wrong'), 460); api.wrong(v); }
+      else {
+        v.classList.add('wrong');
+        api.later(() => v.classList.remove('wrong'), 460);
+        // 「せが たかい ＝ おおい」 — the hintline warns about it; this records it
+        api.wrong(v, (more && s.rows === tallest) ? 'looks' : null);
+      }
     });
     wrap.append(v);
+  });
+  api.onShow(() => {
+    const v = $$('.vessel', wrap).find(x => Number(x.dataset.cells) === ans);
+    if (v) v.click();
   });
   api.field.append(wrap, el('div.hintline', { text: 'せが たかい ＝ おおい とは かぎらないよ' }));
   // one unit, the same in every glass, dividing the water exactly
@@ -5672,10 +6172,16 @@ function findAllShapes(api){
         b.classList.add('wrong'); api.later(() => b.classList.remove('wrong'), 460); api.wrong(b);
       }
     });
+    b.dataset.hit = c.hit ? '1' : '0';
     grid.append(b);
   });
   drawTally();
   api.field.append(grid, tally, el('div.hintline', { text: 'むきが かわっても おなじ かたちだよ' }));
+  api.onShow(() => {
+    $$('.shapebtn', grid).forEach(b => {
+      if (b.dataset.hit === '1' && !b.classList.contains('picked')) b.click();
+    });
+  });
   api.onHint(() => {
     if ($('.hint2', api.field)) return;
     api.field.append(el('div.hintline.hint2', { text: KIND_JA[target] + 'は ぜんぶで ' + nTarget + 'こ。のこり ' + (nTarget - found) + 'こ' }));
@@ -5972,6 +6478,13 @@ function sortGame(api, catset, nBins, byColor){
     }
   });
   Object.values(binMap).forEach(b => dd.bindTarget(b));
+  api.onShow(() => {
+    $$('.tile', tray).forEach(t => {
+      if (t.classList.contains('gone')) return;
+      dd.select(t);
+      binMap[t.dataset.cat].click();
+    });
+  });
   shuffle(picks).forEach(p => {
     let t;
     if (byColor){
@@ -6157,14 +6670,25 @@ function pickClock(api, half){
     if (!opts.some(o => o.h === hh && o.m === mm)) opts.push({ h: hh, m: mm });
   }
   clear(api.choices);
+  // the number the LONG hand points at, which is the one a five-year-old reads first
+  const longHand = m === 30 ? 6 : 12;
   shuffle(opts).forEach(o => {
     const wrap = el('div.clock-choice', null, clockSVG(o.h, o.m, { numerals: true }));
+    wrap.dataset.t = o.h + ':' + o.m;
     tappable(wrap, () => {
       if (api.locked) return;
       if (o.h === h && o.m === m){ wrap.classList.add('correct'); api.correct(); }
-      else { wrap.classList.add('wrong'); api.later(() => wrap.classList.remove('wrong'), 460); api.wrong(wrap); }
+      else {
+        wrap.classList.add('wrong');
+        api.later(() => wrap.classList.remove('wrong'), 460);
+        api.wrong(wrap, (o.h === longHand && o.h !== h) ? 'hand' : null);
+      }
     });
     api.choices.append(wrap);
+  });
+  api.onShow(() => {
+    const w = $$('.clock-choice', api.choices).find(x => x.dataset.t === h + ':' + m);
+    if (w) w.click();
   });
 }
 
@@ -6254,6 +6778,7 @@ function setClock(api, hand){
       if (api.locked) return;
       if (cur === target) api.correct(); else { api.wrong(check); }
     } });
+  api.onShow(() => { cur = target; paint(); api.later(() => api.correct(), 500); });
   const controls = minuteMode
     ? [
         el('button.btn.clock-adjust', {
@@ -6419,6 +6944,10 @@ function groupChart(api){
     row.append(g);
     row.dataset.n = r.n;
     if (!asCount){
+      api.onShow(() => {
+        const t = $$('.mrow', board).find(x => Number(x.dataset.n) === wantN);
+        if (t) t.click();
+      });
       tappable(row, () => {
         if (api.locked) return;
         if (r.n === wantN){ row.classList.add('correct'); api.correct(); }
@@ -7013,7 +7542,46 @@ const Diagnostic = (() => {
     return { gameId: 'flash', levelIndex: 0 };
   }
 
-  function current(){
+  /* The order the six-month roadmap actually walks. 「いまの おすすめ」 used to know
+     only five of the sixteen 入学前 games, so a child who followed it every day was
+     told to replay いくつと いくつ L1 for the rest of the year: 180 simulated days of
+     きょうの れんしゅう + おすすめ cleared 15 of the 48 levels at 95% accuracy and 33 at
+     75% — the door that opens 小学1年生 never opened, and the *more* accurate the
+     child, the less they were moved on, because the only way past those five games
+     was the「struggling」rescue below, which an accurate child never trips.
+
+     Everything registered is walked, in curriculum order; a game added later and
+     not named here still lands at the end rather than dropping out. */
+  const ROADMAP = ['count', 'flash', 'numeral', 'seq', 'trace',
+                   'compare', 'ordinal', 'measure',
+                   'bond', 'ten', 'add', 'sub',
+                   'shape', 'sort', 'pattern', 'clock',
+                   'g1set', 'g1pair', 'g1teen', 'g1shiki'];
+  function roadmap(){
+    const seen = new Set(), out = [];
+    ROADMAP.forEach(id => { if (Games.byId[id]){ out.push(id); seen.add(id); } });
+    Games.list.forEach(g => { if (!seen.has(g.id)) out.push(g.id); });
+    return out;
+  }
+
+  /* Done with a level = it has its clear sticker. Deliberately the same thing the
+     door counts, so the level おすすめ names is always a level the door is waiting
+     for — and a ★★★ level can never be recommended again. */
+  const cleared = (id, i) => Store.hasSticker(id + ':' + i);
+
+  function nextUncleared(){
+    for (const id of roadmap()){
+      const g = Games.byId[id];
+      if (!g) continue;
+      for (let i = 0; i < g.levels.length; i++){
+        if (levelOpen(g, i) && !cleared(id, i)) return { gameId: id, levelIndex: i };
+      }
+    }
+    return null;
+  }
+
+  /** The weakest open level with enough evidence to say so, or null. */
+  function weakestLevel(){
     let weakest = null;
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
       if (!levelOpen(g, i)) return;
@@ -7022,26 +7590,38 @@ const Diagnostic = (() => {
       const acc = Store.recentAccuracy(g.id, i);
       if (!weakest || acc < weakest.acc) weakest = { gameId: g.id, levelIndex: i, acc };
     }));
-    if (weakest && weakest.acc < .75) return weakest;
+    return weakest;
+  }
 
+  /* Below this, the child is not making progress and the day is better spent going
+     back. It used to be .75 — but 75% first-try is a pass (★★), so an ordinary child
+     was held on the same level instead of being shown the next one. Rescue is for
+     being stuck, not for being imperfect. */
+  const STUCK = 0.60;
+
+  function current(){
+    const weakest = weakestLevel();
+    if (weakest && weakest.acc < STUCK) return weakest;
+
+    /* はじめの ぼうけん picked a starting point; honour it until it is cleared. */
     const first = Store.data.diagnostic && Store.data.diagnostic.recommended;
     if (first && Games.byId[first.gameId]
         && levelOpen(Games.byId[first.gameId], first.levelIndex || 0)
-        && Store.stars(first.gameId, first.levelIndex || 0) < 2) return first;
+        && !cleared(first.gameId, first.levelIndex || 0)) return first;
 
-    /* Once the 入学前 half is finished there is nothing left under 2 stars to
-       recommend there, so the queue continues into the classroom. */
-    const order = Progress.g1Open()
-      ? ['count', 'flash', 'numeral', 'seq', 'bond', 'g1set', 'g1pair', 'g1teen', 'g1shiki']
-      : ['count', 'flash', 'numeral', 'seq', 'bond'];
-    for (const id of order){
-      const g = Games.byId[id];
-      if (!g) continue;
-      for (let i = 0; i < g.levels.length; i++){
-        if (levelOpen(g, i) && Store.stars(id, i) < 2) return { gameId: id, levelIndex: i };
-      }
-    }
-    return { gameId: 'bond', levelIndex: 0 };
+    const next = nextUncleared();
+    if (next) return next;
+
+    // everything open is cleared: go back to whatever is shakiest rather than
+    // naming a level that has nothing left to give
+    if (weakest) return weakest;
+    let lowest = null;
+    Games.list.forEach(g => g.levels.forEach((lv, i) => {
+      if (!levelOpen(g, i)) return;
+      const s = Store.stars(g.id, i);
+      if (!lowest || s < lowest.stars) lowest = { gameId: g.id, levelIndex: i, stars: s };
+    }));
+    return lowest || { gameId: 'count', levelIndex: 0 };
   }
 
   function startRecommended(){
@@ -7050,7 +7630,7 @@ const Diagnostic = (() => {
     else Session.startDaily(10);
   }
 
-  return { shouldRun, recommendFrom, current, startRecommended };
+  return { shouldRun, recommendFrom, current, startRecommended, nextUncleared };
 })();
 
 const Missions = (() => {
@@ -7232,7 +7812,13 @@ const Title = (() => {
     node = el('div#title', null,
       mascotSVG('happy', 'talk'),
       logo,
-      el('div.tag', { text: Progress.g1Open()
+      /* A five-year-old being called by name is not decoration — it is the
+         difference between「アプリを開いた」and「わたしの ぼうけん」. The field was in
+         Store from the first version, validated in every backup, and read by
+         nothing. */
+      el('div.tag', { text: Store.name
+        ? Store.name + 'の ぼうけん、はじまるよ'
+        : Progress.g1Open()
         ? 'しょうがっこう 1ねんせいの もんだいも あるよ'
         : 'しょうがっこうへ いく まえに　さんすうの ちからを あそんで つける' }),
       start,
@@ -7245,6 +7831,7 @@ const Title = (() => {
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl;
+  let parentBtn;
 
   function build(){
     if (node) return node;
@@ -7266,7 +7853,7 @@ const Home = (() => {
         el('div.starcount', null, starSVG(true), starEl),
         el('button.btn.btn-round', { 'aria-label': 'シールブック', title: 'シールブック',
           onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } }, '📖'),
-        el('button.btn.btn-round', { 'aria-label': 'おうちのかたへ', title: 'おうちのかたへ',
+        parentBtn = el('button.btn.btn-round', { 'aria-label': 'おうちのかたへ', title: 'おうちのかたへ',
           onclick(){ Sound.sfx.tap(); Parent.open(); } }, '👤')));
     /* きょうの れんしゅう reviews everything the child has unlocked, which means a
        single weak fact comes round about once a fortnight. This is the aimed set:
@@ -7334,6 +7921,13 @@ const Home = (() => {
   function render(){
     build();
     starEl.textContent = String(Store.totalStars());
+    /* A quiet mark for the adult, on the button only they press. The child sees a
+       dot; the parent sees that the records have not been written out in a month.
+       Nothing on the child's half of the screen changes, and nothing is spoken. */
+    const due = Store.backupDue();
+    parentBtn.classList.toggle('due', !!due);
+    parentBtn.setAttribute('title', due
+      ? 'おうちのかたへ（記録の書き出しを おすすめします）' : 'おうちのかたへ');
     const n = Store.todayCount(), streak = Store.streak();
     const firstRun = Diagnostic.shouldRun();
     const rec = Diagnostic.current();
@@ -7407,9 +8001,21 @@ const Home = (() => {
     } else {
       strip.append(el('span.empty', { text: 'レベルを クリアすると シールが たまるよ' }));
     }
+    /* The padlocked 1ねんせい cards are meant to be the reason to fill the shelf, but
+       on a 1024×768 iPad the world list scrolls: 509px of window over 1079px of map,
+       so those cards sit at y≈900 and a child has to scroll two thirds of the way
+       down to meet them. Rather than move the map around, the count goes on the one
+       strip that is on screen whatever happens — the shelf the child already taps. */
+    const gate = Progress.preStickers();
+    const toGo = Progress.g1Open() ? 0 : Math.max(0, gate.total - gate.got);
+    shelfEl.classList.toggle('nearly', toGo > 0 && toGo <= 6);
     shelfEl.append(
       el('span.bk', { text: '📖' }),
-      el('div.lbl', null, 'シール ' + got.length + 'まい', el('small', { text: 'タップで シールブック' })),
+      el('div.lbl', null, 'シール ' + got.length + 'まい',
+        el('small', { text: toGo
+          ? '1ねんせいの きょうしつまで あと ' + toGo + 'レベル'
+          : Progress.g1Open() ? '1ねんせいの きょうしつが ひらいて いるよ'
+                              : 'タップで シールブック' })),
       strip);
 
     /* how many banners share the row decides how much of each one fits: with three
@@ -7507,6 +8113,9 @@ const Result = (() => {
                  : r.stars === 2 ? 'よくできました！'
                  : r.stars === 1 ? 'クリア！'
                  : '惜しい！もう一度やってみよう。');
+    // 「やったね」 and 「やったね、みおちゃん」 are not the same sentence to a five-year-old
+    const called = Store.name && r.stars >= 2 && r.mode !== 'diagnostic'
+      ? Store.name + '、' : '';
     inner.append(
       mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
       r.mode === 'diagnostic'
@@ -7619,7 +8228,7 @@ const Result = (() => {
         onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
     inner.append(actions);
     UI.show('result', { replace: true });
-    Sound.say(spoken, { delay: 700 });
+    Sound.say(called + spoken, { delay: 700 });
     for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
   return { show, build };
@@ -7627,21 +8236,26 @@ const Result = (() => {
 
 /* ---------------------------------------------------------- STICKER BOOK */
 const Book = (() => {
-  let node, grid, count;
+  let node, grid, count, missing, headEl;
   function build(){
     if (node) return node;
     grid = el('div.book');
     count = el('div.aim');
+    /* 「あと 4レベル」 without saying *which* four is a number a child cannot act on
+       and a parent cannot help with: the shelf's empty slots are anonymous dots, and
+       working out which level each one belongs to means counting slot positions. */
+    missing = el('div.book-todo');
     node = el('div#book', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); UI.show('home', { replace: true }); } }, '←'),
-        el('h2', { text: '📖　シールブック' })),
-      count, grid);
+        headEl = el('h2')),
+      count, missing, grid);
     return UI.register('book', node);
   }
   function render(){
     build();
+    headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
     clear(grid);
     let got = 0;
     const drawSlots = keys => keys.forEach(key => {
@@ -7673,6 +8287,40 @@ const Book = (() => {
        the shelf (96 of them, gold included), the levels are the door (48). Saying
        「あと ◯まい」for the door would stall the moment a gold sticker was earned
        for a level that was already cleared. */
+    /* Name the levels the door is still waiting for, and make each one a way in.
+       The same list the「いまの おすすめ」walks, shown all at once. */
+    clear(missing);
+    const todo = Progress.gateSlots('pre')
+      .filter(k => !Store.hasSticker(k))
+      .map(k => {
+        const cut = k.lastIndexOf(':');
+        const g = Games.byId[k.slice(0, cut)], i = Number(k.slice(cut + 1));
+        return g && g.levels[i] ? { g, i, lv: g.levels[i] } : null;
+      })
+      .filter(Boolean);
+    if (todo.length){
+      const row = el('div.todorow');
+      todo.slice(0, 10).forEach(({ g, i, lv }) => {
+        const open = Store.levelUnlocked(g.id, i);
+        row.append(el('button.todochip' + (open ? '' : '.shut'), {
+          type: 'button', style: { '--lc': g.color },
+          title: g.name + '　' + lv.t,
+          onclick(){
+            Sound.sfx.tap();
+            if (open){ Session.startLevel(g, i); return; }
+            // not open yet: show the child where it lives, and what comes first
+            Levels.render(g);
+            UI.show('levels');
+          }
+        },
+          el('span.i', { text: open ? g.ico : '🔒' }),
+          el('span.t', null, g.name, el('small', { text: lv.t }))));
+      });
+      missing.append(
+        el('div.l', { text: 'のこりの レベル' + (todo.length > 10 ? '（さいしょの 10こ）' : '') }),
+        row);
+    }
+
     const left = Math.max(0, pre.total - pre.got);
     count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
       + (left
@@ -7860,20 +8508,24 @@ const Parent = (() => {
       const acc = f[1] / f[0];
       if (acc >= .6) continue;
       const gid = k.slice(0, k.indexOf(':'));
-      weak.push({ acc, n: f[0], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid });
+      weak.push({ acc, n: f[0], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid,
+                  miss: Store.factMiss(k) });
     }
     weak.sort((a, b) => a.acc - b.acc || b.n - a.n);
     if (weak.length){
       sec.append(el('h4', { text: 'つまずいている中身' }));
       const chips = el('div.factchips');
       weak.slice(0, 8).forEach(w => chips.append(
-        el('span.factchip', null, el('small', { text: w.game }), w.label)));
+        el('span.factchip', null, el('small', { text: w.game }), w.label,
+          w.miss ? el('em', { text: missParent(w.miss.kind) }) : null)));
       sec.append(chips);
       sec.append(el('p', { text: 'ここに出た項目は「きょうの れんしゅう」が自動で多めに出します。声かけに使うなら、答えを教えるより、おはじきやお菓子で同じ数を作ってみせるほうが早いです。' }));
     } else {
       sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
         text: '取りこぼしている項目はいまのところありません。' }));
     }
+
+    sec.append(missSection());
 
     /* Right every time, and still counted out. Invisible to every number on this
        page until answers were timed, and the single most useful thing to work on
@@ -7896,6 +8548,57 @@ const Parent = (() => {
       sec.append(el('p', { text: '正解はしていますが、答えが出るまでに時間がかかっています。指を折る、枠のマスを数える、というやり方で合わせている状態です。まちがいではないので放っておかれがちですが、くり上がりのたし算は「9+4 を 9+1+3 にする」途中でこの答えを即座に使うので、ここが遅いとその先が進みません。「にがて あつめ」はこれらも拾います。家では、答えを急がせるより、おはじきを5と5、6と4 のように置いて見せて「かたまりで見る」経験を足すほうが早いです。' }));
     }
     return sec;
+  }
+
+  /* ---- まちがえ方の型 ----
+     A percentage says how often. It cannot say that the same child answers「10は4と
+     いくつ」with 4 — reading back the part they can see — and that the fix is to
+     cover the four rather than to drill the fact. The app throws away nothing now:
+     the value pressed on the first mistake is classified and counted (06-miss.js),
+     so this is the one place on the page that says what to actually do. */
+  function missSection(){
+    const facts = Store.data.facts || {};
+    const tally = {};                   // kind -> { n, games:Set, examples:[] }
+    let taught = 0;
+    for (const k in facts){
+      const m = facts[k] && facts[k][6];
+      if (!m) continue;
+      const gid = k.slice(0, k.indexOf(':'));
+      const gname = (Games.byId[gid] || {}).name || gid;
+      for (const kind in m){
+        if (kind === 'taught'){ taught += m[kind]; continue; }
+        if (MISS_DIAGNOSTIC.indexOf(kind) < 0) continue;
+        const t = tally[kind] || (tally[kind] = { n: 0, games: {}, examples: [] });
+        t.n += m[kind];
+        t.games[gname] = true;
+        if (t.examples.length < 3) t.examples.push(facts[k][3] || k);
+      }
+    }
+    const kinds = Object.keys(tally).filter(k => tally[k].n >= 3)
+      .sort((a, b) => tally[b].n - tally[a].n);
+    if (!kinds.length && !taught) return el('span', { hidden: true });
+
+    const s = el('div');
+    s.append(el('h4', { text: 'まちがえ方の型' }));
+    if (kinds.length){
+      s.append(el('p', { text: '同じ「不正解」でも中身は違います。1回目に押した答えを分類して数えたものです。正答率だけを見ていても出てこない情報で、家庭での声かけを変えられるのはここです。' }));
+      const list = el('div.misslist');
+      kinds.forEach(k => {
+        const t = tally[k];
+        list.append(el('div.missrow', null,
+          el('b', { text: missParent(k) }),
+          el('span.n', { text: 'のべ ' + t.n + '回' }),
+          el('small', { text: Object.keys(t.games).join('・') + '　例：' + t.examples.join('、') })));
+      });
+      s.append(list);
+    }
+    if (taught){
+      s.append(el('p', { style: { marginTop: 'calc(var(--u)*.7)' },
+        text: '※ 自力では届かず、アプリが答えを見せて終えた回が ' + taught
+            + ' 回あります（6回まちがえると出ます）。★にも「1回目で正解」にも数えていません。'
+            + 'この回の項目は「にがて あつめ」が必ず拾います。' }));
+    }
+    return s;
   }
 
   /* ---- なぜこの遊びなのか ----
@@ -8036,6 +8739,77 @@ const Parent = (() => {
     return s;
   }
 
+  /* ---- 入学まで ----
+     「入学までの半年で」 is the premise of the app, and the app had no idea when that
+     was. `createdAt` was stored and never read, there was no 入学日, and the roadmap
+     below was fixed prose: it could tell a parent what the third month should look
+     like without knowing whether this child is in it. This is the same numbers the
+     app already has, put on a calendar. */
+  function scheduleSection(){
+    const s = el('section');
+    const school = Store.schoolDate();
+    const toSchool = Store.daysToSchool();
+    const elapsed = Store.daysSinceStart();
+    const pre = Progress.preStickers();
+    const left = Math.max(0, pre.total - pre.got);
+    s.append(el('div.eyebrow', { text: 'calendar' }), el('h3', { text: '入学まで' }));
+
+    const fmt = d => d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    const head = el('div.schedule');
+    head.append(
+      el('div.big', null, toSchool > 0 ? el('b', { text: 'あと ' + toSchool + '日' })
+                                       : el('b', { text: '入学しています' }),
+        el('small', { text: fmt(school) + ' 入学の予定' })),
+      el('div.big', null, el('b', { text: pre.got + ' / ' + pre.total + ' レベル' }),
+        el('small', { text: left ? 'のこり ' + left + 'レベルで 1ねんせいの きょうしつが開きます' : 'すべてクリア済み' })));
+    s.append(head);
+
+    /* Pace, stated plainly enough that a parent can check it: levels cleared,
+       divided by the days since this app was first opened. It is a blunt average
+       and it says so — but it is the difference between a roadmap and a plan. */
+    if (!left){
+      s.append(el('p', { text: '入学前の48レベルはすべてクリア済みです。あとは「きょうの れんしゅう」と'
+        + '「にがて あつめ」で保つのと、「1ねんせいの きょうしつ」を進めるので十分です。' }));
+    } else if (elapsed < 7 || pre.got === 0){
+      s.append(el('p', { text: 'ペースを見積もれるだけの日数がまだありません（1週間ほど使うと出ます）。'
+        + '目安は1日1レベル・10分です。48レベルなら、休む日を入れても2〜3か月で終わる分量です。' }));
+    } else {
+      const rate = pre.got / Math.max(1, elapsed);            // levels per calendar day
+      const eta = Math.ceil(left / rate);
+      const done = new Date(Date.now() + eta * 86400000);
+      const inTime = toSchool <= 0 ? false : eta <= toSchool;
+      const perWeek = (rate * 7).toFixed(1);
+      s.append(el('div.todo' + (inTime ? '' : '.warn'), null,
+        el('div.mk', { text: inTime ? '◎' : '！' }),
+        el('div', null,
+          el('b', { text: inTime
+            ? 'このペースなら ' + fmt(done) + 'ごろ、入学に間に合います'
+            : 'このペースだと ' + fmt(done) + 'ごろ' + (toSchool > 0 ? '——入学に ' + (eta - toSchool) + '日ほど足りません' : '') }),
+          el('div', { text: '使い始めてから ' + elapsed + '日で ' + pre.got + 'レベル（週 ' + perWeek + 'レベル）。'
+            + 'のこり ' + left + 'レベルを同じペースで進めた場合の見込みです。' }))));
+      if (!inTime){
+        s.append(el('p', { text: '追いつき方は2つです。1つは「いまの おすすめ」を毎日1回、最後まで（8問）。'
+          + 'これがそのまま1日1レベルになります。もう1つは、間違いが多いレベルを繰り返すより'
+          + '「にがて あつめ」で該当する項目だけを10問回すほうが、同じ10分で進みます。'
+          + 'なお、間に合わなくても内容が消えるわけではありません——入学後も続けられます。' }));
+      }
+    }
+
+    /* The auto-guess is right for a 年長 and wrong for a 年中; one tap either way. */
+    const shift = n => el('button.btn', {
+      text: n < 0 ? '1年 早める' : '1年 遅らせる',
+      onclick(){
+        Store.setSchoolYear(school.getFullYear() + n);
+        render();
+      }
+    });
+    s.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
+      text: '入学の年は、はじめて使った日から推定しています。ちがうときは動かしてください。' }));
+    s.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap' } },
+      shift(-1), shift(1)));
+    return s;
+  }
+
   function planSection(){
     const s = el('section');
     s.append(el('div.eyebrow', { text: 'roadmap' }), el('h3', { text: '入学までの半年、どう進めるか' }),
@@ -8044,8 +8818,13 @@ const Parent = (() => {
     t.append(el('thead', null, el('tr', null,
       el('th', { text: '時期' }), el('th', { text: '中心にする世界' }), el('th', { text: 'ねらい' }))));
     const tb = el('tbody');
-    PLAN.forEach(([a2, b2, c]) => tb.append(el('tr', null,
-      el('td', { style: { whiteSpace: 'nowrap', fontWeight: 800 }, text: a2 }),
+    // which band this child is in today — the roadmap used to be prose that could
+    // not point at the reader
+    const month = Math.floor(Store.daysSinceStart() / 30) + 1;
+    const band = Progress.g1Open() ? 3 : month <= 2 ? 0 : month <= 4 ? 1 : 2;
+    PLAN.forEach(([a2, b2, c], i) => tb.append(el('tr' + (i === band ? '.now' : ''), null,
+      el('td', { style: { whiteSpace: 'nowrap', fontWeight: 800 },
+        text: a2 + (i === band ? '　← いまここ' : '') }),
       el('td', { style: { whiteSpace: 'nowrap' }, text: b2 }),
       el('td', { text: c }))));
     t.append(tb);
@@ -8098,6 +8877,32 @@ const Parent = (() => {
   function settingsSection(){
     const s = el('section');
     s.append(el('div.eyebrow', { text: 'settings' }), el('h3', { text: '設定' }));
+
+    /* One record per device. Naming it is worth doing for a five-year-old — the
+       title screen and the sticker book say it, and the result screen speaks it —
+       but it is a label, not a profile: two children sharing one iPad still share
+       one set of records, and the honest way to keep them apart today is one
+       backup file each (下の「書き出す／読み込む」). */
+    const nameIn = el('input.namein', {
+      type: 'text', value: Store.name, maxlength: '12', placeholder: 'なまえ（ひらがなでも）',
+      'aria-label': 'こどもの なまえ'
+    });
+    const saveName = el('button.btn', { text: '保存', onclick(){
+      Store.setName(nameIn.value);
+      Book.render();
+      nameHint.textContent = Store.name
+        ? '「' + Store.name + '」と呼びます（タイトル・シールブック・ほめ言葉）。'
+        : '名前は設定されていません。';
+    } });
+    const nameHint = el('p', { style: { marginTop: 'calc(var(--u)*.4)' },
+      text: Store.name
+        ? '「' + Store.name + '」と呼びます（タイトル・シールブック・ほめ言葉）。'
+        : 'お子さんの呼び名を入れると、タイトルとシールブックに出て、レベルをクリアしたときに名前で褒めます。空欄のままでも構いません。' });
+    s.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap', alignItems: 'center' } },
+      el('span', { text: 'なまえ：' }), nameIn, saveName), nameHint);
+    s.append(el('p', { style: { color: 'var(--ink-soft)' },
+      text: '※ 記録はこの端末に1人ぶんです。きょうだいで1台を使う場合は、名前を変えても記録は混ざります。'
+        + '分けるなら、下の「記録を書き出す」で1人ずつファイルを保管し、遊ぶ前に「おきかえる」で読み込んでください。' }));
     const toggle = (label, get, set) => {
       const b = el('button.btn', { text: label + '：' + (get() ? 'オン' : 'オフ') });
       b.addEventListener('click', () => {
@@ -8141,6 +8946,22 @@ const Parent = (() => {
     const s = el('section');
     s.append(el('div.eyebrow', { text: 'backup' }), el('h3', { text: '記録の保存とバックアップ' }));
 
+    /* Nothing on this page used to ask. Six months of records — including every
+       fact-level judgement the app makes about this child — live in one
+       localStorage key, on a device whose own documentation says it will discard
+       it, and the only defence was a button nobody had a reason to press. */
+    const due = Store.backupDue();
+    const last = Store.lastBackupDays();
+    if (due){
+      s.append(el('div.backup-due', null,
+        el('b', { text: due.never ? 'まだ一度も書き出していません' : last + '日間、書き出していません' }),
+        el('div', { text: 'この端末の記録が消えると、★もシールも、どの項目でつまずいているかの記録も、'
+          + 'まとめて失われます。下のボタンで書き出したファイルを、iCloud Drive などに置いておいてください（数KBです）。' })));
+    } else if (last != null){
+      s.append(el('p', { style: { color: 'var(--good-ink)', fontWeight: 800 },
+        text: last === 0 ? '✓ 今日、書き出しています。' : '✓ ' + last + '日前に書き出しています。' }));
+    }
+
     s.append(el('p', { html:
       '学習の記録は、<b>いま開いている URL ごとに、この端末のブラウザの中だけ</b>に保存されます。' +
       'ちがう URL で開くと、同じアプリでも記録は共有されません。' +
@@ -8177,13 +8998,19 @@ const Parent = (() => {
         const a = el('a', { href: URL.createObjectURL(blob), download: 'kazu-no-bouken-' + stamp() + '.json' });
         document.body.append(a); a.click();
         setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        Store.noteBackup();
+        Home.render();                       // clears the mark on the ホーム button
         status.textContent = '書き出しました。ファイルアプリや iCloud Drive に保管してください。';
       }catch(e){ status.textContent = 'この環境ではファイルに書き出せません。下の「コピー」を使ってください。'; }
     } });
 
     const copy = el('button.btn', { text: 'コピー（貼り付けで復元）', onclick(){
       const text = Store.exportText();
-      const done = () => { status.textContent = 'コピーしました。メモアプリなどに貼り付けて保管してください。'; };
+      const done = () => {
+        Store.noteBackup();
+        Home.render();
+        status.textContent = 'コピーしました。メモアプリなどに貼り付けて保管してください。';
+      };
       if (navigator.clipboard && navigator.clipboard.writeText){
         navigator.clipboard.writeText(text).then(done, () => { box.value = text; box.select(); status.textContent = '下の枠に出しました。長押しして「コピー」してください。'; });
       } else { box.value = text; box.select(); status.textContent = '下の枠に出しました。長押しして「コピー」してください。'; }
@@ -8241,6 +9068,7 @@ const Parent = (() => {
           + 'それを全部終えると、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
         el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると自動でヒントが出て、必ず自分で正解にたどり着いて終われるようにしてあります。' })),
       nextUpSection(),
+      scheduleSection(),
       statsSection(),
       stageSection(),
       progressSection(),

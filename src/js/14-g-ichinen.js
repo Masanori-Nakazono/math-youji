@@ -118,6 +118,10 @@ function groupChart(api){
     row.append(g);
     row.dataset.n = r.n;
     if (!asCount){
+      api.onShow(() => {
+        const t = $$('.mrow', board).find(x => Number(x.dataset.n) === wantN);
+        if (t) t.click();
+      });
       tappable(row, () => {
         if (api.locked) return;
         if (r.n === wantN){ row.classList.add('correct'); api.correct(); }

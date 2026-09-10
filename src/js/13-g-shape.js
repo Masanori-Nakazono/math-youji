@@ -54,10 +54,16 @@ function findAllShapes(api){
         b.classList.add('wrong'); api.later(() => b.classList.remove('wrong'), 460); api.wrong(b);
       }
     });
+    b.dataset.hit = c.hit ? '1' : '0';
     grid.append(b);
   });
   drawTally();
   api.field.append(grid, tally, el('div.hintline', { text: 'むきが かわっても おなじ かたちだよ' }));
+  api.onShow(() => {
+    $$('.shapebtn', grid).forEach(b => {
+      if (b.dataset.hit === '1' && !b.classList.contains('picked')) b.click();
+    });
+  });
   api.onHint(() => {
     if ($('.hint2', api.field)) return;
     api.field.append(el('div.hintline.hint2', { text: KIND_JA[target] + 'は ぜんぶで ' + nTarget + 'こ。のこり ' + (nTarget - found) + 'こ' }));
@@ -354,6 +360,13 @@ function sortGame(api, catset, nBins, byColor){
     }
   });
   Object.values(binMap).forEach(b => dd.bindTarget(b));
+  api.onShow(() => {
+    $$('.tile', tray).forEach(t => {
+      if (t.classList.contains('gone')) return;
+      dd.select(t);
+      binMap[t.dataset.cat].click();
+    });
+  });
   shuffle(picks).forEach(p => {
     let t;
     if (byColor){
@@ -539,14 +552,25 @@ function pickClock(api, half){
     if (!opts.some(o => o.h === hh && o.m === mm)) opts.push({ h: hh, m: mm });
   }
   clear(api.choices);
+  // the number the LONG hand points at, which is the one a five-year-old reads first
+  const longHand = m === 30 ? 6 : 12;
   shuffle(opts).forEach(o => {
     const wrap = el('div.clock-choice', null, clockSVG(o.h, o.m, { numerals: true }));
+    wrap.dataset.t = o.h + ':' + o.m;
     tappable(wrap, () => {
       if (api.locked) return;
       if (o.h === h && o.m === m){ wrap.classList.add('correct'); api.correct(); }
-      else { wrap.classList.add('wrong'); api.later(() => wrap.classList.remove('wrong'), 460); api.wrong(wrap); }
+      else {
+        wrap.classList.add('wrong');
+        api.later(() => wrap.classList.remove('wrong'), 460);
+        api.wrong(wrap, (o.h === longHand && o.h !== h) ? 'hand' : null);
+      }
     });
     api.choices.append(wrap);
+  });
+  api.onShow(() => {
+    const w = $$('.clock-choice', api.choices).find(x => x.dataset.t === h + ':' + m);
+    if (w) w.click();
   });
 }
 
@@ -636,6 +660,7 @@ function setClock(api, hand){
       if (api.locked) return;
       if (cur === target) api.correct(); else { api.wrong(check); }
     } });
+  api.onShow(() => { cur = target; paint(); api.later(() => api.correct(), 500); });
   const controls = minuteMode
     ? [
         el('button.btn.clock-adjust', {

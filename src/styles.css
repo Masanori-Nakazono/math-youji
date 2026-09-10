@@ -599,6 +599,75 @@ body::before{
 }
 .shelf .strip span{ flex: 0 0 auto; }
 .shelf .strip .empty{ font-size: calc(var(--u)*1.3); color: var(--ink-soft); font-weight: 500; }
+/* the last few levels before the classroom opens: the same colour the result
+   screen uses for「もうすぐ ひらくよ」, so the two say the same thing */
+.shelf.nearly{ border-color: var(--accent); }
+.shelf.nearly .lbl small{ color: var(--accent-ink); font-weight: 800; }
+
+#parent .namein{
+  font: inherit; font-size: calc(var(--u)*1.4);
+  padding: calc(var(--u)*.4) calc(var(--u)*.8);
+  min-height: max(calc(var(--u)*3.4), 40px);
+  border: calc(var(--u)*.18) solid var(--card-edge); border-radius: calc(var(--u)*.6);
+  background: var(--card); color: var(--ink); max-width: calc(var(--u)*18);
+}
+
+/* ---------- parent: where this child is on the calendar ---------- */
+#parent .schedule{
+  display: flex; flex-wrap: wrap; gap: calc(var(--u)*.8);
+  margin: calc(var(--u)*.6) 0 calc(var(--u)*.9);
+}
+#parent .schedule .big{
+  flex: 1 1 calc(var(--u)*18);
+  background: var(--paper-2); border-radius: calc(var(--u)*.6);
+  padding: calc(var(--u)*.7) calc(var(--u)*1);
+}
+#parent .schedule .big b{ display: block; font-family: var(--fs-num); font-size: calc(var(--u)*2.2); line-height: 1.2; }
+#parent .schedule .big small{ display: block; color: var(--ink-soft); font-size: calc(var(--u)*1.1); margin-top: .25em; }
+#parent .todo.warn .mk{ color: var(--oops-ink); }
+#parent .skilltable tr.now td{ background: color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* a mark only an adult reads: the records have not been written out in a while */
+.btn-round.due{ position: relative; }
+.btn-round.due::after{
+  content: ""; position: absolute; top: 6%; right: 6%;
+  width: calc(var(--u)*1.1); height: calc(var(--u)*1.1); border-radius: 50%;
+  background: var(--accent); border: calc(var(--u)*.18) solid var(--card);
+}
+#parent .backup-due{
+  background: var(--oops-soft); border-left: calc(var(--u)*.4) solid var(--oops);
+  border-radius: calc(var(--u)*.5);
+  padding: calc(var(--u)*.7) calc(var(--u)*1);
+  margin: calc(var(--u)*.6) 0;
+}
+#parent .backup-due b{ display: block; color: var(--oops-ink); margin-bottom: .2em; }
+
+/* ---------- sticker book: which levels are still missing ---------- */
+.book-todo{ flex: 0 0 auto; margin: calc(var(--u)*.2) 0 calc(var(--u)*.6); }
+.book-todo .l{
+  font-size: calc(var(--u)*1.2); font-weight: 800; color: var(--ink-soft);
+  margin-bottom: calc(var(--u)*.35);
+}
+.book-todo .todorow{
+  display: flex; gap: calc(var(--u)*.5); overflow-x: auto;
+  padding-bottom: calc(var(--u)*.3);
+}
+.todochip{
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: calc(var(--u)*.45);
+  font: inherit; text-align: left; color: var(--ink); cursor: pointer;
+  background: var(--card);
+  border: calc(var(--u)*.2) solid var(--lc, var(--card-edge));
+  border-radius: var(--wob-b);
+  padding: calc(var(--u)*.4) calc(var(--u)*.8);
+  min-height: max(calc(var(--u)*4), var(--tap));
+  transition: transform .14s cubic-bezier(.2,.9,.3,1.4);
+}
+.todochip:active{ transform: translateY(.15em); }
+.todochip.shut{ border-color: var(--card-edge); opacity: .62; }
+.todochip .i{ font-size: calc(var(--u)*2); line-height: 1; }
+.todochip .t{ font-size: calc(var(--u)*1.25); font-weight: 800; white-space: nowrap; }
+.todochip .t small{ display: block; font-size: calc(var(--u)*1.05); font-weight: 500; color: var(--ink-soft); }
 
 .world h3 .sub{
   font-size: calc(var(--u)*1.15); font-weight: 500; color: var(--ink-soft);
@@ -1256,6 +1325,9 @@ body::before{
   background: var(--paper-2);
   border-radius: 999px;
   padding: calc(var(--u)*.3) calc(var(--u)*1.1);
+  /* the pill's own padding can push a long line a few pixels past the playfield,
+     which the auto-scaler then has to shrink the whole question to fix */
+  max-width: 100%; box-sizing: border-box; text-align: center;
   animation: pop .35s cubic-bezier(.2,.9,.3,1.5);
 }
 .sr{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -1285,6 +1357,26 @@ body::before{
 .feedback .mk{ font-size: 1.15em; }
 .feedback.oops{ background: var(--oops-soft); color: color-mix(in srgb, var(--oops) 55%, var(--ink)); }
 .feedback.hint{ background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: var(--accent-ink); }
+/* the way out, once the ladder has run out of rungs: offered, not forced */
+.feedback .teachbtn{
+  margin-left: calc(var(--u)*.6);
+  font-size: calc(var(--u)*1.35); font-weight: 800;
+  padding: calc(var(--u)*.3) calc(var(--u)*1.2);
+  /* a rescue a five-year-old has to be able to hit; the prompt bar is the only
+     place it can live, so it takes a floor of its own rather than --tap */
+  min-height: max(calc(var(--u)*3), 40px);
+  border-radius: 999px;
+  border: calc(var(--u)*.2) solid var(--accent); color: var(--accent-ink);
+  background: var(--card); box-shadow: var(--shadow-sm);
+}
+.feedback{ flex-wrap: wrap; }
+/* the answer, about to be pressed for the child — it has to be watchable */
+.choice.showme{
+  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 26%, var(--card));
+  animation: showme .7s ease-in-out 2;
+}
+@keyframes showme{ 0%,100%{ transform: none } 50%{ transform: scale(1.12) } }
+@media (prefers-reduced-motion: reduce){ .choice.showme{ animation: none } }
 
 /* a tried-and-wrong answer keeps a quiet mark, so the child can see what is ruled out */
 .choice.tried{ border-color: var(--oops); }
@@ -1548,6 +1640,17 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 /* right every time, and still counted out — a different thing from a wrong answer,
    so it must not wear the same colour as one */
 #parent .factchip.slow{ background:color-mix(in srgb, var(--c-yellow) 32%, var(--card)); }
+/* what kind of wrong it was — the sentence, not the percentage */
+#parent .factchip em{ font-style:normal; font-weight:500; color:var(--oops-ink); font-size:.78em }
+#parent .misslist{ display:grid; gap:calc(var(--u)*.4); margin:calc(var(--u)*.6) 0 }
+#parent .missrow{
+  display:grid; grid-template-columns:1fr auto; gap:0 calc(var(--u)*.8);
+  background:var(--paper-2); border-radius:calc(var(--u)*.6);
+  padding:calc(var(--u)*.5) calc(var(--u)*.8);
+}
+#parent .missrow b{ font-weight:800 }
+#parent .missrow .n{ font-family:var(--fs-num); font-weight:800; color:var(--oops-ink); white-space:nowrap }
+#parent .missrow small{ grid-column:1 / -1; color:var(--ink-soft); font-size:.8em }
 
 /* ---------- floors for anything a finger has to hit ----------
    The question is scaled up to fill its box, but the smallest iPad in portrait

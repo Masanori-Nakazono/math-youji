@@ -23,6 +23,11 @@ function platesCompare(api, opts){
   }
   const wrap = el('div.row', { style: { gap: 'calc(var(--u)*1.4)' } });
   const order = shuffle(counts.map((c, i) => ({ c, i })));
+  /* ちかい かず draws the *smaller* group with bigger icons on purpose. Choosing by
+     how much space a plate fills instead of by counting is the misconception this
+     level exists to catch — so when that is what happened, say which it was. */
+  const bigIcon = o.sizes ? Math.max.apply(null, o.sizes) : null;
+  const smallIcon = o.sizes ? Math.min.apply(null, o.sizes) : null;
   let solved = false;
   order.forEach(({ c, i }) => {
     const size = o.sizes ? o.sizes[i] : null;
@@ -36,12 +41,22 @@ function platesCompare(api, opts){
     tappable(plate, () => {
       if (api.locked || solved) return;
       if (c === answer){ solved = true; plate.classList.add('correct'); api.correct(); }
-      else { plate.classList.add('wrong'); api.later(() => plate.classList.remove('wrong'), 460); api.wrong(plate); }
+      else {
+        plate.classList.add('wrong');
+        api.later(() => plate.classList.remove('wrong'), 460);
+        const looks = o.sizes && bigIcon !== smallIcon
+          && size === (want === 'most' ? bigIcon : smallIcon);
+        api.wrong(plate, looks ? 'looks' : null);
+      }
     });
     wrap.append(plate);
     plate.dataset.count = c;
   });
   api.field.append(wrap);
+  api.onShow(() => {
+    const p = $$('.plate', wrap).find(x => Number(x.dataset.count) === answer);
+    if (p) p.click();
+  });
   api.onHint(() => {
     $$('.plate', wrap).forEach(p => {
       if (!$('.hintline', p)) p.append(el('div.hintline', { text: p.dataset.count + 'こ' }));
@@ -134,15 +149,21 @@ function ordinalRow(api, n, dir, target){
                 `${label}から${banmeKana(target)}の動物をタップ。`);
   const idxWanted = (dir === 'front' || dir === 'left') ? target - 1 : n - target;
   const q = el('div.queue');
+  const mirror = n - 1 - idxWanted;      // the same 「◯ばんめ」 counted from the other end
   critters.forEach((c, i) => {
     const item = el('div.qi', { text: c });
     tappable(item, () => {
       if (api.locked) return;
       if (i === idxWanted){ item.classList.add('correct'); api.correct(); }
-      else { item.classList.add('wrong'); api.later(() => item.classList.remove('wrong'), 460); api.wrong(item); }
+      else {
+        item.classList.add('wrong');
+        api.later(() => item.classList.remove('wrong'), 460);
+        api.wrong(item, i === mirror ? 'rev' : null);
+      }
     });
     q.append(item);
   });
+  api.onShow(() => { const it = $$('.qi', q)[idxWanted]; if (it) it.click(); });
   // the marker sits at the end you count from and points into the line
   const fromLeft = (dir === 'front' || dir === 'left');
   const marker = fromLeft
@@ -187,10 +208,19 @@ function ordinalVsCount(api, n){
         }
       } else {
         if (i === k - 1){ item.classList.add('correct'); api.correct(); }
-        else { item.classList.add('wrong'); api.later(() => item.classList.remove('wrong'), 460); api.wrong(item); }
+        else {
+          item.classList.add('wrong');
+          api.later(() => item.classList.remove('wrong'), 460);
+          api.wrong(item, i === n - k ? 'rev' : null);
+        }
       }
     });
     q.append(item);
+  });
+  api.onShow(() => {
+    const items = $$('.qi', q);
+    if (!countMode){ if (items[k - 1]) items[k - 1].click(); return; }
+    items.forEach((x, i) => { if (i < k && !x.classList.contains('marked')) x.click(); });
   });
   api.field.append(el('div.row', { style: { flexWrap: 'nowrap', gap: 'calc(var(--u)*.6)', maxWidth: '100%' } },
     el('div.dirmark', null, 'まえ', arrowSVG('right')), q));
@@ -210,14 +240,25 @@ function gridPosition(api, cols, rows){
   api.setPrompt(`うえから ${numTag(tr)}ばんめ、ひだりから ${numTag(tc)}ばんめ は だれ？`,
                 `上から${banmeKana(tr)}、左から${banmeKana(tc)}は、だれ？`);
   const g = el('div.qgrid', { style: { '--gc': cols } });
+  const items = [];
   cells.forEach((cell, i) => {
     const item = el('div.qi', { text: pool[i] });
+    items.push(item);
     tappable(item, () => {
       if (api.locked) return;
       if (cell.r === tr - 1 && cell.c === tc - 1){ item.classList.add('correct'); api.correct(); }
-      else { item.classList.add('wrong'); api.later(() => item.classList.remove('wrong'), 460); api.wrong(item); }
+      else {
+        item.classList.add('wrong');
+        api.later(() => item.classList.remove('wrong'), 460);
+        // read the two axes the other way round: 「うえから3・ひだりから2」→「うえから2・ひだりから3」
+        api.wrong(item, (cell.r === tc - 1 && cell.c === tr - 1) ? 'rev' : null);
+      }
     });
     g.append(item);
+  });
+  api.onShow(() => {
+    const at = cells.findIndex(c => c.r === tr - 1 && c.c === tc - 1);
+    if (items[at]) items[at].click();
   });
   // two axes at once is hard enough without having to guess where counting starts
   api.field.append(el('div.axes', null,
@@ -278,17 +319,31 @@ function lengthCompare(api, aligned){
                 longest ? '一番長いのは、どれ？' : '一番短いのは、どれ？');
   const wrap = el('div.measure');
   const colors = shuffle(['var(--c-red)','var(--c-blue)','var(--c-green)','var(--c-purple)']);
+  const ends = [];
   lens.forEach((L, i) => {
     const off = aligned ? 0 : ri(0, Math.max(0, Math.min(22, 97 - L)));
+    ends.push(off + L);
     const row = barRow(L, off, colors[i % colors.length], cap);
+    row.dataset.len = L;
     tappable(row, () => {
       if (api.locked) return;
       if (L === ans){ row.classList.add('correct'); api.correct(); }
-      else { row.classList.add('wrong'); api.later(() => row.classList.remove('wrong'), 460); api.wrong(row); }
+      else {
+        row.classList.add('wrong');
+        api.later(() => row.classList.remove('wrong'), 460);
+        // ragged starts: going by which bar reaches furthest right is the error
+        // this level is about, and it is not the same as「ながさ」
+        const furthest = !aligned && longest && (off + L) >= Math.max.apply(null, ends);
+        api.wrong(row, furthest ? 'looks' : null);
+      }
     });
     wrap.append(row);
   });
   api.field.append(wrap);
+  api.onShow(() => {
+    const r = $$('.mrow', wrap).find(x => Number(x.dataset.len) === ans);
+    if (r) r.click();
+  });
   if (!aligned) api.field.append(el('div.hintline', { text: 'はじまる ところが ちがうよ。ながさ だけを みてね' }));
   // sliding every bar back to a shared start line IS the lesson, so show it
   api.onHint(() => {
@@ -361,14 +416,25 @@ function capacityCompare(api){
                 more ? 'ジュースが多いのは、どれ？' : 'ジュースが少ないのは、どれ？');
   const colors = shuffle(['var(--c-orange)','var(--c-red)','var(--c-purple)']);
   const wrap = el('div.vessels');
+  const tallest = Math.max.apply(null, specs.map(s => s.rows));
   shuffle(specs).forEach((s, i) => {
     const v = el('div.vessel', null, vesselSVG(s.w, s.h, s.fill, colors[i % colors.length]));
+    v.dataset.cells = s.cells;
     tappable(v, () => {
       if (api.locked) return;
       if (s.cells === ans){ v.classList.add('correct'); api.correct(); }
-      else { v.classList.add('wrong'); api.later(() => v.classList.remove('wrong'), 460); api.wrong(v); }
+      else {
+        v.classList.add('wrong');
+        api.later(() => v.classList.remove('wrong'), 460);
+        // 「せが たかい ＝ おおい」 — the hintline warns about it; this records it
+        api.wrong(v, (more && s.rows === tallest) ? 'looks' : null);
+      }
     });
     wrap.append(v);
+  });
+  api.onShow(() => {
+    const v = $$('.vessel', wrap).find(x => Number(x.dataset.cells) === ans);
+    if (v) v.click();
   });
   api.field.append(wrap, el('div.hintline', { text: 'せが たかい ＝ おおい とは かぎらないよ' }));
   // one unit, the same in every glass, dividing the water exactly
