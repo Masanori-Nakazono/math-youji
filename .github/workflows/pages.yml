@@ -16,7 +16,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # a page that fails its own regression suite is never published
+  test:
+    uses: ./.github/workflows/test.yml
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

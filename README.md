@@ -701,7 +701,7 @@ Games.add({
   world: 'shima',                 // shima | umi | yama | mori | kyoshitsu
   color: 'var(--c-blue)',
   // stage: 'g1',                 // 付けると「1ねんせいの きょうしつ」側になり、
-                                  // シールが全部そろうまで出題にも画面にも出ません
+                                  // 入学前を全部クリアするまで出題には出ません
   aim: '保護者ページに出る「この遊びで つく ちから」',
   levels: [
     { t: 'レベル名', d: 'ひとこと説明', n: 8, make(api){
