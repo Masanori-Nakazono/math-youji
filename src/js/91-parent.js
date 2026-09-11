@@ -139,7 +139,8 @@ const Parent = (() => {
             background: now != null && now < .6 ? 'var(--oops)' : 'var(--good)' } }))),
           el('td', { class: 'n', text: s + '/' + max }),
           el('td', { class: 'n', style: { color: now != null && now < .6 ? 'var(--oops-ink)' : null, fontWeight: 800 }, text: pct(now) }),
-          el('td', { class: 'n', style: { color: slowNow ? 'var(--oops-ink)' : fastNow ? 'var(--good-ink)' : 'var(--ink-soft)',
+          // amber, not the warning red: counting it out is where most children are at five
+          el('td', { class: 'n', style: { color: slowNow ? 'var(--accent-ink)' : fastNow ? 'var(--good-ink)' : 'var(--ink-soft)',
                                           fontWeight: slowNow || fastNow ? 800 : 500 },
                      text: g.fluent ? secs(ms) : '—' }),
           el('td', { class: 'n', style: { color: 'var(--ink-soft)' }, text: pct(acc) }),
@@ -151,7 +152,7 @@ const Parent = (() => {
     sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
       text: '「直近30問」「通算」はどちらも「1回目のタップで正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
     sec.append(el('p', {
-      text: '「こたえるまで」は、けいさんの やま の4つの遊びだけに出ます。問題が出てから最初に答えるまでの時間で、正解だったときだけ記録しています。3.0秒までなら緑（思い出している）、9.0秒を超えると赤（数えて出している）。正答率だけを見ていると「できている」と「数えればできる」が同じ数字になりますが、くり上がりの計算で効くのは前者だけです。ここが赤い遊びは、正答率が高くても、まだ仕上がっていません。' }));
+      text: '「こたえるまで」は、けいさんの やま の4つの遊びだけに出ます。問題が出てから最初に答えるまでの時間で、正解だったときだけ記録しています。3.0秒までなら緑（思い出している）、9.0秒を超えると茶色（数えて出している）。正答率だけを見ていると「できている」と「数えればできる」が同じ数字になりますが、くり上がりの計算で効くのは前者だけです。茶色はこの時期には自然な段階で、まちがいではありません。次は「かたまりで見る」練習がいちばん効きます（下の「できるけれど、数えている」）。' }));
     return sec;
   }
 
@@ -191,8 +192,18 @@ const Parent = (() => {
       sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
         '直近' + focus.n + '問の初回正答率 ' + pct(focus.acc) + '。ここを中心に、1日1回。8問を最後までやりきれば十分です。'));
     } else {
+      /* Levels are judged on eight questions or more, facts on two misses — so a page
+         could say「よく仕上がっています」and list three gaps directly under it. Say
+         only what both halves agree on. */
+      const facts0 = Store.data.facts || {};
+      const gaps = Object.keys(facts0).some(k => {
+        const f = facts0[k];
+        return f && (f[0] - f[1]) >= 2 && f[1] / f[0] < .6;
+      });
       sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
-        '直近' + focus.n + '問で ' + pct(focus.acc) + '。いちばん低いところがこれなら、よく仕上がっています。次のレベルに進んで構いません。'));
+        '直近' + focus.n + '問で ' + pct(focus.acc) + '。' + (gaps
+          ? 'レベルとしては安定しています。次のレベルに進みながら、下の「つまずいている中身」だけを「とっくん」で拾ってください。'
+          : 'いちばん低いところがこれなら、よく仕上がっています。次のレベルに進んで構いません。')));
     }
     // what that game is actually for — the one place a parent is most likely to read it
     if (focus.g.aim) sec.append(el('div.aimnote', { html: focus.g.aim }));
@@ -482,12 +493,14 @@ const Parent = (() => {
       const done = new Date(Date.now() + eta * 86400000);
       const inTime = toSchool <= 0 ? false : eta <= toSchool;
       const perWeek = (rate * 7).toFixed(1);
-      s.append(el('div.todo' + (inTime ? '' : '.warn'), null,
-        el('div.mk', { text: inTime ? '◎' : '！' }),
+      // a plain forecast, not an alarm: nothing is lost if it runs past April
+      s.append(el('div.todo', null,
+        el('div.mk', { text: inTime ? '◎' : '○' }),
         el('div', null,
           el('b', { text: inTime
             ? 'このペースなら ' + fmt(done) + 'ごろ、入学に間に合います'
-            : 'このペースだと ' + fmt(done) + 'ごろ' + (toSchool > 0 ? '——入学に ' + (eta - toSchool) + '日ほど足りません' : '') }),
+            : 'このペースだと、全部おわるのは ' + fmt(done) + 'ごろの見込みです'
+              + (toSchool > 0 ? '（入学の ' + (eta - toSchool) + '日あと）' : '') }),
           el('div', { text: '使い始めてから ' + elapsed + '日で ' + pre.got + 'レベル（週 ' + perWeek + 'レベル）。'
             + 'のこり ' + left + 'レベルを同じペースで進めた場合の見込みです。' }))));
       if (!inTime){
@@ -540,6 +553,7 @@ const Parent = (() => {
       The enhanced / premium download is a different recording of the same name,
       so we cannot tell them apart from here: the honest fix is to list what the
       device actually has, let a parent hear each one, and remember the choice. */
+  let voiceWarning = null, voiceWaiting = false;
   function voiceRow(){
     const wrap = el('div', { style: { marginTop: 'calc(var(--u)*.7)' } });
     const list = Sound.voices;
@@ -548,11 +562,17 @@ const Parent = (() => {
         text: '※ この端末で日本語の読み上げ音声が見つかりませんでした。iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 日本語 で音声を追加すると、問題文が音声で読まれます。文字だけでも遊べます。' }));
       // Safari fills the voice list asynchronously, so an empty list here often
       // just means "not yet" — swap the warning for the picker when it arrives.
-      if (window.speechSynthesis){
+      // One listener however often the page is drawn: it swaps whichever warning
+      // is on screen, rather than every page drawn since keeping its own.
+      voiceWarning = wrap;
+      if (window.speechSynthesis && !voiceWaiting){
+        voiceWaiting = true;
         speechSynthesis.addEventListener('voiceschanged', function again(){
           if (!Sound.voices.length) return;
           speechSynthesis.removeEventListener('voiceschanged', again);
-          wrap.replaceWith(voiceRow());
+          voiceWaiting = false;
+          if (voiceWarning && voiceWarning.isConnected) voiceWarning.replaceWith(voiceRow());
+          voiceWarning = null;
         });
       }
       return wrap;
@@ -825,8 +845,10 @@ const Parent = (() => {
   function render(){
     buildSheet();
     clear(sheetInner);
-    sheetInner.append(
-      el('section', null,
+    /* What to do this week comes first. It used to sit under an essay, with twelve
+       sections after it; the reading — what the app is for, what each game builds,
+       the roadmap — is still all here, folded under「くわしく」at the end. */
+    const about = el('section', null,
         el('div.eyebrow', { text: 'about' }),
         el('h3', { text: 'このアプリがねらっていること' }),
         // counted, not typed: the sentence used to say 15 and quietly went stale
@@ -834,18 +856,22 @@ const Parent = (() => {
           + Games.list.filter(g => Progress.stageOf(g) === 'pre').length
           + 'の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。'
           + 'それを全部終えると、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
-        el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると自動でヒントが出て、4回でもっと強いヒントと「こたえを みる」ボタン、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、1回目の正解には数えません）。' })),
+        el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると自動でヒントが出て、4回でもっと強いヒントと「こたえを みる」ボタン、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、1回目の正解には数えません）。' }));
+    sheetInner.append(
       nextUpSection(),
       scheduleSection(),
       statsSection(),
       stageSection(),
       progressSection(),
-      aimsSection(),
-      planSection(),
-      textSection('why', '入学前に育てておきたい力', WHY),
-      textSection('at home', 'おうちでできること', HOME_TIPS),
       backupSection(),
       settingsSection(),
+      el('details.more', null,
+        el('summary', { text: 'くわしく ── ねらい・遊びごとの力・半年の進め方・おうちでできること' }),
+        about,
+        aimsSection(),
+        planSection(),
+        textSection('why', '入学前に育てておきたい力', WHY),
+        textSection('at home', 'おうちでできること', HOME_TIPS)),
       el('div', { style: { height: 'calc(var(--u)*2)' } }));
   }
 

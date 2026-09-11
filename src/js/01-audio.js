@@ -166,6 +166,13 @@ const Sound = (() => {
      times an answer from the end of the question, not from the first word of it —
      a question read aloud for four seconds is not four seconds of thinking. */
   let ending = null;                  // { f } for the line currently owed an onend
+  /* The utterance being spoken, held on purpose: Chrome can collect one nothing
+     references and then never fire its onend — and a line whose end never comes
+     leaves every answer timed as instant. */
+  let speaking = null;
+  /* And if the end still never comes (some engines drop it on iOS too), stop
+     waiting after roughly how long the line takes to say. */
+  const sayMs = (t, rate) => 700 + t.length * 250 / (rate || 1);
   function ended(){
     const t = ending; ending = null;
     if (t) try{ t.f(); }catch(e){}
@@ -180,12 +187,15 @@ const Sound = (() => {
     ended();                          // the line this one replaces will not be heard
     const mine = o.onend ? { f: o.onend } : null;
     ending = mine;
-    const fire = () => { if (mine && ending === mine) ended(); };
+    let guard = null;
+    const fire = () => { clearTimeout(guard); if (mine && ending === mine) ended(); };
     const go = () => {
       try{
         if (!voicesReady) loadVoices();
         speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(forSpeech(text));
+        const line = forSpeech(text);
+        const u = new SpeechSynthesisUtterance(line);
+        speaking = u;
         u.lang  = 'ja-JP';
         if (jaVoice) u.voice = jaVoice;
         // 1.0 is the voice's own recorded prosody; pushing rate or pitch away
@@ -193,8 +203,9 @@ const Sound = (() => {
         u.rate   = o.rate   == null ? 0.95 : o.rate;
         u.pitch  = o.pitch  == null ? 1 : o.pitch;
         u.volume = o.volume == null ? 1 : o.volume;
-        u.onend = u.onerror = fire;
+        u.onend = u.onerror = () => { if (speaking === u) speaking = null; fire(); };
         speechSynthesis.speak(u);
+        if (mine) guard = setTimeout(fire, sayMs(line, u.rate));
       }catch(e){ fire(); }
     };
     // a beat of delay lets the sfx land first and avoids iOS cancel/speak races

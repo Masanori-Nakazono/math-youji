@@ -101,6 +101,12 @@ function classifyMiss(itemKey, answer, given){
     shown = [+m[1], +m[2]]; whole = +m[1];
     opp = (+m[1]) + (+m[2]);                                    // added instead
   }
+  /* 「4の まえの かずは？」に 5: the 4 is on the screen, and so are both ends of
+     「あいだ」. Saying one back is the same reading as in a sum, not a count slip. */
+  else if ((m = /^nb:(next|before|between):(\d+)$/.exec(rest))){
+    const ans = +m[2];
+    shown = m[1] === 'next' ? [ans - 1, ans - 1] : m[1] === 'before' ? [ans + 1, ans + 1] : [ans - 1, ans + 1];
+  }
   /* same1to1 (「おなじ かずに しよう」) shows two rows and no numbers or sign at all,
      so neither「見えている数」nor「＋か −か」is something the child could have read.
      It falls through to the count-slip reading. */
@@ -114,7 +120,11 @@ function classifyMiss(itemKey, answer, given){
   }
   if (opp != null && g === opp) return 'opp';
 
-  if (g === a + 1) return 'up';
-  if (g === a - 1) return 'down';
+  /* 「1つ多く／少なく数えています」 is about counting, so it is only said where the
+     answer is a count. 7 chosen over 8 in「どっちが おおきい」, or 1 for the gap in
+     1 _ 3, is one away on the number line and says nothing about counting. */
+  if (Math.abs(g - a) === 1) return COUNTED.test(rest) ? (g > a ? 'up' : 'down') : null;
   return 'far';
 }
+/* The item keys whose answer is a number of things, counted or worked out. */
+const COUNTED = /^(?:count[LS]|give|q2n|n2q|teen|teensplit|teensum|teenrest|dec|com|ten|fill10|sum|rest|diff|diff1to1|same1to1|same|chart):/;

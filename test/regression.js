@@ -469,11 +469,12 @@
     K.Result.show({ stars: 1, right: 5, total: 8, mode: 'level', game: K.Games.byId.ten,
                     levelIndex: 1, sticker: null, focusKeys: [],
                     shaky: [{ key: 'ten:ten:3', label: '3 と 7 で 10' }] });
-    const chip = q('#result button.shakyitem');
+    // named as words, and reached through the one とっくん button rather than three look-alike chips
+    const named = /3 と 7 で 10/.test((q('#result .shaky') || {}).textContent || '') && !q('#result button.shakyitem');
     const acts = qa('#result .result-actions .btn').map(b => (b.querySelector('.bl') || b).textContent);
     check('the facts the result names can be practised straight from it',
-      !!chip && acts[0] === 'とっくん する',
-      'chip=' + !!chip + ' actions=' + acts.join(' / '));
+      named && acts[0] === 'とっくん する',
+      'named=' + named + ' actions=' + acts.join(' / '));
     K.Store.reset();
   })();
 
@@ -989,9 +990,13 @@
       text: '3こ かぞえよう', prompt: 'ひとつずつ かぞえよう' });
     const mission = K.Store.mission(day);
     K.Missions.open(mission);
-    q('#mission .btn-accent').click();
-    const gated = K.UI.currentName() === 'gate' && !K.Store.mission(day).done;
-    const adultAnswer = passGate();
+    // a tap is not an adult; a two-second press is — not the gate that guards 消す
+    const btn = q('#mission .btn-accent');
+    btn.click();
+    const gated = K.UI.currentName() === 'mission' && !K.Store.mission(day).done;
+    btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, isPrimary: true }));
+    K.Missions._test.finishHold();
+    const adultAnswer = !!K.Store.mission(day).done && K.UI.currentName() === 'home';
     const review = K.Missions.yesterdayReview();
     K.Store.reviewMission(day);
     const old = new Date(); old.setDate(old.getDate() - 2);
@@ -1472,11 +1477,13 @@
     const chips = qa('#book .todochip');
     const names = chips.map(c => c.textContent);
     K.Home.render();
-    const shelf = q('#home .shelf').textContent;
+    // the count is a picture now; the number is kept for the adult in its label
+    const togo = q('#home .shelf .togo');
+    const shelf = togo ? togo.getAttribute('aria-label') + ' dots=' + togo.querySelectorAll('.leftdots span').length : '';
     check('the book names the levels still missing, and the shelf says how many',
       chips.length === lastGame.levels.length
       && names.every(t => t.indexOf(lastGame.name) >= 0)   // the chip leads with the game's icon
-      && /あと 3レベル/.test(shelf),
+      && /あと 3レベル/.test(shelf) && /dots=3$/.test(shelf),
       'chips=' + chips.length + ' shelf=' + shelf);
 
     // and the first one is a way in, not just a label
@@ -1593,7 +1600,11 @@
       ['sub:rest:9-4', 5, 9, 'whole'], ['sub:rest:9-4', 5, 13, 'opp'],
       ['g1pair:diff1to1:7-4', 3, 11, 'opp'],
       ['g1pair:same1to1:6-4', 2, 10, 'far'], ['g1pair:same1to1:7-4', 3, 4, 'up'],
-      ['g1pair:same1to1:7-4', 3, 7, 'far']
+      ['g1pair:same1to1:7-4', 3, 7, 'far'],
+      // one away on the number line is not a count slip where nothing was counted
+      ['compare:numcmp:7_8:g', 8, 7, null], ['seq:fill:2', 2, 1, null],
+      ['seq:nb:before:4', 4, 5, 'part'],    ['seq:nb:next:6', 6, 5, 'part'],
+      ['seq:nb:between:5', 5, 6, 'part']
     ];
     if (typeof K.classifyMiss !== 'function'){
       check('a mistake is named for what the question actually showed', false, 'KazuApp.classifyMiss is not exposed');
@@ -1961,7 +1972,11 @@
 
     K.Result.show(Object.assign({ stars: 1, stickers: [] }, base));
     const shakyLead = primary();
-    const missionWithoutSticker = !!q('#result .result-mission');
+    const noMissionWithShaky = !q('#result .result-mission');
+    K.Result.show(Object.assign({}, base, { stars: 1, stickers: [], shaky: [] }));
+    const missionWithoutSticker = !!q('#result .result-mission') && noMissionWithShaky;
+    K.Result.show(Object.assign({ stars: 2, stickers: [] }, base));
+    const nextFirst = labels()[0] === 'つぎの レベルへ';
 
     K.Progress.gateSlots('pre').slice(0, -5).forEach(k => K.Store.addSticker(k));
     K.Result.show(Object.assign({ stars: 2, stickers: sticker }, base));
@@ -1969,9 +1984,58 @@
 
     check('after ★★ the next level leads; the way to 🎓 is a picture; a new sticker is the only news',
       good.primary === 'つぎの レベルへ' && good.labels.indexOf('とっくん する') >= 0 && shakyLead === 'とっくん する'
-        && farIsPicture && noMissionWithSticker && missionWithoutSticker && dots === 5,
-      JSON.stringify({ good, shakyLead, farIsPicture, far: far && far.textContent, noMissionWithSticker, missionWithoutSticker, dots }));
+        && farIsPicture && noMissionWithSticker && missionWithoutSticker && dots === 5 && nextFirst,
+      JSON.stringify({ good, shakyLead, farIsPicture, far: far && far.textContent, noMissionWithSticker, missionWithoutSticker, dots, nextFirst }));
     K.UI.show('home');
+    K.Store.reset();
+  })();
+
+  /* ---------- 75b. ★0: the words, the bright button and the voice agree ----------
+     The heading and the voice said「もう いちど」and the bright button was「とっくん」,
+     so a child who pressed what they were told about started a different ten
+     questions — under three empty stars, a sad face and「8もん中 2もん」. */
+  (function zeroStarsAgree(){
+    K.Store.reset();
+    K.Store.noteFact('bond:dec:10-4', false, '10 は 4 と 6', 'bond:2', 0, 'part');
+    const log = [], say = K.Sound.say;
+    K.Sound.say = t => log.push(t);
+    const d = {};
+    try{
+      K.Result.show({ stars: 0, right: 2, total: 8, mode: 'level', game: K.Games.byId.bond, levelIndex: 1,
+                      stickers: [], focusKeys: [], shaky: [{ key: 'bond:dec:10-4', label: '10 は 4 と 6' }],
+                      lastGameId: 'bond' });
+      d.primary = ((q('#result .result-actions .primary .bl') || {}).textContent) || '';
+      d.drill = qa('#result .result-actions .bl').some(b => b.textContent === 'とっくん する');
+      d.tried = !!q('#result .tried') && !q('#result .bigstars') && !q('#result .result-sub');
+      d.tall = qa('#result .result-actions .btn').every(b => b.getBoundingClientRect().height >= 63.5);
+      d.spoken = log.join(' ');
+      log.length = 0;
+      const speak = q('#result > .speakbtn');
+      if (speak) speak.click();
+      d.again = log.join(' ');
+    } finally { K.Sound.say = say; }
+    check('after ★0 in a level, もういちど is the bright button, the voice names it, and no empty stars',
+      d.primary === 'もういちど' && d.drill && d.tried && d.tall
+        && /もう一度やってみよう/.test(d.spoken) && /オレンジのボタンで、もう一度/.test(d.spoken)
+        && d.again === d.spoken, JSON.stringify(d));
+    K.UI.show('home');
+    K.Store.reset();
+  })();
+
+  /* ---------- 75c. the banner names break where the words do ----------
+     With three or four banners up, the names wrapped mid-word:「いまの おす／すめ」. */
+  (function bannerNamesKeepWords(){
+    K.Store.reset();
+    ['bond:dec:10-4', 'bond:dec:10-3'].forEach(k => {
+      K.Store.noteFact(k, false, k, 'bond:2', 0, 'part');
+      K.Store.noteFact(k, false, k, 'bond:2', 0, 'part');
+    });
+    K.Home.render();
+    K.UI.show('home');
+    const names = qa('#home .dailies > .daily').filter(b => !b.hidden).map(b => b.querySelector('.t'));
+    const breaks = names.map(t => getComputedStyle(t).wordBreak);
+    check('with three or more banners up, their names break only at the spaces',
+      names.length >= 3 && breaks.every(b => b === 'keep-all'), breaks.join(','));
     K.Store.reset();
   })();
 
@@ -2184,7 +2248,192 @@
     K.Store.reset();
   }
 
+  /* ---------- 77. the fastest answer is kept, not dropped ----------
+     An answer given while the question was still being read is timed as 0, and 0
+     was thrown away: the average was made of the slow answers alone, and a fact the
+     child knew cold came out「数えている」and was sent to とっくん. */
+  function instantAnswerKeepsItsSpeed(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    const d = {};
+    K.Sound.say = () => {};                         // the reading never finishes
+    try{
+      let ans = null, item = null;
+      for (let t = 0; t < 40 && ans == null; t++){
+        K.Session.startLevel(K.Games.byId.ten, 1);
+        const m = /^ten:ten:(\d+)$/.exec(S.item || '');
+        if (m){ ans = 10 - (+m[1]); item = S.item; }
+      }
+      const key = qa('#play .padkey').find(k => Number(k.textContent) === ans);
+      if (key) key.click();
+      d.ms = S.responseMs;
+      d.speed = K.Store.factSpeed(item);
+      K.Store.noteFact(item, true, null, 'ten:1', 9500);   // one slow answer after it
+      const w = K.Store.weakFacts().find(x => x.key === item);
+      d.slow = !!(w && w.slow);
+    } finally { K.Sound.say = say; }
+    leavePlay();
+    check('an answer given before the question finished being read is kept as the fastest, not dropped',
+      d.ms === 0 && d.speed > 0 && d.speed <= 3000 && !d.slow, JSON.stringify(d));
+    K.Store.reset();
+  }
+
+  /* ---------- 78. a line ends even if the engine never says so ----------
+     Chrome can drop onend for an utterance nothing holds on to. With no end, every
+     answer counted as given during the reading — timed as instant, ⚡ for all. */
+  async function speechEndsWithoutTheEngine(){
+    const syn = window.speechSynthesis;
+    let fired = false;
+    if (syn){
+      const was = K.Sound.voiceOn;
+      syn.speak = function(){};                     // takes the line, never reports its end
+      try{
+        K.Sound.voiceOn = true;
+        K.Sound.say('あ', { delay: 0, onend(){ fired = true; } });
+        await new Promise(r => setTimeout(r, 1600));
+      } finally {
+        delete syn.speak;
+        K.Sound.voiceOn = was;
+      }
+    } else fired = true;
+    check('a line whose end the speech engine never reports still ends', fired);
+  }
+
+  /* ---------- 79. a day is the child's day, not UTC's ----------
+     Counted in UTC, the day changed at 9 a.m. in Japan: a backup written at 8:30
+     was「1日前」by 9:30. And 31 March said「入学しています」from 1 p.m. */
+  function localDays(){
+    const now = Date.now, keep = K.Store.data.schoolYear;
+    const at = (...a) => { const t = new Date(...a).getTime(); Date.now = () => t; };
+    const d = {};
+    try{
+      at(2026, 0, 10, 0, 30);  K.Store.noteBackup();
+      at(2026, 0, 10, 23, 30); d.sameDay = K.Store.lastBackupDays();
+      at(2026, 0, 11, 0, 10);  d.nextDay = K.Store.lastBackupDays();
+      K.Store.setSchoolYear(2026);
+      at(2026, 2, 31, 13, 0);  d.eve = K.Store.daysToSchool();
+      at(2026, 3, 1, 8, 0);    d.first = K.Store.daysToSchool();
+    } finally {
+      Date.now = now;
+      K.Store.setSchoolYear(keep);
+    }
+    check('days are counted on the local calendar: same day is 0, 31 March is「あと 1日」',
+      d.sameDay === 0 && d.nextDay === 1 && d.eve === 1 && d.first === 0, JSON.stringify(d));
+    K.Store.reset();
+  }
+
+  /* ---------- 80. merging keeps a level met only in practice ----------
+     `plays` counts whole levels, so a level met only in きょうの れんしゅう was 0 on
+     both sides, and a strict「more plays」 threw its recent form away. */
+  function mergeKeepsPracticeOnly(){
+    K.Store.reset();
+    K.Store.noteOutcome('count', 0, true);
+    K.Store.noteOutcome('count', 0, false);
+    const text = K.Store.exportText();
+    K.Store.reset();
+    const r = K.Store.importText(text);
+    check('合体 keeps the recent form of a level met only in practice',
+      r.ok && K.Store.recentCount('count', 0) === 2, 'n=' + K.Store.recentCount('count', 0));
+    K.Store.reset();
+  }
+
+  /* ---------- 81. 「答えを見せた」survives the next blank ----------
+     In a question with several blanks, building the next blank reset the flag, and
+     a question the app had answered was saved as the child's own mistake. */
+  function taughtSurvivesNextBlank(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = () => {};
+    const d = {};
+    const target = () => {
+      const cells = qa('#play .numline .nn');
+      const i = cells.findIndex(c => c.classList.contains('now'));
+      if (i < 0) return null;
+      const prev = cells[i - 1] && Number(cells[i - 1].textContent);
+      const next = cells[i + 1] && Number(cells[i + 1].textContent);
+      return Number.isFinite(prev) && prev > 0 ? prev + 1 : Number.isFinite(next) ? next - 1 : null;
+    };
+    try{
+      const seq = K.Games.byId.seq;
+      for (let t = 0; t < 60 && blanks() < 2; t++) K.Session.startLevel(seq, t % 2);
+      d.blanks = blanks();
+      d.item = S.item;
+      const v = target();
+      for (let n = 0; n < 12 && !S.taught; n++){
+        const b = liveChoices().find(x => Number(x.textContent) !== v);
+        if (!b) break;
+        b.click();
+      }
+      d.shown = S.taught;
+      S.flushTimers();                               // the app answers this blank; the next one is built
+      d.nextBlank = blanks() >= 1 && !S.taught;
+      for (let n = 0; n < 6 && S.item === d.item && !S.locked; n++){
+        const w = target();
+        const b = liveChoices().find(x => Number(x.textContent) === w);
+        if (!b) break;
+        b.click(); S.flushTimers(1);
+      }
+      const f = K.Store.fact(d.item);
+      d.miss = f && f[6];
+    } finally { K.Sound.say = say; }
+    leavePlay();
+    check('a question the app answered is saved as「答えを見せた」, even with more blanks after it',
+      d.blanks >= 2 && d.shown && d.nextBlank && !!d.miss && d.miss.taught === 1 && !d.miss.down && !d.miss.up,
+      JSON.stringify(d));
+    K.Store.reset();
+  }
+
+  /* ---------- 82. おすすめ does not wait for ever at one level ----------
+     A level tried three times opens the next one; おすすめ kept naming it anyway,
+     and nothing after it on the roadmap ever came up. */
+  function recommendationMovesOn(){
+    K.Store.reset();
+    [0, 1].forEach(i => { K.Store.recordLevel('count', i, 3, 8, 8); K.Store.addSticker('count:' + i); });
+    for (let n = 0; n < 3; n++) K.Store.recordLevel('count', 2, 0, 2, 8);
+    for (let n = 0; n < 8; n++) K.Store.noteOutcome('count', 2, n % 4 === 0);
+    const now = K.Diagnostic.current();
+    check('a level tried three times without a pass rests, and おすすめ moves on',
+      !!now && !(now.gameId === 'count' && now.levelIndex === 2), JSON.stringify(now));
+    K.Store.reset();
+  }
+
+  /* ---------- 83. the ← asks, and an answer stands it down ----------
+     The first tap turned it into a pink「？」 that said nothing, and a mistake made
+     while it was armed lost its hint 2.6 s later when the arming timed out. */
+  function backButtonAsks(){
+    K.Store.reset();
+    const log = [], say = K.Sound.say;
+    K.Sound.say = t => log.push(t);
+    const d = {};
+    try{
+      let ans = null;
+      for (let t = 0; t < 40 && ans == null; t++){
+        K.Session.startLevel(K.Games.byId.ten, 1);
+        const m = /^ten:ten:(\d+)$/.exec(S.item || '');
+        if (m) ans = 10 - (+m[1]);
+      }
+      const back = q('#play .backbtn');
+      log.length = 0;
+      back.click();
+      d.asks = back.textContent === '🏠' && q('#play .feedback').classList.contains('hint')
+        && log.some(t => /もう一度押してね/.test(t));
+      const key = qa('#play .padkey').find(k => Number(k.textContent) !== ans);
+      key.click();
+      d.stoodDown = back.textContent === '←' && !q('#play .feedback').hidden;
+    } finally { K.Sound.say = say; }
+    leavePlay();
+    check('the first ← asks out loud, and a mistake made then keeps its words on screen',
+      d.asks && d.stoodDown, JSON.stringify(d));
+    K.Store.reset();
+  }
+
   function finish(){
+    instantAnswerKeepsItsSpeed();
+    localDays();
+    mergeKeepsPracticeOnly();
+    taughtSurvivesNextBlank();
+    recommendationMovesOn();
+    backButtonAsks();
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();
     return { pass: results.filter(r => r.ok).length, fail: results.filter(r => !r.ok).length, results };
@@ -2199,5 +2448,6 @@
                        exportOnlyCountsWhenSaved()))
     .then(() => settle('an answer is timed from the end of the question being read, not from its first word',
                        timedFromTheEndOfTheQuestion()))
+    .then(() => settle('a line whose end the speech engine never reports still ends', speechEndsWithoutTheEngine()))
     .then(finish);
 })();

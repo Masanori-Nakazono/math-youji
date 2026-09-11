@@ -390,9 +390,11 @@ body::before{
 }
 .obj:active{ transform: translate(-50%,-50%) scale(1.14); }
 .obj.counted{ filter: drop-shadow(0 0 calc(var(--u)*.5) var(--good)); }
+/* inside the object's own box: hung outside it, the badge on a flower near the
+   edge was cut by the board — and the last number said is the answer */
 .obj .tag{
   position: absolute;
-  top: -.45em; right: -.45em;
+  top: 0; right: 0;
   font-family: var(--fs-num); font-weight: 800;
   font-size: .42em; line-height: 1;
   color: var(--on-crayon); background: var(--good);
@@ -548,6 +550,9 @@ body::before{
 .dailies.n4 > .daily .t{
   white-space: normal; text-overflow: clip;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  /* and it breaks at the spaces the name is written with —「いまの／おすすめ」,
+     never「いまの おす／すめ」: a child who is starting to read reads word shapes */
+  word-break: keep-all; overflow-wrap: anywhere;
 }
 .dailies.n3 > .daily .s,
 .dailies.n4 > .daily .s{ display: none; }
@@ -616,6 +621,13 @@ body::before{
 .shelf .strip .empty{ font-size: calc(var(--u)*1.3); color: var(--ink-soft); font-weight: 500; }
 /* the last few levels before the classroom opens: the same colour the result
    screen uses for「もうすぐ ひらくよ」, so the two say the same thing */
+.shelf .lbl .togo{ display: flex; align-items: center; gap: calc(var(--u)*.35); margin-top: calc(var(--u)*.2); }
+.shelf .togo .gauge{
+  display: block; width: calc(var(--u)*7); height: calc(var(--u)*.7);
+  border-radius: 99px; background: var(--paper-2); overflow: hidden;
+}
+.shelf .togo .fill{ display: block; height: 100%; background: var(--star); border-radius: inherit; }
+.shelf .togo .leftdots{ color: var(--accent-ink); font-size: calc(var(--u)*.9); letter-spacing: .12em; }
 .shelf.nearly{ border-color: var(--accent); }
 .shelf.nearly .lbl small{ color: var(--accent-ink); font-weight: 800; }
 
@@ -640,15 +652,26 @@ body::before{
 #parent .schedule .big b{ display: block; font-family: var(--fs-num); font-size: calc(var(--u)*2.2); line-height: 1.2; }
 #parent .schedule .big small{ display: block; color: var(--ink-soft); font-size: calc(var(--u)*1.1); margin-top: .25em; }
 #parent .todo.warn .mk{ color: var(--oops-ink); }
+/* the mission's「できた」fills while it is held, so the adult can see it working */
+.holdbtn{ position: relative; overflow: hidden; isolation: isolate; touch-action: none; -webkit-user-select: none; user-select: none; }
+.holdbtn.holding::before{
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+  transform-origin: left; animation: holdFill var(--hold, 2s) linear both;
+}
+@keyframes holdFill{ from{ transform: scaleX(0) } to{ transform: scaleX(1) } }
+#parent details.more{ margin-top: calc(var(--u)*1); }
+#parent details.more > summary{
+  cursor: pointer; font-weight: 800; min-height: var(--tap);
+  display: flex; align-items: center; padding: 0 calc(var(--u)*1);
+  border-radius: calc(var(--u)*.6); background: var(--paper-2);
+}
 #parent .skilltable tr.now td{ background: color-mix(in srgb, var(--accent) 16%, transparent); }
 
-/* a mark only an adult reads: the records have not been written out in a while */
-.btn-round.due{ position: relative; }
-.btn-round.due::after{
-  content: ""; position: absolute; top: 6%; right: 6%;
-  width: calc(var(--u)*1.1); height: calc(var(--u)*1.1); border-radius: 50%;
-  background: var(--accent); border: calc(var(--u)*.18) solid var(--card);
-}
+/* a mark only an adult reads: the records have not been written out in a while.
+   A ring, not a dot — an orange notification dot is the one shape on a screen a
+   five-year-old most wants to press. */
+.btn-round.due{ box-shadow: 0 0 0 calc(var(--u)*.22) color-mix(in srgb, var(--accent) 60%, transparent); }
 #parent .backup-due{
   background: var(--oops-soft); border-left: calc(var(--u)*.4) solid var(--oops);
   border-radius: calc(var(--u)*.5);
@@ -791,7 +814,25 @@ body::before{
 .result-msg{ font-size: calc(var(--u)*3); font-weight: 800; }
 .result-sub{ font-size: calc(var(--u)*1.6); color: var(--ink-soft); }
 .result-actions{ display: flex; gap: calc(var(--u)*.9); flex-wrap: wrap; justify-content: center; }
-.result-actions .btn{ font-size: calc(var(--u)*1.8); padding: calc(var(--u)*.9) calc(var(--u)*1.8); }
+/* every way off this screen is a finger-sized target, the ones that wrap to a
+   second row included — they were 53px, under the app's own floor */
+.result-actions .btn{ font-size: calc(var(--u)*1.8); padding: calc(var(--u)*.9) calc(var(--u)*1.8);
+                      min-height: var(--tap); }
+#result{ position: relative; }
+#result > .speakbtn{ position: absolute; top: calc(var(--u)*.6); right: calc(var(--u)*.6); z-index: 2; }
+#result .enough{
+  display: flex; align-items: center; gap: calc(var(--u)*.6);
+  font-size: calc(var(--u)*1.7); font-weight: 800;
+  background: color-mix(in srgb, var(--c-blue) 14%, var(--card));
+  border-radius: var(--wob-b); padding: calc(var(--u)*.6) calc(var(--u)*1.3);
+}
+#result .enough .mk{ font-size: calc(var(--u)*2.4); line-height: 1; }
+/* ★0: what the child did, in place of three empty stars */
+#result .tried{
+  font-size: calc(var(--u)*2.2); font-weight: 800; color: var(--good-ink);
+  background: var(--good-soft); border-radius: var(--wob-b);
+  padding: calc(var(--u)*.7) calc(var(--u)*1.6);
+}
 .result-actions .btn .bi{ font-size: 1.3em; line-height: 1; margin-right: .35em; }
 
 .newsticker{
@@ -1354,6 +1395,14 @@ body::before{
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
+  /* The big ◯ is not decoration, it is the answer being right — and cut to
+     .01ms, an animation that ends at opacity 0 showed nothing at all. Still,
+     not moving: on, held, then gone. */
+  .bigmark{ animation: markStill .75s linear both !important; }
+}
+@keyframes markStill{
+  0%, 80%{ opacity: 1 }
+  100%{ opacity: 0 }
 }
 
 /* ===========================================================
@@ -1541,17 +1590,6 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   border-radius:calc(var(--u)*.8); padding:calc(var(--u)*.3) calc(var(--u)*.8);
   font-family:var(--fs-num); font-weight:800; font-size:calc(var(--u)*1.7); color:var(--ink);
 }
-
-/* The named facts are the way back to them, so they have to look pressable and
-   be big enough for a five-year-old to hit. */
-#result button.shakyitem{
-  appearance: none; cursor: pointer;
-  padding: calc(var(--u)*.5) calc(var(--u)*.95);
-  transition: transform .12s cubic-bezier(.2,.9,.3,1.4), box-shadow .12s;
-  box-shadow: var(--shadow-sm);
-}
-#result button.shakyitem:active{ transform: translateY(.14em); box-shadow: none; }
-#result button.shakyitem:focus-visible{ outline: calc(var(--u)*.24) solid var(--ring); outline-offset: 2px; }
 
 /* ---------- ぱっと みて いくつ ----------
    The dots have to be genuinely gone when the cover is up, and genuinely legible
@@ -2360,6 +2398,13 @@ const Sound = (() => {
      times an answer from the end of the question, not from the first word of it —
      a question read aloud for four seconds is not four seconds of thinking. */
   let ending = null;                  // { f } for the line currently owed an onend
+  /* The utterance being spoken, held on purpose: Chrome can collect one nothing
+     references and then never fire its onend — and a line whose end never comes
+     leaves every answer timed as instant. */
+  let speaking = null;
+  /* And if the end still never comes (some engines drop it on iOS too), stop
+     waiting after roughly how long the line takes to say. */
+  const sayMs = (t, rate) => 700 + t.length * 250 / (rate || 1);
   function ended(){
     const t = ending; ending = null;
     if (t) try{ t.f(); }catch(e){}
@@ -2374,12 +2419,15 @@ const Sound = (() => {
     ended();                          // the line this one replaces will not be heard
     const mine = o.onend ? { f: o.onend } : null;
     ending = mine;
-    const fire = () => { if (mine && ending === mine) ended(); };
+    let guard = null;
+    const fire = () => { clearTimeout(guard); if (mine && ending === mine) ended(); };
     const go = () => {
       try{
         if (!voicesReady) loadVoices();
         speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(forSpeech(text));
+        const line = forSpeech(text);
+        const u = new SpeechSynthesisUtterance(line);
+        speaking = u;
         u.lang  = 'ja-JP';
         if (jaVoice) u.voice = jaVoice;
         // 1.0 is the voice's own recorded prosody; pushing rate or pitch away
@@ -2387,8 +2435,9 @@ const Sound = (() => {
         u.rate   = o.rate   == null ? 0.95 : o.rate;
         u.pitch  = o.pitch  == null ? 1 : o.pitch;
         u.volume = o.volume == null ? 1 : o.volume;
-        u.onend = u.onerror = fire;
+        u.onend = u.onerror = () => { if (speaking === u) speaking = null; fire(); };
         speechSynthesis.speak(u);
+        if (mine) guard = setTimeout(fire, sayMs(line, u.rate));
       }catch(e){ fire(); }
     };
     // a beat of delay lets the sfx land first and avoids iOS cancel/speak races
@@ -2492,6 +2541,22 @@ const Store = (() => {
       try{ parsed = JSON.parse(raw); }catch(e){}
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)){
         mem = Object.assign(blank(), parsed);
+        /* It parsed, but a field can still have the wrong shape — `stickers` that is
+           not a list stopped Home from drawing at all, so the app never opened and
+           the record could not even be written out. A field like that goes back to
+           empty, and the whole record as it was is kept aside first. (The full
+           check in normalizeData needs 06-miss.js, which has not loaded yet here.) */
+        const fresh = blank();
+        const shape = v => Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v;
+        let bent = false;
+        for (const k of Object.keys(fresh)){
+          const want = shape(fresh[k]), got = shape(mem[k]);
+          if (want === got) continue;
+          if ((k === 'diagnostic' && got === 'object') || (k === 'voiceId' && got === 'string')) continue;
+          mem[k] = fresh[k];
+          bent = true;
+        }
+        if (bent){ try{ localStorage.setItem(ASIDE, raw); }catch(e){} }
       } else {
         unreadable = true;
         // if the copy cannot be made, the original is the only one: leave it be
@@ -2520,7 +2585,11 @@ const Store = (() => {
   /* Whole-day resolution keeps six months of daily use small enough for
      localStorage, and days are the only unit the scheduling actually needs. */
   const DAY = 86400000;
-  const dayNo = () => Math.floor(Date.now() / DAY);
+  /* The local calendar day, not the UTC one. Counted in UTC, a day in Japan ended at
+     9 in the morning: a backup written at 8:30 was「1日前」by 9:30, and every
+     「何日ふれていない」and the pace to 入学 were a day out for half of each morning. */
+  const dayOf = ms => Math.floor((ms - new Date(ms).getTimezoneOffset() * 60000) / DAY);
+  const dayNo = () => dayOf(Date.now());
   const todayKey = () => {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -2685,11 +2754,16 @@ const Store = (() => {
         out.facts[k][6] = m;
       }
     }
-    // recent / last: follow whichever side actually played that level more
+    /* recent / last: follow whichever side actually played that level more, and on
+       a tie the side that met it last. `plays` only counts whole levels, so a level
+       met only inside きょうの れんしゅう or とっくん is 0 on both sides — and a strict
+       「more」 dropped its record even when this device had none at all. */
     out.recent = Object.assign({}, base.recent || {});
     out.last   = Object.assign({}, base.last || {});
     for (const k in (add.recent || {})){
-      if ((add.plays && add.plays[k] || 0) > (base.plays && base.plays[k] || 0)) out.recent[k] = add.recent[k];
+      const ap = (add.plays && add.plays[k]) || 0, bp = (base.plays && base.plays[k]) || 0;
+      const newer = ((add.last && add.last[k]) || 0) > ((base.last && base.last[k]) || 0);
+      if (!(k in out.recent) || ap > bp || (ap === bp && newer)) out.recent[k] = add.recent[k];
     }
     for (const k in (add.last || {})) out.last[k] = maxNum(out.last[k], add.last[k]);
     out.stickers = Array.from(new Set((base.stickers || []).concat(add.stickers || [])));
@@ -2887,7 +2961,7 @@ const Store = (() => {
     usedDays(){ return Object.keys(mem.daily || {}).length; },
     /** calendar days since the app was first opened on this device */
     daysSinceStart(){
-      return Math.max(0, dayNo() - Math.floor((mem.createdAt || Date.now()) / DAY));
+      return Math.max(0, dayNo() - dayOf(mem.createdAt || Date.now()));
     },
     /** 1 April of the year this child starts school — set, or guessed from day one.
         School starts in April, so a first run in April or later belongs to next April. */
@@ -2897,9 +2971,10 @@ const Store = (() => {
       return new Date(d.getFullYear() + (d.getMonth() >= 3 ? 1 : 0), 3, 1);
     },
     setSchoolYear(y){ mem.schoolYear = y || 0; save(); },
-    /** whole days from today to 入学 (negative once it has passed) */
+    /** calendar days from today to 入学 (negative once it has passed). Days, not
+        rounded milliseconds: rounded, 31 March said「入学しています」from 1 p.m. */
     daysToSchool(){
-      return Math.round((this.schoolDate().getTime() - Date.now()) / DAY);
+      return dayOf(this.schoolDate().getTime()) - dayNo();
     },
     noteBackup(){ mem.backupAt = dayNo(); writeNow(); },
     lastBackupDays(){ return mem.backupAt ? Math.max(0, dayNo() - mem.backupAt) : null; },
@@ -2942,9 +3017,12 @@ const Store = (() => {
       /* How long the answer took, kept only where speed is the goal and only for
          clean answers — a wrong answer times a guess. A single interrupted question
          (the iPad put down mid-problem) is clamped rather than dropped, so it cannot
-         decide the average on its own. */
-      if (ms > 0){
-        const capped = Math.min(ms, 20000);
+         decide the average on its own. An answer given while the question was still
+         being read out arrives as 0 — the fastest answer there is, not a missing one:
+         dropping it left the average made of the slow answers alone, and a fact the
+         child knew cold was reported as「数えている」and sent to とっくん. */
+      if (ms != null && ms >= 0){
+        const capped = Math.max(1, Math.min(ms, 20000));
         f[5] = f[5] ? Math.round(f[5] * 0.65 + capped * 0.35) : capped;
       }
       /* What kind of wrong it was, from the first mistake on this question. A
@@ -3660,6 +3738,11 @@ const Session = (() => {
      never be left in front of a door they cannot move. */
   const STRONG_AFTER = 2, TEACH_AFTER = 4;   // mistakes past the game's own hint
   let hintStrongFns = [], showFn = null, answerBtn = null, answerText = null, taught = false;
+  /* `taught` guards one answer surface and is reset with it; this one is the
+     record, and belongs to the whole question. With several blanks, the next blank
+     used to wipe it, and a question the app had answered was saved as the child's
+     own mistake. */
+  let taughtQ = false;
   /* What this question is *about*. Every generator names its item, so the app can
      avoid asking the same fact twice in one sitting, steer toward the facts this
      child keeps missing, and tell the parent which ones they are. */
@@ -3778,7 +3861,7 @@ const Session = (() => {
     clear(feedbackEl);
     feedbackEl.append(el('span.mk', { text: kind === 'oops' ? '？' : '💡' }), text);
     if (extra) feedbackEl.append(extra);
-    feedbackEl.animate
+    feedbackEl.animate && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
   }
   function clearFeedback(){ feedbackEl.hidden = true; clear(feedbackEl); }
@@ -3806,12 +3889,17 @@ const Session = (() => {
     }
   }
 
+  /* The first tap asks. It used to turn the button into a pink「？」with the
+     mistake colour and say nothing — to a child who cannot read, a telling-off
+     with no way to tell what for. It is a question, so it looks like the hints,
+     shows where the button goes, and says it out loud. */
   function quit(){
     if (!quitArmed){
       quitArmed = true;
-      backBtn.textContent = '？';
+      backBtn.textContent = '🏠';
       backBtn.setAttribute('aria-label', 'もういちど おすと おわる');
-      showFeedback('oops', 'もういちど おすと おわるよ');
+      showFeedback('hint', 'おわりに する？ もういちど おしてね');
+      Sound.say('終わりにする？もう一度押してね。', { delay: 60 });
       clearTimeout(quitTimer);
       quitTimer = setTimeout(() => {
         disarmQuit();
@@ -4171,7 +4259,7 @@ const Session = (() => {
     hintAfter = 2; extrasShown = false;
     askedAt = 0; respondedMs = null; spokenAt = 0; slipAt = 0;
     curItem = null; curLabel = null; curAnswer = null; missType = null;
-    hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false;
+    hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false; taughtQ = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
     choicesEl.classList.remove('pad');
     clearFeedback();
@@ -4281,7 +4369,7 @@ const Session = (() => {
       otherwise let the game show it, and end the question either way. */
   function teach(){
     if (locked || taught) return;
-    taught = true;
+    taught = true; taughtQ = true;
     // stop the child racking up misses on a board that is already being answered
     $$('.choice', choicesEl).forEach(b => { if (b !== answerBtn) b.disabled = true; });
     const tb = $('.teachbtn', choicesEl);
@@ -4302,6 +4390,9 @@ const Session = (() => {
   function onWrong(target, given){
     // once the answer is being shown, taps on the old surface are not attempts
     if (locked || taught) return;
+    /* an answer means the child is still playing: stand the ← down, or its timer
+       clears the bubble 2.6 s later and takes this mistake's hint with it */
+    disarmQuit();
     markResponse();
     wrongThisQ++;
     mistakes++;
@@ -4328,6 +4419,10 @@ const Session = (() => {
       showFeedback('hint', 'ヒントを だすね');
       Sound.say('ヒントを出すね。', { delay: 260 });
       if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
+      /* 「ヒントを だすね」 has to change the board. On three choices the one dimmed
+         at random was often one the child had already tried, which changed nothing;
+         the answers already ruled out go grey first. */
+      hintBtns.forEach(b => { if (b.classList.contains('tried')) b.classList.add('dim'); });
       if (wrongThisQ >= 2) dimOne();
       return;
     }
@@ -4350,6 +4445,7 @@ const Session = (() => {
   function onCorrect(o){
     if (locked) return;
     locked = true;
+    disarmQuit();
     markResponse();
     clearFeedback();
     const clean = wrongThisQ === 0;
@@ -4368,7 +4464,7 @@ const Session = (() => {
         /* 'taught' outranks the reading of the first mistake: what matters about
            this question is that the child did not get there on their own. */
         Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed,
-                       taught ? 'taught' : missType);
+                       taughtQ ? 'taught' : missType);
         if (!clean && !shaky.some(x => x.key === curItem)){
           shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
         }
@@ -4482,6 +4578,7 @@ const Session = (() => {
       get responseMs(){ return respondedMs; },
       get missType(){ return missType; },
       get taught(){ return taught; },
+      get taughtQ(){ return taughtQ; },
       get wrongThisQ(){ return wrongThisQ; },
       get planItems(){ return plan.map(p => p.want || null); }
     }
@@ -4592,6 +4689,12 @@ function classifyMiss(itemKey, answer, given){
     shown = [+m[1], +m[2]]; whole = +m[1];
     opp = (+m[1]) + (+m[2]);                                    // added instead
   }
+  /* 「4の まえの かずは？」に 5: the 4 is on the screen, and so are both ends of
+     「あいだ」. Saying one back is the same reading as in a sum, not a count slip. */
+  else if ((m = /^nb:(next|before|between):(\d+)$/.exec(rest))){
+    const ans = +m[2];
+    shown = m[1] === 'next' ? [ans - 1, ans - 1] : m[1] === 'before' ? [ans + 1, ans + 1] : [ans - 1, ans + 1];
+  }
   /* same1to1 (「おなじ かずに しよう」) shows two rows and no numbers or sign at all,
      so neither「見えている数」nor「＋か −か」is something the child could have read.
      It falls through to the count-slip reading. */
@@ -4605,10 +4708,14 @@ function classifyMiss(itemKey, answer, given){
   }
   if (opp != null && g === opp) return 'opp';
 
-  if (g === a + 1) return 'up';
-  if (g === a - 1) return 'down';
+  /* 「1つ多く／少なく数えています」 is about counting, so it is only said where the
+     answer is a count. 7 chosen over 8 in「どっちが おおきい」, or 1 for the gap in
+     1 _ 3, is one away on the number line and says nothing about counting. */
+  if (Math.abs(g - a) === 1) return COUNTED.test(rest) ? (g > a ? 'up' : 'down') : null;
   return 'far';
 }
+/* The item keys whose answer is a number of things, counted or worked out. */
+const COUNTED = /^(?:count[LS]|give|q2n|n2q|teen|teensplit|teensum|teenrest|dec|com|ten|fill10|sum|rest|diff|diff1to1|same1to1|same|chart):/;
 
 /* ---- 10-g-number.js ---- */
 /* ===========================================================
@@ -7721,12 +7828,25 @@ const Diagnostic = (() => {
      for — and a ★★★ level can never be recommended again. */
   const cleared = (id, i) => Store.hasSticker(id + ':' + i);
 
+  /* A level tried three times without a pass has already opened the next one — the
+     rule that no child is left at a padlock. おすすめ did not follow it: it named the
+     first uncleared level, so one level a child could not yet pass was named every
+     day and nothing after it ever came up. Once it has had its three goes it rests
+     for a few days, and the roadmap moves on; it comes back afterwards, and it comes
+     back at once if there is nothing else left to name. */
+  const REST_DAYS = 3;
+  const resting = (id, i) => !cleared(id, i) && Store.plays(id, i) >= 3 && Store.daysSince(id, i) < REST_DAYS;
+
   function nextUncleared(){
-    for (const id of roadmap()){
-      const g = Games.byId[id];
-      if (!g) continue;
-      for (let i = 0; i < g.levels.length; i++){
-        if (levelOpen(g, i) && !cleared(id, i)) return { gameId: id, levelIndex: i };
+    for (const skipResting of [true, false]){
+      for (const id of roadmap()){
+        const g = Games.byId[id];
+        if (!g) continue;
+        for (let i = 0; i < g.levels.length; i++){
+          if (!levelOpen(g, i) || cleared(id, i)) continue;
+          if (skipResting && resting(id, i)) continue;
+          return { gameId: id, levelIndex: i };
+        }
       }
     }
     return null;
@@ -7738,7 +7858,7 @@ const Diagnostic = (() => {
     let weakest = null;
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
       if (!levelOpen(g, i)) return;
-      if (unclearedOnly && cleared(g.id, i)) return;
+      if (unclearedOnly && (cleared(g.id, i) || resting(g.id, i))) return;
       const n = Store.recentCount(g.id, i);
       if (n < 4) return;
       const acc = Store.recentAccuracy(g.id, i);
@@ -7884,20 +8004,53 @@ const Missions = (() => {
     return UI.register('mission', node);
   }
 
+  /* The adult's「できた」. It went through the full adult gate — two 2-digit ×
+     1-digit sums in a row, and five seconds' wait after a slip — which is the lock
+     on「記録をすべて消す」, for the lightest thing an adult does all day, often with
+     a pan in the other hand. So it was mostly never pressed, and the next day's
+     「どうやったか」never came. A two-second press says an adult was there; a tap
+     only says how. */
+  const HOLD_MS = 2000;
+  let holdTimer = null, holdDone = null, held = false;
+  function stopHold(){
+    clearTimeout(holdTimer); holdTimer = null; holdDone = null;
+    if (doneBtn) doneBtn.classList.remove('holding');
+  }
+  function holdToConfirm(onDone){
+    doneBtn.classList.add('holdbtn');
+    doneBtn.style.setProperty('--hold', HOLD_MS + 'ms');
+    doneBtn.onpointerdown = e => {
+      e.preventDefault();
+      stopHold();
+      doneBtn.classList.add('holding');
+      holdDone = () => { stopHold(); held = true; onDone(); };
+      holdTimer = setTimeout(holdDone, HOLD_MS);
+    };
+    doneBtn.onpointerup = doneBtn.onpointerleave = doneBtn.onpointercancel = stopHold;
+    doneBtn.onclick = () => {
+      if (held){ held = false; return; }             // the click that ends a finished press
+      Sound.say('おうちの人が、2秒長押ししてね。', { delay: 60 });
+    };
+  }
+  function plainButton(onclick){
+    stopHold();
+    doneBtn.classList.remove('holdbtn');
+    doneBtn.onpointerdown = doneBtn.onpointerup = doneBtn.onpointerleave = doneBtn.onpointercancel = null;
+    doneBtn.onclick = onclick;
+  }
+
   function open(mission){
     build();
     titleEl.textContent = 'きょうの さんすう ミッション';
     promptEl.textContent = mission.text;
     noteEl.textContent = mission.prompt;
-    doneBtn.textContent = 'おうちのひとに かくにんしてもらう';
-    doneBtn.onclick = () => {
-      Parent.open(() => {
-        Store.completeMission(mission.day);
-        Sound.sfx.finish();
-        Home.render();
-        UI.show('home', { replace: true });
-      });
-    };
+    doneBtn.textContent = 'おうちのひとが ながおし（2びょう）';
+    holdToConfirm(() => {
+      Store.completeMission(mission.day);
+      Sound.sfx.finish();
+      Home.render();
+      UI.show('home', { replace: true });
+    });
     UI.show('mission');
     Sound.say(mission.text + '。' + mission.prompt, { delay: 250 });
   }
@@ -7908,12 +8061,12 @@ const Missions = (() => {
     promptEl.textContent = mission.text;
     noteEl.textContent = 'どんな ふうに できたか、おうちのひとに おはなししよう';
     doneBtn.textContent = 'おはなし できた！';
-    doneBtn.onclick = () => {
+    plainButton(() => {
       Store.reviewMission(mission.day);
       Sound.sfx.correct();
       Home.render();
       UI.show('home', { replace: true });
-    };
+    });
     UI.show('mission');
     Sound.say('昨日のミッション、どんなふうにできたかお話ししよう。', { delay: 250 });
   }
@@ -7927,7 +8080,9 @@ const Missions = (() => {
     return b;
   }
 
-  return { forGame, yesterdayReview, open, openReview, resultCard };
+  return { forGame, yesterdayReview, open, openReview, resultCard,
+           /** test seam: end a press that has started, without waiting two seconds */
+           _test: { finishHold(){ if (holdDone) holdDone(); } } };
 })();
 
 /* ---- 90-screens.js ---- */
@@ -8196,13 +8351,24 @@ const Home = (() => {
     const gate = Progress.preStickers();
     const toGo = Progress.g1Open() ? 0 : Math.max(0, gate.total - gate.got);
     shelfEl.classList.toggle('nearly', toGo > 0 && toGo <= 6);
+    /* The same picture the result screen draws: a bar filling towards 🎓, and dots to
+       count once there are few enough. 「あと 34レベル」 is a number for the adult,
+       so it stays in the label for them. */
+    let sub;
+    if (toGo){
+      const say = '1ねんせいの きょうしつまで あと ' + toGo + 'レベル';
+      const middle = toGo <= 10 ? el('span.leftdots') : el('span.gauge', null,
+        el('span.fill', { style: { width: Math.round(gate.got / gate.total * 100) + '%' } }));
+      if (toGo <= 10) for (let i = 0; i < toGo; i++) middle.append(el('span', { text: '●' }));
+      sub = el('small.togo', { role: 'img', 'aria-label': say, title: say },
+        middle, el('span', { text: '🎓', 'aria-hidden': 'true' }));
+    } else {
+      sub = el('small', { text: Progress.g1Open() ? '1ねんせいの きょうしつが ひらいて いるよ'
+                                                  : 'タップで シールブック' });
+    }
     shelfEl.append(
       el('span.bk', { text: '📖' }),
-      el('div.lbl', null, 'シール ' + got.length + 'まい',
-        el('small', { text: toGo
-          ? '1ねんせいの きょうしつまで あと ' + toGo + 'レベル'
-          : Progress.g1Open() ? '1ねんせいの きょうしつが ひらいて いるよ'
-                              : 'タップで シールブック' })),
+      el('div.lbl', null, 'シール ' + got.length + 'まい', sub),
       strip);
 
     /* how many banners share the row decides how much of each one fits: with three
@@ -8279,20 +8445,36 @@ const Levels = (() => {
 
 /* ---------------------------------------------------------- RESULT */
 const Result = (() => {
-  let node, inner;
+  let node, inner, lastSpoken = '';
+  const DAY_ENOUGH = 18;          // questions: one level (8) and one きょうの れんしゅう (10)
   function build(){
     if (node) return node;
     inner = el('div.inner');
-    node = el('div#result', null, inner);
+    /* Every other screen can say itself again; this was the one that could not —
+       and it is the one where a child who cannot read has to pick a button. */
+    node = el('div#result', null, speakBtn(() => lastSpoken), inner);
     return UI.register('result', node);
   }
   function show(r){
     build();
     clear(inner);
+    const nxt = r.mode === 'level' ? r.levelIndex + 1 : -1;
+    const canNext = r.mode === 'level' && nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt);
+    const shakyKeys = (r.shaky || []).map(x => x.key).filter(k => Store.factOrigin(k));
+    const aimed = r.mode === 'focus' ? (r.focusKeys || []) : shakyKeys;
+    /* Practising what just went wrong leads — unless the level went well, or it
+       went badly enough that the words on this screen say「もう いちど」. After ★★
+       the thing to do is the next level; after ★0 in a level the heading and the
+       voice both say try again, and a bright「とっくん」there started a different
+       ten questions under a child who had pressed the button they were told about.
+       Either way the facts stay one tap away as the second button. */
+    const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus';
+    const lead = drill && !(canNext && r.stars >= 2) && !(r.mode === 'level' && r.stars === 0);
     const msg = r.mode === 'diagnostic' ? 'さいしょの ぼうけん クリア！'
               : r.stars === 3 ? 'パーフェクト！'
               : r.stars === 2 ? 'よく できました！'
               : r.stars === 1 ? 'クリア！'
+              : lead ? 'おしい！ とっくん してみよう'
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
@@ -8302,19 +8484,24 @@ const Result = (() => {
                  : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
                  : r.stars === 1 ? 'クリア！'
+                 : lead ? '惜しい！特訓してみよう。'
                  : '惜しい！もう一度やってみよう。');
     // 「やったね」 and 「やったね、みおちゃん」 are not the same sentence to a five-year-old
     const called = Store.name && r.stars >= 2 && r.mode !== 'diagnostic'
       ? Store.name + '、' : '';
+    /* A run that earned nothing is not shown three empty stars, a sad face and
+       「8もん中 2もん」: that is a verdict. It is shown that the child got to the end.
+       The count is for a run good enough to be proud of; the parent page has the rest. */
+    const tried = r.mode !== 'diagnostic' && r.stars === 0;
     inner.append(
-      mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
+      mascotSVG(tried ? 'happy' : 'cheer', tried ? 'talk' : 'cheer'),
       r.mode === 'diagnostic'
         ? el('div.diagnostic-badge', { text: '10もん たんけん できたね' })
+        : tried ? el('div.tried', { text: 'さいごまで がんばったね' })
         : UI.stars(r.stars, true),
-      el('div.result-msg', { text: msg }),
-      el('div.result-sub', { text: r.mode === 'diagnostic'
-        ? 'ぴったりの はじまりを みつけたよ'
-        : `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+      el('div.result-msg', { text: msg }));
+    if (r.mode === 'diagnostic') inner.append(el('div.result-sub', { text: 'ぴったりの はじまりを みつけたよ' }));
+    else if (r.stars >= 2) inner.append(el('div.result-sub', { text: `${r.total}もんの うち ${r.right}もん いっかいめで せいかい` }));
     /* Every level cleared is a step towards a door the child can already see on
        the home screen. Saying how many are left, at the moment one is earned, is
        what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
@@ -8365,23 +8552,15 @@ const Result = (() => {
     /* Name what went wrong. "62%" tells a child nothing; "3と7" is something they
        can carry to tomorrow — and it is exactly what the app will bring back.
 
-       The names are also the way back to them. This screen used to list the facts
-       and then offer「つぎの レベルへ」as the only bright button: it named the gap
-       and walked the child straight past it. */
-    const shakyKeys = (r.shaky || []).map(x => x.key).filter(k => Store.factOrigin(k));
-    const aimed = r.mode === 'focus' ? (r.focusKeys || []) : shakyKeys;
+       Named, not pressed: each name used to be a small button of its own — three
+       43px buttons that all started the same practice and looked like three
+       different choices. The way back to them is the one「とっくん」button below. */
     const runFocus = () => { Sound.sfx.tap(); Session.startFocus(aimed, { n: 10 }); };
     if (r.shaky && r.shaky.length){
       const list = el('div.shakylist');
-      r.shaky.forEach(x => {
-        const usable = aimed.indexOf(x.key) >= 0 || (r.mode !== 'focus' && shakyKeys.indexOf(x.key) >= 0);
-        list.append(usable
-          ? el('button.shakyitem', { type: 'button', text: x.label, onclick: runFocus })
-          : el('span.shakyitem', { text: x.label }));
-      });
+      r.shaky.forEach(x => list.append(el('span.shakyitem', { text: x.label })));
       inner.append(el('div.shaky', null,
-        el('div.l', { text: aimed.length ? 'つぎは これを もういちど（タップで れんしゅう）'
-                                         : 'つぎは これを もういちど' }), list));
+        el('div.l', { text: 'つぎは これを もういちど' }), list));
     }
     if (stickers.length){
       const gold = stickers.some(x => x.gold);
@@ -8399,53 +8578,73 @@ const Result = (() => {
           el('div.l', { text: 'つぎの おすすめ' }),
           el('b', { text: g.name + '　《' + lv.t + '》' })));
       }
-    } else if (!r.unlockedG1 && !stickers.length
+    } else if (!r.unlockedG1 && !stickers.length && !(r.shaky && r.shaky.length)
                && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
       /* one piece of news per screen: the classroom outranks today's kitchen-table
-         task, and so does a new sticker — the mission comes up on the next pass */
+         task, and so do a new sticker and the facts to practise — the mission comes
+         up on the next pass */
       inner.append(Missions.resultCard(r.lastGameId));
     }
     const actions = el('div.result-actions');
     /* A picture first on every way off this screen: a child who cannot read
        「つぎの レベルへ」yet can still tell ▶ from ↻ from 🏠. */
-    const act = (cls, icon, label, onclick) => el('button.btn' + cls, { onclick },
-      el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
+    /* The voice says which button is the way on, by its colour: 「クリア！」 alone
+       left a child who cannot read in front of three or four buttons to guess from. */
+    let nextLine = '';
+    const act = (cls, icon, label, onclick, say) => {
+      if (!nextLine && say && /btn-accent/.test(cls)) nextLine = 'オレンジのボタンで、' + say;
+      return el('button.btn' + cls, { onclick },
+        el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
+    };
     const home = () => { Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); };
-    const nxt = r.mode === 'level' ? r.levelIndex + 1 : -1;
-    const canNext = r.mode === 'level' && nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt);
-    /* Practising what just went wrong leads — unless the level went well. After ★★
-       the thing to do is the next level, and a bright「とっくん」there said the
-       opposite of the stars; the facts stay one tap away as the second button. */
-    const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus';
-    const lead = drill && !(canNext && r.stars >= 2);
+    const again = r.stars === 0 && !lead;
     if (r.mode === 'focus'){
-      actions.append(act('.btn-accent.primary', '🎯', 'もういちど', runFocus));
+      actions.append(act('.btn-accent.primary', '🎯', 'もういちど', runFocus, 'もう一度特訓できるよ。'));
     } else if (lead){
-      actions.append(act('.btn-accent.primary', '🎯', 'とっくん する', runFocus));
+      actions.append(act('.btn-accent.primary', '🎯', 'とっくん する', runFocus, '特訓できるよ。'));
     }
     if (r.mode === 'diagnostic'){
       actions.append(act('.btn-accent.primary', '🗺️', 'おすすめで あそぶ',
-        () => { Sound.sfx.tap(); Diagnostic.startRecommended(); }));
+        () => { Sound.sfx.tap(); Diagnostic.startRecommended(); }, 'おすすめを遊べるよ。'));
     } else if (r.mode === 'level'){
       // when nothing was earned, another go is the obvious next step, not a footnote
-      actions.append(act(r.stars === 0 && !lead ? '.btn-accent.primary' : '', '↻', 'もういちど',
-        () => { Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); }));
-      if (canNext){
-        actions.append(act(lead ? '' : '.btn-accent.primary', '▶', 'つぎの レベルへ',
-          () => { Sound.sfx.tap(); Session.startLevel(r.game, nxt); }));
-      }
+      const againBtn = act(again ? '.btn-accent.primary' : '', '↻', 'もういちど',
+        () => { Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); }, 'もう一度できるよ。');
+      const nextBtn = canNext ? act(lead || again ? '' : '.btn-accent.primary', '▶', 'つぎの レベルへ',
+        () => { Sound.sfx.tap(); Session.startLevel(r.game, nxt); }, '次のレベルに行けるよ。') : null;
+      /* the way on is also the first button, not only the brightest: after a good
+         run「もういちど」 in front of it read as the suggestion */
+      if (nextBtn && !lead && !again) actions.append(nextBtn, againBtn);
+      else actions.append(againBtn, ...(nextBtn ? [nextBtn] : []));
       if (drill && !lead) actions.append(act('', '🎯', 'とっくん する', runFocus));
     } else if (r.mode === 'daily'){
-      actions.append(act('', '↻', 'もういちど', () => { Sound.sfx.tap(); Session.startDaily(10); }));
+      actions.append(act(again ? '.btn-accent.primary' : '', '↻', 'もういちど',
+        () => { Sound.sfx.tap(); Session.startDaily(10); }, 'もう一度できるよ。'));
     }
     if (r.unlockedG1){
-      actions.append(act('.btn-accent.primary', '🎓', '1ねんせいの きょうしつへ', home));
+      actions.append(act('.btn-accent.primary', '🎓', '1ねんせいの きょうしつへ', home, '一年生の教室に行けるよ。'));
     }
-    actions.append(act(r.mode === 'level' || r.mode === 'diagnostic' || lead || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent',
-      '🏠', 'あそびを えらぶ', home));
+    const homeBtn = act(r.mode === 'level' || r.mode === 'diagnostic' || lead || again || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent',
+      '🏠', 'あそびを えらぶ', home, '遊びを選べるよ。');
+    actions.append(homeBtn);
+    /* 1日10分 — one level and one れんしゅう — is the whole plan, and nothing on the
+       child's side of the app ever said so: every result offered another go, and
+       とっくん's「もういちど」went round for as long as the child kept pressing it.
+       Once today holds that much, this screen says it is enough and the bright
+       button is the way home. Nothing is locked; the other buttons still work. */
+    if (r.mode !== 'diagnostic' && !r.unlockedG1 && Store.todayCount() >= DAY_ENOUGH){
+      inner.append(el('div.enough', null,
+        el('span.mk', { text: '🌙', 'aria-hidden': 'true' }), 'きょうは ここまで で じゅうぶん！ また あした あそぼう'));
+      $$('.btn', actions).forEach(b => b.classList.remove('btn-accent', 'primary'));
+      homeBtn.classList.add('btn-accent', 'primary');
+      homeBtn.querySelector('.bl').textContent = 'きょうは おしまい';
+      actions.prepend(homeBtn);
+      nextLine = '今日は、ここまでで十分だよ。オレンジのボタンで、おしまいにしよう。';
+    }
     inner.append(actions);
     UI.show('result', { replace: true });
-    Sound.say(called + spoken, { delay: 700 });
+    lastSpoken = called + spoken + nextLine;
+    Sound.say(lastSpoken, { delay: 700 });
     for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
   return { show, build };
@@ -8701,7 +8900,8 @@ const Parent = (() => {
             background: now != null && now < .6 ? 'var(--oops)' : 'var(--good)' } }))),
           el('td', { class: 'n', text: s + '/' + max }),
           el('td', { class: 'n', style: { color: now != null && now < .6 ? 'var(--oops-ink)' : null, fontWeight: 800 }, text: pct(now) }),
-          el('td', { class: 'n', style: { color: slowNow ? 'var(--oops-ink)' : fastNow ? 'var(--good-ink)' : 'var(--ink-soft)',
+          // amber, not the warning red: counting it out is where most children are at five
+          el('td', { class: 'n', style: { color: slowNow ? 'var(--accent-ink)' : fastNow ? 'var(--good-ink)' : 'var(--ink-soft)',
                                           fontWeight: slowNow || fastNow ? 800 : 500 },
                      text: g.fluent ? secs(ms) : '—' }),
           el('td', { class: 'n', style: { color: 'var(--ink-soft)' }, text: pct(acc) }),
@@ -8713,7 +8913,7 @@ const Parent = (() => {
     sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
       text: '「直近30問」「通算」はどちらも「1回目のタップで正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
     sec.append(el('p', {
-      text: '「こたえるまで」は、けいさんの やま の4つの遊びだけに出ます。問題が出てから最初に答えるまでの時間で、正解だったときだけ記録しています。3.0秒までなら緑（思い出している）、9.0秒を超えると赤（数えて出している）。正答率だけを見ていると「できている」と「数えればできる」が同じ数字になりますが、くり上がりの計算で効くのは前者だけです。ここが赤い遊びは、正答率が高くても、まだ仕上がっていません。' }));
+      text: '「こたえるまで」は、けいさんの やま の4つの遊びだけに出ます。問題が出てから最初に答えるまでの時間で、正解だったときだけ記録しています。3.0秒までなら緑（思い出している）、9.0秒を超えると茶色（数えて出している）。正答率だけを見ていると「できている」と「数えればできる」が同じ数字になりますが、くり上がりの計算で効くのは前者だけです。茶色はこの時期には自然な段階で、まちがいではありません。次は「かたまりで見る」練習がいちばん効きます（下の「できるけれど、数えている」）。' }));
     return sec;
   }
 
@@ -8753,8 +8953,18 @@ const Parent = (() => {
       sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
         '直近' + focus.n + '問の初回正答率 ' + pct(focus.acc) + '。ここを中心に、1日1回。8問を最後までやりきれば十分です。'));
     } else {
+      /* Levels are judged on eight questions or more, facts on two misses — so a page
+         could say「よく仕上がっています」and list three gaps directly under it. Say
+         only what both halves agree on. */
+      const facts0 = Store.data.facts || {};
+      const gaps = Object.keys(facts0).some(k => {
+        const f = facts0[k];
+        return f && (f[0] - f[1]) >= 2 && f[1] / f[0] < .6;
+      });
       sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
-        '直近' + focus.n + '問で ' + pct(focus.acc) + '。いちばん低いところがこれなら、よく仕上がっています。次のレベルに進んで構いません。'));
+        '直近' + focus.n + '問で ' + pct(focus.acc) + '。' + (gaps
+          ? 'レベルとしては安定しています。次のレベルに進みながら、下の「つまずいている中身」だけを「とっくん」で拾ってください。'
+          : 'いちばん低いところがこれなら、よく仕上がっています。次のレベルに進んで構いません。')));
     }
     // what that game is actually for — the one place a parent is most likely to read it
     if (focus.g.aim) sec.append(el('div.aimnote', { html: focus.g.aim }));
@@ -9044,12 +9254,14 @@ const Parent = (() => {
       const done = new Date(Date.now() + eta * 86400000);
       const inTime = toSchool <= 0 ? false : eta <= toSchool;
       const perWeek = (rate * 7).toFixed(1);
-      s.append(el('div.todo' + (inTime ? '' : '.warn'), null,
-        el('div.mk', { text: inTime ? '◎' : '！' }),
+      // a plain forecast, not an alarm: nothing is lost if it runs past April
+      s.append(el('div.todo', null,
+        el('div.mk', { text: inTime ? '◎' : '○' }),
         el('div', null,
           el('b', { text: inTime
             ? 'このペースなら ' + fmt(done) + 'ごろ、入学に間に合います'
-            : 'このペースだと ' + fmt(done) + 'ごろ' + (toSchool > 0 ? '——入学に ' + (eta - toSchool) + '日ほど足りません' : '') }),
+            : 'このペースだと、全部おわるのは ' + fmt(done) + 'ごろの見込みです'
+              + (toSchool > 0 ? '（入学の ' + (eta - toSchool) + '日あと）' : '') }),
           el('div', { text: '使い始めてから ' + elapsed + '日で ' + pre.got + 'レベル（週 ' + perWeek + 'レベル）。'
             + 'のこり ' + left + 'レベルを同じペースで進めた場合の見込みです。' }))));
       if (!inTime){
@@ -9102,6 +9314,7 @@ const Parent = (() => {
       The enhanced / premium download is a different recording of the same name,
       so we cannot tell them apart from here: the honest fix is to list what the
       device actually has, let a parent hear each one, and remember the choice. */
+  let voiceWarning = null, voiceWaiting = false;
   function voiceRow(){
     const wrap = el('div', { style: { marginTop: 'calc(var(--u)*.7)' } });
     const list = Sound.voices;
@@ -9110,11 +9323,17 @@ const Parent = (() => {
         text: '※ この端末で日本語の読み上げ音声が見つかりませんでした。iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 日本語 で音声を追加すると、問題文が音声で読まれます。文字だけでも遊べます。' }));
       // Safari fills the voice list asynchronously, so an empty list here often
       // just means "not yet" — swap the warning for the picker when it arrives.
-      if (window.speechSynthesis){
+      // One listener however often the page is drawn: it swaps whichever warning
+      // is on screen, rather than every page drawn since keeping its own.
+      voiceWarning = wrap;
+      if (window.speechSynthesis && !voiceWaiting){
+        voiceWaiting = true;
         speechSynthesis.addEventListener('voiceschanged', function again(){
           if (!Sound.voices.length) return;
           speechSynthesis.removeEventListener('voiceschanged', again);
-          wrap.replaceWith(voiceRow());
+          voiceWaiting = false;
+          if (voiceWarning && voiceWarning.isConnected) voiceWarning.replaceWith(voiceRow());
+          voiceWarning = null;
         });
       }
       return wrap;
@@ -9387,8 +9606,10 @@ const Parent = (() => {
   function render(){
     buildSheet();
     clear(sheetInner);
-    sheetInner.append(
-      el('section', null,
+    /* What to do this week comes first. It used to sit under an essay, with twelve
+       sections after it; the reading — what the app is for, what each game builds,
+       the roadmap — is still all here, folded under「くわしく」at the end. */
+    const about = el('section', null,
         el('div.eyebrow', { text: 'about' }),
         el('h3', { text: 'このアプリがねらっていること' }),
         // counted, not typed: the sentence used to say 15 and quietly went stale
@@ -9396,18 +9617,22 @@ const Parent = (() => {
           + Games.list.filter(g => Progress.stageOf(g) === 'pre').length
           + 'の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。'
           + 'それを全部終えると、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
-        el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると自動でヒントが出て、4回でもっと強いヒントと「こたえを みる」ボタン、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、1回目の正解には数えません）。' })),
+        el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると自動でヒントが出て、4回でもっと強いヒントと「こたえを みる」ボタン、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、1回目の正解には数えません）。' }));
+    sheetInner.append(
       nextUpSection(),
       scheduleSection(),
       statsSection(),
       stageSection(),
       progressSection(),
-      aimsSection(),
-      planSection(),
-      textSection('why', '入学前に育てておきたい力', WHY),
-      textSection('at home', 'おうちでできること', HOME_TIPS),
       backupSection(),
       settingsSection(),
+      el('details.more', null,
+        el('summary', { text: 'くわしく ── ねらい・遊びごとの力・半年の進め方・おうちでできること' }),
+        about,
+        aimsSection(),
+        planSection(),
+        textSection('why', '入学前に育てておきたい力', WHY),
+        textSection('at home', 'おうちでできること', HOME_TIPS)),
       el('div', { style: { height: 'calc(var(--u)*2)' } }));
   }
 

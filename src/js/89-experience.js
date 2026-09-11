@@ -49,12 +49,25 @@ const Diagnostic = (() => {
      for — and a ★★★ level can never be recommended again. */
   const cleared = (id, i) => Store.hasSticker(id + ':' + i);
 
+  /* A level tried three times without a pass has already opened the next one — the
+     rule that no child is left at a padlock. おすすめ did not follow it: it named the
+     first uncleared level, so one level a child could not yet pass was named every
+     day and nothing after it ever came up. Once it has had its three goes it rests
+     for a few days, and the roadmap moves on; it comes back afterwards, and it comes
+     back at once if there is nothing else left to name. */
+  const REST_DAYS = 3;
+  const resting = (id, i) => !cleared(id, i) && Store.plays(id, i) >= 3 && Store.daysSince(id, i) < REST_DAYS;
+
   function nextUncleared(){
-    for (const id of roadmap()){
-      const g = Games.byId[id];
-      if (!g) continue;
-      for (let i = 0; i < g.levels.length; i++){
-        if (levelOpen(g, i) && !cleared(id, i)) return { gameId: id, levelIndex: i };
+    for (const skipResting of [true, false]){
+      for (const id of roadmap()){
+        const g = Games.byId[id];
+        if (!g) continue;
+        for (let i = 0; i < g.levels.length; i++){
+          if (!levelOpen(g, i) || cleared(id, i)) continue;
+          if (skipResting && resting(id, i)) continue;
+          return { gameId: id, levelIndex: i };
+        }
       }
     }
     return null;
@@ -66,7 +79,7 @@ const Diagnostic = (() => {
     let weakest = null;
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
       if (!levelOpen(g, i)) return;
-      if (unclearedOnly && cleared(g.id, i)) return;
+      if (unclearedOnly && (cleared(g.id, i) || resting(g.id, i))) return;
       const n = Store.recentCount(g.id, i);
       if (n < 4) return;
       const acc = Store.recentAccuracy(g.id, i);
@@ -212,20 +225,53 @@ const Missions = (() => {
     return UI.register('mission', node);
   }
 
+  /* The adult's「できた」. It went through the full adult gate — two 2-digit ×
+     1-digit sums in a row, and five seconds' wait after a slip — which is the lock
+     on「記録をすべて消す」, for the lightest thing an adult does all day, often with
+     a pan in the other hand. So it was mostly never pressed, and the next day's
+     「どうやったか」never came. A two-second press says an adult was there; a tap
+     only says how. */
+  const HOLD_MS = 2000;
+  let holdTimer = null, holdDone = null, held = false;
+  function stopHold(){
+    clearTimeout(holdTimer); holdTimer = null; holdDone = null;
+    if (doneBtn) doneBtn.classList.remove('holding');
+  }
+  function holdToConfirm(onDone){
+    doneBtn.classList.add('holdbtn');
+    doneBtn.style.setProperty('--hold', HOLD_MS + 'ms');
+    doneBtn.onpointerdown = e => {
+      e.preventDefault();
+      stopHold();
+      doneBtn.classList.add('holding');
+      holdDone = () => { stopHold(); held = true; onDone(); };
+      holdTimer = setTimeout(holdDone, HOLD_MS);
+    };
+    doneBtn.onpointerup = doneBtn.onpointerleave = doneBtn.onpointercancel = stopHold;
+    doneBtn.onclick = () => {
+      if (held){ held = false; return; }             // the click that ends a finished press
+      Sound.say('おうちの人が、2秒長押ししてね。', { delay: 60 });
+    };
+  }
+  function plainButton(onclick){
+    stopHold();
+    doneBtn.classList.remove('holdbtn');
+    doneBtn.onpointerdown = doneBtn.onpointerup = doneBtn.onpointerleave = doneBtn.onpointercancel = null;
+    doneBtn.onclick = onclick;
+  }
+
   function open(mission){
     build();
     titleEl.textContent = 'きょうの さんすう ミッション';
     promptEl.textContent = mission.text;
     noteEl.textContent = mission.prompt;
-    doneBtn.textContent = 'おうちのひとに かくにんしてもらう';
-    doneBtn.onclick = () => {
-      Parent.open(() => {
-        Store.completeMission(mission.day);
-        Sound.sfx.finish();
-        Home.render();
-        UI.show('home', { replace: true });
-      });
-    };
+    doneBtn.textContent = 'おうちのひとが ながおし（2びょう）';
+    holdToConfirm(() => {
+      Store.completeMission(mission.day);
+      Sound.sfx.finish();
+      Home.render();
+      UI.show('home', { replace: true });
+    });
     UI.show('mission');
     Sound.say(mission.text + '。' + mission.prompt, { delay: 250 });
   }
@@ -236,12 +282,12 @@ const Missions = (() => {
     promptEl.textContent = mission.text;
     noteEl.textContent = 'どんな ふうに できたか、おうちのひとに おはなししよう';
     doneBtn.textContent = 'おはなし できた！';
-    doneBtn.onclick = () => {
+    plainButton(() => {
       Store.reviewMission(mission.day);
       Sound.sfx.correct();
       Home.render();
       UI.show('home', { replace: true });
-    };
+    });
     UI.show('mission');
     Sound.say('昨日のミッション、どんなふうにできたかお話ししよう。', { delay: 250 });
   }
@@ -255,5 +301,7 @@ const Missions = (() => {
     return b;
   }
 
-  return { forGame, yesterdayReview, open, openReview, resultCard };
+  return { forGame, yesterdayReview, open, openReview, resultCard,
+           /** test seam: end a press that has started, without waiting two seconds */
+           _test: { finishHold(){ if (holdDone) holdDone(); } } };
 })();

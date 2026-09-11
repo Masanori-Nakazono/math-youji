@@ -77,6 +77,22 @@ const Store = (() => {
       try{ parsed = JSON.parse(raw); }catch(e){}
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)){
         mem = Object.assign(blank(), parsed);
+        /* It parsed, but a field can still have the wrong shape — `stickers` that is
+           not a list stopped Home from drawing at all, so the app never opened and
+           the record could not even be written out. A field like that goes back to
+           empty, and the whole record as it was is kept aside first. (The full
+           check in normalizeData needs 06-miss.js, which has not loaded yet here.) */
+        const fresh = blank();
+        const shape = v => Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v;
+        let bent = false;
+        for (const k of Object.keys(fresh)){
+          const want = shape(fresh[k]), got = shape(mem[k]);
+          if (want === got) continue;
+          if ((k === 'diagnostic' && got === 'object') || (k === 'voiceId' && got === 'string')) continue;
+          mem[k] = fresh[k];
+          bent = true;
+        }
+        if (bent){ try{ localStorage.setItem(ASIDE, raw); }catch(e){} }
       } else {
         unreadable = true;
         // if the copy cannot be made, the original is the only one: leave it be
@@ -105,7 +121,11 @@ const Store = (() => {
   /* Whole-day resolution keeps six months of daily use small enough for
      localStorage, and days are the only unit the scheduling actually needs. */
   const DAY = 86400000;
-  const dayNo = () => Math.floor(Date.now() / DAY);
+  /* The local calendar day, not the UTC one. Counted in UTC, a day in Japan ended at
+     9 in the morning: a backup written at 8:30 was「1日前」by 9:30, and every
+     「何日ふれていない」and the pace to 入学 were a day out for half of each morning. */
+  const dayOf = ms => Math.floor((ms - new Date(ms).getTimezoneOffset() * 60000) / DAY);
+  const dayNo = () => dayOf(Date.now());
   const todayKey = () => {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -270,11 +290,16 @@ const Store = (() => {
         out.facts[k][6] = m;
       }
     }
-    // recent / last: follow whichever side actually played that level more
+    /* recent / last: follow whichever side actually played that level more, and on
+       a tie the side that met it last. `plays` only counts whole levels, so a level
+       met only inside きょうの れんしゅう or とっくん is 0 on both sides — and a strict
+       「more」 dropped its record even when this device had none at all. */
     out.recent = Object.assign({}, base.recent || {});
     out.last   = Object.assign({}, base.last || {});
     for (const k in (add.recent || {})){
-      if ((add.plays && add.plays[k] || 0) > (base.plays && base.plays[k] || 0)) out.recent[k] = add.recent[k];
+      const ap = (add.plays && add.plays[k]) || 0, bp = (base.plays && base.plays[k]) || 0;
+      const newer = ((add.last && add.last[k]) || 0) > ((base.last && base.last[k]) || 0);
+      if (!(k in out.recent) || ap > bp || (ap === bp && newer)) out.recent[k] = add.recent[k];
     }
     for (const k in (add.last || {})) out.last[k] = maxNum(out.last[k], add.last[k]);
     out.stickers = Array.from(new Set((base.stickers || []).concat(add.stickers || [])));
@@ -472,7 +497,7 @@ const Store = (() => {
     usedDays(){ return Object.keys(mem.daily || {}).length; },
     /** calendar days since the app was first opened on this device */
     daysSinceStart(){
-      return Math.max(0, dayNo() - Math.floor((mem.createdAt || Date.now()) / DAY));
+      return Math.max(0, dayNo() - dayOf(mem.createdAt || Date.now()));
     },
     /** 1 April of the year this child starts school — set, or guessed from day one.
         School starts in April, so a first run in April or later belongs to next April. */
@@ -482,9 +507,10 @@ const Store = (() => {
       return new Date(d.getFullYear() + (d.getMonth() >= 3 ? 1 : 0), 3, 1);
     },
     setSchoolYear(y){ mem.schoolYear = y || 0; save(); },
-    /** whole days from today to 入学 (negative once it has passed) */
+    /** calendar days from today to 入学 (negative once it has passed). Days, not
+        rounded milliseconds: rounded, 31 March said「入学しています」from 1 p.m. */
     daysToSchool(){
-      return Math.round((this.schoolDate().getTime() - Date.now()) / DAY);
+      return dayOf(this.schoolDate().getTime()) - dayNo();
     },
     noteBackup(){ mem.backupAt = dayNo(); writeNow(); },
     lastBackupDays(){ return mem.backupAt ? Math.max(0, dayNo() - mem.backupAt) : null; },
@@ -527,9 +553,12 @@ const Store = (() => {
       /* How long the answer took, kept only where speed is the goal and only for
          clean answers — a wrong answer times a guess. A single interrupted question
          (the iPad put down mid-problem) is clamped rather than dropped, so it cannot
-         decide the average on its own. */
-      if (ms > 0){
-        const capped = Math.min(ms, 20000);
+         decide the average on its own. An answer given while the question was still
+         being read out arrives as 0 — the fastest answer there is, not a missing one:
+         dropping it left the average made of the slow answers alone, and a fact the
+         child knew cold was reported as「数えている」and sent to とっくん. */
+      if (ms != null && ms >= 0){
+        const capped = Math.max(1, Math.min(ms, 20000));
         f[5] = f[5] ? Math.round(f[5] * 0.65 + capped * 0.35) : capped;
       }
       /* What kind of wrong it was, from the first mistake on this question. A

@@ -263,13 +263,24 @@ const Home = (() => {
     const gate = Progress.preStickers();
     const toGo = Progress.g1Open() ? 0 : Math.max(0, gate.total - gate.got);
     shelfEl.classList.toggle('nearly', toGo > 0 && toGo <= 6);
+    /* The same picture the result screen draws: a bar filling towards 🎓, and dots to
+       count once there are few enough. 「あと 34レベル」 is a number for the adult,
+       so it stays in the label for them. */
+    let sub;
+    if (toGo){
+      const say = '1ねんせいの きょうしつまで あと ' + toGo + 'レベル';
+      const middle = toGo <= 10 ? el('span.leftdots') : el('span.gauge', null,
+        el('span.fill', { style: { width: Math.round(gate.got / gate.total * 100) + '%' } }));
+      if (toGo <= 10) for (let i = 0; i < toGo; i++) middle.append(el('span', { text: '●' }));
+      sub = el('small.togo', { role: 'img', 'aria-label': say, title: say },
+        middle, el('span', { text: '🎓', 'aria-hidden': 'true' }));
+    } else {
+      sub = el('small', { text: Progress.g1Open() ? '1ねんせいの きょうしつが ひらいて いるよ'
+                                                  : 'タップで シールブック' });
+    }
     shelfEl.append(
       el('span.bk', { text: '📖' }),
-      el('div.lbl', null, 'シール ' + got.length + 'まい',
-        el('small', { text: toGo
-          ? '1ねんせいの きょうしつまで あと ' + toGo + 'レベル'
-          : Progress.g1Open() ? '1ねんせいの きょうしつが ひらいて いるよ'
-                              : 'タップで シールブック' })),
+      el('div.lbl', null, 'シール ' + got.length + 'まい', sub),
       strip);
 
     /* how many banners share the row decides how much of each one fits: with three
@@ -346,20 +357,36 @@ const Levels = (() => {
 
 /* ---------------------------------------------------------- RESULT */
 const Result = (() => {
-  let node, inner;
+  let node, inner, lastSpoken = '';
+  const DAY_ENOUGH = 18;          // questions: one level (8) and one きょうの れんしゅう (10)
   function build(){
     if (node) return node;
     inner = el('div.inner');
-    node = el('div#result', null, inner);
+    /* Every other screen can say itself again; this was the one that could not —
+       and it is the one where a child who cannot read has to pick a button. */
+    node = el('div#result', null, speakBtn(() => lastSpoken), inner);
     return UI.register('result', node);
   }
   function show(r){
     build();
     clear(inner);
+    const nxt = r.mode === 'level' ? r.levelIndex + 1 : -1;
+    const canNext = r.mode === 'level' && nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt);
+    const shakyKeys = (r.shaky || []).map(x => x.key).filter(k => Store.factOrigin(k));
+    const aimed = r.mode === 'focus' ? (r.focusKeys || []) : shakyKeys;
+    /* Practising what just went wrong leads — unless the level went well, or it
+       went badly enough that the words on this screen say「もう いちど」. After ★★
+       the thing to do is the next level; after ★0 in a level the heading and the
+       voice both say try again, and a bright「とっくん」there started a different
+       ten questions under a child who had pressed the button they were told about.
+       Either way the facts stay one tap away as the second button. */
+    const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus';
+    const lead = drill && !(canNext && r.stars >= 2) && !(r.mode === 'level' && r.stars === 0);
     const msg = r.mode === 'diagnostic' ? 'さいしょの ぼうけん クリア！'
               : r.stars === 3 ? 'パーフェクト！'
               : r.stars === 2 ? 'よく できました！'
               : r.stars === 1 ? 'クリア！'
+              : lead ? 'おしい！ とっくん してみよう'
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
@@ -369,19 +396,24 @@ const Result = (() => {
                  : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
                  : r.stars === 1 ? 'クリア！'
+                 : lead ? '惜しい！特訓してみよう。'
                  : '惜しい！もう一度やってみよう。');
     // 「やったね」 and 「やったね、みおちゃん」 are not the same sentence to a five-year-old
     const called = Store.name && r.stars >= 2 && r.mode !== 'diagnostic'
       ? Store.name + '、' : '';
+    /* A run that earned nothing is not shown three empty stars, a sad face and
+       「8もん中 2もん」: that is a verdict. It is shown that the child got to the end.
+       The count is for a run good enough to be proud of; the parent page has the rest. */
+    const tried = r.mode !== 'diagnostic' && r.stars === 0;
     inner.append(
-      mascotSVG(r.stars === 0 ? 'soft' : 'cheer', r.stars === 0 ? 'talk' : 'cheer'),
+      mascotSVG(tried ? 'happy' : 'cheer', tried ? 'talk' : 'cheer'),
       r.mode === 'diagnostic'
         ? el('div.diagnostic-badge', { text: '10もん たんけん できたね' })
+        : tried ? el('div.tried', { text: 'さいごまで がんばったね' })
         : UI.stars(r.stars, true),
-      el('div.result-msg', { text: msg }),
-      el('div.result-sub', { text: r.mode === 'diagnostic'
-        ? 'ぴったりの はじまりを みつけたよ'
-        : `${r.total}もん中 ${r.right}もん を いっかいめで せいかい` }));
+      el('div.result-msg', { text: msg }));
+    if (r.mode === 'diagnostic') inner.append(el('div.result-sub', { text: 'ぴったりの はじまりを みつけたよ' }));
+    else if (r.stars >= 2) inner.append(el('div.result-sub', { text: `${r.total}もんの うち ${r.right}もん いっかいめで せいかい` }));
     /* Every level cleared is a step towards a door the child can already see on
        the home screen. Saying how many are left, at the moment one is earned, is
        what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
@@ -432,23 +464,15 @@ const Result = (() => {
     /* Name what went wrong. "62%" tells a child nothing; "3と7" is something they
        can carry to tomorrow — and it is exactly what the app will bring back.
 
-       The names are also the way back to them. This screen used to list the facts
-       and then offer「つぎの レベルへ」as the only bright button: it named the gap
-       and walked the child straight past it. */
-    const shakyKeys = (r.shaky || []).map(x => x.key).filter(k => Store.factOrigin(k));
-    const aimed = r.mode === 'focus' ? (r.focusKeys || []) : shakyKeys;
+       Named, not pressed: each name used to be a small button of its own — three
+       43px buttons that all started the same practice and looked like three
+       different choices. The way back to them is the one「とっくん」button below. */
     const runFocus = () => { Sound.sfx.tap(); Session.startFocus(aimed, { n: 10 }); };
     if (r.shaky && r.shaky.length){
       const list = el('div.shakylist');
-      r.shaky.forEach(x => {
-        const usable = aimed.indexOf(x.key) >= 0 || (r.mode !== 'focus' && shakyKeys.indexOf(x.key) >= 0);
-        list.append(usable
-          ? el('button.shakyitem', { type: 'button', text: x.label, onclick: runFocus })
-          : el('span.shakyitem', { text: x.label }));
-      });
+      r.shaky.forEach(x => list.append(el('span.shakyitem', { text: x.label })));
       inner.append(el('div.shaky', null,
-        el('div.l', { text: aimed.length ? 'つぎは これを もういちど（タップで れんしゅう）'
-                                         : 'つぎは これを もういちど' }), list));
+        el('div.l', { text: 'つぎは これを もういちど' }), list));
     }
     if (stickers.length){
       const gold = stickers.some(x => x.gold);
@@ -466,53 +490,73 @@ const Result = (() => {
           el('div.l', { text: 'つぎの おすすめ' }),
           el('b', { text: g.name + '　《' + lv.t + '》' })));
       }
-    } else if (!r.unlockedG1 && !stickers.length
+    } else if (!r.unlockedG1 && !stickers.length && !(r.shaky && r.shaky.length)
                && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
       /* one piece of news per screen: the classroom outranks today's kitchen-table
-         task, and so does a new sticker — the mission comes up on the next pass */
+         task, and so do a new sticker and the facts to practise — the mission comes
+         up on the next pass */
       inner.append(Missions.resultCard(r.lastGameId));
     }
     const actions = el('div.result-actions');
     /* A picture first on every way off this screen: a child who cannot read
        「つぎの レベルへ」yet can still tell ▶ from ↻ from 🏠. */
-    const act = (cls, icon, label, onclick) => el('button.btn' + cls, { onclick },
-      el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
+    /* The voice says which button is the way on, by its colour: 「クリア！」 alone
+       left a child who cannot read in front of three or four buttons to guess from. */
+    let nextLine = '';
+    const act = (cls, icon, label, onclick, say) => {
+      if (!nextLine && say && /btn-accent/.test(cls)) nextLine = 'オレンジのボタンで、' + say;
+      return el('button.btn' + cls, { onclick },
+        el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
+    };
     const home = () => { Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); };
-    const nxt = r.mode === 'level' ? r.levelIndex + 1 : -1;
-    const canNext = r.mode === 'level' && nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt);
-    /* Practising what just went wrong leads — unless the level went well. After ★★
-       the thing to do is the next level, and a bright「とっくん」there said the
-       opposite of the stars; the facts stay one tap away as the second button. */
-    const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus';
-    const lead = drill && !(canNext && r.stars >= 2);
+    const again = r.stars === 0 && !lead;
     if (r.mode === 'focus'){
-      actions.append(act('.btn-accent.primary', '🎯', 'もういちど', runFocus));
+      actions.append(act('.btn-accent.primary', '🎯', 'もういちど', runFocus, 'もう一度特訓できるよ。'));
     } else if (lead){
-      actions.append(act('.btn-accent.primary', '🎯', 'とっくん する', runFocus));
+      actions.append(act('.btn-accent.primary', '🎯', 'とっくん する', runFocus, '特訓できるよ。'));
     }
     if (r.mode === 'diagnostic'){
       actions.append(act('.btn-accent.primary', '🗺️', 'おすすめで あそぶ',
-        () => { Sound.sfx.tap(); Diagnostic.startRecommended(); }));
+        () => { Sound.sfx.tap(); Diagnostic.startRecommended(); }, 'おすすめを遊べるよ。'));
     } else if (r.mode === 'level'){
       // when nothing was earned, another go is the obvious next step, not a footnote
-      actions.append(act(r.stars === 0 && !lead ? '.btn-accent.primary' : '', '↻', 'もういちど',
-        () => { Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); }));
-      if (canNext){
-        actions.append(act(lead ? '' : '.btn-accent.primary', '▶', 'つぎの レベルへ',
-          () => { Sound.sfx.tap(); Session.startLevel(r.game, nxt); }));
-      }
+      const againBtn = act(again ? '.btn-accent.primary' : '', '↻', 'もういちど',
+        () => { Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); }, 'もう一度できるよ。');
+      const nextBtn = canNext ? act(lead || again ? '' : '.btn-accent.primary', '▶', 'つぎの レベルへ',
+        () => { Sound.sfx.tap(); Session.startLevel(r.game, nxt); }, '次のレベルに行けるよ。') : null;
+      /* the way on is also the first button, not only the brightest: after a good
+         run「もういちど」 in front of it read as the suggestion */
+      if (nextBtn && !lead && !again) actions.append(nextBtn, againBtn);
+      else actions.append(againBtn, ...(nextBtn ? [nextBtn] : []));
       if (drill && !lead) actions.append(act('', '🎯', 'とっくん する', runFocus));
     } else if (r.mode === 'daily'){
-      actions.append(act('', '↻', 'もういちど', () => { Sound.sfx.tap(); Session.startDaily(10); }));
+      actions.append(act(again ? '.btn-accent.primary' : '', '↻', 'もういちど',
+        () => { Sound.sfx.tap(); Session.startDaily(10); }, 'もう一度できるよ。'));
     }
     if (r.unlockedG1){
-      actions.append(act('.btn-accent.primary', '🎓', '1ねんせいの きょうしつへ', home));
+      actions.append(act('.btn-accent.primary', '🎓', '1ねんせいの きょうしつへ', home, '一年生の教室に行けるよ。'));
     }
-    actions.append(act(r.mode === 'level' || r.mode === 'diagnostic' || lead || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent',
-      '🏠', 'あそびを えらぶ', home));
+    const homeBtn = act(r.mode === 'level' || r.mode === 'diagnostic' || lead || again || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent',
+      '🏠', 'あそびを えらぶ', home, '遊びを選べるよ。');
+    actions.append(homeBtn);
+    /* 1日10分 — one level and one れんしゅう — is the whole plan, and nothing on the
+       child's side of the app ever said so: every result offered another go, and
+       とっくん's「もういちど」went round for as long as the child kept pressing it.
+       Once today holds that much, this screen says it is enough and the bright
+       button is the way home. Nothing is locked; the other buttons still work. */
+    if (r.mode !== 'diagnostic' && !r.unlockedG1 && Store.todayCount() >= DAY_ENOUGH){
+      inner.append(el('div.enough', null,
+        el('span.mk', { text: '🌙', 'aria-hidden': 'true' }), 'きょうは ここまで で じゅうぶん！ また あした あそぼう'));
+      $$('.btn', actions).forEach(b => b.classList.remove('btn-accent', 'primary'));
+      homeBtn.classList.add('btn-accent', 'primary');
+      homeBtn.querySelector('.bl').textContent = 'きょうは おしまい';
+      actions.prepend(homeBtn);
+      nextLine = '今日は、ここまでで十分だよ。オレンジのボタンで、おしまいにしよう。';
+    }
     inner.append(actions);
     UI.show('result', { replace: true });
-    Sound.say(called + spoken, { delay: 700 });
+    lastSpoken = called + spoken + nextLine;
+    Sound.say(lastSpoken, { delay: 700 });
     for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
   return { show, build };

@@ -12,7 +12,7 @@
    less likely to throw away the localStorage the records live in. */
 'use strict';
 
-const VERSION = 'bd95f300ab99';
+const VERSION = '39d087bdbaa5';
 const CACHE   = 'kazu-no-bouken-' + VERSION;
 /* Every name the app itself is served under. Pages publishes the one file twice
    (index.html and kazu-no-bouken.html), and a name missing here was only cached
@@ -28,8 +28,18 @@ self.addEventListener('install', e => {
       // added one at a time: a single missing entry (the app hosted under a
       // different filename, say) must not leave the child with no offline app
       .then(c => Promise.all(SHELL.map(u =>
-        c.add(new Request(u, { cache: 'reload' })).catch(() => {}))))
-      .then(() => self.skipWaiting())
+        c.add(new Request(u, { cache: 'reload' })).then(() => true, () => false))))
+      /* But the app itself has to have arrived. On a connection that brought this
+         worker and then dropped the 480 KB page, installing anyway meant `activate`
+         deleted the cache that still had a working app in it, and the next launch
+         with no network opened nothing. Failing here keeps the old worker, and the
+         old cache, until a later visit gets the whole thing. */
+      .then(got => {
+        if (!PAGES.some((u, i) => got[i])){
+          return caches.delete(CACHE).then(() => { throw new Error('the app page did not arrive'); });
+        }
+        return self.skipWaiting();
+      })
   );
 });
 

@@ -385,9 +385,11 @@ body::before{
 }
 .obj:active{ transform: translate(-50%,-50%) scale(1.14); }
 .obj.counted{ filter: drop-shadow(0 0 calc(var(--u)*.5) var(--good)); }
+/* inside the object's own box: hung outside it, the badge on a flower near the
+   edge was cut by the board — and the last number said is the answer */
 .obj .tag{
   position: absolute;
-  top: -.45em; right: -.45em;
+  top: 0; right: 0;
   font-family: var(--fs-num); font-weight: 800;
   font-size: .42em; line-height: 1;
   color: var(--on-crayon); background: var(--good);
@@ -543,6 +545,9 @@ body::before{
 .dailies.n4 > .daily .t{
   white-space: normal; text-overflow: clip;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  /* and it breaks at the spaces the name is written with —「いまの／おすすめ」,
+     never「いまの おす／すめ」: a child who is starting to read reads word shapes */
+  word-break: keep-all; overflow-wrap: anywhere;
 }
 .dailies.n3 > .daily .s,
 .dailies.n4 > .daily .s{ display: none; }
@@ -611,6 +616,13 @@ body::before{
 .shelf .strip .empty{ font-size: calc(var(--u)*1.3); color: var(--ink-soft); font-weight: 500; }
 /* the last few levels before the classroom opens: the same colour the result
    screen uses for「もうすぐ ひらくよ」, so the two say the same thing */
+.shelf .lbl .togo{ display: flex; align-items: center; gap: calc(var(--u)*.35); margin-top: calc(var(--u)*.2); }
+.shelf .togo .gauge{
+  display: block; width: calc(var(--u)*7); height: calc(var(--u)*.7);
+  border-radius: 99px; background: var(--paper-2); overflow: hidden;
+}
+.shelf .togo .fill{ display: block; height: 100%; background: var(--star); border-radius: inherit; }
+.shelf .togo .leftdots{ color: var(--accent-ink); font-size: calc(var(--u)*.9); letter-spacing: .12em; }
 .shelf.nearly{ border-color: var(--accent); }
 .shelf.nearly .lbl small{ color: var(--accent-ink); font-weight: 800; }
 
@@ -635,15 +647,26 @@ body::before{
 #parent .schedule .big b{ display: block; font-family: var(--fs-num); font-size: calc(var(--u)*2.2); line-height: 1.2; }
 #parent .schedule .big small{ display: block; color: var(--ink-soft); font-size: calc(var(--u)*1.1); margin-top: .25em; }
 #parent .todo.warn .mk{ color: var(--oops-ink); }
+/* the mission's「できた」fills while it is held, so the adult can see it working */
+.holdbtn{ position: relative; overflow: hidden; isolation: isolate; touch-action: none; -webkit-user-select: none; user-select: none; }
+.holdbtn.holding::before{
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+  transform-origin: left; animation: holdFill var(--hold, 2s) linear both;
+}
+@keyframes holdFill{ from{ transform: scaleX(0) } to{ transform: scaleX(1) } }
+#parent details.more{ margin-top: calc(var(--u)*1); }
+#parent details.more > summary{
+  cursor: pointer; font-weight: 800; min-height: var(--tap);
+  display: flex; align-items: center; padding: 0 calc(var(--u)*1);
+  border-radius: calc(var(--u)*.6); background: var(--paper-2);
+}
 #parent .skilltable tr.now td{ background: color-mix(in srgb, var(--accent) 16%, transparent); }
 
-/* a mark only an adult reads: the records have not been written out in a while */
-.btn-round.due{ position: relative; }
-.btn-round.due::after{
-  content: ""; position: absolute; top: 6%; right: 6%;
-  width: calc(var(--u)*1.1); height: calc(var(--u)*1.1); border-radius: 50%;
-  background: var(--accent); border: calc(var(--u)*.18) solid var(--card);
-}
+/* a mark only an adult reads: the records have not been written out in a while.
+   A ring, not a dot — an orange notification dot is the one shape on a screen a
+   five-year-old most wants to press. */
+.btn-round.due{ box-shadow: 0 0 0 calc(var(--u)*.22) color-mix(in srgb, var(--accent) 60%, transparent); }
 #parent .backup-due{
   background: var(--oops-soft); border-left: calc(var(--u)*.4) solid var(--oops);
   border-radius: calc(var(--u)*.5);
@@ -786,7 +809,25 @@ body::before{
 .result-msg{ font-size: calc(var(--u)*3); font-weight: 800; }
 .result-sub{ font-size: calc(var(--u)*1.6); color: var(--ink-soft); }
 .result-actions{ display: flex; gap: calc(var(--u)*.9); flex-wrap: wrap; justify-content: center; }
-.result-actions .btn{ font-size: calc(var(--u)*1.8); padding: calc(var(--u)*.9) calc(var(--u)*1.8); }
+/* every way off this screen is a finger-sized target, the ones that wrap to a
+   second row included — they were 53px, under the app's own floor */
+.result-actions .btn{ font-size: calc(var(--u)*1.8); padding: calc(var(--u)*.9) calc(var(--u)*1.8);
+                      min-height: var(--tap); }
+#result{ position: relative; }
+#result > .speakbtn{ position: absolute; top: calc(var(--u)*.6); right: calc(var(--u)*.6); z-index: 2; }
+#result .enough{
+  display: flex; align-items: center; gap: calc(var(--u)*.6);
+  font-size: calc(var(--u)*1.7); font-weight: 800;
+  background: color-mix(in srgb, var(--c-blue) 14%, var(--card));
+  border-radius: var(--wob-b); padding: calc(var(--u)*.6) calc(var(--u)*1.3);
+}
+#result .enough .mk{ font-size: calc(var(--u)*2.4); line-height: 1; }
+/* ★0: what the child did, in place of three empty stars */
+#result .tried{
+  font-size: calc(var(--u)*2.2); font-weight: 800; color: var(--good-ink);
+  background: var(--good-soft); border-radius: var(--wob-b);
+  padding: calc(var(--u)*.7) calc(var(--u)*1.6);
+}
 .result-actions .btn .bi{ font-size: 1.3em; line-height: 1; margin-right: .35em; }
 
 .newsticker{
@@ -1349,6 +1390,14 @@ body::before{
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
+  /* The big ◯ is not decoration, it is the answer being right — and cut to
+     .01ms, an animation that ends at opacity 0 showed nothing at all. Still,
+     not moving: on, held, then gone. */
+  .bigmark{ animation: markStill .75s linear both !important; }
+}
+@keyframes markStill{
+  0%, 80%{ opacity: 1 }
+  100%{ opacity: 0 }
 }
 
 /* ===========================================================
@@ -1536,17 +1585,6 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   border-radius:calc(var(--u)*.8); padding:calc(var(--u)*.3) calc(var(--u)*.8);
   font-family:var(--fs-num); font-weight:800; font-size:calc(var(--u)*1.7); color:var(--ink);
 }
-
-/* The named facts are the way back to them, so they have to look pressable and
-   be big enough for a five-year-old to hit. */
-#result button.shakyitem{
-  appearance: none; cursor: pointer;
-  padding: calc(var(--u)*.5) calc(var(--u)*.95);
-  transition: transform .12s cubic-bezier(.2,.9,.3,1.4), box-shadow .12s;
-  box-shadow: var(--shadow-sm);
-}
-#result button.shakyitem:active{ transform: translateY(.14em); box-shadow: none; }
-#result button.shakyitem:focus-visible{ outline: calc(var(--u)*.24) solid var(--ring); outline-offset: 2px; }
 
 /* ---------- ぱっと みて いくつ ----------
    The dots have to be genuinely gone when the cover is up, and genuinely legible

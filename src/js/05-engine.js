@@ -155,6 +155,11 @@ const Session = (() => {
      never be left in front of a door they cannot move. */
   const STRONG_AFTER = 2, TEACH_AFTER = 4;   // mistakes past the game's own hint
   let hintStrongFns = [], showFn = null, answerBtn = null, answerText = null, taught = false;
+  /* `taught` guards one answer surface and is reset with it; this one is the
+     record, and belongs to the whole question. With several blanks, the next blank
+     used to wipe it, and a question the app had answered was saved as the child's
+     own mistake. */
+  let taughtQ = false;
   /* What this question is *about*. Every generator names its item, so the app can
      avoid asking the same fact twice in one sitting, steer toward the facts this
      child keeps missing, and tell the parent which ones they are. */
@@ -273,7 +278,7 @@ const Session = (() => {
     clear(feedbackEl);
     feedbackEl.append(el('span.mk', { text: kind === 'oops' ? '？' : '💡' }), text);
     if (extra) feedbackEl.append(extra);
-    feedbackEl.animate
+    feedbackEl.animate && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
   }
   function clearFeedback(){ feedbackEl.hidden = true; clear(feedbackEl); }
@@ -301,12 +306,17 @@ const Session = (() => {
     }
   }
 
+  /* The first tap asks. It used to turn the button into a pink「？」with the
+     mistake colour and say nothing — to a child who cannot read, a telling-off
+     with no way to tell what for. It is a question, so it looks like the hints,
+     shows where the button goes, and says it out loud. */
   function quit(){
     if (!quitArmed){
       quitArmed = true;
-      backBtn.textContent = '？';
+      backBtn.textContent = '🏠';
       backBtn.setAttribute('aria-label', 'もういちど おすと おわる');
-      showFeedback('oops', 'もういちど おすと おわるよ');
+      showFeedback('hint', 'おわりに する？ もういちど おしてね');
+      Sound.say('終わりにする？もう一度押してね。', { delay: 60 });
       clearTimeout(quitTimer);
       quitTimer = setTimeout(() => {
         disarmQuit();
@@ -666,7 +676,7 @@ const Session = (() => {
     hintAfter = 2; extrasShown = false;
     askedAt = 0; respondedMs = null; spokenAt = 0; slipAt = 0;
     curItem = null; curLabel = null; curAnswer = null; missType = null;
-    hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false;
+    hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false; taughtQ = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
     choicesEl.classList.remove('pad');
     clearFeedback();
@@ -776,7 +786,7 @@ const Session = (() => {
       otherwise let the game show it, and end the question either way. */
   function teach(){
     if (locked || taught) return;
-    taught = true;
+    taught = true; taughtQ = true;
     // stop the child racking up misses on a board that is already being answered
     $$('.choice', choicesEl).forEach(b => { if (b !== answerBtn) b.disabled = true; });
     const tb = $('.teachbtn', choicesEl);
@@ -797,6 +807,9 @@ const Session = (() => {
   function onWrong(target, given){
     // once the answer is being shown, taps on the old surface are not attempts
     if (locked || taught) return;
+    /* an answer means the child is still playing: stand the ← down, or its timer
+       clears the bubble 2.6 s later and takes this mistake's hint with it */
+    disarmQuit();
     markResponse();
     wrongThisQ++;
     mistakes++;
@@ -823,6 +836,10 @@ const Session = (() => {
       showFeedback('hint', 'ヒントを だすね');
       Sound.say('ヒントを出すね。', { delay: 260 });
       if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
+      /* 「ヒントを だすね」 has to change the board. On three choices the one dimmed
+         at random was often one the child had already tried, which changed nothing;
+         the answers already ruled out go grey first. */
+      hintBtns.forEach(b => { if (b.classList.contains('tried')) b.classList.add('dim'); });
       if (wrongThisQ >= 2) dimOne();
       return;
     }
@@ -845,6 +862,7 @@ const Session = (() => {
   function onCorrect(o){
     if (locked) return;
     locked = true;
+    disarmQuit();
     markResponse();
     clearFeedback();
     const clean = wrongThisQ === 0;
@@ -863,7 +881,7 @@ const Session = (() => {
         /* 'taught' outranks the reading of the first mistake: what matters about
            this question is that the child did not get there on their own. */
         Store.noteFact(curItem, clean, curLabel, g.id + ':' + plan[idx].levelIndex, timed,
-                       taught ? 'taught' : missType);
+                       taughtQ ? 'taught' : missType);
         if (!clean && !shaky.some(x => x.key === curItem)){
           shaky.push({ key: curItem, label: curLabel || plan[idx].game.name });
         }
@@ -977,6 +995,7 @@ const Session = (() => {
       get responseMs(){ return respondedMs; },
       get missType(){ return missType; },
       get taught(){ return taught; },
+      get taughtQ(){ return taughtQ; },
       get wrongThisQ(){ return wrongThisQ; },
       get planItems(){ return plan.map(p => p.want || null); }
     }
