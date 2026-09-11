@@ -8492,6 +8492,15 @@ const Parent = (() => {
     return gateNode;
   }
 
+  /** An iPhone/iPad in a Safari tab — not the home-screen app, not a file:// copy. */
+  function inSafariTab(){
+    const ios = /iP(hone|ad|od)/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);   // iPadOS asks for the desktop site
+    const standalone = navigator.standalone === true
+      || !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    return ios && !standalone && /^https?:$/.test(location.protocol);
+  }
+
   function open(onSuccess){
     buildGate();
     afterGate = typeof onSuccess === 'function' ? onSuccess : null;
@@ -9089,6 +9098,20 @@ const Parent = (() => {
       s.append(el('p', { style: { color: 'var(--good-ink)', fontWeight: 800 },
         text: last === 0 ? '✓ 今日、書き出しています。' : '✓ ' + last + '日前に書き出しています。' }));
     }
+    /* iPadOS can keep a home-screen web app's storage apart from Safari's. A family
+       that plays in a Safari tab for a week and then does 「ホーム画面に追加」 — the
+       step every instruction recommends — can open the icon to an empty app. Say so
+       while it can still be avoided: in the tab, before the icon exists. */
+    if (inSafariTab()){
+      const has = Object.keys(Store.data.stars).length > 0 || Store.data.stickers.length > 0;
+      s.append(el('div.backup-due.tabnotice', null,
+        el('b', { text: 'いまは Safari のタブで開いています' }),
+        el('div', { text: has
+          ? 'ホーム画面に追加したアイコンから開くと、記録が Safari とは別になり、空から始まることがあります。'
+            + '追加する前に下の「記録を書き出す」で書き出し、追加したアイコンから開いて「記録を読み込む」で戻してください。'
+          : '続けて使うなら、遊びはじめる前に 共有 → ホーム画面に追加 し、そのアイコンから開いてください。'
+            + 'Safari のタブで遊んだ記録は、ホーム画面のアプリに引き継がれないことがあります。' })));
+    }
 
     s.append(el('p', { html:
       '学習の記録は、<b>いま開いている URL ごとに、この端末のブラウザの中だけ</b>に保存されます。' +
@@ -9121,24 +9144,60 @@ const Parent = (() => {
       return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
     };
 
-    const dl = el('button.btn', { text: '記録を書き出す（ファイル）', onclick(){
+    /* 「書き出した」is only written down once the file has actually gone somewhere.
+       It used to be recorded the instant the download link was clicked — and on an
+       iPad started from the home screen that link often saves nothing, or the link
+       was revoked before the save sheet was answered. The mark on the ホーム button
+       then went away on a backup that did not exist.
+       The share sheet says when it finished (and when it was cancelled), so it is
+       tried first. A plain download cannot say, so an adult says it for it. */
+    const say = (text, good) => {
+      status.textContent = text;
+      status.style.color = good ? 'var(--good-ink)' : 'var(--ink)';
+    };
+    const markSaved = text => {
+      confirmBtn.hidden = true;
+      Store.noteBackup();
+      Home.render();                       // clears the mark on the ホーム button
+      say(text, true);
+    };
+    const confirmBtn = el('button.btn.btn-ghost', { text: '保存できた', hidden: true,
+      onclick(){ markSaved('✓ 書き出したことを記録しました。'); } });
+
+    function download(){
       try{
         const blob = new Blob([Store.exportText()], { type: 'application/json' });
         const a = el('a', { href: URL.createObjectURL(blob), download: 'kazu-no-bouken-' + stamp() + '.json' });
         document.body.append(a); a.click();
-        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-        Store.noteBackup();
-        Home.render();                       // clears the mark on the ホーム button
-        status.textContent = '書き出しました。ファイルアプリや iCloud Drive に保管してください。';
-      }catch(e){ status.textContent = 'この環境ではファイルに書き出せません。下の「コピー」を使ってください。'; }
+        // long enough for an adult to answer the save sheet
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+        confirmBtn.hidden = false;
+        say('保存の画面が出たら、ファイルアプリや iCloud Drive に保存してください。保存できたら「保存できた」を押してください。');
+      }catch(e){ say('この環境ではファイルに書き出せません。下の「コピー」を使ってください。'); }
+    }
+
+    const dl = el('button.btn', { text: '記録を書き出す（ファイル）', onclick(){
+      let file = null;
+      try{ file = new File([Store.exportText()], 'kazu-no-bouken-' + stamp() + '.json', { type: 'application/json' }); }
+      catch(e){}
+      if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })){
+        navigator.share({ files: [file], title: 'かずのぼうけん の記録' }).then(
+          () => markSaved('✓ 書き出しました。「ファイルに保存」を選んだなら、ファイルアプリに入っています。'),
+          e => {
+            if (e && e.name === 'AbortError') say('書き出しを取り消しました。記録はまだ保管されていません。');
+            else download();
+          });
+        return;
+      }
+      download();
     } });
 
     const copy = el('button.btn', { text: 'コピー（貼り付けで復元）', onclick(){
       const text = Store.exportText();
+      // copied is not kept: it counts once it has been pasted somewhere
       const done = () => {
-        Store.noteBackup();
-        Home.render();
-        status.textContent = 'コピーしました。メモアプリなどに貼り付けて保管してください。';
+        confirmBtn.hidden = false;
+        say('コピーしました。メモアプリなどに貼り付けて保管したら「保存できた」を押してください。');
       };
       if (navigator.clipboard && navigator.clipboard.writeText){
         navigator.clipboard.writeText(text).then(done, () => { box.value = text; box.select(); status.textContent = '下の枠に出しました。長押しして「コピー」してください。'; });
@@ -9176,7 +9235,7 @@ const Parent = (() => {
       status.style.color = 'var(--oops-ink)';
     }
 
-    s.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap' } }, dl, copy),
+    s.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap' } }, dl, copy, confirmBtn),
              el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap', marginTop: 'calc(var(--u)*.6)' } }, pick, paste, modeBtn),
              file, box, status,
              el('p', { text: '「合体する」は、いまの記録と読み込んだ記録の良いほうを残します（同じファイルを二度読み込んでも数字は増えません）。「おきかえる」は、いまの記録を捨てて読み込んだ内容にします。' }));

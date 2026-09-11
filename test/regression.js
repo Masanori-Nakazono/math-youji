@@ -1752,6 +1752,34 @@
     K.Store.reset();
   })();
 
+  /* ---------- 67. an iPad Safari tab is told before the home-screen icon starts empty ----------
+     iPadOS can keep a home-screen app's records apart from Safari's, so a week in
+     a tab followed by「ホーム画面に追加」can open to nothing. */
+  (function safariTabNotice(){
+    const nav = navigator;
+    const define = (k, v) => Object.defineProperty(nav, k, { value: v, configurable: true });
+    const notice = () => { K.Parent.render(); const n = q('#parent .tabnotice'); return n ? n.textContent : null; };
+    let desktop, tabEmpty, tabWithRecords, installed;
+    try{
+      K.Store.reset();
+      desktop = notice();
+      define('userAgent', 'Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1');
+      define('standalone', false);
+      tabEmpty = notice();
+      K.Store.recordLevel('count', 0, 2, 6, 8);
+      tabWithRecords = notice();
+      define('standalone', true);
+      installed = notice();
+    } finally {
+      delete nav.userAgent; delete nav.standalone;
+    }
+    check('an iPad Safari tab is told its records may not follow it to the home screen',
+      desktop === null && installed === null
+        && /ホーム画面に追加/.test(tabEmpty || '') && /書き出/.test(tabWithRecords || ''),
+      'desktop=' + desktop + ' · empty=' + tabEmpty + ' · records=' + tabWithRecords + ' · installed=' + installed);
+    K.Store.reset();
+  })();
+
   /* ---------- 63. the question stays readable once the answers arrive ----------
      かぞえよう asks only after every object is counted. The buttons took height
      from the play area, the board was never re-fitted, and it spilled up over the
@@ -1857,6 +1885,51 @@
       Object.keys(detail).length === 6 && Object.values(detail).every(Boolean), JSON.stringify(detail));
   }
 
+  /* ---------- 68. 「書き出した」is recorded only when it was ----------
+     The download link was clicked and the backup recorded in the same breath — on
+     an iPad started from the home screen that link can save nothing, and the mark
+     on the ホーム button went away on a backup that did not exist. */
+  async function exportOnlyCountsWhenSaved(){
+    const nav = navigator, had = {};
+    const stub = (k, v) => {
+      if (!(k in had)) had[k] = Object.getOwnPropertyDescriptor(nav, k);
+      Object.defineProperty(nav, k, { value: v, configurable: true, writable: true });
+    };
+    const unstub = () => Object.keys(had).forEach(k => { delete nav[k]; if (had[k]) Object.defineProperty(nav, k, had[k]); });
+    const exportBtn = () => { K.Parent.render(); return qa('#parent button').find(b => /記録を書き出す/.test(b.textContent)); };
+    const settle = () => new Promise(r => setTimeout(r, 0));
+    const realClick = HTMLAnchorElement.prototype.click;
+    const detail = {};
+    try{
+      K.Store.reset();
+      stub('canShare', () => true);
+      stub('share', () => Promise.reject(new DOMException('cancelled', 'AbortError')));
+      exportBtn().click(); await settle(); await settle();
+      detail.cancelNotCounted = K.Store.lastBackupDays() == null;
+      nav.share = () => Promise.resolve();
+      exportBtn().click(); await settle(); await settle();
+      detail.shareCounted = K.Store.lastBackupDays() === 0;
+
+      // no share sheet: a download is not a backup until an adult says it was saved
+      K.Store.reset();
+      stub('canShare', undefined);
+      let downloads = 0;
+      HTMLAnchorElement.prototype.click = function(){ if (this.download) downloads++; else realClick.call(this); };
+      exportBtn().click();
+      detail.downloadStarted = downloads === 1;
+      detail.notYet = K.Store.lastBackupDays() == null;
+      const saved = qa('#parent button').find(b => b.textContent === '保存できた' && !b.hidden);
+      if (saved) saved.click();
+      detail.confirmed = K.Store.lastBackupDays() === 0;
+    } finally {
+      unstub();
+      HTMLAnchorElement.prototype.click = realClick;
+      K.Store.reset();
+    }
+    check('「書き出した」is recorded when the share finished or an adult confirmed the save, never on the click',
+      Object.keys(detail).length === 5 && Object.values(detail).every(Boolean), JSON.stringify(detail));
+  }
+
   function finish(){
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();
@@ -1868,5 +1941,7 @@
   return settle('the app still opens with no network', serviceWorkerOffline())
     .then(() => settle('after counting, the question and the hint are not hidden under the board', promptStaysVisible()))
     .then(() => settle('an unreadable record is set aside, and saving, 消す and 読み込む keep working', unreadableRecord()))
+    .then(() => settle('「書き出した」is recorded when the share finished or an adult confirmed the save, never on the click',
+                       exportOnlyCountsWhenSaved()))
     .then(finish);
 })();
