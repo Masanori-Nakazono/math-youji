@@ -239,7 +239,8 @@ const Home = (() => {
       focusEl.append(
         el('div.ico', { text: BANNER_ICON.focus, 'aria-hidden': 'true' }),
         el('div.grow', null,
-          el('div.t', { text: 'にがて あつめ' }),
+          // 「にがて」is a word for the parent page: to a five-year-old it is a verdict
+          el('div.t', { text: 'とっくん' }),
           el('div.s', { text: weak.slice(0, 2).map(w => w.label).join('　･　')
                               + (weak.length > 2 ? '　ほか' : '') })),
         el('div.go', { text: '▶' }));
@@ -386,13 +387,28 @@ const Result = (() => {
        what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
        ones no longer move this number, so counting stickers here would stall. */
     const stickers = r.stickers || [];
+    /* 「あと 47レベル」 is a number a five-year-old cannot hold. A bar filling up
+       towards 🎓 is something they can see move; and once few enough are left to
+       count on a hand or two, they become dots to count. The number stays for the
+       adult, in the label. It rides inside the sticker card: one piece of news. */
+    let toDoor = null;
     if (stickers.length && !r.unlockedG1 && !Progress.g1Open()){
       const st = Progress.preStickers();
       const left = Math.max(0, st.total - st.got);
-      if (left) inner.append(el('div.stagenext' + (left <= 6 ? '.nearly' : ''), null,
-        el('span.mk', { text: '🔒' }),
-        '1ねんせいの きょうしつまで ',
-        el('b', { text: 'あと ' + left + 'レベル' })));
+      if (left){
+        const say = '1ねんせいの きょうしつまで あと ' + left + 'レベル';
+        let middle;
+        if (left <= 10){
+          middle = el('div.leftdots');
+          for (let i = 0; i < left; i++) middle.append(el('span', { text: '●' }));
+        } else {
+          middle = el('div.gauge', null,
+            el('div.fill', { style: { width: Math.round(st.got / st.total * 100) + '%' } }));
+        }
+        toDoor = el('div.stagenext' + (left <= 10 ? '.nearly' : ''),
+          { role: 'img', 'aria-label': say, title: say },
+          el('span.mk', { text: '🔒' }), middle, el('span.mk', { text: '🎓' }));
+      }
     }
     /* The last sticker. This is the one screen in the app that says the child has
        finished 入学前 — it has to say it in words a six-year-old reads, on the
@@ -439,7 +455,8 @@ const Result = (() => {
       inner.append(el('div.newsticker' + (gold ? '.gold' : ''), null,
         el('div.e', { text: stickers.map(x => x.emoji).join(' ') }),
         el('div.l', { text: stickers.length > 1 ? 'シール と きんの シール を ゲット！'
-                          : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' })));
+                          : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' }),
+        toDoor));
     }
     if (r.mode === 'diagnostic' && r.recommended){
       const g = Games.byId[r.recommended.gameId];
@@ -449,8 +466,10 @@ const Result = (() => {
           el('div.l', { text: 'つぎの おすすめ' }),
           el('b', { text: g.name + '　《' + lv.t + '》' })));
       }
-    } else if (!r.unlockedG1 && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
-      // one piece of news per screen: the classroom outranks today's kitchen-table task
+    } else if (!r.unlockedG1 && !stickers.length
+               && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
+      /* one piece of news per screen: the classroom outranks today's kitchen-table
+         task, and so does a new sticker — the mission comes up on the next pass */
       inner.append(Missions.resultCard(r.lastGameId));
     }
     const actions = el('div.result-actions');
@@ -459,12 +478,17 @@ const Result = (() => {
     const act = (cls, icon, label, onclick) => el('button.btn' + cls, { onclick },
       el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
     const home = () => { Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); };
-    // practising the facts that just went wrong outranks anything else on offer
-    const lead = aimed.length > 0 && r.mode !== 'diagnostic';
+    const nxt = r.mode === 'level' ? r.levelIndex + 1 : -1;
+    const canNext = r.mode === 'level' && nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt);
+    /* Practising what just went wrong leads — unless the level went well. After ★★
+       the thing to do is the next level, and a bright「とっくん」there said the
+       opposite of the stars; the facts stay one tap away as the second button. */
+    const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus';
+    const lead = drill && !(canNext && r.stars >= 2);
     if (r.mode === 'focus'){
       actions.append(act('.btn-accent.primary', '🎯', 'もういちど', runFocus));
     } else if (lead){
-      actions.append(act('.btn-accent.primary', '🎯', 'にがてを れんしゅう', runFocus));
+      actions.append(act('.btn-accent.primary', '🎯', 'とっくん する', runFocus));
     }
     if (r.mode === 'diagnostic'){
       actions.append(act('.btn-accent.primary', '🗺️', 'おすすめで あそぶ',
@@ -473,11 +497,11 @@ const Result = (() => {
       // when nothing was earned, another go is the obvious next step, not a footnote
       actions.append(act(r.stars === 0 && !lead ? '.btn-accent.primary' : '', '↻', 'もういちど',
         () => { Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); }));
-      const nxt = r.levelIndex + 1;
-      if (nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt)){
+      if (canNext){
         actions.append(act(lead ? '' : '.btn-accent.primary', '▶', 'つぎの レベルへ',
           () => { Sound.sfx.tap(); Session.startLevel(r.game, nxt); }));
       }
+      if (drill && !lead) actions.append(act('', '🎯', 'とっくん する', runFocus));
     } else if (r.mode === 'daily'){
       actions.append(act('', '↻', 'もういちど', () => { Sound.sfx.tap(); Session.startDaily(10); }));
     }

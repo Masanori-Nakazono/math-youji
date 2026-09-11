@@ -472,7 +472,7 @@
     const chip = q('#result button.shakyitem');
     const acts = qa('#result .result-actions .btn').map(b => (b.querySelector('.bl') || b).textContent);
     check('the facts the result names can be practised straight from it',
-      !!chip && acts[0] === 'にがてを れんしゅう',
+      !!chip && acts[0] === 'とっくん する',
       'chip=' + !!chip + ' actions=' + acts.join(' / '));
     K.Store.reset();
   })();
@@ -1911,6 +1911,96 @@
     leavePlay();
     check('a plate with one too many is read as「1つ多く」',
       kind && kind.got === 'up', JSON.stringify(kind));
+    K.Store.reset();
+  })();
+
+  /* ---------- 74. the child is never told what they are「にがて」at ----------
+     A five-year-old reads「にがて」as a verdict about themselves. It belongs on the
+     parent page; the child sees「とっくん」. */
+  (function neverCalledWeak(){
+    K.Store.reset();
+    ['bond:dec:10-4', 'bond:dec:10-3'].forEach(k => {
+      K.Store.noteFact(k, false, k, 'bond:2', 0, 'part');
+      K.Store.noteFact(k, false, k, 'bond:2', 0, 'part');
+    });
+    K.Home.render();
+    K.UI.show('home');
+    const home = q('#home .dailies').textContent;
+    K.Session.startFocus(K.Store.weakFacts(4).map(w => w.key), { n: 10 });
+    const title = q('#play .topbar h2').textContent;
+    leavePlay();
+    K.Result.show({ stars: 1, right: 5, total: 8, mode: 'level', game: K.Games.byId.ten, levelIndex: 1,
+                    stickers: [], focusKeys: [], shaky: [{ key: 'bond:dec:10-4', label: '10 は 4 と 6' }] });
+    const result = q('#result .result-actions').textContent;
+    check('the child\'s screens say「とっくん」, never「にがて」',
+      ![home, title, result].some(t => /にがて/.test(t)) && /とっくん/.test(home) && /とっくん/.test(result),
+      'home=' + home + ' | title=' + title + ' | result=' + result);
+    K.UI.show('home');
+    K.Store.reset();
+  })();
+
+  /* ---------- 75. the result screen: one piece of news, and the way on after a good run ----------
+     After ★★ the bright button said「にがてを れんしゅう」, the opposite of the stars.
+     「🔒 あと 47レベル」 was a number a five-year-old cannot hold, and the sticker,
+     the lock, the mission and three buttons all arrived on one screen. */
+  (function resultScreenOneThing(){
+    K.Store.reset();
+    K.Store.noteFact('bond:dec:10-4', false, '10 は 4 と 6', 'bond:2', 0, 'part');
+    K.Store.recordLevel('bond', 1, 2, 6, 8);                  // so level 3 is open
+    const base = { right: 6, total: 8, mode: 'level', game: K.Games.byId.bond, levelIndex: 1,
+                   focusKeys: [], shaky: [{ key: 'bond:dec:10-4', label: '10 は 4 と 6' }], lastGameId: 'bond' };
+    const primary = () => ((q('#result .result-actions .primary .bl') || {}).textContent) || '';
+    const labels = () => qa('#result .result-actions .bl').map(b => b.textContent);
+    const sticker = [{ emoji: '🍎', gold: false }];
+
+    K.Result.show(Object.assign({ stars: 2, stickers: sticker }, base));
+    const good = { primary: primary(), labels: labels() };
+    const far = q('#result .newsticker .stagenext');
+    const farIsPicture = !!far && !!far.querySelector('.gauge') && !/\d/.test(far.textContent);
+    const noMissionWithSticker = !q('#result .result-mission');
+
+    K.Result.show(Object.assign({ stars: 1, stickers: [] }, base));
+    const shakyLead = primary();
+    const missionWithoutSticker = !!q('#result .result-mission');
+
+    K.Progress.gateSlots('pre').slice(0, -5).forEach(k => K.Store.addSticker(k));
+    K.Result.show(Object.assign({ stars: 2, stickers: sticker }, base));
+    const dots = qa('#result .stagenext .leftdots span').length;
+
+    check('after ★★ the next level leads; the way to 🎓 is a picture; a new sticker is the only news',
+      good.primary === 'つぎの レベルへ' && good.labels.indexOf('とっくん する') >= 0 && shakyLead === 'とっくん する'
+        && farIsPicture && noMissionWithSticker && missionWithoutSticker && dots === 5,
+      JSON.stringify({ good, shakyLead, farIsPicture, far: far && far.textContent, noMissionWithSticker, missionWithoutSticker, dots }));
+    K.UI.show('home');
+    K.Store.reset();
+  })();
+
+  /* ---------- 76. the way out is within reach, and the bubble can be read ----------
+     「こたえを みる」 was a 40px pill in the speech bubble — on an iPad held upright
+     a hand's width above the keypad — and the bubble itself was 17px text. */
+  (function rescueWithinReach(){
+    K.Store.reset();
+    let ans = null;
+    for (let t = 0; t < 40 && ans == null; t++){
+      K.Session.startLevel(K.Games.byId.ten, 1);
+      const m = /^ten:ten:(\d+)$/.exec(S.item || '');
+      if (m) ans = 10 - (+m[1]);
+    }
+    let fontPx = 0;
+    for (let i = 0; i < 6 && !q('#play .teachbtn'); i++){
+      const w = qa('#play .padkey').find(k => Number(k.textContent) !== ans && !k.disabled);
+      if (!w) break;
+      w.click();
+      if (i === 0) fontPx = parseFloat(getComputedStyle(q('#play .feedback')).fontSize);
+    }
+    const tb = q('#play .teachbtn');
+    const inAnswers = !!tb && !!tb.closest('#play .choices');
+    const h = tb ? tb.getBoundingClientRect().height : 0;
+    const tap = parseFloat(getComputedStyle(doc.documentElement).getPropertyValue('--tap')) || 64;
+    leavePlay();
+    check('「こたえを みる」sits among the answers at a size a child can hit, and the bubble is at least 20px',
+      inAnswers && h >= tap - 1 && fontPx >= 20,
+      'inAnswers=' + inAnswers + ' height=' + Math.round(h) + '/' + tap + ' bubble=' + fontPx + 'px');
     K.Store.reset();
   })();
 

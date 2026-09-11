@@ -537,6 +537,13 @@ body::before{
    tells them apart, so it stays; the small print under the name goes instead */
 .dailies.n3 > .daily .t,
 .dailies.n4 > .daily .t{ font-size: calc(var(--u)*1.55); }
+/* with the small print gone there is room for the name to take two lines instead
+   of being cut to「いまの おす…」 */
+.dailies.n3 > .daily .t,
+.dailies.n4 > .daily .t{
+  white-space: normal; text-overflow: clip;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
 .dailies.n3 > .daily .s,
 .dailies.n4 > .daily .s{ display: none; }
 .dailies.n3 > .daily .ico,
@@ -1354,25 +1361,29 @@ body::before{
 .feedback{
   align-self: flex-start;
   display: inline-flex; align-items: center; gap: calc(var(--u)*.4);
-  font-size: calc(var(--u)*1.35); font-weight: 800;
+  /* on a device with no Japanese voice this bubble is the only thing that answers
+     a mistake, so it has to be readable by a child who has just started reading:
+     1.35u was 17px on a 1024 iPad and under 15px on an iPad mini held upright */
+  font-size: max(20px, calc(var(--u)*1.5)); font-weight: 800;
   border-radius: 999px;
   padding: calc(var(--u)*.2) calc(var(--u)*.9);
 }
 .feedback .mk{ font-size: 1.15em; }
 .feedback.oops{ background: var(--oops-soft); color: color-mix(in srgb, var(--oops) 55%, var(--ink)); }
 .feedback.hint{ background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: var(--accent-ink); }
-/* the way out, once the ladder has run out of rungs: offered, not forced */
-.feedback .teachbtn{
-  margin-left: calc(var(--u)*.6);
-  font-size: calc(var(--u)*1.35); font-weight: 800;
-  padding: calc(var(--u)*.3) calc(var(--u)*1.2);
-  /* a rescue a five-year-old has to be able to hit; the prompt bar is the only
-     place it can live, so it takes a floor of its own rather than --tap */
-  min-height: max(calc(var(--u)*3), 40px);
+/* the way out, once the ladder has run out of rungs: offered, not forced — among
+   the answers, at the size of an answer */
+.choices .teachbtn{
+  font-size: calc(var(--u)*1.8); font-weight: 800;
+  padding: calc(var(--u)*.3) calc(var(--u)*1.4);
+  min-height: var(--tap); min-width: var(--tap);
   border-radius: 999px;
-  border: calc(var(--u)*.2) solid var(--accent); color: var(--accent-ink);
+  border: calc(var(--u)*.24) solid var(--accent); color: var(--accent-ink);
   background: var(--card); box-shadow: var(--shadow-sm);
 }
+.choices .teachbtn .bi{ font-size: 1.3em; line-height: 1; margin-right: .3em; }
+/* in the 6 + 5 keypad grid it gets a row of its own rather than a keypad cell */
+.choices.pad .teachbtn{ grid-column: 1 / -1; }
 .feedback{ flex-wrap: wrap; }
 /* the answer, about to be pressed for the child — it has to be watchable */
 .choice.showme{
@@ -1950,6 +1961,17 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   font-size: calc(var(--u)*1.5); font-weight: 800;
 }
 #result .stagenext b{ color: var(--ink) }
+#result .newsticker .stagenext{ align-self: stretch; justify-content: center; }
+#result .stagenext .gauge{
+  flex: 1 1 auto; min-width: calc(var(--u)*12); height: calc(var(--u)*1.3);
+  border-radius: 999px; background: var(--card); border: 1px solid var(--card-edge);
+  overflow: hidden;
+}
+#result .stagenext .gauge .fill{ height: 100%; background: var(--star); border-radius: inherit; }
+#result .stagenext .leftdots{
+  display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--u)*.35);
+  color: var(--accent); font-size: calc(var(--u)*1.7); line-height: 1;
+}
 #result .stagenext.nearly{
   background: color-mix(in srgb, var(--accent) 18%, var(--paper-2));
   color: var(--ink);

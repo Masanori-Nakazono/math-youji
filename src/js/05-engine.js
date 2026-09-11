@@ -412,7 +412,7 @@ const Session = (() => {
        would let the child copy the last answer instead of retrieving it. */
     const n = o.n || 10;
     for (let i = 0; i < n; i++) plan.push(want[i % want.length]);
-    titleEl.textContent = 'にがて あつめ';
+    titleEl.textContent = 'とっくん';
     begin();
   }
 
@@ -727,7 +727,7 @@ const Session = (() => {
     const step = plan[idx];
     if (mode !== 'level'){
       const modeName = mode === 'daily' ? 'きょうの れんしゅう'
-                     : mode === 'focus' ? 'にがて あつめ' : 'はじめの ぼうけん';
+                     : mode === 'focus' ? 'とっくん' : 'はじめの ぼうけん';
       titleEl.textContent = modeName + '　' + step.game.name;
     }
     drawQuestion(step);
@@ -756,16 +756,19 @@ const Session = (() => {
     hintStrongFns.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
     // leave exactly one wrong answer standing beside the right one
     for (let i = 0; i < 12 && hintBtns.filter(b => !b.classList.contains('dim')).length > 1; i++) dimOne();
-    showFeedback('hint', 'もう ちょっと ヒントを だすね', teachButton());
+    showFeedback('hint', 'もう ちょっと ヒントを だすね');
+    offerTeach();
     Sound.say('もう少し、ヒントを出すね。', { delay: 260 });
   }
 
-  /** The way out, offered before it is taken. */
-  function teachButton(){
-    return el('button.btn.btn-ghost.teachbtn', {
-      type: 'button', text: 'こたえを みる',
-      onclick(e){ e.stopPropagation(); teach(); }
-    });
+  /** The way out, offered before it is taken — where the answers are, at a size a
+      five-year-old hits. It lived in the speech bubble at 40px, which on an iPad
+      held upright was a hand's width above the keypad the child was pressing. */
+  function offerTeach(){
+    if ($('.teachbtn', choicesEl)) return;
+    choicesEl.append(el('button.btn.teachbtn', {
+      type: 'button', onclick(e){ e.stopPropagation(); teach(); }
+    }, el('span.bi', { text: '👀', 'aria-hidden': 'true' }), el('span.bl', { text: 'こたえを みる' })));
   }
 
   /** Bottom rung. Press the right button if there is one — that runs the question's
@@ -776,6 +779,8 @@ const Session = (() => {
     taught = true;
     // stop the child racking up misses on a board that is already being answered
     $$('.choice', choicesEl).forEach(b => { if (b !== answerBtn) b.disabled = true; });
+    const tb = $('.teachbtn', choicesEl);
+    if (tb) tb.remove();
     clearFeedback();
     showFeedback('hint', 'いっしょに やってみよう');
     Sound.say(answerText != null ? `こたえは、${answerText}。いっしょに見てみよう。`
@@ -826,8 +831,8 @@ const Session = (() => {
     if (wrongThisQ > hintAfter){
       // between the rungs: still say something new, and keep narrowing
       dimOne();
-      showFeedback('hint', 'まだ ちがうね。よく みて みよう',
-        wrongThisQ > hintAfter + STRONG_AFTER ? teachButton() : null);
+      showFeedback('hint', 'まだ ちがうね。よく みて みよう');
+      if (wrongThisQ > hintAfter + STRONG_AFTER) offerTeach();
       return;
     }
     /* Before the hint: name the mistake if we can read it. 「1つ多く数えた」 and

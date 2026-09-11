@@ -542,6 +542,13 @@ body::before{
    tells them apart, so it stays; the small print under the name goes instead */
 .dailies.n3 > .daily .t,
 .dailies.n4 > .daily .t{ font-size: calc(var(--u)*1.55); }
+/* with the small print gone there is room for the name to take two lines instead
+   of being cut to「いまの おす…」 */
+.dailies.n3 > .daily .t,
+.dailies.n4 > .daily .t{
+  white-space: normal; text-overflow: clip;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
 .dailies.n3 > .daily .s,
 .dailies.n4 > .daily .s{ display: none; }
 .dailies.n3 > .daily .ico,
@@ -1359,25 +1366,29 @@ body::before{
 .feedback{
   align-self: flex-start;
   display: inline-flex; align-items: center; gap: calc(var(--u)*.4);
-  font-size: calc(var(--u)*1.35); font-weight: 800;
+  /* on a device with no Japanese voice this bubble is the only thing that answers
+     a mistake, so it has to be readable by a child who has just started reading:
+     1.35u was 17px on a 1024 iPad and under 15px on an iPad mini held upright */
+  font-size: max(20px, calc(var(--u)*1.5)); font-weight: 800;
   border-radius: 999px;
   padding: calc(var(--u)*.2) calc(var(--u)*.9);
 }
 .feedback .mk{ font-size: 1.15em; }
 .feedback.oops{ background: var(--oops-soft); color: color-mix(in srgb, var(--oops) 55%, var(--ink)); }
 .feedback.hint{ background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: var(--accent-ink); }
-/* the way out, once the ladder has run out of rungs: offered, not forced */
-.feedback .teachbtn{
-  margin-left: calc(var(--u)*.6);
-  font-size: calc(var(--u)*1.35); font-weight: 800;
-  padding: calc(var(--u)*.3) calc(var(--u)*1.2);
-  /* a rescue a five-year-old has to be able to hit; the prompt bar is the only
-     place it can live, so it takes a floor of its own rather than --tap */
-  min-height: max(calc(var(--u)*3), 40px);
+/* the way out, once the ladder has run out of rungs: offered, not forced — among
+   the answers, at the size of an answer */
+.choices .teachbtn{
+  font-size: calc(var(--u)*1.8); font-weight: 800;
+  padding: calc(var(--u)*.3) calc(var(--u)*1.4);
+  min-height: var(--tap); min-width: var(--tap);
   border-radius: 999px;
-  border: calc(var(--u)*.2) solid var(--accent); color: var(--accent-ink);
+  border: calc(var(--u)*.24) solid var(--accent); color: var(--accent-ink);
   background: var(--card); box-shadow: var(--shadow-sm);
 }
+.choices .teachbtn .bi{ font-size: 1.3em; line-height: 1; margin-right: .3em; }
+/* in the 6 + 5 keypad grid it gets a row of its own rather than a keypad cell */
+.choices.pad .teachbtn{ grid-column: 1 / -1; }
 .feedback{ flex-wrap: wrap; }
 /* the answer, about to be pressed for the child — it has to be watchable */
 .choice.showme{
@@ -1955,6 +1966,17 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   font-size: calc(var(--u)*1.5); font-weight: 800;
 }
 #result .stagenext b{ color: var(--ink) }
+#result .newsticker .stagenext{ align-self: stretch; justify-content: center; }
+#result .stagenext .gauge{
+  flex: 1 1 auto; min-width: calc(var(--u)*12); height: calc(var(--u)*1.3);
+  border-radius: 999px; background: var(--card); border: 1px solid var(--card-edge);
+  overflow: hidden;
+}
+#result .stagenext .gauge .fill{ height: 100%; background: var(--star); border-radius: inherit; }
+#result .stagenext .leftdots{
+  display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--u)*.35);
+  color: var(--accent); font-size: calc(var(--u)*1.7); line-height: 1;
+}
 #result .stagenext.nearly{
   background: color-mix(in srgb, var(--accent) 18%, var(--paper-2));
   color: var(--ink);
@@ -3895,7 +3917,7 @@ const Session = (() => {
        would let the child copy the last answer instead of retrieving it. */
     const n = o.n || 10;
     for (let i = 0; i < n; i++) plan.push(want[i % want.length]);
-    titleEl.textContent = 'にがて あつめ';
+    titleEl.textContent = 'とっくん';
     begin();
   }
 
@@ -4210,7 +4232,7 @@ const Session = (() => {
     const step = plan[idx];
     if (mode !== 'level'){
       const modeName = mode === 'daily' ? 'きょうの れんしゅう'
-                     : mode === 'focus' ? 'にがて あつめ' : 'はじめの ぼうけん';
+                     : mode === 'focus' ? 'とっくん' : 'はじめの ぼうけん';
       titleEl.textContent = modeName + '　' + step.game.name;
     }
     drawQuestion(step);
@@ -4239,16 +4261,19 @@ const Session = (() => {
     hintStrongFns.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
     // leave exactly one wrong answer standing beside the right one
     for (let i = 0; i < 12 && hintBtns.filter(b => !b.classList.contains('dim')).length > 1; i++) dimOne();
-    showFeedback('hint', 'もう ちょっと ヒントを だすね', teachButton());
+    showFeedback('hint', 'もう ちょっと ヒントを だすね');
+    offerTeach();
     Sound.say('もう少し、ヒントを出すね。', { delay: 260 });
   }
 
-  /** The way out, offered before it is taken. */
-  function teachButton(){
-    return el('button.btn.btn-ghost.teachbtn', {
-      type: 'button', text: 'こたえを みる',
-      onclick(e){ e.stopPropagation(); teach(); }
-    });
+  /** The way out, offered before it is taken — where the answers are, at a size a
+      five-year-old hits. It lived in the speech bubble at 40px, which on an iPad
+      held upright was a hand's width above the keypad the child was pressing. */
+  function offerTeach(){
+    if ($('.teachbtn', choicesEl)) return;
+    choicesEl.append(el('button.btn.teachbtn', {
+      type: 'button', onclick(e){ e.stopPropagation(); teach(); }
+    }, el('span.bi', { text: '👀', 'aria-hidden': 'true' }), el('span.bl', { text: 'こたえを みる' })));
   }
 
   /** Bottom rung. Press the right button if there is one — that runs the question's
@@ -4259,6 +4284,8 @@ const Session = (() => {
     taught = true;
     // stop the child racking up misses on a board that is already being answered
     $$('.choice', choicesEl).forEach(b => { if (b !== answerBtn) b.disabled = true; });
+    const tb = $('.teachbtn', choicesEl);
+    if (tb) tb.remove();
     clearFeedback();
     showFeedback('hint', 'いっしょに やってみよう');
     Sound.say(answerText != null ? `こたえは、${answerText}。いっしょに見てみよう。`
@@ -4309,8 +4336,8 @@ const Session = (() => {
     if (wrongThisQ > hintAfter){
       // between the rungs: still say something new, and keep narrowing
       dimOne();
-      showFeedback('hint', 'まだ ちがうね。よく みて みよう',
-        wrongThisQ > hintAfter + STRONG_AFTER ? teachButton() : null);
+      showFeedback('hint', 'まだ ちがうね。よく みて みよう');
+      if (wrongThisQ > hintAfter + STRONG_AFTER) offerTeach();
       return;
     }
     /* Before the hint: name the mistake if we can read it. 「1つ多く数えた」 and
@@ -8145,7 +8172,8 @@ const Home = (() => {
       focusEl.append(
         el('div.ico', { text: BANNER_ICON.focus, 'aria-hidden': 'true' }),
         el('div.grow', null,
-          el('div.t', { text: 'にがて あつめ' }),
+          // 「にがて」is a word for the parent page: to a five-year-old it is a verdict
+          el('div.t', { text: 'とっくん' }),
           el('div.s', { text: weak.slice(0, 2).map(w => w.label).join('　･　')
                               + (weak.length > 2 ? '　ほか' : '') })),
         el('div.go', { text: '▶' }));
@@ -8292,13 +8320,28 @@ const Result = (() => {
        what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
        ones no longer move this number, so counting stickers here would stall. */
     const stickers = r.stickers || [];
+    /* 「あと 47レベル」 is a number a five-year-old cannot hold. A bar filling up
+       towards 🎓 is something they can see move; and once few enough are left to
+       count on a hand or two, they become dots to count. The number stays for the
+       adult, in the label. It rides inside the sticker card: one piece of news. */
+    let toDoor = null;
     if (stickers.length && !r.unlockedG1 && !Progress.g1Open()){
       const st = Progress.preStickers();
       const left = Math.max(0, st.total - st.got);
-      if (left) inner.append(el('div.stagenext' + (left <= 6 ? '.nearly' : ''), null,
-        el('span.mk', { text: '🔒' }),
-        '1ねんせいの きょうしつまで ',
-        el('b', { text: 'あと ' + left + 'レベル' })));
+      if (left){
+        const say = '1ねんせいの きょうしつまで あと ' + left + 'レベル';
+        let middle;
+        if (left <= 10){
+          middle = el('div.leftdots');
+          for (let i = 0; i < left; i++) middle.append(el('span', { text: '●' }));
+        } else {
+          middle = el('div.gauge', null,
+            el('div.fill', { style: { width: Math.round(st.got / st.total * 100) + '%' } }));
+        }
+        toDoor = el('div.stagenext' + (left <= 10 ? '.nearly' : ''),
+          { role: 'img', 'aria-label': say, title: say },
+          el('span.mk', { text: '🔒' }), middle, el('span.mk', { text: '🎓' }));
+      }
     }
     /* The last sticker. This is the one screen in the app that says the child has
        finished 入学前 — it has to say it in words a six-year-old reads, on the
@@ -8345,7 +8388,8 @@ const Result = (() => {
       inner.append(el('div.newsticker' + (gold ? '.gold' : ''), null,
         el('div.e', { text: stickers.map(x => x.emoji).join(' ') }),
         el('div.l', { text: stickers.length > 1 ? 'シール と きんの シール を ゲット！'
-                          : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' })));
+                          : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' }),
+        toDoor));
     }
     if (r.mode === 'diagnostic' && r.recommended){
       const g = Games.byId[r.recommended.gameId];
@@ -8355,8 +8399,10 @@ const Result = (() => {
           el('div.l', { text: 'つぎの おすすめ' }),
           el('b', { text: g.name + '　《' + lv.t + '》' })));
       }
-    } else if (!r.unlockedG1 && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
-      // one piece of news per screen: the classroom outranks today's kitchen-table task
+    } else if (!r.unlockedG1 && !stickers.length
+               && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
+      /* one piece of news per screen: the classroom outranks today's kitchen-table
+         task, and so does a new sticker — the mission comes up on the next pass */
       inner.append(Missions.resultCard(r.lastGameId));
     }
     const actions = el('div.result-actions');
@@ -8365,12 +8411,17 @@ const Result = (() => {
     const act = (cls, icon, label, onclick) => el('button.btn' + cls, { onclick },
       el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
     const home = () => { Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); };
-    // practising the facts that just went wrong outranks anything else on offer
-    const lead = aimed.length > 0 && r.mode !== 'diagnostic';
+    const nxt = r.mode === 'level' ? r.levelIndex + 1 : -1;
+    const canNext = r.mode === 'level' && nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt);
+    /* Practising what just went wrong leads — unless the level went well. After ★★
+       the thing to do is the next level, and a bright「とっくん」there said the
+       opposite of the stars; the facts stay one tap away as the second button. */
+    const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus';
+    const lead = drill && !(canNext && r.stars >= 2);
     if (r.mode === 'focus'){
       actions.append(act('.btn-accent.primary', '🎯', 'もういちど', runFocus));
     } else if (lead){
-      actions.append(act('.btn-accent.primary', '🎯', 'にがてを れんしゅう', runFocus));
+      actions.append(act('.btn-accent.primary', '🎯', 'とっくん する', runFocus));
     }
     if (r.mode === 'diagnostic'){
       actions.append(act('.btn-accent.primary', '🗺️', 'おすすめで あそぶ',
@@ -8379,11 +8430,11 @@ const Result = (() => {
       // when nothing was earned, another go is the obvious next step, not a footnote
       actions.append(act(r.stars === 0 && !lead ? '.btn-accent.primary' : '', '↻', 'もういちど',
         () => { Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); }));
-      const nxt = r.levelIndex + 1;
-      if (nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt)){
+      if (canNext){
         actions.append(act(lead ? '' : '.btn-accent.primary', '▶', 'つぎの レベルへ',
           () => { Sound.sfx.tap(); Session.startLevel(r.game, nxt); }));
       }
+      if (drill && !lead) actions.append(act('', '🎯', 'とっくん する', runFocus));
     } else if (r.mode === 'daily'){
       actions.append(act('', '↻', 'もういちど', () => { Sound.sfx.tap(); Session.startDaily(10); }));
     }
@@ -8759,7 +8810,7 @@ const Parent = (() => {
       slowOnes.slice(0, 8).forEach(w => chips.append(
         el('span.factchip.slow', null, el('small', { text: w.game + '　' + secs(w.ms) }), w.label)));
       sec.append(chips);
-      sec.append(el('p', { text: '正解はしていますが、答えが出るまでに時間がかかっています。指を折る、枠のマスを数える、というやり方で合わせている状態です。まちがいではないので放っておかれがちですが、くり上がりのたし算は「9+4 を 9+1+3 にする」途中でこの答えを即座に使うので、ここが遅いとその先が進みません。「にがて あつめ」はこれらも拾います。家では、答えを急がせるより、おはじきを5と5、6と4 のように置いて見せて「かたまりで見る」経験を足すほうが早いです。' }));
+      sec.append(el('p', { text: '正解はしていますが、答えが出るまでに時間がかかっています。指を折る、枠のマスを数える、というやり方で合わせている状態です。まちがいではないので放っておかれがちですが、くり上がりのたし算は「9+4 を 9+1+3 にする」途中でこの答えを即座に使うので、ここが遅いとその先が進みません。「とっくん」はこれらも拾います。家では、答えを急がせるより、おはじきを5と5、6と4 のように置いて見せて「かたまりで見る」経験を足すほうが早いです。' }));
     }
     return sec;
   }
@@ -8810,7 +8861,7 @@ const Parent = (() => {
       s.append(el('p', { style: { marginTop: 'calc(var(--u)*.7)' },
         text: '※ 自力では届かず、アプリが答えを見せて終えた回が ' + taught
             + ' 回あります（6回まちがえると出ます）。★にも「1回目で正解」にも数えていません。'
-            + 'この回の項目は「にがて あつめ」が必ず拾います。' }));
+            + 'この回の項目は「とっくん」が必ず拾います。' }));
     }
     return s;
   }
@@ -8983,7 +9034,7 @@ const Parent = (() => {
        and it says so — but it is the difference between a roadmap and a plan. */
     if (!left){
       s.append(el('p', { text: '入学前の48レベルはすべてクリア済みです。あとは「きょうの れんしゅう」と'
-        + '「にがて あつめ」で保つのと、「1ねんせいの きょうしつ」を進めるので十分です。' }));
+        + '「とっくん」で保つのと、「1ねんせいの きょうしつ」を進めるので十分です。' }));
     } else if (elapsed < 7 || pre.got === 0){
       s.append(el('p', { text: 'ペースを見積もれるだけの日数がまだありません（1週間ほど使うと出ます）。'
         + '目安は1日1レベル・10分です。48レベルなら、休む日を入れても2〜3か月で終わる分量です。' }));
@@ -9004,7 +9055,7 @@ const Parent = (() => {
       if (!inTime){
         s.append(el('p', { text: '追いつき方は2つです。1つは「いまの おすすめ」を毎日1回、最後まで（8問）。'
           + 'これがそのまま1日1レベルになります。もう1つは、間違いが多いレベルを繰り返すより'
-          + '「にがて あつめ」で該当する項目だけを10問回すほうが、同じ10分で進みます。'
+          + '「とっくん」で該当する項目だけを10問回すほうが、同じ10分で進みます。'
           + 'なお、間に合わなくても内容が消えるわけではありません——入学後も続けられます。' }));
       }
     }
