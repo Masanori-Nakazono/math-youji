@@ -470,7 +470,7 @@
                     levelIndex: 1, sticker: null, focusKeys: [],
                     shaky: [{ key: 'ten:ten:3', label: '3 と 7 で 10' }] });
     const chip = q('#result button.shakyitem');
-    const acts = qa('#result .result-actions .btn').map(b => b.textContent);
+    const acts = qa('#result .result-actions .btn').map(b => (b.querySelector('.bl') || b).textContent);
     check('the facts the result names can be practised straight from it',
       !!chip && acts[0] === 'にがてを れんしゅう',
       'chip=' + !!chip + ' actions=' + acts.join(' / '));
@@ -1777,6 +1777,77 @@
       desktop === null && installed === null
         && /ホーム画面に追加/.test(tabEmpty || '') && /書き出/.test(tabWithRecords || ''),
       'desktop=' + desktop + ' · empty=' + tabEmpty + ' · records=' + tabWithRecords + ' · installed=' + installed);
+    K.Store.reset();
+  })();
+
+  /* ---------- 69. a child who cannot read yet can tell the ways in apart ----------
+     The four banners on Home carried the same rabbit, and with three or four up
+     even that was hidden — what told them apart was words. The result screen's
+     buttons were words only. */
+  (function waysInHavePictures(){
+    K.Store.reset();
+    // a day with every banner up: yesterday's mission done, two shaky facts
+    const d = new Date(); d.setDate(d.getDate() - 1);
+    const day = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    K.Store.recordMission({ day, id: 'pic-mission', gameId: 'count', text: 'x', prompt: 'y' });
+    K.Store.completeMission(day);
+    ['bond:dec:10-4', 'bond:dec:10-3'].forEach(k => {
+      K.Store.noteFact(k, false, k, 'bond:2', 0, 'part');
+      K.Store.noteFact(k, false, k, 'bond:2', 0, 'part');
+    });
+    K.Home.render();
+    K.UI.show('home');
+    const up = qa('#home .dailies > .daily').filter(b => !b.hidden);
+    const icons = up.map(b => (b.querySelector('.ico') || {}).textContent || '');
+    const visible = up.every(b => { const i = b.querySelector('.ico'); return !!i && i.getBoundingClientRect().width > 0; });
+    const distinct = icons.every(Boolean) && new Set(icons).size === up.length;
+
+    K.Store.reset();
+    K.Session.startLevel(K.Games.byId.bond, 0);
+    let guard = 0;
+    while (!onResult() && guard++ < 40){ S.forceCorrect(); S.flushTimers(); }
+    const acts = qa('#result .result-actions .btn');
+    const pictured = acts.length > 1 && acts.every(b => {
+      const i = b.querySelector('.bi');
+      return !!i && /\S/.test(i.textContent);
+    });
+    check('every way in on Home and every way off the result screen has its own picture',
+      up.length === 4 && distinct && visible && pictured,
+      'banners=' + up.length + ' icons=' + icons.join('') + ' visible=' + visible + ' resultButtons=' + acts.length + ' pictured=' + pictured);
+    K.UI.show('home');
+    K.Store.reset();
+  })();
+
+  /* ---------- 70. the screens between the games say what they are ----------
+     Home, a game's levels and the sticker book spoke nothing, on the way in or on
+     request. A child who cannot read「かぞえよう」could only tap and find out. */
+  (function screensSpeak(){
+    K.Store.reset();
+    const log = [], say = K.Sound.say, hush = K.Sound.hush;
+    K.Sound.say = t => log.push('say:' + t);
+    K.Sound.hush = () => log.push('hush');
+    // what is still to be heard: anything said after the last hush
+    const heard = () => log.slice(log.lastIndexOf('hush') + 1).filter(x => x.indexOf('say:') === 0).join(' ');
+    let name = '', card = '', levels = '', home = '', book = '';
+    try{
+      K.Home.render();
+      K.UI.show('home');
+      const c = q('#home .gamecard:not(.locked)');
+      name = c.querySelector('.nm').textContent;
+      c.click();
+      card = heard();
+      log.length = 0; q('#levels .speakbtn').click(); levels = heard();
+      K.Home.render(); K.UI.show('home');
+      log.length = 0; q('#home .speakbtn').click(); home = heard();
+      log.length = 0; q('#home .shelf').click(); book = heard();
+    } finally {
+      K.Sound.say = say; K.Sound.hush = hush;
+    }
+    check('Home, the level list and the sticker book say what they are, out loud',
+      card.indexOf(name) >= 0 && levels.indexOf(name) >= 0
+        && /きょうの れんしゅう/.test(home) && /レベル/.test(book) && /シールブック/.test(book),
+      'card=' + card + ' | levels=' + levels + ' | home=' + home + ' | book=' + book);
+    K.UI.show('home');
     K.Store.reset();
   })();
 

@@ -3,6 +3,13 @@
    =========================================================== */
 'use strict';
 
+/** 🔊 in a title bar. A five-year-old does not read the screen's words yet; this
+    says what the screen is for, out loud, whenever they want it again. */
+function speakBtn(text){
+  return el('button.btn.btn-round.speakbtn', { type: 'button', 'aria-label': 'よみあげる', title: 'よみあげる',
+    onclick(){ Sound.sfx.tap(); Sound.say(typeof text === 'function' ? text() : text, { delay: 60 }); } }, '🔊');
+}
+
 /* ---------------------------------------------------------- TITLE */
 const Title = (() => {
   let node, starting = false;
@@ -78,8 +85,9 @@ const Home = (() => {
           el('span.k', { text: 'かず' }), el('span.n', { text: 'の' }), el('span.b', { text: 'ぼうけん' })),
         el('div.spacer'),
         el('div.starcount', null, starSVG(true), starEl),
+        speakBtn(homeSpeech),
         el('button.btn.btn-round', { 'aria-label': 'シールブック', title: 'シールブック',
-          onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } }, '📖'),
+          onclick(){ Sound.sfx.tap(); Book.open(); } }, '📖'),
         parentBtn = el('button.btn.btn-round', { 'aria-label': 'おうちのかたへ', title: 'おうちのかたへ',
           onclick(){ Sound.sfx.tap(); Parent.open(); } }, '👤')));
     /* きょうの れんしゅう reviews everything the child has unlocked, which means a
@@ -87,7 +95,7 @@ const Home = (() => {
        three or four facts, ten questions, each fact several times. */
     focusEl = el('button.daily.focusset', { type: 'button', hidden: true });
     shelfEl = el('button.shelf', { type: 'button',
-      onclick(){ Sound.sfx.tap(); Book.render(); UI.show('book'); } });
+      onclick(){ Sound.sfx.tap(); Book.open(); } });
     /* The door to 1ねんせい used to have a progress banner of its own down here.
        It said what the locked cards on the map already say, and between it and the
        sticker shelf the map itself was the smallest thing on its own screen. The
@@ -97,6 +105,16 @@ const Home = (() => {
     dailiesEl = el('div.dailies', null, recommendEl, dailyEl, reviewEl, focusEl);
     node.append(voiceWarnEl, dailiesEl, worldsEl, shelfEl);
     return UI.register('home', node);
+  }
+
+  /* The banners are the day's way in, and they were told apart only by their
+     words: every one carried the same rabbit, and on a busy day even that went.
+     Each has a picture of its own now, and 🔊 reads out which ones are up. */
+  const BANNER_ICON = { recommend: '🗺️', first: '🧭', daily: '📅', review: '💬', focus: '🎯' };
+  function homeSpeech(){
+    const names = [recommendEl, dailyEl, reviewEl, focusEl]
+      .filter(b => b && !b.hidden).map(b => ($('.t', b) || {}).textContent).filter(Boolean);
+    return '上のボタンから選んでね。' + names.join('、') + '。下の地図から、好きな遊びも選べるよ。';
   }
 
   function gameCard(g){
@@ -111,7 +129,13 @@ const Home = (() => {
     for (let i = 0; i < 3; i++) st.append(starSVG(i < done));
     return el('button.gamecard', {
       type: 'button', title: g.name + '　★ ' + earned + '/' + max,
-      onclick(){ Sound.sfx.tap(); Levels.render(g); UI.show('levels'); }
+      onclick(){
+        Sound.sfx.tap();
+        Levels.render(g);
+        UI.show('levels');
+        // the child picked a picture; say the name of what they picked
+        Sound.say(Levels.speech(), { delay: 120 });
+      }
     },
       el('div.ico', { text: perfect ? '👑' : g.ico }),
       el('div.nm', { text: g.name }),
@@ -165,7 +189,7 @@ const Home = (() => {
     if (recGame){
       const lv = recGame.levels[rec.levelIndex] || recGame.levels[0];
       recommendEl.append(
-        mascotSVG('happy', 'talk'),
+        el('div.ico', { text: firstRun ? BANNER_ICON.first : BANNER_ICON.recommend, 'aria-hidden': 'true' }),
         el('div.grow', null,
           el('div.t', { text: firstRun ? 'はじめの ぼうけん' : 'いまの おすすめ' }),
           el('div.s', { text: firstRun
@@ -190,6 +214,7 @@ const Home = (() => {
     if (review){
       clear(reviewEl);
       reviewEl.append(
+        el('div.ico', { text: BANNER_ICON.review, 'aria-hidden': 'true' }),
         el('div.grow', null,
           el('div.t', { text: 'きのうの ミッション' }),
           el('div.s', { text: 'どんな ふうに できたか おはなししよう' })),
@@ -199,7 +224,7 @@ const Home = (() => {
     clear(dailyEl);
     dailyEl.classList.toggle('done', n >= 10);
     dailyEl.append(
-      mascotSVG(n >= 10 ? 'cheer' : 'happy', 'talk'),
+      el('div.ico', { text: BANNER_ICON.daily, 'aria-hidden': 'true' }),
       el('div.grow', null,
         el('div.t', { text: n >= 10 ? 'きょうの れんしゅう おわり！' : 'きょうの れんしゅう' }),
         el('div.s', { text: n >= 10
@@ -212,7 +237,7 @@ const Home = (() => {
     if (!focusEl.hidden){
       clear(focusEl);
       focusEl.append(
-        mascotSVG('soft', 'talk'),
+        el('div.ico', { text: BANNER_ICON.focus, 'aria-hidden': 'true' }),
         el('div.grow', null,
           el('div.t', { text: 'にがて あつめ' }),
           el('div.s', { text: weak.slice(0, 2).map(w => w.label).join('　･　')
@@ -283,9 +308,12 @@ const Levels = (() => {
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
-        titleEl),
+        titleEl, speakBtn(() => speech())),
       listEl);
     return UI.register('levels', node);
+  }
+  function speech(){
+    return game ? game.name + '。レベルを選んでね。鍵のついたレベルは、前のレベルをクリアすると遊べるよ。' : '';
   }
   function render(g){
     build();
@@ -312,7 +340,7 @@ const Levels = (() => {
     });
 
   }
-  return { build, render, get game(){ return game; } };
+  return { build, render, speech, get game(){ return game; } };
 })();
 
 /* ---------------------------------------------------------- RESULT */
@@ -426,37 +454,38 @@ const Result = (() => {
       inner.append(Missions.resultCard(r.lastGameId));
     }
     const actions = el('div.result-actions');
+    /* A picture first on every way off this screen: a child who cannot read
+       「つぎの レベルへ」yet can still tell ▶ from ↻ from 🏠. */
+    const act = (cls, icon, label, onclick) => el('button.btn' + cls, { onclick },
+      el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
+    const home = () => { Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); };
     // practising the facts that just went wrong outranks anything else on offer
     const lead = aimed.length > 0 && r.mode !== 'diagnostic';
     if (r.mode === 'focus'){
-      actions.append(el('button.btn.btn-accent.primary', { text: 'もういちど', onclick: runFocus }));
+      actions.append(act('.btn-accent.primary', '🎯', 'もういちど', runFocus));
     } else if (lead){
-      actions.append(el('button.btn.btn-accent.primary', { text: 'にがてを れんしゅう', onclick: runFocus }));
+      actions.append(act('.btn-accent.primary', '🎯', 'にがてを れんしゅう', runFocus));
     }
     if (r.mode === 'diagnostic'){
-      actions.append(el('button.btn.btn-accent.primary', {
-        text: 'おすすめで あそぶ',
-        onclick(){ Sound.sfx.tap(); Diagnostic.startRecommended(); }
-      }));
+      actions.append(act('.btn-accent.primary', '🗺️', 'おすすめで あそぶ',
+        () => { Sound.sfx.tap(); Diagnostic.startRecommended(); }));
     } else if (r.mode === 'level'){
       // when nothing was earned, another go is the obvious next step, not a footnote
-      actions.append(el('button.btn' + (r.stars === 0 && !lead ? '.btn-accent.primary' : ''), { text: 'もういちど',
-        onclick(){ Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); } }));
+      actions.append(act(r.stars === 0 && !lead ? '.btn-accent.primary' : '', '↻', 'もういちど',
+        () => { Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); }));
       const nxt = r.levelIndex + 1;
       if (nxt < r.game.levels.length && Store.levelUnlocked(r.game.id, nxt)){
-        actions.append(el('button.btn' + (lead ? '' : '.btn-accent.primary'), { text: 'つぎの レベルへ',
-          onclick(){ Sound.sfx.tap(); Session.startLevel(r.game, nxt); } }));
+        actions.append(act(lead ? '' : '.btn-accent.primary', '▶', 'つぎの レベルへ',
+          () => { Sound.sfx.tap(); Session.startLevel(r.game, nxt); }));
       }
     } else if (r.mode === 'daily'){
-      actions.append(el('button.btn', { text: 'もういちど', onclick(){ Sound.sfx.tap(); Session.startDaily(10); } }));
+      actions.append(act('', '↻', 'もういちど', () => { Sound.sfx.tap(); Session.startDaily(10); }));
     }
     if (r.unlockedG1){
-      actions.append(el('button.btn.btn-accent.primary', { text: '1ねんせいの きょうしつへ',
-        onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
+      actions.append(act('.btn-accent.primary', '🎓', '1ねんせいの きょうしつへ', home));
     }
-    actions.append(el('button.btn' + (r.mode === 'level' || r.mode === 'diagnostic' || lead || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent'),
-      { text: 'あそびを えらぶ',
-        onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }));
+    actions.append(act(r.mode === 'level' || r.mode === 'diagnostic' || lead || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent',
+      '🏠', 'あそびを えらぶ', home));
     inner.append(actions);
     UI.show('result', { replace: true });
     Sound.say(called + spoken, { delay: 700 });
@@ -480,9 +509,21 @@ const Book = (() => {
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); UI.show('home', { replace: true }); } }, '←'),
-        headEl = el('h2')),
+        headEl = el('h2'), speakBtn(() => speech())),
       count, missing, grid);
     return UI.register('book', node);
+  }
+  /** Said on the way in: the count under the heading is a sentence a child cannot read yet. */
+  function speech(){
+    if (Progress.g1Open()) return 'シールブックだよ。集めたシールが並んでいるよ。';
+    const st = Progress.preStickers();
+    const left = Math.max(0, st.total - st.got);
+    return 'シールブックだよ。あと' + left + 'レベルで、1年生の教室が開くよ。';
+  }
+  function open(){
+    render();
+    UI.show('book');
+    Sound.say(speech(), { delay: 200 });      // after the switch, which hushes
   }
   function render(){
     build();
@@ -558,5 +599,5 @@ const Book = (() => {
         ? `<br><b>あと ${left}レベル</b> クリアすると しょうがっこう 1ねんせいの もんだいが ひらくよ（${pre.got}／${pre.total}）`
         : '<br><b>レベルを ぜんぶ クリアしたね！</b> しょうがっこう 1ねんせいの もんだいが できるよ');
   }
-  return { build, render };
+  return { build, render, open, speech };
 })();

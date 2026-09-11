@@ -501,6 +501,8 @@ body::before{
 .daily .s{ font-size: calc(var(--u)*1.4); font-weight: 500; opacity: .82; }
 .daily .grow{ flex: 1 1 auto; min-width: 0; }
 .daily .mascot{ width: calc(var(--u)*5.6); height: calc(var(--u)*5.6); }
+/* each banner's own picture: the thing a child who cannot read yet tells them apart by */
+.daily .ico{ font-size: calc(var(--u)*3.6); line-height: 1; flex: 0 0 auto; }
 .daily.done{
   background: var(--good-soft);
   color: var(--ink);
@@ -530,14 +532,15 @@ body::before{
 .dailies > .daily .s{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dailies > .daily .mascot{ width: calc(var(--u)*4.4); height: calc(var(--u)*4.4); }
 .dailies > .daily .go{ font-size: calc(var(--u)*2); }
-/* three or four banners at once: the name is what the child reads, so the mascot
-   gives up its width to it before the words start clipping */
-.dailies.n3 > .daily .mascot,
-.dailies.n4 > .daily .mascot{ display: none; }
+.dailies > .daily .ico{ font-size: calc(var(--u)*3); }
+/* three or four banners at once: the picture is how a child who cannot read yet
+   tells them apart, so it stays; the small print under the name goes instead */
 .dailies.n3 > .daily .t,
 .dailies.n4 > .daily .t{ font-size: calc(var(--u)*1.55); }
 .dailies.n3 > .daily .s,
-.dailies.n4 > .daily .s{ font-size: calc(var(--u)*1.1); }
+.dailies.n4 > .daily .s{ display: none; }
+.dailies.n3 > .daily .ico,
+.dailies.n4 > .daily .ico{ font-size: calc(var(--u)*2.6); }
 .dailies.n3 > .daily .go,
 .dailies.n4 > .daily .go{ font-size: calc(var(--u)*1.6); }
 
@@ -777,6 +780,7 @@ body::before{
 .result-sub{ font-size: calc(var(--u)*1.6); color: var(--ink-soft); }
 .result-actions{ display: flex; gap: calc(var(--u)*.9); flex-wrap: wrap; justify-content: center; }
 .result-actions .btn{ font-size: calc(var(--u)*1.8); padding: calc(var(--u)*.9) calc(var(--u)*1.8); }
+.result-actions .btn .bi{ font-size: 1.3em; line-height: 1; margin-right: .35em; }
 
 .newsticker{
   display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.3);
