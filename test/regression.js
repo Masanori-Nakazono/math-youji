@@ -1851,6 +1851,69 @@
     K.Store.reset();
   })();
 
+  /* ---------- 71. a finger a key over is not a counting mistake ----------
+     On the keypad the keys either side of the answer are the answer ±1, so a slip
+     of the finger was recorded as「1つ多く数えています」and shown to the parent. */
+  (function padSlip(){
+    const missOf = k => ((K.Store.data.facts[k] || [])[6]) || {};
+    const setup = () => {
+      for (let t = 0; t < 60; t++){
+        K.Session.startLevel(K.Games.byId.ten, 1);
+        const m = /^ten:ten:(\d+)$/.exec(S.item || '');
+        if (!m) continue;
+        const ans = 10 - (+m[1]), over = ans + 1;
+        if (over >= 10 || over === +m[1]) continue;            // that would read as 'whole' / 'part'
+        const key = v => qa('#play .padkey').find(k => Number(k.textContent) === v);
+        if (key(over) && key(ans)) return { item: S.item, ans, over, key };
+      }
+      return null;
+    };
+    K.Store.reset();
+    const a = setup();
+    if (a){ a.key(a.over).click(); a.key(a.ans).click(); }
+    const quickMiss = a ? missOf(a.item) : null;
+    const slipDropped = !!a && !quickMiss.up;
+    K.Store.reset();
+    const b = setup();
+    if (b){
+      b.key(b.over).click();
+      const other = qa('#play .padkey').find(k => Math.abs(Number(k.textContent) - b.ans) > 2);
+      if (other) other.click();
+      b.key(b.ans).click();
+    }
+    const realKept = !!b && !!missOf(b.item).up;
+    leavePlay();
+    check('a keypad miss by one, put right at once, is not recorded as counting one too many',
+      slipDropped && realKept, 'quickFix=' + JSON.stringify(quickMiss) + ' notQuick=' + JSON.stringify(b && missOf(b.item)));
+    K.Store.reset();
+  })();
+
+  /* ---------- 72. a hand-built answer surface can have its misses read too ----------
+     すうじ どれかな passes the plate's count to `wrong`, but the engine only knew
+     the answer when buildChoices / buildPad had set it — so a plate one too many
+     was never read as「1つ多く」. */
+  (function platesClassify(){
+    K.Store.reset();
+    const g = K.Games.list.find(x => x.name.indexOf('すうじ どれかな') >= 0);
+    let kind = 'never drew a numeral → quantity plate question';
+    for (let li = 0; g && li < g.levels.length && typeof kind === 'string'; li++){
+      for (let t = 0; t < 20; t++){
+        K.Session.startLevel(g, li);
+        const m = /:n2q:(\d+)$/.exec(S.item || '');
+        if (!m) continue;
+        const p = qa('#play .plate').find(x => Number(x.dataset.count) === +m[1] + 1);
+        if (!p) continue;
+        p.click();
+        kind = { got: S.missType };
+        break;
+      }
+    }
+    leavePlay();
+    check('a plate with one too many is read as「1つ多く」',
+      kind && kind.got === 'up', JSON.stringify(kind));
+    K.Store.reset();
+  })();
+
   /* ---------- 63. the question stays readable once the answers arrive ----------
      かぞえよう asks only after every object is counted. The buttons took height
      from the play area, the board was never re-fitted, and it spilled up over the
@@ -2001,6 +2064,36 @@
       Object.keys(detail).length === 5 && Object.values(detail).every(Boolean), JSON.stringify(detail));
   }
 
+  /* ---------- 73. thinking time starts when the question has been heard ----------
+     The clock started when the question appeared, so the seconds spent reading it
+     aloud were counted as thinking: 「すぐ言える」 was nearly out of reach with the
+     voice on, and「数えている」came easily. */
+  async function timedFromTheEndOfTheQuestion(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    let heard = null, ms = null, ans = null;
+    K.Sound.say = (t, o) => { if (o && o.onend) heard = o.onend; };
+    try{
+      for (let t = 0; t < 40 && ans == null; t++){
+        heard = null;
+        K.Session.startLevel(K.Games.byId.ten, 1);
+        const m = /^ten:ten:(\d+)$/.exec(S.item || '');
+        if (m && heard) ans = 10 - (+m[1]);
+      }
+      await new Promise(r => setTimeout(r, 500));          // still being read out…
+      if (heard) heard();                                  // …and now it has been
+      const key = qa('#play .padkey').find(k => Number(k.textContent) === ans);
+      if (key) key.click();
+      ms = S.responseMs;
+    } finally {
+      K.Sound.say = say;
+    }
+    leavePlay();
+    check('an answer is timed from the end of the question being read, not from its first word',
+      ms != null && ms < 250, 'responseMs=' + ms);
+    K.Store.reset();
+  }
+
   function finish(){
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();
@@ -2014,5 +2107,7 @@
     .then(() => settle('an unreadable record is set aside, and saving, 消す and 読み込む keep working', unreadableRecord()))
     .then(() => settle('「書き出した」is recorded when the share finished or an adult confirmed the save, never on the click',
                        exportOnlyCountsWhenSaved()))
+    .then(() => settle('an answer is timed from the end of the question being read, not from its first word',
+                       timedFromTheEndOfTheQuestion()))
     .then(finish);
 })();

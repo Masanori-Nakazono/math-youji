@@ -1688,9 +1688,13 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 /* eleven keys fit one row in landscape; where they cannot, break 6 + 5 rather
    than letting a lone "10" wrap onto a line of its own */
 @media (max-width: 900px){
+  /* in portrait the keys stack 6 + 5 and there is room to part them: at .7u they
+     were 7px apart on a 768-wide iPad, and a finger a key over reads as a counting
+     mistake */
   .choices.pad{
     display: grid; grid-template-columns: repeat(6, auto);
     justify-content: center; justify-items: center;
+    gap: max(16px, calc(var(--u)*1.2));
   }
 }
 .choice.padkey{

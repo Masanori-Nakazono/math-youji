@@ -161,10 +161,26 @@ const Sound = (() => {
   }
 
   let speakTimer = null;
+  /* `opts.onend` hears when a line is over: finished, cut off by a newer line or by
+     hush(), or never going to be spoken at all (voice off, no engine). The engine
+     times an answer from the end of the question, not from the first word of it —
+     a question read aloud for four seconds is not four seconds of thinking. */
+  let ending = null;                  // { f } for the line currently owed an onend
+  function ended(){
+    const t = ending; ending = null;
+    if (t) try{ t.f(); }catch(e){}
+  }
   function say(text, opts){
-    if (!voiceOn || !text || !window.speechSynthesis) return;
     const o = opts || {};
+    if (!voiceOn || !text || !window.speechSynthesis){
+      if (o.onend) try{ o.onend(); }catch(e){}
+      return;
+    }
     clearTimeout(speakTimer);
+    ended();                          // the line this one replaces will not be heard
+    const mine = o.onend ? { f: o.onend } : null;
+    ending = mine;
+    const fire = () => { if (mine && ending === mine) ended(); };
     const go = () => {
       try{
         if (!voicesReady) loadVoices();
@@ -177,8 +193,9 @@ const Sound = (() => {
         u.rate   = o.rate   == null ? 0.95 : o.rate;
         u.pitch  = o.pitch  == null ? 1 : o.pitch;
         u.volume = o.volume == null ? 1 : o.volume;
+        u.onend = u.onerror = fire;
         speechSynthesis.speak(u);
-      }catch(e){}
+      }catch(e){ fire(); }
     };
     // a beat of delay lets the sfx land first and avoids iOS cancel/speak races
     speakTimer = setTimeout(go, o.delay == null ? 90 : o.delay);
@@ -186,6 +203,7 @@ const Sound = (() => {
   function hush(){
     clearTimeout(speakTimer);
     try{ window.speechSynthesis && speechSynthesis.cancel(); }catch(e){}
+    ended();
   }
 
   return {

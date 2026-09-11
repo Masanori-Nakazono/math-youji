@@ -171,9 +171,23 @@ const Session = (() => {
      clean answer, and only the second makes a carry sum fast. So time the first
      response, and only where speed is actually the goal (`game.fluent`). */
   let askedAt = 0, respondedMs = null, swiftCount = 0;
+  /* When the question had finished being read out (0 while it still is). Timing
+     from the moment it appeared counted the reading as thinking: with the voice on,
+     「3秒以内」was nearly out of reach and「9秒以上 = 数えている」came easily, and that
+     bias went straight into the parent page and into what gets practised. An answer
+     given before the reading ends counts as instant — the child did not need it. */
+  let spokenAt = 0;
   function markResponse(){
-    if (respondedMs == null && askedAt) respondedMs = Math.round(performance.now() - askedAt);
+    if (respondedMs != null || !askedAt) return;
+    const now = performance.now();
+    respondedMs = Math.round(Math.max(0, now - Math.max(askedAt, spokenAt || now)));
   }
+  /* A keypad key sits beside the keys one either side of it, so a finger that
+     lands a key over reads exactly like「1つ多く数えた」. A ±1 miss put right at
+     once is taken as the finger, not the counting: the question still is not a
+     first-try right, but the parent page is not told the child counts one too many. */
+  const PAD_SLIP_MS = 1500;
+  let slipAt = 0;
   let usedItems = new Set();      // the shuffle bag for the current session
   let shaky = [];                 // facts missed this session, for the result screen
   let sessionOutcomes = [];       // [{ gameId, levelIndex, clean }] for diagnostic/recommendation
@@ -475,7 +489,8 @@ const Session = (() => {
         if (stale()) return;
         promptTxt.innerHTML = html;
         lastSpeech = speech != null ? speech : String(html).replace(/<[^>]*>/g, '');
-        Sound.say(lastSpeech, { delay: 220 });
+        spokenAt = 0;
+        Sound.say(lastSpeech, { delay: 220, onend(){ if (!stale()) spokenAt = performance.now(); } });
       },
       say(t, o){ if (stale()) return; lastSpeech = t; Sound.say(t, o); },
       /** Name the fact this question asks. `label` is what the result screen and
@@ -486,6 +501,10 @@ const Session = (() => {
         curItem = a.game.id + ':' + key;
         curLabel = label || null;
       },
+      /** For a hand-built answer surface: what the answer is. buildChoices and
+          buildPad say it themselves; without this a number passed to `wrong` had
+          nothing to be read against, and the miss went unclassified. */
+      answer(v){ if (!stale()) curAnswer = v; },
       /** In a 集中練習 session, the fact this question is supposed to ask (the part
           of the item key after the game id), or null in a normal session.
 
@@ -645,7 +664,7 @@ const Session = (() => {
   function resetSurface(){
     locked = false; hintBtns = []; hintFn = null; hintExtras = []; hintShown = false;
     hintAfter = 2; extrasShown = false;
-    askedAt = 0; respondedMs = null;
+    askedAt = 0; respondedMs = null; spokenAt = 0; slipAt = 0;
     curItem = null; curLabel = null; curAnswer = null; missType = null;
     hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
@@ -776,6 +795,8 @@ const Session = (() => {
     markResponse();
     wrongThisQ++;
     mistakes++;
+    if (wrongThisQ === 1 && choicesEl.classList.contains('pad')
+        && Math.abs(Number(given) - Number(curAnswer)) === 1) slipAt = performance.now();
     /* The first mistake is the diagnostic one — later ones are increasingly guided,
        so they say less about what the child was thinking. */
     if (!missType){
@@ -829,6 +850,8 @@ const Session = (() => {
     const g = plan[idx].game;
     const timed = g.fluent && clean ? respondedMs : null;
     if (timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
+    if (slipAt && wrongThisQ === 1 && performance.now() - slipAt < PAD_SLIP_MS
+        && (missType === 'up' || missType === 'down')) missType = null;
     if (mode !== 'diagnostic'){
       Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
       if (curItem){

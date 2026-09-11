@@ -258,6 +258,7 @@ function groupNode(count, thing){
 function numToQty(api, lo, hi){        // numeral shown → pick the matching group
   const n = ri(lo, hi), thing = pick(THINGS);
   api.item('n2q:' + n, 'すうじ ' + n + ' → その かず');
+  api.answer(n);                   // so a plate one too many reads as「1つ多く」
   api.setPrompt(`${thing.e} が ${numTag(n)}こ あるのは どれ？`, `${thing.n}が${koKana(n)}、あるのは、どれ？`);
   const big = el('div', { style: { fontFamily: 'var(--fs-num)', fontWeight: 800, fontSize: 'calc(var(--u)*11)', lineHeight: 1, color: 'var(--c-red)' }, text: String(n) });
   api.field.append(big);
