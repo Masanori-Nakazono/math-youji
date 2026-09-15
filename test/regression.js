@@ -12,6 +12,9 @@
 
   const K = window.KazuApp;
   const S = K.Session._test;
+  // levels opened for the first time start with two lesson questions; those have
+  // tests of their own (87–89), and everything else here counts questions exactly
+  if (S.intro) S.intro(false);
   const doc = document;
   const results = [];
   let uncaught = 0;
@@ -710,11 +713,12 @@
           break;
         }
         if (t === 0){
-          // two wrong answers must narrow it to something thinkable, not to a coin flip
+          /* two wrong answers bring the picture back to work with; they must not start
+             taking keys away — narrowing waits for the hand's walk-through */
           const wrong = keys.filter(k => !k.classList.contains('correct'));
           wrong[0].click(); wrong[0].click();
           const live = qa('#play .padkey').filter(k => !k.classList.contains('dim'));
-          if (live.length < 3) bad.push(id + '/L' + (li+1) + ' hint left only ' + live.length + ' keys');
+          if (live.length < 11) bad.push(id + '/L' + (li+1) + ' hint left only ' + live.length + ' keys');
         }
       }
       if (!sawPad) bad.push(id + '/L' + (li+1) + ' never showed a keypad');
@@ -1457,6 +1461,370 @@
     check('six mistakes end in「こたえを みる」, not in a child pressing keys forever',
       sawEscape && taught && marked && clean && S.idx >= 1,
       'escape=' + sawEscape + ' taught=' + taught + ' recorded=' + marked + ' idx=' + S.idx);
+    K.Store.reset();
+  })();
+
+  /* ---------- 84. a hint is heard, and it hands over a way to work ----------
+     The hint was a line of small print nothing read out; 🔊 replayed only the question;
+     and on three choices it greyed out the ones the child had tried, which left one
+     button standing — pressable without having used the hint at all. */
+  function prepAnswers(g){
+    S.flushTimers();
+    const go = q('#play .flashgo');
+    if (go){ go.click(); S.flushTimers(); }
+    if (g.id === 'count') qa('#play .obj').forEach(o => o.click());
+    if (g.id === 'g1pair'){
+      const rows = qa('#play .pairrow');
+      if (rows.length === 2){
+        const a = rows[0].querySelectorAll('.pairitem'), b = rows[1].querySelectorAll('.pairitem');
+        for (let i = 0; i < Math.min(a.length, b.length); i++){ a[i].click(); b[i].click(); }
+      }
+    }
+    S.flushTimers();
+  }
+  (function hintsAreHeardAndUsable(){
+    K.Store.reset();
+    const log = [], say = K.Sound.say;
+    K.Sound.say = t => log.push(String(t));
+    const generic = [], narrowed = [], noReplay = [];
+    let levels = 0;
+    try{
+      eachLevel((g, li) => {
+        for (let t = 0; t < 14; t++){
+          K.Session.startLevel(g, li);
+          prepAnswers(g);
+          const btns = qa('#play .choices .choice:not(.flashgo):not(.teachbtn)');
+          if (btns.length < 2) return;                      // not answered on buttons
+          const w = btns[Math.floor(Math.random() * btns.length)];
+          let hinted = false;
+          for (let i = 0; i < 3 && !S.locked && !hinted; i++){
+            log.length = 0;
+            w.click();
+            if (S.locked) break;
+            const fb = q('#play .feedback');
+            hinted = !fb.hidden && fb.classList.contains('hint');
+          }
+          if (!hinted) continue;                            // that button was right; draw again
+          levels++;
+          const at = g.id + '/L' + (li + 1);
+          const heard = log.slice();
+          if (!heard.length || heard.some(x => x === 'ヒントを出すね。')) generic.push(at + ' said ' + JSON.stringify(heard));
+          if (qa('#play .choices .choice.dim').length) narrowed.push(at);
+          log.length = 0;
+          q('#play .prompt .btn-round').click();
+          if (!log.length || !heard.some(h => log[log.length - 1].indexOf(h) >= 0)) noReplay.push(at);
+          return;
+        }
+      });
+    } finally { K.Sound.say = say; }
+    leavePlay();
+    check('every hint says what to do out loud, 🔊 says it again, and no choice is taken away for it',
+      levels >= 30 && !generic.length && !narrowed.length && !noReplay.length,
+      'levels=' + levels + ' generic: ' + (generic.slice(0, 3).join(' | ') || '-')
+        + ' · narrowed: ' + (narrowed.slice(0, 4).join(',') || '-') + ' · no replay: ' + (noReplay.slice(0, 4).join(',') || '-'));
+    K.Store.reset();
+  })();
+
+  /* ---------- 85. a hint does not put the answer on the board ----------
+     「5こ」on each plate, a number on every animal from the end being counted, a
+     glow on the right box: each finished the question for the child. */
+  (function hintsDoNotAnswer(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = () => {};
+    const bad = [];
+    const twiceWrong = (id, li, targets) => {
+      for (let t = 0; t < 30; t++){
+        K.Session.startLevel(K.Games.byId[id], li);
+        const xs = qa(targets);
+        if (xs.length < 2) continue;
+        const w = xs[Math.floor(Math.random() * xs.length)];
+        w.click(); if (S.locked) continue;
+        w.click(); if (S.locked) continue;
+        return true;
+      }
+      return false;
+    };
+    try{
+      if (twiceWrong('compare', 0, '#play .plate')){
+        if (qa('#play .plate .hintline, #play .plate .ctag').length) bad.push('どっちが おおい writes counts on the plates');
+        if (qa('#play .plate .row.lined').length !== qa('#play .plate').length) bad.push('どっちが おおい does not line the items up');
+      } else bad.push('どっちが おおい never reached its hint');
+      if (twiceWrong('ordinal', 0, '#play .queue .qi')){
+        const tags = qa('#play .queue .ctag, #play .queue .hintline');
+        if (tags.length > 1) bad.push('なんばんめ numbers ' + tags.length + ' animals');
+      } else bad.push('なんばんめ never reached its hint');
+      let sorted = false;
+      for (let t = 0; t < 20 && !sorted; t++){
+        K.Session.startLevel(K.Games.byId.sort, 1);
+        const tile = q('#play .tile:not(.gone)');
+        const wrongBin = tile && qa('#play .bin').find(b => b.dataset.cat !== tile.dataset.cat);
+        if (!wrongBin) continue;
+        // picked up once (a second tap on a held tile puts it down), then the wrong box twice
+        tile.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 0, clientY: 0, pointerId: 1, isPrimary: true }));
+        window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 0, clientY: 0, pointerId: 1, isPrimary: true }));
+        for (let i = 0; i < 2; i++) wrongBin.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        sorted = S.wrongThisQ >= 2;
+        if (sorted && q('#play .bin.glow')) bad.push('なかまわけ lights the right box');
+      }
+      if (!sorted) bad.push('なかまわけ never reached its hint');
+    } finally { K.Sound.say = say; }
+    leavePlay();
+    check('a hint takes the trick away without writing the answer on the board', !bad.length, bad.join(' | '));
+    K.Store.reset();
+  })();
+
+  /* ---------- 86. the fourth mistake: the hand goes through the method ----------
+     「もう ちょっと ヒントを だすね」 used to narrow the keys and nothing else, and
+     「こたえを みる」 said the answer and pressed it. Now the hand fills the frame
+     from the part shown, the frame is left full, and the pressing is left to the child. */
+  (function handShowsTheMethod(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = () => {};
+    const d = {};
+    try{
+      let a = null;
+      for (let t = 0; t < 40 && a == null; t++){
+        K.Session.startLevel(K.Games.byId.ten, 1);
+        const m = /^ten:ten:(\d+)$/.exec(S.item || '');
+        if (m) a = +m[1];
+      }
+      const wrongKey = () => qa('#play .padkey').find(k => Number(k.textContent) !== 10 - a && !k.disabled);
+      for (let i = 0; i < 4; i++) wrongKey().click();
+      d.walking = q('#play').classList.contains('walking');
+      d.teachOffered = !!q('#play .teachbtn');
+      S.flushTimers(1);                                     // the walk's first step
+      d.handShown = !!q('.coachhand') && !q('.coachhand').hidden;
+      S.flushTimers(60);
+      d.frameFull = qa('#play .tenframe .dot').length === 10;
+      d.handGone = !q('.coachhand') || q('.coachhand').hidden;
+      d.fingersBack = !q('#play').classList.contains('walking');
+      d.leftToChild = !S.locked && S.idx === 0;
+      q('#play .teachbtn').click();
+      S.flushTimers(20);
+      d.answered = S.idx === 1;
+    } finally { K.Sound.say = say; }
+    leavePlay();
+    check('the fourth mistake brings the hand through the method, and the answer is still the child\'s to press',
+      d.walking && d.handShown && d.teachOffered && d.frameFull && d.handGone && d.fingersBack && d.leftToChild && d.answered,
+      JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 87. a level opened for the first time starts by being shown ----------
+     The first「5は 2と いくつ」a child ever met was a test, and the method only came
+     after two mistakes. Now the hand does one, the child does one with the tool
+     already out, and only then does the level begin — none of it graded. */
+  (function firstMeeting(){
+    K.Store.reset();
+    S.intro(true);
+    const say = K.Sound.say;
+    K.Sound.say = () => {};
+    const d = {};
+    try{
+      K.Session.startLevel(K.Games.byId.bond, 0);
+      d.plan = S.planIntro.slice(0, 3).join(',');
+      d.length = S.planLength;
+      d.heldForShow = S.introStep === 'show' && q('#play').classList.contains('walking');
+      S.flushTimers(120);                                   // the hand shows it, and answers
+      d.shownAndAnswered = S.idx === 1 && S.introStep === 'together';
+      d.toolOut = qa('#play .cell.coachhole').length > 0 && !q('#play .feedback').hidden;
+      d.fingersFree = !q('#play').classList.contains('walking');
+      const m = /^bond:dec:(\d+)-(\d+)$/.exec(S.item || '');
+      const right = m && qa('#play .choices .choice').find(b => Number(b.textContent) === m[1] - m[2]);
+      if (right) right.click();
+      S.flushTimers(8);
+      d.togetherDone = S.idx === 2 && !S.introStep;
+      for (let i = 0; i < 8 && !onResult(); i++){ S.forceCorrect(); S.flushTimers(); }
+      const facts = K.Store.data.facts;
+      d.recorded = Object.keys(facts).reduce((n, k) => n + facts[k][0], 0);
+      d.stars = K.Store.stars('bond', 0);
+      d.introduced = K.Store.introduced('bond', 0);
+      K.Session.startLevel(K.Games.byId.bond, 0);
+      d.secondTime = S.planLength;
+    } finally { K.Sound.say = say; S.intro(false); }
+    leavePlay();
+    check('a level opened for the first time is shown, then done together, and only then graded',
+      d.plan === 'show,together,' && d.length === 10 && d.heldForShow && d.shownAndAnswered && d.toolOut
+        && d.fingersFree && d.togetherDone && d.recorded === 8 && d.stars === 3 && d.introduced && d.secondTime === 8,
+      JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 88. every game can be shown to the end ----------
+     A demonstration that stalls halfway (a hand that picks up a piece and never puts
+     it down) holds a five-year-old in front of a frozen screen. */
+  (function everyGameCanBeShown(){
+    K.Store.reset();
+    K.Store.setPref('g1Open', true);
+    S.intro(true);
+    const say = K.Sound.say;
+    K.Sound.say = () => {};
+    const stalled = [];
+    try{
+      eachLevel((g, li) => {
+        if (g.intro === false) return;
+        for (let run = 0; run < 3; run++){
+          K.Store.reset();
+          K.Store.setPref('g1Open', true);
+          K.Session.startLevel(g, li);
+          if (S.introStep !== 'show'){ stalled.push(g.id + '/L' + (li + 1) + ' no intro'); return; }
+          S.flushTimers(400);
+          if (S.idx < 1){ stalled.push(g.id + '/L' + (li + 1) + ' (' + S.item + ')'); return; }
+        }
+      });
+    } finally { K.Sound.say = say; S.intro(false); }
+    leavePlay();
+    check('the hand can show every game all the way to an answer', !stalled.length, stalled.slice(0, 6).join(' | '));
+    K.Store.reset();
+  })();
+
+  /* ---------- 89. help can be asked for, and practice meets a new level together ---------- */
+  (function askedForHelp(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = () => {};
+    const d = {};
+    try{
+      let m = null;
+      for (let t = 0; t < 40 && !m; t++){ K.Session.startLevel(K.Games.byId.bond, 0); m = /^bond:dec:(\d+)-(\d+)$/.exec(S.item || ''); }
+      q('#play .showbtn').click();
+      d.toolBeforeAMistake = qa('#play .cell.coachhole').length > 0 && S.wrongThisQ === 0 && S.helped;
+      const right = qa('#play .choices .choice').find(b => Number(b.textContent) === m[1] - m[2]);
+      right.click();
+      S.flushTimers(4);
+      const f = K.Store.fact(Object.keys(K.Store.data.facts)[0]);
+      d.notCountedAsKnown = !!f && f[1] === 0 && !(f[6] && Object.keys(f[6]).length);
+      leavePlay();
+
+      K.Store.reset();
+      S.intro(true);
+      K.Session.startDaily(10);
+      const kinds = S.planIntro;
+      d.dailyTogether = kinds.filter(x => x === 'together').length;
+      d.dailyNoShow = kinds.indexOf('show') < 0;
+    } finally { K.Sound.say = say; S.intro(false); }
+    leavePlay();
+    check('👀 hands over the tool before any mistake (and that answer is not counted as known); practice meets at most two new levels together',
+      d.toolBeforeAMistake && d.notCountedAsKnown && d.dailyTogether >= 1 && d.dailyTogether <= 2 && d.dailyNoShow,
+      JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 90. a provisional clear survives a backup, and the door waits for confirmed ones ---------- */
+  (function provisionalStickers(){
+    K.Store.reset();
+    K.Store.addPending('bond:0');
+    const waiting = K.Store.exportText();
+    K.Store.confirmSticker('bond:0');
+    K.Store.importText(waiting, 'merge');
+    const confirmedWins = !K.Store.isPending('bond:0') && K.Store.hasSticker('bond:0');
+    K.Store.reset();
+    K.Store.importText(waiting, 'replace');
+    const roundTrip = K.Store.isPending('bond:0') && K.Store.hasSticker('bond:0');
+    K.Store.reset();
+    const gate = K.Progress.gateSlots('pre');
+    gate.forEach(k => K.Store.addPending(k));
+    const shut = !K.Progress.g1Open() && K.Progress.preStickers().got === 0 && K.Progress.pendingCount('pre') === gate.length;
+    gate.forEach(k => K.Store.confirmSticker(k));
+    const open = K.Progress.g1Open();
+    check('a provisional sticker survives a backup, a confirmation on either device wins, and the door counts confirmed ones',
+      confirmedWins && roundTrip && shut && open,
+      JSON.stringify({ confirmedWins, roundTrip, shut, open }));
+    K.Store.reset();
+  })();
+
+  /* ---------- 91. a clear below ★★★ is confirmed on another day ----------
+     「8問中4問」 is reached by tapping at random about one run in four on three
+     choices, and two plates reach it nearly two runs in three. */
+  (function checkedOnAnotherDay(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = () => {};
+    const d = {};
+    const finishLevel = () => { let guard = 0; while (!onResult() && guard++ < 40){ S.forceCorrect(); S.flushTimers(); } };
+    try{
+      const today = K.Store.dayNumber();
+      K.Session.startLevel(K.Games.byId.bond, 0);
+      for (let i = 0; i < 3; i++){
+        const m = /^bond:dec:(\d+)-(\d+)$/.exec(S.item || '');
+        const w = m && qa('#play .choices .choice').find(b => Number(b.textContent) !== m[1] - m[2]);
+        if (w) w.click();
+        S.forceCorrect(); S.flushTimers();
+      }
+      finishLevel();
+      d.stars = K.Store.stars('bond', 0);
+      d.provisional = K.Store.hasSticker('bond:0') && K.Store.isPending('bond:0') && K.Progress.preStickers().got === 0;
+      d.saysLater = /いろが つく/.test((q('#result .newsticker') || {}).textContent || '');
+      K.Session.startLevel(K.Games.byId.count, 0);
+      d.notSameDay = S.planChecks.every(x => !x);
+      leavePlay();
+
+      K.Store.data.pending['bond:0'][0] = today - 1;           // tomorrow
+      K.Session.startLevel(K.Games.byId.count, 0);
+      d.checksFirst = S.planChecks.slice(0, 3).join() === 'bond:0,bond:0,bond:0' && S.planLength === 11;
+      finishLevel();
+      d.confirmed = !K.Store.isPending('bond:0') && K.Progress.preStickers().got === 2;
+      d.saysColour = /いろが ついた/.test(q('#result').textContent);
+      d.levelGradedAlone = /8もんの うち 8もん/.test(q('#result').textContent);
+
+      // a check that is failed: the sticker keeps waiting, and おすすめ goes back for it
+      K.Store.reset();
+      ['count', 'flash', 'numeral', 'seq', 'trace'].forEach(id => [0, 1, 2].forEach(i => K.Store.addSticker(id + ':' + i)));
+      K.Store.addPending('compare:0');
+      K.Store.data.pending['compare:0'][0] = today - 1;
+      const before = K.Diagnostic.current();
+      d.movedOnMeanwhile = !(before.gameId === 'compare' && before.levelIndex === 0);
+      K.Session.startLevel(K.Games.byId.count, 0);
+      let three = 0;
+      for (let i = 0; i < 3; i++){
+        const plates = qa('#play .plate');
+        if (plates.length === 3) three++;
+        const m = /cmp:([\d_]+):(most|least)$/.exec(S.item || '');
+        const counts = m ? m[1].split('_').map(Number) : [];
+        const ans = m ? (m[2] === 'most' ? Math.max.apply(null, counts) : Math.min.apply(null, counts)) : null;
+        const w = plates.find(p => Number(p.dataset.count) !== ans);
+        if (w) w.click();
+        S.forceCorrect(); S.flushTimers();
+      }
+      d.threePlates = three === 3;
+      finishLevel();
+      d.stillWaiting = K.Store.isPending('compare:0') && K.Store.checkFailed('compare:0');
+      const back = K.Diagnostic.current();
+      d.backToIt = back.gameId === 'compare' && back.levelIndex === 0;
+      K.Session.startLevel(K.Games.byId.count, 1);
+      d.onceADay = S.planChecks.every(x => !x);
+    } finally { K.Sound.say = say; }
+    leavePlay();
+    check('a pass below ★★★ is provisional until two of three right on another day, and a failed check sends おすすめ back',
+      d.stars >= 1 && d.stars < 3 && d.provisional && d.saysLater && d.notSameDay && d.checksFirst && d.confirmed
+        && d.saysColour && d.levelGradedAlone && d.movedOnMeanwhile && d.threePlates && d.stillWaiting && d.backToIt && d.onceADay,
+      JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 92. ungraded questions still count towards「きょうは ここまで」----------
+     A first-time level that also carries a check is 3 + 2 + 8 questions. Only the 8
+     reached today's total, so the day's stopping point arrived five questions late. */
+  (function ungradedCountsToday(){
+    K.Store.reset();
+    S.intro(true);
+    const say = K.Sound.say;
+    K.Sound.say = () => {};
+    const d = {};
+    try{
+      K.Store.addPending('bond:0');
+      K.Store.data.pending['bond:0'][0] = K.Store.dayNumber() - 1;
+      K.Session.startLevel(K.Games.byId.count, 0);
+      d.plan = S.planLength;
+      for (let i = 0; i < 20 && !onResult(); i++){ S.forceCorrect(); S.flushTimers(); }
+      d.today = K.Store.todayCount();
+      d.gradedOnEight = /8もんの うち 8もん/.test(q('#result').textContent);
+    } finally { K.Sound.say = say; S.intro(false); }
+    leavePlay();
+    check('the lesson and check questions count towards today\'s total, and not towards the level\'s stars',
+      d.plan === 13 && d.today === 13 && d.gradedOnEight, JSON.stringify(d));
     K.Store.reset();
   })();
 

@@ -251,7 +251,7 @@ const Home = (() => {
     clear(shelfEl);
     const strip = el('div.strip');
     if (got.length){
-      got.slice(-16).reverse().forEach(k => strip.append(el('span', { text: stickerFor(k) })));
+      got.slice(-16).reverse().forEach(k => strip.append(el('span' + (Store.isPending(k) ? '.pending' : ''), { text: stickerFor(k) })));
     } else {
       strip.append(el('span.empty', { text: 'レベルを クリアすると シールが たまるよ' }));
     }
@@ -423,8 +423,9 @@ const Result = (() => {
        towards 🎓 is something they can see move; and once few enough are left to
        count on a hand or two, they become dots to count. The number stays for the
        adult, in the label. It rides inside the sticker card: one piece of news. */
+    const coloured = r.confirmed || [];
     let toDoor = null;
-    if (stickers.length && !r.unlockedG1 && !Progress.g1Open()){
+    if ((stickers.length || coloured.length) && !r.unlockedG1 && !Progress.g1Open()){
       const st = Progress.preStickers();
       const left = Math.max(0, st.total - st.got);
       if (left){
@@ -474,11 +475,20 @@ const Result = (() => {
       inner.append(el('div.shaky', null,
         el('div.l', { text: 'つぎは これを もういちど' }), list));
     }
+    /* A sticker confirmed by today's check turns from outline to colour — and that
+       is the moment the door gauge moves, so the gauge rides with it. */
+    if (coloured.length){
+      inner.append(el('div.newsticker.confirmed', null,
+        el('div.e', { text: coloured.map(x => x.emoji).join(' ') }),
+        el('div.l', { text: 'シールに いろが ついた！' }),
+        stickers.length ? null : toDoor));
+    }
     if (stickers.length){
-      const gold = stickers.some(x => x.gold);
-      inner.append(el('div.newsticker' + (gold ? '.gold' : ''), null,
+      const gold = stickers.some(x => x.gold), provisional = stickers.some(x => x.pending);
+      inner.append(el('div.newsticker' + (gold ? '.gold' : '') + (provisional ? '.pending' : ''), null,
         el('div.e', { text: stickers.map(x => x.emoji).join(' ') }),
-        el('div.l', { text: stickers.length > 1 ? 'シール と きんの シール を ゲット！'
+        el('div.l', { text: provisional ? 'かりの シール！ べつの ひに また できたら いろが つくよ'
+                          : stickers.length > 1 ? 'シール と きんの シール を ゲット！'
                           : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' }),
         toDoor));
     }
@@ -490,7 +500,7 @@ const Result = (() => {
           el('div.l', { text: 'つぎの おすすめ' }),
           el('b', { text: g.name + '　《' + lv.t + '》' })));
       }
-    } else if (!r.unlockedG1 && !stickers.length && !(r.shaky && r.shaky.length)
+    } else if (!r.unlockedG1 && !stickers.length && !coloured.length && !(r.shaky && r.shaky.length)
                && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
       /* one piece of news per screen: the classroom outranks today's kitchen-table
          task, and so do a new sticker and the facts to practise — the mission comes
@@ -555,7 +565,9 @@ const Result = (() => {
     }
     inner.append(actions);
     UI.show('result', { replace: true });
-    lastSpoken = called + spoken + nextLine;
+    const news = (coloured.length ? 'シールに、色がついたね！' : '')
+      + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '');
+    lastSpoken = called + spoken + news + nextLine;
     Sound.say(lastSpoken, { delay: 700 });
     for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
@@ -601,7 +613,8 @@ const Book = (() => {
     const drawSlots = keys => keys.forEach(key => {
       const has = Store.hasSticker(key);
       if (has) got++;
-      grid.append(el('div.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : ''),
+      grid.append(el('div.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : '')
+          + (has && Store.isPending(key) ? '.pending' : ''),
         { text: has ? stickerFor(key) : '･' }));
     });
     /* The 入学前 shelf is the one that opens the 小1 classroom, so it is the one
@@ -631,18 +644,18 @@ const Book = (() => {
        The same list the「いまの おすすめ」walks, shown all at once. */
     clear(missing);
     const todo = Progress.gateSlots('pre')
-      .filter(k => !Store.hasSticker(k))
+      .filter(k => !Store.hasConfirmed(k))
       .map(k => {
         const cut = k.lastIndexOf(':');
         const g = Games.byId[k.slice(0, cut)], i = Number(k.slice(cut + 1));
-        return g && g.levels[i] ? { g, i, lv: g.levels[i] } : null;
+        return g && g.levels[i] ? { g, i, lv: g.levels[i], waiting: Store.isPending(k) } : null;
       })
       .filter(Boolean);
     if (todo.length){
       const row = el('div.todorow');
-      todo.slice(0, 10).forEach(({ g, i, lv }) => {
+      todo.slice(0, 10).forEach(({ g, i, lv, waiting }) => {
         const open = Store.levelUnlocked(g.id, i);
-        row.append(el('button.todochip' + (open ? '' : '.shut'), {
+        row.append(el('button.todochip' + (open ? '' : '.shut') + (waiting ? '.pending' : ''), {
           type: 'button', style: { '--lc': g.color },
           title: g.name + '　' + lv.t,
           onclick(){
@@ -654,7 +667,7 @@ const Book = (() => {
           }
         },
           el('span.i', { text: open ? g.ico : '🔒' }),
-          el('span.t', null, g.name, el('small', { text: lv.t }))));
+          el('span.t', null, g.name, el('small', { text: lv.t + (waiting ? '・たしかめ' : '') }))));
       });
       missing.append(
         el('div.l', { text: 'のこりの レベル' + (todo.length > 10 ? '（さいしょの 10こ）' : '') }),
@@ -662,7 +675,9 @@ const Book = (() => {
     }
 
     const left = Math.max(0, pre.total - pre.got);
+    const waiting = Progress.pendingCount('pre');
     count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
+      + (waiting ? `<br>かりの シール ${waiting}まい（べつの ひに また できたら いろが つくよ）` : '')
       + (left
         ? `<br><b>あと ${left}レベル</b> クリアすると しょうがっこう 1ねんせいの もんだいが ひらくよ（${pre.got}／${pre.total}）`
         : '<br><b>レベルを ぜんぶ クリアしたね！</b> しょうがっこう 1ねんせいの もんだいが できるよ');

@@ -28,6 +28,16 @@ const Store = (() => {
     recent: {},       // "gameId:levelIndex" -> last 30 first-try outcomes, "1011…"
     last:  {},        // "gameId:levelIndex" -> day number last played
     swift: {},        // "gameId:levelIndex" -> 1 when cleared without counting
+    /* "gameId:levelIndex" -> 1 once the hand has shown this level's method and the
+       child has done one alongside it. Until then, opening the level starts with
+       those two questions instead of a test. */
+    intro: {},
+    /* "gameId:levelIndex" -> [clearDay, lastCheckDay, failedChecks]. A clear below
+       ★★★ goes on the shelf provisionally: eight questions at 4 right is a pass that
+       random tapping reaches on a three-choice level about one time in four. It is
+       confirmed by two of three right on another day (or by clearing it again on
+       another day, or by ★★★). The door and おすすめ count confirmed clears. */
+    pending: {},
     stickers: [],     // earned sticker keys
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
@@ -172,6 +182,8 @@ const Store = (() => {
      || !copyMap('daily', isCount)
      || !copyMap('last', isCount)
      || !copyMap('swift', v => v === 0 || v === 1)
+     || !copyMap('intro', v => v === 1)
+     || !copyMap('pending', v => Array.isArray(v) && v.length >= 3 && v.slice(0, 3).every(isCount))
      || !copyMap('recent', v => typeof v === 'string' && /^[01]{0,30}$/.test(v))
      || !copyMap('firstTry', v => Array.isArray(v) && v.length >= 2
           && isCount(v[0]) && isCount(v[1]) && v[0] <= v[1])
@@ -256,7 +268,7 @@ const Store = (() => {
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
   function mergeInto(base, add){
     const out = Object.assign(blank(), base);
-    ['stars', 'plays', 'seen', 'daily', 'swift'].forEach(k => {
+    ['stars', 'plays', 'seen', 'daily', 'swift', 'intro'].forEach(k => {
       const src = add[k] || {};
       out[k] = Object.assign({}, base[k] || {});
       // max, never sum: importing the same backup twice must not inflate anything
@@ -323,6 +335,17 @@ const Store = (() => {
         out.missions[d] = Object.assign({}, score(incoming) > score(cur) ? incoming : cur);
       }
     }
+    /* provisional clears: confirmed on either device (on that shelf, not waiting)
+       stays confirmed; otherwise keep the earliest clear and the latest check */
+    out.pending = {};
+    const bpend = base.pending || {}, apend = add.pending || {};
+    const shelved = (rec, k) => (rec.stickers || []).indexOf(k) >= 0;
+    new Set(Object.keys(bpend).concat(Object.keys(apend))).forEach(k => {
+      if ((shelved(base, k) && !bpend[k]) || (shelved(add, k) && !apend[k])) return;
+      const x = bpend[k], y = apend[k];
+      if (!x || !y){ out.pending[k] = (x || y).slice(0, 3); return; }
+      out.pending[k] = [Math.min(x[0], y[0]), Math.max(x[1], y[1]), Math.max(x[2], y[2])];
+    });
     // a stage that has been opened on either device stays open
     out.g1Open = !!(base.g1Open || add.g1Open);
     out.g1Reached = !!(base.g1Reached || add.g1Reached);
@@ -493,6 +516,14 @@ const Store = (() => {
       return (p && p[1]) ? p[0] / p[1] : null;
     },
     todayCount(){ return mem.daily[todayKey()] || 0; },
+    /** Questions answered today that no grade counts — the lesson and check questions.
+        They took the child's time, so「きょうは ここまで」has to count them too. */
+    countToday(n){
+      if (!(n > 0)) return;
+      const t = todayKey();
+      mem.daily[t] = (mem.daily[t] || 0) + n;
+      save();
+    },
     /** calendar days this app has actually been used on — how much there is to lose */
     usedDays(){ return Object.keys(mem.daily || {}).length; },
     /** calendar days since the app was first opened on this device */
@@ -605,6 +636,40 @@ const Store = (() => {
     },
     /** Cleared with every answer right first time *and* without counting. */
     recordSwift(g, l){ mem.swift[key(g, l)] = 1; save(); },
+    introduced: (g, l) => !!(mem.intro && mem.intro[key(g, l)]),
+    markIntroduced(g, l){ (mem.intro || (mem.intro = {}))[key(g, l)] = 1; save(); },
+
+    /* ---- provisional clears ---- */
+    dayNumber: () => dayNo(),
+    /** on the shelf, but waiting for another day to confirm it */
+    addPending(k){
+      if (mem.stickers.indexOf(k) >= 0) return false;
+      mem.stickers.push(k);
+      (mem.pending || (mem.pending = {}))[k] = [dayNo(), 0, 0];
+      save();
+      return true;
+    },
+    isPending: k => !!(mem.pending && mem.pending[k]),
+    hasConfirmed: k => mem.stickers.indexOf(k) >= 0 && !(mem.pending && mem.pending[k]),
+    pendingFrom: k => (mem.pending && mem.pending[k]) ? mem.pending[k][0] : null,
+    checkFailed: k => !!(mem.pending && mem.pending[k] && mem.pending[k][2] > 0),
+    /** waiting clears from an earlier day that have not been checked today, oldest first */
+    pendingDue(){
+      const t = dayNo(), p = mem.pending || {};
+      return Object.keys(p).filter(k => p[k][0] < t && p[k][1] < t).sort((a, b) => p[a][0] - p[b][0]);
+    },
+    confirmSticker(k){
+      if (!mem.pending || !mem.pending[k]) return false;
+      delete mem.pending[k];
+      save();
+      return true;
+    },
+    failCheck(k){
+      const p = mem.pending && mem.pending[k];
+      if (!p) return;
+      p[1] = dayNo(); p[2]++;
+      save();
+    },
     isSwift: (g, l) => !!mem.swift[key(g, l)],
     factDue: dueOf,
     weakFacts,

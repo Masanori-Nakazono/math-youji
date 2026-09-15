@@ -93,7 +93,8 @@ const Progress = (() => {
   function count(stage){
     const all = gateSlots(stage);
     let got = 0;
-    all.forEach(k => { if (Store.hasSticker(k)) got++; });
+    // confirmed clears only: a provisional one has not yet been shown on another day
+    all.forEach(k => { if (Store.hasConfirmed(k)) got++; });
     return { got, total: all.length };
   }
 
@@ -116,6 +117,8 @@ const Progress = (() => {
     gateSlots,
     /** { got, total } over the levels the door counts — cleared levels, not stickers */
     preStickers: () => count('pre'),
+    /** levels cleared provisionally, waiting for another day */
+    pendingCount: stage => gateSlots(stage).filter(k => Store.isPending(k)).length,
     g1Open,
     /** opened by hand from the parent page; never reversible */
     openG1(){ Store.setPref('g1Open', true); }
@@ -128,12 +131,12 @@ function stageOpen(g){ return Progress.stageOf(g) === 'pre' || Progress.g1Open()
 function levelOpen(g, i){ return stageOpen(g) && Store.levelUnlocked(g.id, i); }
 
 const Session = (() => {
-  let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, backBtn, moodEl, feedbackEl;
+  let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, showBtn, backBtn, moodEl, feedbackEl;
   let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
   let locked = false, mode = 'level', curGame = null, curLevelIdx = 0;
-  let hintBtns = [], hintFn = null, hintExtras = [], hintShown = false, lastSpeech = '';
+  let hintBtns = [], hintExtras = [], hintShown = false, lastSpeech = '';
   /* Most questions keep their hint back until a second mistake, so the child
      gets a real second try first. A question whose picture is already hidden
      (ぱっと みて いくつ) has nothing to try with: 「もういちど」 over a covered
@@ -160,6 +163,43 @@ const Session = (() => {
      used to wipe it, and a question the app had answered was saved as the child's
      own mistake. */
   let taughtQ = false;
+  /* ---------- the coach ----------
+     What the game hands over when the child gets stuck. `tool` changes the board
+     into something to work with (dots to count, holes to fill, bars lined up);
+     `text`/`say` are the words for it, in the bubble and out loud; `walk` returns the
+     steps the hand goes through to show the method. The hint used to be a line of
+     small text in the playfield that nothing read out, so a child who cannot read
+     yet was told「ヒントを だすね」and then shown nothing they could use. */
+  let coach = null, hintSpeech = '', walkToken = 0, walked = false;
+  /* ---------- meeting a level for the first time ----------
+     A new idea used to arrive as a test: the first「なんじはん」a child ever saw was a
+     question to get right, and the explanation of「はん」only came as a hint after two
+     misses. The first time a level is opened, two questions go in front of it:
+       'show'     — the hand goes through the method and answers; input waits
+       'together' — the tool is on the board from the start and the child answers
+     Neither is recorded or graded: they are the lesson, not the child's work.
+     `helped` is the 👀 button — help asked for before a mistake, which is fine and
+     also means the answer was not the child's alone. */
+  let introOn = true, demo = null, demoRunning = false, demoWalked = null, demoWaits = 0;
+  let touched = false, helped = false;
+  /* ---------- checking a clear on another day ----------
+     Three questions from a provisionally cleared level, asked on a later day, first
+     thing: two right first time confirms the sticker. They are not graded as the
+     level being played. See `pending` in 02-store.js. */
+  const CHECK_N = 3, CHECK_PASS = 2;
+  let checkTally = {}, announced = new Set();
+  function checkSteps(exceptKey, maxLevels){
+    const out = [];
+    for (const key of Store.pendingDue()){
+      if (out.length >= maxLevels * CHECK_N) break;
+      if (key === exceptKey) continue;               // replaying it is the check
+      const cut = key.lastIndexOf(':');
+      const g = Games.byId[key.slice(0, cut)], li = Number(key.slice(cut + 1));
+      if (!g || !g.levels[li] || !levelOpen(g, li)) continue;
+      for (let i = 0; i < CHECK_N; i++) out.push({ game: g, level: g.levels[li], levelIndex: li, check: key });
+    }
+    return out;
+  }
   /* What this question is *about*. Every generator names its item, so the app can
      avoid asking the same fact twice in one sitting, steer toward the facts this
      child keeps missing, and tell the parent which ones they are. */
@@ -215,6 +255,7 @@ const Session = (() => {
     epoch++;
     timers.forEach((v, id) => clearTimeout(id));
     timers.clear();
+    endWalk();
   }
 
   /** Test seam: run every pending question timer now instead of waiting for it.
@@ -241,8 +282,16 @@ const Session = (() => {
     });
     speakBtn  = el('button.btn.btn-ghost.btn-round', {
       'aria-label': 'もういちど きく', title: 'もういちど きく',
-      onclick(){ Sound.sfx.tap(); if (lastSpeech) Sound.say(lastSpeech, { delay: 40 }); }
+      // the question, and the hint if one is up: a child who missed the hint's words
+      // has no other way to hear them again
+      onclick(){ Sound.sfx.tap(); if (lastSpeech || hintSpeech) Sound.say(lastSpeech + hintSpeech, { delay: 40 }); }
     }, '🔊');
+    /* 👀: the help a child can ask for before getting it wrong. Help that only ever
+       arrives after two mistakes teaches that being wrong is how you get help. */
+    showBtn = el('button.btn.btn-ghost.btn-round.showbtn', {
+      type: 'button', 'aria-label': 'みせて', title: 'みせて',
+      onclick(){ Sound.sfx.tap(); askForHelp(); }
+    }, '👀');
     moodEl = mascotSVG('idle', 'talk');
     moodEl.style.width = 'calc(var(--u)*4.6)';
     moodEl.style.height = 'calc(var(--u)*4.6)';
@@ -255,9 +304,13 @@ const Session = (() => {
         backBtn,
         titleEl, pipsEl),
       el('div.prompt', null, moodEl,
-        el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn),
+        el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn, showBtn),
       fieldEl, choicesEl);
     UI.register('play', node);
+    // has a finger been on this question yet — the together-tool must not wipe the child's own work
+    const touch = () => { touched = true; };
+    node.addEventListener('pointerdown', touch, true);
+    node.addEventListener('click', touch, true);
     refit = UI.watchFit(fieldEl);
     return node;
   }
@@ -341,6 +394,11 @@ const Session = (() => {
     const n = lv.n || 8;
     plan = [];
     for (let i = 0; i < n; i++) plan.push({ game, level: lv, levelIndex });
+    if (needsIntro(game, levelIndex)){
+      plan.unshift({ game, level: lv, levelIndex, intro: 'show' },
+                   { game, level: lv, levelIndex, intro: 'together' });
+    }
+    plan.unshift(...checkSteps(game.id + ':' + levelIndex, 1));
     titleEl.textContent = game.name + '　' + lv.t;
     begin();
   }
@@ -361,7 +419,18 @@ const Session = (() => {
       return;
     }
     const n = count || 10;
-    plan = drawDailyPlan(pool, n);
+    const checks = checkSteps(null, 2);
+    plan = (checks.length ? shuffle(checks.concat(drawDailyPlan(pool, Math.max(4, n - checks.length))))
+                          : drawDailyPlan(pool, n)).map(p => Object.assign({}, p));
+    /* Practice can reach a level the child has never opened. Its first question is
+       done together instead of cold — two at most, so the set stays practice. */
+    const met = new Set();
+    let intros = 0;
+    plan.forEach(p => {
+      const k = p.game.id + ':' + p.levelIndex;
+      if (intros < 2 && !met.has(k) && needsIntro(p.game, p.levelIndex)){ p.intro = 'together'; intros++; }
+      met.add(k);
+    });
     titleEl.textContent = 'きょうの れんしゅう';
     begin();
   }
@@ -384,6 +453,13 @@ const Session = (() => {
     }).filter(Boolean);
     titleEl.textContent = 'はじめの ぼうけん';
     begin();
+  }
+
+  /** Has this child been shown this level's method yet? A level already played, or
+      met often enough in practice, counts as known ground. */
+  function needsIntro(g, i){
+    return introOn && g.intro !== false && !Store.introduced(g.id, i)
+      && Store.plays(g.id, i) === 0 && Store.recentCount(g.id, i) < 4;
   }
 
   /* Three or four facts, ten questions: enough for each of them to come round
@@ -480,7 +556,8 @@ const Session = (() => {
     if (mode !== 'focus') focusKeys = [];
     usedItems = new Set(); shaky = []; sessionOutcomes = [];
     clear(pipsEl);
-    plan.forEach(() => pipsEl.append(el('div.pip')));
+    checkTally = {}; announced = new Set();
+    plan.forEach(p => pipsEl.append(el('div.pip' + (p.intro ? '.intro' : p.check ? '.check' : ''))));
     UI.show('play');
     nextQuestion();
   }
@@ -521,14 +598,32 @@ const Session = (() => {
           A generator that reads this hits the requested fact on its first build.
           One that ignores it still works: the engine re-rolls it and settles for
           the same level, which is the right topic if not the exact fact. */
+      /** A check question on another day. A generator with a two-way format (two
+          plates, おなじ／かわった) asks it with three instead: a coin toss confirms nothing. */
+      get check(){ return !!(plan[idx] && plan[idx].check); },
       get want(){
         const w = plan[idx] && plan[idx].want;
         if (!w) return null;
         const p = a.game.id + ':';
         return w.indexOf(p) === 0 ? w.slice(p.length) : null;
       },
-      /** `after` = how many mistakes before it fires (default 2, minimum 1). */
-      onHint(fn, after){ if (stale()) return; hintFn = fn; if (after) hintAfter = Math.max(1, after); },
+      /** The old one-function hint: `fn` becomes the coach's tool.
+          `after` = how many mistakes before it fires (default 2, minimum 1). */
+      onHint(fn, after){ if (stale()) return; a.coach({ tool: fn, after }); },
+      /** What to do when the child is stuck. Everything is optional.
+            tool()  — change the board into something to work with; never the answer
+            text    — kana for the bubble (a string, or a function read after tool runs)
+            say     — the same for the voice, written for the speech engine
+            walk()  — steps for the hand: [{ at: node | () => node, say, act(), ms }]
+            after   — mistakes before the tool appears (default 2)
+          Calling it again (a question with several blanks) replaces what it names. */
+      coach(c){
+        if (stale() || !c) return;
+        coach = Object.assign({}, coach || {}, c);
+        if (c.after) hintAfter = Math.max(1, c.after);
+        // a together-question hands its tool over as soon as it has one, before any finger
+        if (demo === 'together' && c.tool && !touched && !hintShown) later(togetherHint, 30);
+      },
       /** Show (and take) the correct action, for the bottom rung of the ladder.
           `buildChoices` / `buildPad` questions need nothing: the engine presses the
           right button, which runs the question's own reveal. A hand-made answer
@@ -672,8 +767,10 @@ const Session = (() => {
   }
 
   function resetSurface(){
-    locked = false; hintBtns = []; hintFn = null; hintExtras = []; hintShown = false;
+    locked = false; hintBtns = []; hintExtras = []; hintShown = false;
     hintAfter = 2; extrasShown = false;
+    coach = null; hintSpeech = ''; walked = false; endWalk();
+    demoRunning = false; helped = false;
     askedAt = 0; respondedMs = null; spokenAt = 0; slipAt = 0;
     curItem = null; curLabel = null; curAnswer = null; missType = null;
     hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false; taughtQ = false;
@@ -735,17 +832,29 @@ const Session = (() => {
     $$('.pip', pipsEl).forEach((p, i) => p.classList.toggle('now', i === idx));
     setMood('idle');
     const step = plan[idx];
-    if (mode !== 'level'){
+    if (step.check) titleEl.textContent = 'たしかめ　' + step.game.name + '　' + step.level.t;
+    else if (mode !== 'level'){
       const modeName = mode === 'daily' ? 'きょうの れんしゅう'
                      : mode === 'focus' ? 'とっくん' : 'はじめの ぼうけん';
       titleEl.textContent = modeName + '　' + step.game.name;
-    }
+    } else if (curGame) titleEl.textContent = curGame.name + '　' + curGame.levels[curLevelIdx].t;
+    demo = step.intro || null;
+    touched = false;
     drawQuestion(step);
     // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
     // call buildChoices, so start their clock here
     if (!askedAt) askedAt = performance.now();
     UI.fitPlayfield(fieldEl);     // size this question to the room it has
     refit();                      // and again next frame, once fonts/SVGs have settled
+    if (demo) startIntro();
+    if (step.check && !announced.has(step.check)){
+      announced.add(step.check);
+      later(() => {
+        if (locked) return;
+        showFeedback('hint', 'まえに クリアした レベルを たしかめよう');
+        Sound.say('前にクリアした、' + step.game.name + 'を、確かめよう。' + lastSpeech, { delay: 200 });
+      }, 40);
+    }
   }
 
   /** Dim one more wrong choice, so a repeated mistake is never met by a still screen. */
@@ -760,15 +869,79 @@ const Session = (() => {
     hintExtras.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
   }
 
-  /** Second rung: narrow much harder, and put the way out on screen. */
+  const val = v => typeof v === 'function' ? v() : v;
+  const hasTool = () => !!(coach && coach.tool);
+
+  /* ---------- the hand walks through the method ----------
+     Taps on the board are held off while it moves (CSS on #play.walking): a
+     demonstration a finger can interrupt halfway is a demonstration of nothing.
+     The steps are question timers, so leaving the question ends the walk too. */
+  function endWalk(){
+    walkToken++;
+    if (node) node.classList.remove('walking');
+    if (typeof Coach !== 'undefined') Coach.hide();
+  }
+  /** false when the game has nothing to show */
+  function runWalk(onDone, startMs){
+    let steps = null;
+    if (coach && coach.walk){ try{ steps = coach.walk(); }catch(e){ console.error('walk failed', e); } }
+    if (!steps || !steps.length) return false;
+    walked = true;
+    endWalk();
+    const mine = walkToken;
+    node.classList.add('walking');
+    let i = 0;
+    const next = () => {
+      if (mine !== walkToken) return;
+      if (locked){ endWalk(); return; }
+      if (i >= steps.length){ endWalk(); if (onDone) onDone(); return; }
+      const s = steps[i++] || {};
+      let at = null;
+      try{ at = typeof s.at === 'function' ? s.at() : s.at; }catch(e){}
+      if (at) Coach.point(at);
+      if (s.act){ try{ s.act(); }catch(e){ console.error('walk step failed', e); } }
+      if (s.say) Sound.say(s.say, { delay: 0 });
+      later(next, s.ms || Math.max(700, 400 + String(s.say || '').length * 170));
+    };
+    later(next, startMs == null ? 500 : startMs);
+    return true;
+  }
+
+  /** First rung: the game's tool, in words the child hears. */
+  function hint(prefix){
+    hintShown = true;
+    const c = coach || {};
+    if (c.tool){ try{ c.tool(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
+    let text = null, say = null;
+    try{ text = val(c.text); say = val(c.say); }catch(e){ console.error('hint text failed', e); }
+    hintSpeech = say || (text ? text.replace(/\s+/g, '') + '。' : '');
+    showFeedback('hint', text || 'ヒントを だすね');
+    Sound.say((prefix || '') + (hintSpeech || 'ヒントを出すね。'), { delay: 260 });
+    /* Only a question with nothing to hand over narrows its choices here. With a
+       tool on the board, greying out what the child tried turned three choices into
+       one — the question could be finished without using the hint at all. */
+    if (!c.tool){
+      hintBtns.forEach(b => { if (b.classList.contains('tried')) b.classList.add('dim'); });
+      if (wrongThisQ >= 2) dimOne();
+    }
+  }
+
+  /** Second rung: the hand shows the method, and only then do the choices narrow. */
   function strongHint(){
-    runExtras();
-    hintStrongFns.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
-    // leave exactly one wrong answer standing beside the right one
-    for (let i = 0; i < 12 && hintBtns.filter(b => !b.classList.contains('dim')).length > 1; i++) dimOne();
-    showFeedback('hint', 'もう ちょっと ヒントを だすね');
     offerTeach();
-    Sound.say('もう少し、ヒントを出すね。', { delay: 260 });
+    const narrow = () => {
+      runExtras();
+      hintStrongFns.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
+      // leave exactly one wrong answer standing beside the right one
+      for (let i = 0; i < 12 && hintBtns.filter(b => !b.classList.contains('dim')).length > 1; i++) dimOne();
+    };
+    showFeedback('hint', 'やりかたを みせるね');
+    Sound.say('やり方を見せるね。よく見ててね。', { delay: 200 });
+    if (!runWalk(narrow, 1500)){
+      narrow();
+      showFeedback('hint', 'もう ちょっと ヒントを だすね');
+      Sound.say('もう少し、ヒントを出すね。', { delay: 260 });
+    }
   }
 
   /** The way out, offered before it is taken — where the answers are, at a size a
@@ -784,17 +957,11 @@ const Session = (() => {
   /** Bottom rung. Press the right button if there is one — that runs the question's
       own reveal, so the answer lands inside the sentence the child was reading —
       otherwise let the game show it, and end the question either way. */
-  function teach(){
-    if (locked || taught) return;
-    taught = true; taughtQ = true;
-    // stop the child racking up misses on a board that is already being answered
-    $$('.choice', choicesEl).forEach(b => { if (b !== answerBtn) b.disabled = true; });
-    const tb = $('.teachbtn', choicesEl);
-    if (tb) tb.remove();
-    clearFeedback();
-    showFeedback('hint', 'いっしょに やってみよう');
-    Sound.say(answerText != null ? `こたえは、${answerText}。いっしょに見てみよう。`
-                                 : 'いっしょに、やってみよう。', { delay: 200 });
+  /** Answer the question the way a child would: press its own right button (which
+      runs its reveal), or let the game do its right action, and end it either way. */
+  function pressAnswer(){
+    showFeedback('hint', 'こたえは これだよ');
+    Sound.say(answerText != null ? `答えは、${answerText}だよ。` : 'こうすると、できるよ。', { delay: 150 });
     if (answerBtn && answerBtn.isConnected && !answerBtn.disabled){
       answerBtn.classList.add('showme');
       later(() => { if (!locked) answerBtn.click(); }, 900);
@@ -802,6 +969,87 @@ const Session = (() => {
     }
     if (showFn){ try{ showFn(); }catch(e){ console.error('show failed', e); } }
     later(() => { if (!locked) onCorrect({ quiet: true, delay: 1400 }); }, 1000);
+  }
+
+  function startIntro(){
+    if (demo === 'show'){
+      demoRunning = true; demoWalked = new Set(); demoWaits = 0;
+      node.classList.add('walking');
+      showFeedback('hint', 'はじめて だね。やりかたを みせるね');
+      const line = '初めてだね。見ててね。' + lastSpeech;
+      Sound.say(line, { delay: 350 });
+      later(demoStep, Math.min(6000, 900 + line.length * 150));
+      return;
+    }
+    later(() => {                        // after togetherHint has had its turn
+      if (locked || hintShown || demo !== 'together') return;
+      showFeedback('hint', 'こんどは いっしょに やって みよう');
+      Sound.say('今度は、一緒にやってみよう。' + lastSpeech, { delay: 200 });
+    }, 60);
+  }
+
+  /* Walk whatever the question has to walk, phase by phase (count, then ask; the
+     story, then the sum), and answer once there is an answer to give. A question
+     with nothing to show hands itself back rather than holding the child up. */
+  function demoStep(){
+    if (!demoRunning || locked) return;
+    node.classList.add('walking');
+    if (coach && coach.walk && !demoWalked.has(coach)){
+      demoWalked.add(coach);
+      if (runWalk(() => { if (demoRunning){ node.classList.add('walking'); later(demoStep, 350); } }, 150)) return;
+    }
+    if ((answerBtn && answerBtn.isConnected && !answerBtn.disabled) || showFn){
+      pressAnswer();
+      later(demoStep, 1700);             // a question with another blank comes round again
+      return;
+    }
+    if (++demoWaits > 14){
+      demoRunning = false;
+      endWalk();
+      showFeedback('hint', 'こんどは じぶんで やって みよう');
+      Sound.say('今度は、自分でやってみよう。', { delay: 150 });
+      return;
+    }
+    later(demoStep, 500);
+  }
+
+  function togetherHint(){
+    if (locked || hintShown || touched || demo !== 'together' || !coach || !coach.tool) return;
+    hint('今度は、一緒にやってみよう。' + lastSpeech);
+  }
+
+  function askForHelp(){
+    if (locked || taught || demoRunning || node.classList.contains('walking')) return;
+    if (!coach || (!coach.tool && !coach.walk)){ if (lastSpeech) Sound.say(lastSpeech, { delay: 40 }); return; }
+    helped = true;
+    if (!hintShown && coach.tool){ hint(); return; }
+    if (!walked && coach.walk){
+      showFeedback('hint', 'やりかたを みせるね');
+      Sound.say('やり方を見せるね。よく見ててね。', { delay: 200 });
+      runWalk(null, 1300);
+      return;
+    }
+    Sound.say(hintSpeech || lastSpeech, { delay: 40 });
+  }
+
+  function teach(){
+    if (locked || taught) return;
+    taught = true; taughtQ = true;
+    // stop the child racking up misses on a board that is already being answered
+    $$('.choice', choicesEl).forEach(b => { if (b !== answerBtn) b.disabled = true; });
+    const tb = $('.teachbtn', choicesEl);
+    if (tb) tb.remove();
+    const press = pressAnswer;
+    /* 「こたえを みる」 used to say the answer and press it: the child saw *that* it
+       was 3, never *why*. If the hand has not been through the method yet, it goes
+       through it first, and the answer lands at the end of it. */
+    if (!walked){
+      showFeedback('hint', 'いっしょに みて みよう');
+      Sound.say('一緒に見てみよう。', { delay: 150 });
+      if (runWalk(press, 1200)) return;
+    }
+    endWalk();
+    press();
   }
 
   function onWrong(target, given){
@@ -829,26 +1077,19 @@ const Session = (() => {
       later(() => target.classList.remove('wrong'), 460);
     }
 
-    if (wrongThisQ >= 2) runExtras();
-
-    if (wrongThisQ === hintAfter && !hintShown){
-      hintShown = true;
-      showFeedback('hint', 'ヒントを だすね');
-      Sound.say('ヒントを出すね。', { delay: 260 });
-      if (hintFn){ try{ hintFn(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
-      /* 「ヒントを だすね」 has to change the board. On three choices the one dimmed
-         at random was often one the child had already tried, which changed nothing;
-         the answers already ruled out go grey first. */
-      hintBtns.forEach(b => { if (b.classList.contains('tried')) b.classList.add('dim'); });
-      if (wrongThisQ >= 2) dimOne();
-      return;
-    }
+    if (wrongThisQ === hintAfter && !hintShown){ hint(); return; }
     if (wrongThisQ >= hintAfter + TEACH_AFTER){ teach(); return; }
     if (wrongThisQ === hintAfter + STRONG_AFTER){ strongHint(); return; }
     if (wrongThisQ > hintAfter){
-      // between the rungs: still say something new, and keep narrowing
-      dimOne();
-      showFeedback('hint', 'まだ ちがうね。よく みて みよう');
+      /* between the rungs: still say something new. With a tool on the board the
+         something is「use it」, said again; without one, one more choice goes grey. */
+      if (hasTool()){
+        showFeedback('hint', 'まだ ちがうね。ヒントを つかって みよう');
+        Sound.say('まだ違うね。' + (hintSpeech || 'よく見てみよう。'), { delay: 260 });
+      } else {
+        dimOne();
+        showFeedback('hint', 'まだ ちがうね。よく みて みよう');
+      }
       if (wrongThisQ > hintAfter + STRONG_AFTER) offerTeach();
       return;
     }
@@ -865,17 +1106,26 @@ const Session = (() => {
     disarmQuit();
     markResponse();
     clearFeedback();
-    const clean = wrongThisQ === 0;
-    sessionOutcomes.push({
+    const scaffold = plan[idx].intro || null;
+    const clean = wrongThisQ === 0 && !helped && !scaffold;
+    if (!scaffold) sessionOutcomes.push({
       gameId: plan[idx].game.id, levelIndex: plan[idx].levelIndex, clean
     });
-    if (clean) firstTryRight++;
+    // a check question in a level session belongs to the other level, not this one's stars
+    const graded = !scaffold && !(mode === 'level' && plan[idx].check);
+    if (clean && graded) firstTryRight++;
+    if (plan[idx].check){
+      const t = checkTally[plan[idx].check] || (checkTally[plan[idx].check] = { n: 0, right: 0 });
+      t.n++;
+      if (clean) t.right++;
+    }
     const g = plan[idx].game;
     const timed = g.fluent && clean ? respondedMs : null;
-    if (timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
+    if (graded && timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
     if (slipAt && wrongThisQ === 1 && performance.now() - slipAt < PAD_SLIP_MS
         && (missType === 'up' || missType === 'down')) missType = null;
-    if (mode !== 'diagnostic'){
+    if (scaffold === 'together' && mode === 'level') Store.markIntroduced(g.id, plan[idx].levelIndex);
+    if (mode !== 'diagnostic' && !scaffold){
       Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
       if (curItem){
         /* 'taught' outranks the reading of the first mistake: what matters about
@@ -890,8 +1140,8 @@ const Session = (() => {
     Sound.sfx.correct();
     setMood('happy');
     const pip = $$('.pip', pipsEl)[idx];
-    if (pip){ pip.classList.remove('now'); pip.classList.add(wrongThisQ === 0 ? 'done' : 'miss'); }
-    if (!o.quiet){
+    if (pip){ pip.classList.remove('now'); pip.classList.add(scaffold ? 'introdone' : clean ? 'done' : 'miss'); }
+    if (!o.quiet && scaffold !== 'show'){
       UI.bigMark('◯');
       const praise = wrongThisQ === 0
         ? pick(['やったね！', '正解！', 'すごい！', '上手だね！', 'ばっちり！', 'その調子！'])
@@ -916,7 +1166,8 @@ const Session = (() => {
 
   function finish(){
     killTimers();
-    const total = plan.length;
+    // the lesson questions are not graded, and neither are another level's checks
+    const total = plan.filter(p => !p.intro && !(mode === 'level' && p.check)).length;
     /* Stars used to be `mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1` — one star was
        guaranteed for finishing, so the unlock gate really only asked whether the
        child had sat through the level. Grade the questions answered right first
@@ -940,12 +1191,28 @@ const Session = (() => {
        gate before the sticker is handed out, so「もう開いていた」and「いま開いた」
        stay distinguishable. */
     const wasOpen = Progress.g1Open();
+    const confirmed = [];
+    Object.keys(checkTally).forEach(k => {
+      const t = checkTally[k];
+      if (t.n < CHECK_N) return;
+      if (t.right >= CHECK_PASS){ if (Store.confirmSticker(k)) confirmed.push(k); }
+      else Store.failCheck(k);
+    });
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;
       Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
       if (swift) Store.recordSwift(curGame.id, curLevelIdx);
-      // a sticker means "cleared", so it waits for a pass
-      if (stars >= 1 && Store.addSticker(key)) newStickers.push({ emoji: stickerFor(key), gold: false });
+      /* A sticker means "cleared", so it waits for a pass — and below ★★★ it waits
+         for another day too. Eight right first time is not something guessing
+         reaches, so ★★★ is confirmed on the spot; so is a pass on a later day. */
+      if (stars >= 1){
+        if (!Store.hasSticker(key)){
+          if (stars === 3) Store.addSticker(key); else Store.addPending(key);
+          newStickers.push({ emoji: stickerFor(key), gold: false, pending: stars < 3 });
+        } else if (Store.isPending(key) && (stars === 3 || Store.pendingFrom(key) < Store.dayNumber())){
+          if (Store.confirmSticker(key)) confirmed.push(key);
+        }
+      }
       if (stars === 3 && Store.addSticker(key + ':g')){
         newStickers.push({ emoji: stickerFor(key + ':g'), gold: true });
       }
@@ -959,6 +1226,10 @@ const Session = (() => {
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
       if (Store.addSticker(key)) newStickers.push({ emoji: stickerFor(key), gold: stars === 3 });
     }
+    /* The two lesson questions and another level's three checks are not graded, but
+       they were answered: leaving them out of today's count let a first-time level with
+       a check run to 13 questions while「きょうは ここまで」still counted 8. */
+    if (mode !== 'diagnostic') Store.countToday(plan.length - total);
     const justOpenedG1 = !wasOpen && Progress.g1Open();
     if (justOpenedG1){
       Sound.sfx.unlockSfx();
@@ -969,7 +1240,8 @@ const Session = (() => {
     const primaryGameId = mode === 'level' && curGame ? curGame.id
       : Object.keys(gameCounts).sort((a, b) => gameCounts[b] - gameCounts[a])[0] || null;
     Result.show({ stars, right: firstTryRight, total, mode, game: curGame, levelIndex: curLevelIdx,
-                  stickers: newStickers, shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
+                  stickers: newStickers, confirmed: confirmed.map(k => ({ key: k, emoji: stickerFor(k) })),
+                  shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
                   focusKeys: focusKeys.slice(), swift, unlockedG1: justOpenedG1,
                   recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
                   lastGameId: primaryGameId });
@@ -997,7 +1269,13 @@ const Session = (() => {
       get taught(){ return taught; },
       get taughtQ(){ return taughtQ; },
       get wrongThisQ(){ return wrongThisQ; },
-      get planItems(){ return plan.map(p => p.want || null); }
+      get planItems(){ return plan.map(p => p.want || null); },
+      /** the first-meeting questions are on by default; most of the suite tests the rest */
+      intro(on){ introOn = !!on; },
+      get introStep(){ return plan[idx] ? plan[idx].intro || null : null; },
+      get planIntro(){ return plan.map(p => p.intro || null); },
+      get planChecks(){ return plan.map(p => p.check || null); },
+      get helped(){ return helped; }
     }
   };
 })();

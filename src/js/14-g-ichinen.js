@@ -76,13 +76,23 @@ function collectSame(api){
     api.setPrompt(`あつめた <b>${target.lbl}</b> は ぜんぶで いくつ？`,
                   `集めた${target.lbl}は、全部でいくつ？`);
     api.buildChoices(shuffle([n].concat(distractors(n, 2, 1, n + 3))), n);
+    const counted = objs.filter(o => o.classList.contains('counted'))
+      .sort((p, q) => Number(($('.tag', p) || {}).textContent) - Number(($('.tag', q) || {}).textContent));
+    api.coach({
+      text: 'あつめた かずを もういちど みよう',
+      say: '集めた数を、もう一度見よう。',
+      tool(){ Coach.pulse(counted); },
+      walk(){ return counted.map((o, i) => ({ at: o, say: numKana(i + 1), ms: 620 })); }
+    });
   }
 
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', { text: target.lbl + 'は ' + target.items.slice(0, 4).join(' ') + ' の なかま' }));
-    const left = objs.find(o => o.dataset.hit === '1' && !o.classList.contains('counted'));
-    if (left) left.classList.add('glow');
+  const remaining = () => objs.filter(o => o.dataset.hit === '1' && !o.classList.contains('counted'));
+  api.coach({
+    text: target.lbl + 'は ' + target.items.slice(0, 4).join(' ') + ' の なかま',
+    say: `${target.lbl}の仲間を、探そう。`,
+    tool(){ const left = remaining()[0]; if (left) left.classList.add('glow'); },
+    // the hand gathers them: showing the rule is putting it to use
+    walk(){ return remaining().map(o => ({ at: o, act(){ o.click(); }, ms: 800 })); }
   });
 }
 
@@ -90,7 +100,7 @@ function collectSame(api){
     graph 1年生 build in「せいり」: once each group is a row, どれが おおい is read
     off the length instead of counted twice. */
 function groupChart(api){
-  const keys = sample(Object.keys(CATS), ri(2, 3));
+  const keys = sample(Object.keys(CATS), api.check ? 3 : ri(2, 3));
   const counts = [];
   keys.forEach(() => {
     let v = ri(2, 7), guard = 0;
@@ -133,6 +143,7 @@ function groupChart(api){
       });
     }
     board.append(row);
+    r.el = row;
   });
   api.field.append(board);
 
@@ -147,11 +158,28 @@ function groupChart(api){
     api.setPrompt(most ? 'いちばん <b>おおい</b> なかまは どれ？' : 'いちばん <b>すくない</b> なかまは どれ？',
                   most ? '一番多い仲間は、どれ？' : '一番少ない仲間は、どれ？');
   }
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    $$('.mrow', board).forEach(r => r.append(el('span.ordno', { text: r.dataset.n })));
-    api.field.append(el('div.hintline', { text: 'はしを そろえて ながさを くらべよう' }));
-  });
+  /* Putting each row's count at its end answered both kinds of question. Counting
+     one row is the child's to do; comparing is done by the rows' ends. */
+  if (asCount){
+    const cnt = Coach.once(() => Coach.countable(api, $$('.item', target.el)));
+    api.coach({
+      text: `${target.cat.lbl}の れつを かぞえよう`,
+      say: `${target.cat.lbl}の列を、数えよう。`,
+      tool(){ cnt(); },
+      walk(){ return cnt().steps(); }
+    });
+  } else {
+    const ends = () => rows.map(r => $$('.item', r.el).pop());
+    api.coach({
+      text: 'はしを そろえて ながさを くらべよう',
+      say: '端をそろえて、長さを比べよう。',
+      tool(){ Coach.pulse(ends()); },
+      walk(){
+        return rows.map(r => ({ at: $$('.item', r.el).pop(), act(){ if (!$('.ordno', r.el)) r.el.append(el('span.ordno', { text: String(r.n) })); },
+                                say: koKana(r.n), ms: 1300 }));
+      }
+    });
+  }
 }
 
 /** Five things, four of one kind. Naming the one that does not belong means
@@ -164,9 +192,15 @@ function oddOneOut(api){
   api.setPrompt('なかまはずれは どれ？', '仲間はずれは、どれ？');
   api.field.append(el('div.hintline', { text: 'ほかの 4つと ちがう なかまを さがそう' }));
   api.buildChoices(shuffle(four.concat([odd])), odd);
-  api.onHint(() => {
-    if ($('.hint2', api.field)) return;
-    api.field.append(el('div.hintline.hint2', { text: '4つは ' + CATS[kA].lbl + ' の なかまだよ' }));
+  const btnOf = e => $$('.choice', api.choices).find(b => b.textContent === e);
+  api.coach({
+    text: '4つは ' + CATS[kA].lbl + ' の なかまだよ',
+    say: `四つは、${CATS[kA].lbl}の仲間だよ。`,
+    tool(){ Coach.pulse($('.hintline', api.field)); },
+    walk(){
+      return four.map(e => ({ at: btnOf(e), say: CATS[kA].lbl, ms: 800 }))
+        .concat([{ at: btnOf(odd), say: `これは、${CATS[kB].lbl}。`, ms: 1900 }]);
+    }
   });
 }
 
@@ -231,15 +265,16 @@ function ownGroup(api){
     }
   }
 
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', {
-      text: chosen ? CATS[chosen].lbl + 'は ' + CATS[chosen].items.slice(0, 4).join(' ')
-                   : 'どれでも いいよ。ひとつ えらんでね' }));
-    if (chosen){
-      const left = objs.find(o => o.dataset.cat === chosen && !o.classList.contains('counted'));
-      if (left) left.classList.add('glow');
-    }
+  const left = () => objs.filter(o => o.dataset.cat === chosen && !o.classList.contains('counted'));
+  api.coach({
+    text: () => chosen ? CATS[chosen].lbl + 'は ' + CATS[chosen].items.slice(0, 4).join(' ') : 'どれでも いいよ。ひとつ えらんでね',
+    say: () => chosen ? `${CATS[chosen].lbl}の仲間を、探そう。` : 'どれでもいいよ。一つ選んでね。',
+    tool(){ if (chosen){ const o = left()[0]; if (o) o.classList.add('glow'); } },
+    walk(){ return chosen ? left().map(o => ({ at: o, act(){ o.click(); }, ms: 800 })) : []; }
+  });
+  api.onShow(() => {
+    if (!chosen){ const b = $('.choice', api.choices); if (b) b.click(); }
+    left().forEach(o => o.click());
   });
 }
 
@@ -250,7 +285,7 @@ Games.add({
     { t: 'なかまを あつめる', d: 'あつめてから かぞえる', make: collectSame },
     { t: 'どの なかまが おおい', d: 'ならべて くらべる', make: groupChart },
     { t: 'じぶんで きめる', d: 'なかまはずれ・じぶんで あつめる',
-      make: api => chance(.5) ? oddOneOut(api) : ownGroup(api) }
+      make: api => api.check || chance(.5) ? oddOneOut(api) : ownGroup(api) }
   ]
 });
 
@@ -330,11 +365,21 @@ function pairUp(api, na, nb, onSettled, opts){
 
   api.setPrompt(`${t1.e} と ${t2.e} を <b>1つずつ</b> ペアに しよう`,
                 `${t1.n}と${t2.n}を、一つずつペアにしよう。`);
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', { text: 'うえを 1つ タップ、つぎに したを 1つ タップ' }));
-    const a = itemsOf(rowA).find(x => !x.classList.contains('paired'));
-    if (a) a.classList.add('marked');
+  const free = row => itemsOf(row).find(x => !x.classList.contains('paired'));
+  api.coach({
+    text: 'うえを 1つ タップ、つぎに したを 1つ タップ',
+    say: '上を一つタップ、次に、下を一つタップ。',
+    tool(){ const a = free(rowA); if (a && !marked){ marked = a; a.classList.add('marked'); } },
+    // pairing is never wrong, so this only ever runs when asked to show: every pair, in order
+    walk(){
+      const as = itemsOf(rowA).filter(x => !x.classList.contains('paired'));
+      const bs = itemsOf(rowB).filter(x => !x.classList.contains('paired'));
+      const steps = [{ act(){ if (marked){ marked.classList.remove('marked'); marked = null; } }, ms: 200 }];
+      for (let i = 0; i < Math.min(as.length, bs.length); i++){
+        steps.push({ at: as[i], act(){ tap(as[i]); }, ms: 520 }, { at: bs[i], act(){ tap(bs[i]); }, ms: 760 });
+      }
+      return steps;
+    }
   });
   return made;
 }
@@ -359,6 +404,16 @@ function pairWhichMore(api){
     api.setPrompt('ペアに ならなかったのは どっち？　どちらが <b>おおい</b>？',
                   'ペアにならなかったのは、どっち？　どちらが多い？');
     api.buildChoices(shuffle([made.a.e, made.b.e, 'おなじ']), ans);
+    api.coach({
+      text: 'ペアに なれなかった のは どっちの れつ？',
+      say: 'ペアになれなかったのは、どっちの列？',
+      tool(){ Coach.pulse($$('.pairitem.leftover', made.board)); },
+      walk(){
+        const left = $$('.pairitem.leftover', made.board);
+        return left.length ? left.map((x, i) => ({ at: x, say: i ? '' : '余ったのは、こっち。', ms: i ? 700 : 1600 }))
+                           : [{ at: made.board, say: 'どれも、ペアになったね。', ms: 1900 }];
+      }
+    });
   });
 }
 
@@ -382,12 +437,16 @@ function pairHowManyMore(api){
       fillBlank(box, ans);
       // the leftovers are the answer: number them so the sentence and the board agree
       $$('.pairitem.leftover', made.board).forEach((x, i) => {
-        if (!$('.tag', x)) x.append(el('span.tag.left', { text: String(i + 1) }));
+        if (!$('.tag, .ctag', x)) x.append(el('span.tag.left', { text: String(i + 1) }));
       });
     }, { delay: 1500 }));
-    api.onHint(() => {
-      const left = $$('.pairitem.leftover', made.board);
-      left.forEach((x, i) => { if (!$('.tag', x)) x.append(el('span.tag.left', { text: String(i + 1) })); });
+    // the leftovers used to arrive numbered; now they are the child's to count
+    const cnt = Coach.once(() => Coach.countable(api, $$('.pairitem.leftover', made.board)));
+    api.coach({
+      text: 'あまった ぶんを かぞえよう',
+      say: '余った分を、数えよう。',
+      tool(){ cnt(); },
+      walk(){ return cnt().steps(); }
     });
   });
 }
@@ -433,8 +492,19 @@ function pairMakeSame(api){
         });
         short.append(slot);
       }
-      api.onHint(() => {
-        $$('.pairitem.leftover', made.board).forEach(x => x.classList.add('marked'));
+      api.coach({
+        text: 'あまって いる ぶんだけ たそう',
+        say: '余っている分だけ、足そう。',
+        tool(){ $$('.pairitem.leftover', made.board).forEach(x => x.classList.add('marked')); },
+        walk(){
+          const left = $$('.pairitem.leftover', made.board);
+          const slot = $$('.pairslot', short).find(s => s.dataset.filled !== '1');
+          return left.map((x, i) => ({ at: x, say: numKana(i + 1), ms: 650 }))
+            .concat(slot ? [{ at: slot, say: 'その分、ここに足そう。', ms: 1900 }] : []);
+        }
+      });
+      api.onShow(() => {
+        $$('.pairslot', short).filter(s => s.dataset.filled !== '1').slice(0, need - added).forEach(s => s.click());
       });
     } else {
       api.setPrompt(`おなじ かずに するには ${shortThing.e} が あと いくつ？`,
@@ -449,8 +519,12 @@ function pairMakeSame(api){
           }
         }
       });
-      api.onHint(() => {
-        $$('.pairitem.leftover', made.board).forEach(x => x.classList.add('marked'));
+      const cnt = Coach.once(() => Coach.countable(api, $$('.pairitem.leftover', made.board)));
+      api.coach({
+        text: 'あまって いる ぶんが たりない かずだよ',
+        say: '余っている分が、足りない数だよ。数えよう。',
+        tool(){ cnt(); },
+        walk(){ return cnt().steps(); }
       });
     }
   }, { extra: byTapping ? 2 : 0 });
@@ -494,14 +568,18 @@ function tenAndSome(api){
   api.item('teen:' + total, '10と ' + ones + ' で ' + total);
   api.setPrompt(`<b>10</b> と <b>${ones}</b> で いくつ？`, `10と${numKana(ones)}で、いくつ？`);
   const box = el('span.box', { text: '?' });
-  api.field.append(teenFrames(total),
+  const frames = teenFrames(total);
+  api.field.append(frames,
     el('div.eq', null, '10', el('span.op', { text: 'と' }), String(ones),
       el('span.op', { text: 'で' }), box));
   api.buildPad(total, revealed(() => fillBlank(box, total), { lo: 10, hi: 20 }));
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', { text: 'ひだりは かぞえなくて いいよ。ぴったり 10だから、じゅう…' }));
-    Sound.say('左は数えなくていいよ。ぴったり10だから、じゅう…', { delay: 200 });
+  const [ten, rest] = $$('.tenframe', frames);
+  const cnt = Coach.once(() => Coach.countable(api, $$('.dot', rest), { from: 10 }));
+  api.coach({
+    text: 'ひだりは ぴったり 10。じゅうの つぎから かぞえよう',
+    say: '左は数えなくていいよ。ぴったり10。じゅうの次から、数えよう。',
+    tool(){ Coach.pulse(ten); cnt(); },
+    walk(){ return [{ at: ten, say: 'じゅう', ms: 1000 }].concat(cnt().steps()); }
   });
 }
 
@@ -512,13 +590,18 @@ function teenSplit(api){
   api.item('teensplit:' + total, total + ' は 10と ' + ones);
   api.setPrompt(`<b>${total}</b> は 10と いくつ？`, `${numKana(total)}は、10といくつ？`);
   const box = el('span.box', { text: '?' });
-  api.field.append(teenFrames(total, { mute: true }),
+  const frames = teenFrames(total, { mute: true });
+  api.field.append(frames,
     el('div.eq', null, String(total), el('span.op', { text: 'は' }), '10',
       el('span.op', { text: 'と' }), box));
   api.buildPad(ones, revealed(() => fillBlank(box, ones), { lo: 0, hi: 10 }));
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', { text: 'みぎの わくの あかい ○を かぞえよう' }));
+  const [ten, rest] = $$('.tenframe', frames);
+  const cnt = Coach.once(() => Coach.countable(api, $$('.dot', rest)));
+  api.coach({
+    text: 'ひだりは 10。みぎの あかい まるを かぞえよう',
+    say: '左は、10。右の赤い丸を、数えよう。',
+    tool(){ Coach.pulse(ten); cnt(); },
+    walk(){ return [{ at: ten, say: 'じゅう', ms: 1000 }].concat(cnt().steps()); }
   });
 }
 
@@ -534,16 +617,31 @@ function teenCalc(api){
   api.setPrompt('しきを みて こたえよう',
                 `${numKana(a)}、${plus ? 'たす' : 'ひく'}、${numKana(b)}は？`);
   const box = el('span.box', { text: '?' });
+  const bEl = el('span', { text: String(b) });
   api.field.append(el('div.eq', null,
-    String(a), el('span.op', { text: plus ? '＋' : '−' }), String(b),
+    String(a), el('span.op', { text: plus ? '＋' : '−' }), bEl,
     el('span.op', { text: '＝' }), box));
   api.buildPad(ans, revealed(() => fillBlank(box, ans), { lo: 10, hi: 20 }));
-  api.onHint(() => {
-    if ($('.frameset', api.field)) return;
-    api.field.prepend(teenFrames(a, { mute: true }));
-    api.field.append(el('div.hintline', {
-      text: plus ? '10は そのまま。ばらの ' + ones + ' に ' + b + ' を たそう'
-                 : '10は そのまま。ばらの ' + ones + ' から ' + b + ' を ひこう' }));
+  const frames = Coach.once(() => { const s = teenFrames(a, { mute: true }); api.field.prepend(s); return s; });
+  api.coach({
+    text: plus ? '10は そのまま。ばらの ' + ones + ' に ' + b + ' を たそう'
+               : '10は そのまま。ばらの ' + ones + ' から ' + b + ' を ひこう',
+    say: plus ? `10はそのまま。ばらの${numKana(ones)}に、${numKana(b)}を足そう。`
+              : `10はそのまま。ばらの${numKana(ones)}から、${numKana(b)}を引こう。`,
+    tool(){ frames(); },
+    walk(){
+      const [ten, rest] = $$('.tenframe', frames());
+      const dots = $$('.dot', rest);
+      const steps = [{ at: ten, say: 'じゅう', ms: 1000 }];
+      if (plus){
+        dots.forEach((d, i) => steps.push({ at: d, act(){ Coach.tag(d, 11 + i); }, say: numKana(11 + i), ms: 620 }));
+        for (let i = 1; i <= b; i++) steps.push({ at: bEl, say: numKana(a + i), ms: 680 });
+      } else {
+        dots.slice(ones - b).forEach(d => steps.push({ at: d, act(){ d.classList.add('coachgone'); }, ms: 450 }));
+        dots.slice(0, ones - b).forEach((d, i) => steps.push({ at: d, act(){ Coach.tag(d, 11 + i); }, say: numKana(11 + i), ms: 620 }));
+      }
+      return steps;
+    }
   });
 }
 
@@ -586,10 +684,34 @@ function pickEquation(api){
     const other = pool.length ? pick(pool) : b + 1;
     const opts = [ans, (plus ? a + '−' + b : a + '＋' + b), a + (plus ? '＋' : '−') + other];
     api.buildChoices(shuffle(opts), ans);
-    api.onHint(() => {
-      if ($('.hintline', api.field)) return;
-      api.field.append(el('div.hintline', {
-        text: plus ? 'ふえた ときは ＋（たす）だよ' : 'へった ときは −（ひく）だよ' }));
+    /* The story again, instead of a rule about it: seeing them arrive (or leave) a
+       second time is what「ふえた」means. */
+    const replay = () => {
+      const g2 = $$('.actor.g2', api.field);
+      g2.forEach(n => {
+        n.style.transition = 'none';
+        if (plus) n.style.transform = 'translate(160%,-50%)';
+        else { n.classList.remove('leaving'); n.style.transform = 'translate(-50%,-50%)'; }
+      });
+      void api.field.offsetWidth;
+      api.later(() => {
+        Sound.sfx.swoosh();
+        g2.forEach(n => {
+          n.style.transition = '';
+          if (plus) n.style.transform = 'translate(-50%,-50%)';
+          else { n.classList.add('leaving'); n.style.transform = 'translate(160%,-160%)'; }
+        });
+      }, 700);
+    };
+    api.coach({
+      text: plus ? 'もういちど みてね。ふえた ときは ＋（たす）' : 'もういちど みてね。へった ときは −（ひく）',
+      say: plus ? 'もう一度見てね。増えた時は、たす、だよ。' : 'もう一度見てね。減った時は、ひく、だよ。',
+      tool: replay,
+      walk(){
+        const btn = $$('.choice', api.choices).find(x => x.textContent === ans);
+        return [{ act: replay, say: plus ? '増えたね。' : '減ったね。', ms: 2200 },
+                { at: btn, say: plus ? 'だから、たす、の式。' : 'だから、ひく、の式。', ms: 1900 }];
+      }
     });
   });
 }
@@ -640,10 +762,25 @@ function plusOrMinus(api){
       return false;                    // the operation was only half the question
     }
   });
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', {
-      text: plus ? 'ふえた・もらった → ＋' : 'へった・たべた・あげた → −' }));
+  // the word in the story that decides it, marked where the child is reading
+  const markVerb = () => {
+    const tx = $('.tx', card);
+    if (!tx || $('mark', tx)) return;
+    const s = tx.textContent;
+    const m = /(もらいました|ふえました|たべました|あげました)/.exec(s);
+    if (!m) return;
+    clear(tx);
+    tx.append(s.slice(0, m.index), el('mark', { text: m[1] }), s.slice(m.index + m[1].length));
+  };
+  api.coach({
+    text: plus ? 'ふえた・もらった → ＋' : 'へった・たべた・あげた → −',
+    say: plus ? '増えた、もらった、は、たす。' : '食べた、あげた、は、ひく。',
+    tool: markVerb,
+    walk(){
+      markVerb();
+      return [{ at: () => $('mark', card), say: plus ? '増えたお話。' : '減ったお話。', ms: 1700 },
+              { at: () => $('.opbox', eq), say: plus ? 'だから、たす。' : 'だから、ひく。', ms: 1700 }];
+    }
   });
 }
 
@@ -660,8 +797,8 @@ function matchStory(api){
     a + (plus ? ' ＋ ' : ' − ') + b + ' に あう おはなし');
   api.setPrompt(`<b>${a} ${plus ? '＋' : '−'} ${b}</b> の おはなしは どれ？`,
                 `${numKana(a)}、${plus ? 'たす' : 'ひく'}、${numKana(b)}のお話は、どれ？`);
-  api.field.append(el('div.eq', null,
-    String(a), el('span.op', { text: plus ? '＋' : '−' }), String(b)));
+  const opEl = el('span.op', { text: plus ? '＋' : '−' });
+  api.field.append(el('div.eq', null, String(a), opEl, String(b)));
   const line = (n, verb) => `${thing.n}が ${a}こ。\n${n}こ ${verb}`;
   const right   = plus ? line(b, 'もらった') : line(b, 'たべた');
   const wrongOp = plus ? line(b, 'たべた')   : line(b, 'もらった');
@@ -673,11 +810,16 @@ function matchStory(api){
     // to reassemble before they can answer
     render: v => el('span', null, v.split('\n').map((t, i) => i ? [el('br'), t] : t))
   });
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', {
-      text: plus ? '＋ は ふえる おはなし。かずも おなじか みてね'
-                 : '− は へる おはなし。かずも おなじか みてね' }));
+  api.coach({
+    text: plus ? '＋ は ふえる おはなし。かずも おなじか みてね' : '− は へる おはなし。かずも おなじか みてね',
+    say: plus ? 'たす、は、増えるお話。数も同じか、見てね。' : 'ひく、は、減るお話。数も同じか、見てね。',
+    tool(){ Coach.pulse(opEl); },
+    walk(){
+      const flat = s => s.replace(/\s/g, '');
+      const btn = $$('.choice', api.choices).find(x => flat(x.textContent) === flat(right));
+      return [{ at: opEl, say: plus ? 'たす、だから、増える。' : 'ひく、だから、減る。', ms: 1900 },
+              { at: btn, say: `${numKana(b)}こ、${plus ? 'もらった' : 'たべた'}お話。`, ms: 2000 }];
+    }
   });
 }
 

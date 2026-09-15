@@ -57,20 +57,54 @@ function platesCompare(api, opts){
     const p = $$('.plate', wrap).find(x => Number(x.dataset.count) === answer);
     if (p) p.click();
   });
-  api.onHint(() => {
-    $$('.plate', wrap).forEach(p => {
-      if (!$('.hintline', p)) p.append(el('div.hintline', { text: p.dataset.count + 'こ' }));
-    });
+  /* The hint used to write「5こ」on each plate, which answered the question for
+     the child. Now it takes the trick away instead: every item the same size, five
+     to a row, starting at the same edge — the longer arrangement is the bigger
+     number, and the child still has to see which that is. */
+  const lineUp = () => $$('.plate', wrap).forEach(p => {
+    const g = $('.row', p);
+    g.classList.add('lined');
+    $$('.item', g).forEach(it => { it.style.fontSize = 'calc(var(--u)*2.6)'; });
+  });
+  api.coach({
+    text: 'おなじ おおきさで 5こずつ ならべたよ',
+    say: '同じ大きさで、5個ずつ並べたよ。' + (want === 'most' ? '多いのは、どれ？' : '少ないのは、どれ？'),
+    tool: lineUp,
+    walk(){
+      lineUp();
+      return $$('.plate', wrap).map(p => {
+        const c = Number(p.dataset.count), items = $$('.item', p);
+        return { at: p, act(){ Coach.tag(items[items.length - 1], c); }, say: koKana(c), ms: 1300 };
+      });
+    }
   });
 }
 
+/* Three counts at least `gap` apart. Two plates are a coin toss, which is no way to
+   confirm a clear on another day (see `api.check`). */
+function spread3(lo, hi, gap){
+  for (let t = 0; t < 300; t++){
+    const xs = [ri(lo, hi), ri(lo, hi), ri(lo, hi)];
+    if (Math.abs(xs[0] - xs[1]) >= gap && Math.abs(xs[0] - xs[2]) >= gap && Math.abs(xs[1] - xs[2]) >= gap) return xs;
+  }
+  return shuffle([lo, lo + gap, lo + gap * 2]);
+}
+
 function compareEasy(api){
+  if (api.check){ platesCompare(api, { counts: spread3(1, 9, 2), least: chance(.3) }); return; }
   let a = ri(1, 8), b = ri(1, 8);
   for (let g = 0; g < 200 && Math.abs(a - b) < 3; g++){ a = ri(1, 8); b = ri(1, 8); }
   if (Math.abs(a - b) < 3){ a = 2; b = 7; }
   platesCompare(api, { counts: [a, b], least: chance(.3) });
 }
 function compareClose(api){
+  if (api.check){
+    // three close counts, and the trap kept: the fewest drawn biggest, the most drawn smallest
+    const a = ri(4, 10), counts = shuffle([a, a + 1, a + 2]), sizes = [2.6, 2.6, 2.6];
+    if (chance(.6)){ sizes[counts.indexOf(a)] = 4.4; sizes[counts.indexOf(a + 2)] = 2.2; }
+    platesCompare(api, { counts, sizes, least: chance(.35) });
+    return;
+  }
   // same count-difference of 1-2, but the smaller group is drawn LARGER on purpose:
   // the child has to count instead of judging by how much space it fills.
   let a = ri(4, 11), b = a + pick([1, 2]) * (chance(.5) ? 1 : -1);
@@ -87,17 +121,46 @@ function compareThree(api){
   platesCompare(api, { counts: Array.from(set), least: chance(.45) });
 }
 function compareNumerals(api){
-  let a = ri(1, 20), b = ri(1, 20);
-  for (let g = 0; g < 200 && a === b; g++) b = ri(1, 20);
-  if (a === b) b = a === 20 ? 1 : a + 1;
+  // two numerals, or three for a check on another day
+  const nums = [ri(1, 20)];
+  for (let g = 0; g < 400 && nums.length < (api.check ? 3 : 2); g++){
+    const v = ri(1, 20);
+    if (nums.indexOf(v) < 0) nums.push(v);
+  }
+  const two = nums.length === 2;
   const most = chance(.6);
-  const ans = most ? Math.max(a, b) : Math.min(a, b);
-  api.item('numcmp:' + Math.min(a, b) + '_' + Math.max(a, b) + ':' + (most ? 'g' : 'l'),
-    'すうじ ' + a + ' と ' + b + ' の くらべ');
-  api.setPrompt(most ? 'かずが <b>おおきい</b> のは どっち？' : 'かずが <b>ちいさい</b> のは どっち？',
-                most ? '数が大きいのは、どっち？' : '数が小さいのは、どっち？');
+  const sorted = nums.slice().sort((x, y) => x - y);
+  const ans = most ? sorted[sorted.length - 1] : sorted[0];
+  api.item('numcmp:' + sorted.join('_') + ':' + (most ? 'g' : 'l'),
+    'すうじ ' + nums.join(' と ') + ' の くらべ');
+  api.setPrompt(two ? (most ? 'かずが <b>おおきい</b> のは どっち？' : 'かずが <b>ちいさい</b> のは どっち？')
+                    : (most ? 'いちばん <b>おおきい</b> かずは どれ？' : 'いちばん <b>ちいさい</b> かずは どれ？'),
+                two ? (most ? '数が大きいのは、どっち？' : '数が小さいのは、どっち？')
+                    : (most ? '一番大きい数は、どれ？' : '一番小さい数は、どれ？'));
   api.field.append(el('div.hintline', { text: 'すうじで くらべよう' }));
-  api.buildChoices(shuffle([a, b]), ans);
+  api.buildChoices(shuffle(nums), ans);
+  const hi2 = sorted[sorted.length - 1];
+  const line = Coach.once(() => {
+    const l = el('div.numline.cmpline', { style: { flexWrap: 'nowrap' } });
+    for (let v = 1; v <= Math.max(10, hi2); v++){
+      const c = el('div.nn', { text: String(v) });
+      if (nums.indexOf(v) >= 0) c.classList.add('near');
+      l.append(c);
+    }
+    api.field.append(l);
+    return l;
+  });
+  api.coach({
+    text: 'かずの ならびで あとに でて くる ほうが おおきい',
+    say: '数の並びで、後に出てくるほうが、大きいよ。',
+    tool(){ line(); },
+    walk(){
+      const cells = $$('.nn', line());
+      return sorted.map((v, i) => i === sorted.length - 1
+        ? { at: cells[v - 1], say: `${numKana(v)}が、一番後ろ。`, ms: 1900 }
+        : { at: cells[v - 1], say: numKana(v), ms: 1100 });
+    }
+  });
 }
 
 /** The quantity stays the same when the spacing changes. This asks about
@@ -117,11 +180,19 @@ function conserveNumber(api){
       api.buildChoices(['おなじ', 'かわった'], 'おなじ');
     }, 650);
   }, 650);
-  api.onHint(() => {
-    $$('.conserve-row span', api.field).forEach((x, i) => {
-      if (!$('.tag', x)) x.append(el('small.tag', { text: String(i + 1) }));
-    });
-    api.field.append(el('div.hintline', { text: 'ばしょが かわっても ' + n + 'こ のまま' }));
+  const things = Array.from(row.children);
+  api.coach({
+    text: 'ひろげる まえと あとで かぞえて みよう',
+    say: '広げる前と後で、数えてみよう。',
+    tool(){ things.forEach((x, i) => Coach.tag(x, i + 1)); },
+    walk(){
+      const steps = [{ act(){ row.classList.remove('spread'); $$('.ctag', row).forEach(t => t.remove()); }, ms: 900 }];
+      things.forEach((x, i) => steps.push({ at: x, act(){ Coach.tag(x, i + 1); }, say: numKana(i + 1), ms: 480 }));
+      steps.push({ act(){ row.classList.add('spread'); Sound.sfx.swoosh(); }, say: '広げても…', ms: 1300 });
+      things.forEach((x, i) => steps.push({ at: x, say: numKana(i + 1), ms: 480 }));
+      steps.push({ say: `どちらも、${koKana(n)}。`, ms: 1700 });
+      return steps;
+    }
   });
 }
 
@@ -131,7 +202,7 @@ Games.add({
   levels: [
     { t: 'ぱっと みて', d: 'はっきり ちがう かず', make: compareEasy },
     { t: 'ちかい かず', d: 'ならべかえても かずは おなじ',
-      make: api => chance(.35) ? conserveNumber(api) : compareClose(api) },
+      make: api => !api.check && chance(.35) ? conserveNumber(api) : compareClose(api) },
     { t: '3つ・すうじ', d: 'いちばん おおい／すくない', make: api => chance(.4) ? compareNumerals(api) : compareThree(api) }
   ]
 });
@@ -171,11 +242,19 @@ function ordinalRow(api, n, dir, target){
     : el('div.dirmark', null, arrowSVG('left'), label + 'から');
   api.field.append(el('div.row', { style: { flexWrap: 'nowrap', gap: 'calc(var(--u)*.6)', maxWidth: '100%' } },
     fromLeft ? marker : null, q, fromLeft ? null : marker));
-  api.onHint(() => {
-    $$('.qi', q).forEach((item, i) => {
-      const k = fromLeft ? i + 1 : n - i;
-      if (!$('.hintline', item)) item.prepend(el('div.hintline', { text: String(k), style: { fontSize: 'calc(var(--u)*1.1)' } }));
-    });
+  /* It used to number every animal from the end being counted from, which put the
+     asked-for number on the right animal. Now only the start is marked; the counting
+     is the child's, and the hand does it only when asked to show. */
+  const fromStart = () => fromLeft ? $$('.qi', q) : $$('.qi', q).reverse();
+  api.coach({
+    text: `${label}から かぞえるよ。はじめは この こ`,
+    say: `${label}から数えるよ。最初は、この子。`,
+    tool(){ const first = fromStart()[0]; Coach.tag(first, 1, 'alt'); Coach.pulse([first, marker]); },
+    walk(){
+      return fromStart().slice(0, target).map((it, i) => ({
+        at: it, act(){ Coach.tag(it, i + 1, 'alt'); },
+        say: i + 1 === target ? banmeKana(target) : numKana(i + 1), ms: i + 1 === target ? 1600 : 600 }));
+    }
   });
 }
 
@@ -224,10 +303,16 @@ function ordinalVsCount(api, n){
   });
   api.field.append(el('div.row', { style: { flexWrap: 'nowrap', gap: 'calc(var(--u)*.6)', maxWidth: '100%' } },
     el('div.dirmark', null, 'まえ', arrowSVG('right')), q));
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', {
-      text: countMode ? '「◯こ」は まえから その かずだけ ぜんぶ' : '「◯ばんめ」は そのひとり だけ' }));
+  api.coach({
+    text: countMode ? `「${k}こ」は まえから ${k}ひき ぜんぶ` : `「${k}ばんめ」は その 1ぴき だけ`,
+    say: countMode ? `${koKana(k)}は、前から${k}匹、全部だよ。` : `${banmeKana(k)}は、その一匹だけだよ。`,
+    tool(){ Coach.tag($$('.qi', q)[0], 1, 'alt'); Coach.pulse($('.dirmark', api.field)); },
+    walk(){
+      const its = $$('.qi', q);
+      return its.slice(0, k).map((it, i) => ({ at: it, act(){ Coach.tag(it, i + 1, 'alt'); }, say: numKana(i + 1), ms: 600 }))
+        .concat([{ at: its[k - 1], act(){ Coach.pulse(countMode ? its.slice(0, k) : its[k - 1]); },
+                   say: countMode ? `ここまで、全部で${koKana(k)}。` : `${banmeKana(k)}は、この子だけ。`, ms: 1900 }]);
+    }
   });
 }
 
@@ -266,13 +351,20 @@ function gridPosition(api, cols, rows){
     el('div.axis-row', null,
       el('div.axis-y', null, 'うえ', arrowSVG('right')),
       g)));
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    $$('.qi', g).forEach((item, i) => {
-      if (cells[i].c === tc - 1) item.classList.add('colhint');
-      if (cells[i].r === tr - 1) item.classList.add('rowhint');
-    });
-    api.field.append(el('div.hintline', { text: 'まず うえから かぞえて、つぎに ひだりから かぞえよう' }));
+  /* Lighting both the row and the column lit exactly one cell: the answer. The row
+     alone is the first half of the method, and the child does the second. */
+  const rowItems = () => items.filter((it, i) => cells[i].r === tr - 1);
+  api.coach({
+    text: `まず うえから ${tr}ばんめの よこの れつ`,
+    say: `まず、上から${banmeKana(tr)}の、横の列を見つけよう。`,
+    tool(){ rowItems().forEach(it => it.classList.add('rowhint')); Coach.pulse($('.axis-y', api.field)); },
+    walk(){
+      const firstCol = items.filter((it, i) => cells[i].c === 0);
+      const steps = firstCol.slice(0, tr).map((it, i) => ({ at: it, act(){ Coach.tag(it, i + 1, 'alt'); }, say: numKana(i + 1), ms: 600 }));
+      steps.push({ act(){ rowItems().forEach(it => it.classList.add('rowhint')); }, say: `上から${banmeKana(tr)}。次は、左から。`, ms: 1800 });
+      rowItems().slice(0, tc).forEach((it, i) => steps.push({ at: it, act(){ Coach.tag(it, i + 1); }, say: numKana(i + 1), ms: 600 }));
+      return steps;
+    }
   });
 }
 
@@ -345,11 +437,26 @@ function lengthCompare(api, aligned){
     if (r) r.click();
   });
   if (!aligned) api.field.append(el('div.hintline', { text: 'はじまる ところが ちがうよ。ながさ だけを みてね' }));
-  // sliding every bar back to a shared start line IS the lesson, so show it
-  api.onHint(() => {
+  // sliding every bar back to a shared start line IS the lesson, so show it — and
+  // put equal marks along the tracks, so an aligned set can be compared by more than eye
+  const align = () => {
     $$('.track .gap', wrap).forEach(g => { g.style.transition = 'width .6s ease'; g.style.width = '0%'; });
     wrap.classList.add('lined');
-    api.field.append(el('div.hintline', { text: 'はじまりを そろえて みたよ' }));
+    Coach.ticks(wrap);
+  };
+  api.coach({
+    text: aligned ? 'めもりを みて ながさを くらべよう' : 'はじまりを そろえたよ。はしを くらべよう',
+    say: aligned ? '目盛りを見て、長さを比べよう。' : '始まりをそろえたよ。端を、比べよう。',
+    tool: align,
+    walk(){
+      align();
+      const rows = $$('.mrow', wrap).sort((x, y) => longest ? x.dataset.len - y.dataset.len : y.dataset.len - x.dataset.len);
+      return rows.map((r, i) => {
+        const last = i === rows.length - 1;
+        return { at: () => $('.stickbar', r), act(){ if (last) Coach.pulse(r); },
+                 say: last ? (longest ? '一番長いのは、これ。' : '一番短いのは、これ。') : '', ms: last ? 1800 : 650 };
+      });
+    }
   });
 }
 
@@ -386,7 +493,7 @@ function capSpec(cols, rows){
 }
 
 function capacityCompare(api){
-  const n = chance(.5) ? 2 : 3;
+  const n = !api.check && chance(.5) ? 2 : 3;
   // far enough apart to be a fair question by eye as well as by counting
   const clearOf = (list, s) => list.every(o =>
     Math.abs(o.cells - s.cells) / Math.max(o.cells, s.cells) > 0.18);
@@ -438,7 +545,7 @@ function capacityCompare(api){
   });
   api.field.append(wrap, el('div.hintline', { text: 'せが たかい ＝ おおい とは かぎらないよ' }));
   // one unit, the same in every glass, dividing the water exactly
-  api.onHint(() => {
+  const unitGrid = () => {
     $$('.vessel svg', wrap).forEach(sv => {
       const water = sv.querySelectorAll('rect')[1];
       if (!water || sv.querySelector('.unitgrid')) return;
@@ -451,7 +558,18 @@ function capacityCompare(api){
         g.append(svg('line', { x1: x, y1: gy, x2: x + w, y2: gy, stroke: 'rgba(255,255,255,.75)', 'stroke-width': 1 }));
       sv.append(g);
     });
-    api.field.append(el('div.hintline', { text: 'おなじ おおきさの ますが いくつ ぶんか かぞえよう' }));
+  };
+  api.coach({
+    text: 'おなじ おおきさの ますが いくつ ぶんか かぞえよう',
+    say: '同じ大きさのますが、いくつ分か、数えよう。',
+    tool: unitGrid,
+    walk(){
+      unitGrid();
+      return $$('.vessel', wrap).map(v => ({
+        at: v,
+        act(){ if (!$('.caplabel', v)) v.append(el('div.hintline.caplabel', { text: v.dataset.cells + 'ます' })); },
+        say: numKana(Number(v.dataset.cells)) + 'ます', ms: 1400 }));
+    }
   });
 }
 
@@ -492,13 +610,25 @@ function orderBySize(api){
     wrap.append(row);
   });
   api.field.append(wrap);
-  api.onHint(() => {
-    const wantNow = wanted[step];
-    $$('.mrow', wrap).forEach(r => {
-      const bar = $('.stickbar', r);
-      if (bar && Math.abs(parseFloat(bar.style.width) - wantNow) < 0.01) r.classList.add('nexthint');
+  // lighting the next bar picked it for the child; the marks let them pick it
+  api.coach({
+    text: asc ? 'のこりの なかで いちばん みじかいのは？' : 'のこりの なかで いちばん ながいのは？',
+    say: asc ? '残りの中で、一番短いのは、どれ？' : '残りの中で、一番長いのは、どれ？',
+    tool(){ Coach.ticks(wrap); },
+    walk(){
+      Coach.ticks(wrap);
+      const wantNow = wanted[step];
+      const r = $$('.mrow', wrap).find(x => Math.abs(parseFloat($('.stickbar', x).style.width) - wantNow) < 0.01);
+      return r ? [{ at: () => $('.stickbar', r), act(){ r.classList.add('nexthint'); },
+                    say: asc ? 'これが、次に短い。' : 'これが、次に長い。', ms: 1700 }] : [];
+    }
+  });
+  api.onShow(() => {
+    wanted.slice(step).forEach(len => {
+      const r = $$('.mrow', wrap).find(x => !x.classList.contains('picked')
+        && Math.abs(parseFloat($('.stickbar', x).style.width) - len) < 0.01);
+      if (r) r.click();
     });
-    api.field.append(el('div.hintline', { text: asc ? 'ひかって いるのが つぎに みじかい よ' : 'ひかって いるのが つぎに ながい よ' }));
   });
 }
 

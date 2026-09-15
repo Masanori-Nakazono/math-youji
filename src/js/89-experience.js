@@ -47,7 +47,10 @@ const Diagnostic = (() => {
   /* Done with a level = it has its clear sticker. Deliberately the same thing the
      door counts, so the level おすすめ names is always a level the door is waiting
      for — and a ★★★ level can never be recommended again. */
-  const cleared = (id, i) => Store.hasSticker(id + ':' + i);
+  /* A provisional clear counts as done here — the day it was earned, naming it again
+     would send the child straight back — until a check on another day fails. Then
+     the gap is real, and おすすめ goes back for it. */
+  const cleared = (id, i) => Store.hasSticker(id + ':' + i) && !Store.checkFailed(id + ':' + i);
 
   /* A level tried three times without a pass has already opened the next one — the
      rule that no child is left at a padlock. おすすめ did not follow it: it named the

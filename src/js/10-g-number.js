@@ -35,18 +35,32 @@ function countQuestion(api, lo, hi, layout){
   api.item('count' + (layout === 'line' ? 'L' : 'S') + ':' + count, count + 'こ を かぞえる');
   api.setPrompt(`${thing.n}を ひとつずつ タップして かぞえよう`, `${thing.n}を、ひとつずつタップして数えよう。`);
   const objs = makeCountField(api, count, thing, layout);
-  let done = 0;
+  let done = 0, asked = false;
   const tap = (o) => {
     if (o.classList.contains('counted') || api.locked) return;
     done++;
     o.classList.add('counted');
+    const old = $('.tag', o);
+    if (old) old.remove();
     o.append(el('span.tag', { text: String(done) }));
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
-    if (done === count) api.later(ask, 620);
+    if (done !== count) return;
+    if (!asked){ asked = true; api.later(ask, 620); }
+    else api.later(() => Coach.pulse(o), 300);     // a recount ends on the number that answers
   };
   objs.forEach(o => {
     tappable(o, () => tap(o));
+  });
+  // top to bottom, left to right: the order a finger goes round a scattered picture
+  const inOrder = () => objs.slice().sort((p, q) => {
+    const a = p.getBoundingClientRect(), b = q.getBoundingClientRect();
+    return (Math.round(a.top / 70) - Math.round(b.top / 70)) || a.left - b.left;
+  });
+  // before the question is asked there is nothing to get wrong — only something to show
+  api.coach({
+    text: 'ひとつずつ タップして かぞえよう', say: '一つずつタップして、数えよう。',
+    walk(){ return inOrder().map(o => ({ at: o, act(){ tap(o); }, ms: 640 })); }
   });
 
   function ask(){
@@ -54,6 +68,25 @@ function countQuestion(api, lo, hi, layout){
     const n = hi <= 5 ? 3 : 4;
     const vals = shuffle([count].concat(distractors(count, n - 1, 1, Math.max(hi + 2, 6))));
     api.buildChoices(vals, count);
+    /* The hint is counting again, not being told: the badges come off, the child
+       goes round once more, and the last thing touched glows — the last number said
+       is how many there are. */
+    const recount = () => {
+      done = 0;
+      objs.forEach(o => { o.classList.remove('counted'); const t = $('.tag', o); if (t) t.remove(); });
+    };
+    api.coach({
+      text: 'もういちど ゆびで かぞえて みよう。さいごの かずが ぜんぶの かず',
+      say: 'もう一度、指で数えてみよう。最後に言った数が、全部の数だよ。',
+      tool: recount,
+      walk(){
+        // already counted all the way round: only the last number is left to point at
+        const last = () => objs.find(o => ($('.tag', o) || {}).textContent === String(count));
+        const steps = done === count ? []
+          : (recount(), inOrder().map(o => ({ at: o, act(){ tap(o); }, ms: 640 })));
+        return steps.concat([{ at: last, say: '最後の数が、全部の数。', ms: 1900 }]);
+      }
+    });
   }
 }
 
@@ -78,13 +111,14 @@ function giveQuestion(api, lo, hi){
     for (let i = 0; i < Math.min(picked.size, 12); i++) basketItems.append(el('span', { text: thing.e }));
   };
   refresh();
-  objs.forEach(o => tappable(o, () => {
+  const toggle = o => {
     if (api.locked) return;
     const i = o.dataset.i;
     if (picked.has(i)){ picked.delete(i); o.classList.remove('picked'); Sound.sfx.tap(); }
     else { picked.add(i); o.classList.add('picked'); Sound.sfx.count(picked.size - 1); Sound.say(numKana(picked.size), { delay: 0, rate: 1.08 }); }
     refresh();
-  }));
+  };
+  objs.forEach(o => tappable(o, () => toggle(o)));
   doneBtn.addEventListener('click', () => {
     if (api.locked) return;
     if (picked.size === target){ doneBtn.classList.add('choice', 'correct'); api.correct(); }
@@ -95,9 +129,25 @@ function giveQuestion(api, lo, hi){
       Sound.say(picked.size > target ? 'ちょっと多いみたい。' : 'ちょっと足りないみたい。', { delay: 300 });
     }
   });
-  api.onHint(() => {
-    basket.classList.add('want');
-    basket.append(el('div.want', { text: 'ほしいのは ' + target + 'こ' }));
+  api.coach({
+    text: `ほしいのは ${target}こ。かごの かずを みてね`,
+    say: `欲しいのは${koKana(target)}。かごの数を、見てね。`,
+    tool(){
+      basket.classList.add('want');
+      if (!$('.want', basket)) basket.append(el('div.want', { text: 'ほしいのは ' + target + 'こ' }));
+      Coach.pulse(basketCount);
+    },
+    walk(){
+      const steps = [{ act(){ objs.forEach(o => { if (picked.has(o.dataset.i)) toggle(o); }); }, ms: 500 }];
+      objs.slice(0, target).forEach(o => steps.push({ at: o, act(){ if (!picked.has(o.dataset.i)) toggle(o); }, ms: 640 }));
+      steps.push({ at: doneBtn, say: `${koKana(target)}になったら、できた、を押そう。`, ms: 2200 });
+      return steps;
+    }
+  });
+  api.onShow(() => {
+    objs.forEach(o => { if (picked.has(o.dataset.i)) toggle(o); });
+    objs.slice(0, target).forEach(o => toggle(o));
+    doneBtn.click();
   });
 }
 
@@ -106,7 +156,7 @@ Games.add({
   aim: 'ものを <b>1つずつ指さして数え</b>、最後に言った数がそのまとまり全体の数だと分かる力（一対一対応と基数性）。数唱が言えることと「数えられる」ことは別で、就学前にいちばん差がつく土台です。',
   levels: [
     { t: '1〜5', d: 'いちれつに ならんだ もの', make: api => countQuestion(api, 1, 5, 'line') },
-    { t: '1〜10', d: 'ばらばらでも かずは おなじ', make: api => chance(.25)
+    { t: '1〜10', d: 'ばらばらでも かずは おなじ', make: api => !api.check && chance(.25)
         ? conserveNumber(api)
         : countQuestion(api, 4, 10, 'scatter') },
     { t: '◯こ ちょうだい', d: 'かずだけ とりだす', make: api => giveQuestion(api, 3, 10) }
@@ -191,6 +241,7 @@ function flashQuestion(api, o){
     }, o.ms);
   });
   api.choices.append(go);
+  api.coach({ walk(){ return [{ at: go, act(){ go.click(); }, say: 'みる、を押すよ。', ms: o.ms + 1400 }]; } });
 
   function ask(){
     /* Getting it right and never seeing the dots again is half a lesson. This game
@@ -217,10 +268,30 @@ function flashQuestion(api, o){
        guess better; they are being asked to see, and you cannot see what is covered
        — which is also why it comes after the *first* mistake here and not the
        second: 「もういちど やってみよう」 over a covered board is only a guess. */
-    api.onHint(() => {
-      board.classList.add('open');
-      if (!$('.hintline', api.field)) api.field.append(el('div.hintline', { text: 'もういちど みせるね' }));
-    }, 1);
+    api.coach({
+      after: 1,
+      text: o.two ? 'もういちど みせるね。ひだりと みぎ、それぞれ いくつ？'
+          : o.rows ? 'もういちど みせるね。うえは 5こ。したは いくつ？'
+          : 'もういちど みせるね。どんな かたちに ならんでる？',
+      say: o.two ? 'もう一度見せるね。左と右、それぞれ、いくつ？'
+         : o.rows ? 'もう一度見せるね。上は5個。下は、いくつ？'
+         : 'もう一度見せるね。どんな形に、並んでる？',
+      tool(){ board.classList.add('open'); },
+      walk(){
+        board.classList.add('open');
+        if (o.two){
+          const dice = $$('.dice', inner);
+          return [{ at: dice[0], say: numKana(a), ms: 1200 }, { at: dice[1], say: numKana(b), ms: 1200 },
+                  { at: inner, say: `${numKana(a)}と${numKana(b)}で？`, ms: 1900 }];
+        }
+        if (o.rows){
+          const rows = $$('.frow', inner);
+          return [{ at: rows[0], say: 'ご', ms: 1100 }, { at: rows[1], say: numKana(n - 5), ms: 1100 },
+                  { at: inner, say: `ごと${numKana(n - 5)}で？`, ms: 1900 }];
+        }
+        return Coach.countable(api, $$('.fdot.on', inner)).steps(650);
+      }
+    });
   }
 }
 
@@ -274,6 +345,27 @@ function numToQty(api, lo, hi){        // numeral shown → pick the matching gr
     });
     api.choices.append(plate);
   });
+  /* The numeral's own quantity beside it, laid out in fives like every plate: a
+     picture to match against, instead of a count written on the right plate. */
+  api.coach({
+    text: `${n} は これだけ。おなじ かずの おさらは？`,
+    say: `${numKana(n)}は、これだけ。同じ数のお皿は、どれ？`,
+    tool(){
+      if ($('.numdots', api.field)) return;
+      const dots = el('div.numdots', { 'aria-hidden': 'true' });
+      for (let i = 0; i < n; i++) dots.append(el('i'));
+      const pair = el('div.numwith');
+      big.replaceWith(pair);
+      pair.append(big, dots);
+    },
+    walk(){
+      return $$('.plate', api.choices).map(p => {
+        const c = Number(p.dataset.count);
+        const filled = $$('.slot', p).filter(s => s.textContent);
+        return { at: p, act(){ Coach.tag(filled[filled.length - 1], c); }, say: koKana(c), ms: 1300 };
+      });
+    }
+  });
   api.onShow(() => {
     const p = $$('.plate', api.choices).find(x => Number(x.dataset.count) === n);
     if (p) p.click();
@@ -289,6 +381,13 @@ function qtyToNum(api, lo, hi){        // group shown → pick the numeral
   api.field.append(wrap);
   const c = hi <= 5 ? 3 : 4;
   api.buildChoices(shuffle([n].concat(distractors(n, c - 1, 1, hi + 3))), n);
+  const cnt = Coach.once(() => Coach.countable(api, $$('.item', wrap)));
+  api.coach({
+    text: 'ひとつずつ タップして かぞえよう',
+    say: '一つずつタップして、数えよう。',
+    tool(){ cnt(); },
+    walk(){ return cnt().steps(); }
+  });
 }
 
 function tenFrameNode(count, cols, opts){
@@ -314,6 +413,15 @@ function teenQuestion(api){            // 11-20 with a filled ten-frame + loose 
   box.append(rest);
   api.field.append(box, el('div.hintline', { text: '10の わくが いっぱい ＋ のこり' }));
   api.buildChoices(shuffle([n].concat(distractors(n, 3, 10, 20))), n);
+  // the full frame is said once, as ten; the rest is counted on from there
+  const frame = $('.tenframe', box);
+  const cnt = Coach.once(() => Coach.countable(api, $$('.item', rest), { from: 10 }));
+  api.coach({
+    text: 'わくは 10。10の つぎから かぞえよう',
+    say: '枠は、10。10の次から、数えよう。',
+    tool(){ Coach.pulse(frame); cnt(); },
+    walk(){ return [{ at: frame, say: 'じゅう', ms: 1000 }].concat(cnt().steps()); }
+  });
 }
 
 Games.add({
@@ -372,8 +480,11 @@ function lineFill(api, lo, hi, gaps){
         return true;               // last hole — let the engine finish the question
       }
     });
-    api.onHint(() => {
-      [target - 1, target + 1].forEach(v => { if (cells[v]) cells[v].classList.add('near'); });
+    api.coach({
+      text: 'ひだりの かずから かぞえて みよう',
+      say: `${numKana(target - 1)}の、次は？`,
+      tool(){ [target - 1, target + 1].forEach(v => { if (cells[v]) cells[v].classList.add('near'); }); },
+      walk(){ return Coach.readAlong(nums.map(v => cells[v]), cells[target]); }
     });
   }
   askNext();
@@ -400,6 +511,17 @@ function nextBefore(api, hi){
   // the answer belongs in the line, where the child can see the run read straight
   api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, hi))), ans,
     revealed(() => fillBlank(hole, ans)));
+  api.coach({
+    text: mode === 'next' ? 'つぎは 1つ おおきい かず' : mode === 'before' ? 'まえは 1つ ちいさい かず' : 'ふたつの あいだに はいる かず',
+    say: mode === 'next' ? '次は、一つ大きい数。' : mode === 'before' ? '前は、一つ小さい数。' : '二つの間に入る数。',
+    tool(){
+      $$('.nn', line).forEach(c => {
+        const v = Number(c.textContent);
+        if (v === ans - 1 || v === ans + 1) c.classList.add('near');
+      });
+    },
+    walk(){ return Coach.readAlong($$('.nn', line), hole); }
+  });
 }
 
 function skipCount(api){
@@ -415,6 +537,15 @@ function skipCount(api){
   api.field.append(line);
   api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, ans + step * 2, step))), ans,
     revealed(() => fillBlank(cells[3], ans)));
+  api.coach({
+    text: `${step}ずつ ふえて いるよ`,
+    say: `${numKana(step)}ずつ、増えているよ。`,
+    tool(){
+      if ($('.hop', line)) return;
+      cells.slice(1).forEach(c => c.before(el('span.hop', { text: '+' + step, 'aria-hidden': 'true' })));
+    },
+    walk(){ return Coach.readAlong(cells, cells[3]); }
+  });
 }
 
 /* 「10から逆に数える方が難しく、効果があります」— the parent page has said so from
@@ -433,11 +564,11 @@ function countBack(api){
   api.field.append(line, el('div.hintline', { text: 'ぎゃくむきに かぞえて みよう' }));
   api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, start + 2))), ans,
     revealed(() => fillBlank(cells[3], ans)));
-  api.onHint(() => {
-    if ($('.hint2', api.field)) return;
-    api.field.append(el('div.hintline.hint2', {
-      text: numKana(start) + '、' + numKana(start - 1) + '、' + numKana(start - 2) + '、… つぎは？' }));
-    Sound.say(`${numKana(start)}、${numKana(start-1)}、${numKana(start-2)}、…つぎは？`, { delay: 200 });
+  api.coach({
+    text: numKana(start) + '、' + numKana(start - 1) + '、' + numKana(start - 2) + '、… つぎは？',
+    say: `${numKana(start)}、${numKana(start - 1)}、${numKana(start - 2)}、…つぎは？`,
+    tool(){ Coach.pulse(cells.slice(0, 3)); },
+    walk(){ return Coach.readAlong(cells, cells[3]); }
   });
 }
 
@@ -595,6 +726,8 @@ function traceQuestion(api, digits){
 
 Games.add({
   id: 'trace', name: 'すうじを なぞろう', ico: '✏️', world: 'shima', color: 'var(--c-blue)',
+  // the start dot, its arrow and the idle guide already show the way; a hand cannot trace for a finger
+  intro: false,
   aim: '数字を<b>正しい書き順・向き</b>で書く運筆。左右反転（鏡文字）は年長ではよくあることですが、入学前に始点と向きを体で覚えておくと、算数の時間を「書く練習」に取られずに済みます。',
   levels: [
     { t: '1・2・3', d: 'かんたんな せん', n: 6, make: api => traceQuestion(api, [1, 2, 3]) },

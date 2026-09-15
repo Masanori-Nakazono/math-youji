@@ -76,7 +76,24 @@ function decompose(api, whole, pad){
   };
   if (pad) api.buildPad(ans, showParts);
   else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, whole))), ans, showParts);
-  if (pad) api.onHint(showFrame);
+  /* The empty cells become the child's to fill, counting on from the part they can
+     see. What they added is the answer, in red, made with their own taps. */
+  let walking = false;
+  const fill = Coach.once(() => Coach.fillable(api, $$('.cell', frame), { from: known,
+    onDone(){ if (walking) return; Coach.pulse($$('.dot.b', frame)); Sound.say('赤い丸は、いくつ？', { delay: 80 }); } }));
+  api.coach({
+    text: `あいて いる ところを タップして ${whole}に しよう`,
+    say: `空いているところをタップして、${numKana(whole)}にしよう。`,
+    tool(){ showFrame(); fill(); },
+    walk(){
+      walking = true;
+      showFrame();
+      const steps = fill().steps();
+      $$('.cell', frame).slice(known).forEach((c, i) => steps.push({ at: c, act(){ Coach.tag(c, i + 1, 'alt'); }, say: numKana(i + 1), ms: 620 }));
+      steps.push({ say: `${numKana(known)}と${numKana(ans)}で、${numKana(whole)}。`, ms: 2100 });
+      return steps;
+    }
+  });
 }
 
 function compose(api, maxWhole, pad){
@@ -102,12 +119,15 @@ function compose(api, maxWhole, pad){
     el('div.eq', null, String(a), el('span.op', { text: 'と' }), String(b), el('span.op', { text: 'で' }), box));
   const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
   const reveal = revealed(() => { fillBlank(box, ans); showFrame(); }, { delay: 1400 });
-  if (pad){
-    api.buildPad(ans, reveal);
-    api.onHint(showFrame);
-  } else {
-    api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans, reveal);
-  }
+  if (pad) api.buildPad(ans, reveal);
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, maxWhole + 2))), ans, reveal);
+  const cnt = Coach.once(() => Coach.countable(api, $$('.dot', f)));
+  api.coach({
+    text: 'あおと あかを ぜんぶ かぞえよう',
+    say: '青と赤を、全部数えよう。',
+    tool(){ showFrame(); cnt(); },
+    walk(){ showFrame(); return cnt().steps(); }
+  });
 }
 
 /** Make two different decompositions. There is no single hidden answer: every
@@ -155,13 +175,27 @@ function makeTwoWays(api){
   };
   draw();
   build();
-  api.onHint(() => {
+  const unused = () => {
     const used = new Set(made.map(x => Math.min(x, whole - x)));
-    const a = Array.from({ length: whole - 1 }, (_, i) => i + 1)
+    return Array.from({ length: whole - 1 }, (_, i) => i + 1)
       .find(x => !used.has(Math.min(x, whole - x))) || 1;
-    api.field.append(el('div.hintline', {
-      text: a + ' と ' + (whole - a) + ' に わけることも できるよ'
-    }));
+  };
+  api.coach({
+    text: () => { const a = unused(); return a + ' と ' + (whole - a) + ' に わけることも できるよ'; },
+    say: () => { const a = unused(); return `${numKana(a)}と${numKana(whole - a)}に、分けることもできるよ。`; },
+    tool(){ if (!$('.tenframe', api.field)) api.field.append(el('div.frameset', null, tenFrameNode(whole, 5, { total: whole > 5 ? 10 : 5 }))); },
+    walk(){
+      const a = unused();
+      const b = $$('.choice', api.choices).find(x => Number(x.textContent) === a);
+      return b ? [{ at: b, say: `${numKana(a)}を押してみよう。`, ms: 1700 }] : [];
+    }
+  });
+  api.onShow(() => {
+    const press = v => { const b = $$('.choice', api.choices).find(x => Number(x.textContent) === v); if (b) b.click(); };
+    const taken = new Set(made.map(x => Math.min(x, whole - x)));
+    const picks = [1, 2, 3].filter(v => !taken.has(v)).slice(0, 2 - made.length);
+    press(picks[0]);
+    if (picks[1] != null) api.later(() => press(picks[1]), 450);
   });
 }
 
@@ -170,7 +204,8 @@ Games.add({
   aim: '5や10を<b>2つの数に分けたり、合わせたり</b>する感覚。たし算・ひき算を「数えないで思い出す」ための部品で、くり上がり・くり下がりの計算はこれが土台になります。ここが自動化していると小1は驚くほど楽になります。',
   levels: [
     { t: '5は いくつと いくつ', d: 'ごの ぶんかい', make: api => chance(.25) ? compose(api, 5) : decompose(api, 5) },
-    { t: '6〜9', d: 'ちがう わけかたも つくる', make: api => chance(.3)
+    // a check skips the open-ended question: any split is right, so it confirms nothing
+    { t: '6〜9', d: 'ちがう わけかたも つくる', make: api => !api.check && chance(.3)
         ? makeTwoWays(api)
         : chance(.3) ? compose(api, ri(6, 9)) : decompose(api, ri(6, 9)) },
     // the top level asks the child to produce the number, not pick it out of three
@@ -215,6 +250,7 @@ function fillToTen(api){
     });
   });
   api.field.append(el('div.frameset', null, f), readout);
+  api.coach({ walk(){ return cells.filter(c => !c.firstChild).map(c => ({ at: c, act(){ c.click(); }, ms: 620 })); } });
   api.onHint(() => { readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; });
 }
 
@@ -248,12 +284,24 @@ function partnerOfTen(api, pad){
       }, (i - a) * 150 + 200);
     }
   };
-  if (pad){
-    api.buildPad(ans, revealed(fillIn, { delay: 1500 }));
-    api.onHint(showFrame);
-  } else {
-    api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans, revealed(fillIn, { delay: 1500 }));
-  }
+  if (pad) api.buildPad(ans, revealed(fillIn, { delay: 1500 }));
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans, revealed(fillIn, { delay: 1500 }));
+  let walking = false;
+  const fill = Coach.once(() => Coach.fillable(api, cells, { from: a,
+    onDone(){ if (walking) return; Coach.pulse($$('.dot.b', f)); Sound.say('赤い丸は、いくつ？', { delay: 80 }); } }));
+  api.coach({
+    text: '10に なるまで タップして みよう',
+    say: '10になるまで、タップしてみよう。',
+    tool(){ showFrame(); fill(); },
+    walk(){
+      walking = true;
+      showFrame();
+      const steps = fill().steps();
+      cells.slice(a).forEach((c, i) => steps.push({ at: c, act(){ Coach.tag(c, i + 1, 'alt'); }, say: numKana(i + 1), ms: 620 }));
+      steps.push({ say: `${numKana(a)}と${numKana(ans)}で、10。`, ms: 1900 });
+      return steps;
+    }
+  });
 }
 
 function pairHunt(api){
@@ -292,9 +340,28 @@ function pairHunt(api){
     row.append(c);
   });
   api.field.append(el('div.hintline', { text: '1と9、2と8、3と7、4と6、5と5' }));
-  api.onHint(() => {
-    const one = $$('.choice', row).find(c => Number(c.textContent) === a);
-    if (one) one.classList.add('glow');
+  /* Hold one card, and find its partner by filling a frame from it — the glow on
+     one card of the pair is kept, the other is found by counting. */
+  const frame = Coach.once(() => {
+    const fr = el('div.tenframe', { style: { '--cols': 5 } });
+    const cs = [];
+    for (let i = 0; i < 10; i++){ const c = el('div.cell' + (i >= a ? '.hole' : '')); if (i < a) c.append(el('div.dot')); cs.push(c); fr.append(c); }
+    api.field.prepend(el('div.frameset', null, fr));
+    return Coach.fillable(api, cs, { from: a });
+  });
+  const cardOf = v => $$('.choice', row).find(c => Number(c.textContent) === v);
+  api.coach({
+    text: `${a} と あわせて 10に なる カードは？`,
+    say: `${numKana(a)}と合わせて、10になるカードは、どれ？`,
+    tool(){ const one = cardOf(a); if (one) one.classList.add('glow'); frame(); },
+    walk(){ return frame().steps().concat([{ at: cardOf(b), say: `${numKana(a)}と${numKana(b)}で、10。`, ms: 2000 }]); }
+  });
+  api.onShow(() => {
+    picked.slice().forEach(p => p.click());             // put down whatever is held
+    const cs = $$('.choice', row);
+    const c1 = cs.find(c => Number(c.textContent) === a);
+    const c2 = cs.find(c => c !== c1 && Number(c.textContent) === b);
+    [c1, c2].forEach(c => { if (c) c.click(); });
   });
 }
 
@@ -332,8 +399,19 @@ function threeMakeTen(api){
     api.choices.append(b);
   }
   api.choices.classList.add('pad');
-  api.onHint(() => {
-    api.field.append(el('div.hintline', { text: 'まず 5 を えらんで、のこりの 5 を 2つに わけてみよう' }));
+  const key = v => $$('.padkey', api.choices).find(k => k.textContent === String(v));
+  api.coach({
+    text: 'まず 5を えらんで、のこりの 5を 2つに わけよう',
+    say: 'まず5を選んで、残りの5を、二つに分けよう。',
+    tool(){ Coach.pulse(key(5)); },
+    walk(){
+      return [{ at: key(5), say: 'ご', ms: 1000 }, { at: key(2), say: 'に', ms: 1000 },
+              { at: key(3), say: 'さん。5と2と3で、10。', ms: 2300 }];
+    }
+  });
+  api.onShow(() => {
+    picked.length = 0; redraw(); accepting = true;
+    [5, 2, 3].forEach(v => { const k = key(v); if (k) k.click(); });
   });
 }
 
@@ -344,7 +422,7 @@ Games.add({
     { t: '10まで うめる', d: 'わくを いっぱいに する', make: fillToTen },
     { t: '◯と いくつで10', d: 'あと いくつ？ じぶんで こたえる', make: api => partnerOfTen(api, true) },
     { t: 'ペアを さがす', d: '2まい・3まいで 10を つくる',
-      make: api => chance(.35) ? threeMakeTen(api) : pairHunt(api) }
+      make: api => !api.check && chance(.35) ? threeMakeTen(api) : pairHunt(api) }
   ]
 });
 
@@ -428,6 +506,14 @@ function addStory(api, max){
     // the child's answer belongs inside the sentence, not next to it
     api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 1, max + 2, 2))), ans,
       revealed(() => fillBlank($('.box', eq), ans)));
+    // the picture is still there after the story: count it, both groups together
+    const cnt = Coach.once(() => Coach.countable(api, $$('.actor', api.field)));
+    api.coach({
+      text: 'ぜんぶ タップして かぞえよう',
+      say: '全部タップして、数えよう。',
+      tool(){ cnt(); },
+      walk(){ return cnt().steps(); }
+    });
   });
 }
 
@@ -446,6 +532,20 @@ function subStory(api, max){
     api.field.append(eq);
     api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans,
       revealed(() => fillBlank($('.box', eq), ans)));
+    /* The ones that left come back faint, so what is left can be told apart from
+       what went and counted — the difference between「のこり」and「ぜんぶ」 on screen. */
+    const back = () => $$('.actor.g2', api.field).forEach(x => {
+      x.classList.remove('leaving');
+      x.classList.add('coachgone');
+      x.style.transform = 'translate(-50%,-50%)';
+    });
+    const cnt = Coach.once(() => Coach.countable(api, $$('.actor.g1', api.field)));
+    api.coach({
+      text: 'いなく なったのは うすい ほう。のこりを かぞえよう',
+      say: 'いなくなったのは、薄いほう。残りを、数えよう。',
+      tool(){ back(); cnt(); },
+      walk(){ back(); return cnt().steps(); }
+    });
   });
 }
 
@@ -467,17 +567,23 @@ function symbolCalc(api, op, max, pad){
   const reveal = revealed(() => fillBlank($('.box', eq), ans));
   if (pad) api.buildPad(ans, reveal);
   else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 0, max + 2, 2))), ans, reveal);
-  api.onHint(() => {
-    if ($('.tenframe', api.field)) return;
+  const frame = Coach.once(() => {
     const f = el('div.tenframe', { style: { '--cols': 5 } });
     for (let i = 0; i < 10; i++){
       const cell = el('div.cell');
       if (op === '+'){ if (i < a) cell.append(el('div.dot')); else if (i < a + b) cell.append(el('div.dot.b')); }
-      else { if (i < a - b) cell.append(el('div.dot')); else if (i < a) cell.append(el('div.dot.b')); }
+      else { if (i < a - b) cell.append(el('div.dot')); else if (i < a) cell.append(el('div.dot.b.coachgone')); }
       f.append(cell);
     }
-    api.field.append(el('div.frameset', null, f),
-      el('div.hintline', { text: op === '+' ? 'あおと あかを あわせて かぞえよう' : 'あかは いなくなった ぶん。あおを かぞえよう' }));
+    api.field.append(el('div.frameset', null, f));
+    return f;
+  });
+  const cnt = Coach.once(() => Coach.countable(api, $$(op === '+' ? '.dot' : '.dot:not(.b)', frame())));
+  api.coach({
+    text: op === '+' ? 'あおと あかを あわせて かぞえよう' : 'うすい まるは ひいた ぶん。のこりを かぞえよう',
+    say: op === '+' ? '青と赤を、合わせて数えよう。' : '薄い丸は、引いた分。残りを、数えよう。',
+    tool(){ cnt(); },
+    walk(){ return cnt().steps(); }
   });
 }
 
@@ -507,9 +613,22 @@ function differenceQ(api, max, pad){
   const reveal = revealed(() => fillBlank($('.box', eq), ans));
   if (pad) api.buildPad(ans, reveal);
   else api.buildChoices(shuffle([ans].concat(distractors(ans, 2, 0, max, 2))), ans, reveal);
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', { text: 'うえと したを 1つずつ ペアに して、あまりを かぞえよう' }));
+  // the top row's items past the bottom row's length are what does not pair up
+  const rowsEl = $$('.mrow', board);
+  const topItems = () => $$('.item', rowsEl[0]), botItems = () => $$('.item', rowsEl[1]);
+  const cnt = Coach.once(() => {
+    const left = topItems().slice(b);
+    left.forEach(x => x.classList.add('coachleft'));
+    return Coach.countable(api, left);
+  });
+  api.coach({
+    text: 'ペアに ならない ぶんを かぞえよう',
+    say: '上と下をペアにして、ペアにならない分を、数えよう。',
+    tool(){ cnt(); },
+    walk(){
+      const t = topItems();
+      return botItems().map((x, i) => ({ at: x, act(){ Coach.pulse([t[i], x]); }, ms: 380 })).concat(cnt().steps());
+    }
   });
 }
 

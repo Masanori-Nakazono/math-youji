@@ -2034,3 +2034,77 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   display: flex; align-items: center; gap: calc(var(--u)*.6);
 }
 .bookgroup::after{ content: ""; flex: 1 1 auto; border-top: calc(var(--u)*.2) dashed var(--card-edge) }
+
+/* ===========================================================
+   Coaching — the hand that shows how, and the tools a hint hands over
+   =========================================================== */
+.coachhand{
+  position: fixed; left: 0; top: 0; z-index: 96; pointer-events: none;
+  font-size: calc(var(--u)*5); line-height: 1;
+  transform: translate(-38%, -6%);
+  transition: left .42s cubic-bezier(.3,.8,.4,1), top .42s cubic-bezier(.3,.8,.4,1);
+  filter: drop-shadow(0 .12em .22em rgba(0,0,0,.32));
+}
+.coachhand.tap{ animation: handTap .34s ease-out; }
+@keyframes handTap{ 0%,100%{ transform: translate(-38%, -6%) } 50%{ transform: translate(-38%, 4%) scale(.86) } }
+@media (prefers-reduced-motion: reduce){ .coachhand{ transition: none } }
+/* while the hand is showing the way, fingers wait */
+#play.walking .playfield, #play.walking .choices{ pointer-events: none; }
+
+/* something to look at, without saying what it is */
+.coachpulse{ animation: coachPulse .9s ease-in-out 3; }
+@keyframes coachPulse{
+  0%,100%{ filter: none }
+  50%{ filter: drop-shadow(0 0 calc(var(--u)*.6) var(--accent)) brightness(1.08) }
+}
+line.coachpulse, .clock .coachpulse{ animation: none; stroke-width: 8; }
+
+/* a count the child (or the hand) has reached */
+.ctag{
+  position: absolute; top: -.35em; right: -.35em; z-index: 2; pointer-events: none;
+  min-width: 1.6em; height: 1.6em; padding: 0 .3em; box-sizing: border-box;
+  display: grid; place-items: center; border-radius: 999px;
+  background: var(--good); color: var(--on-crayon);
+  font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*1.3); line-height: 1;
+  box-shadow: 0 .08em .2em rgba(0,0,0,.2);
+  animation: pop .3s cubic-bezier(.2,.9,.3,1.6);
+}
+.ctag.alt{ background: var(--accent); }
+.coachable{ cursor: pointer; }
+.coachcounted{ filter: drop-shadow(0 0 calc(var(--u)*.35) var(--good)); }
+/* an empty cell a hint has made fillable: the frame's own size, so its columns hold */
+.cell.coachhole{ cursor: pointer; }
+.cell.coachhole:empty{ box-shadow: inset 0 0 0 calc(var(--u)*.26) color-mix(in srgb, var(--accent) 75%, transparent); }
+/* どっちが おおい: the same things, the same size, five to a row from one edge */
+.plate .row.lined{ display: grid; grid-template-columns: repeat(5, auto); justify-content: start; gap: calc(var(--u)*.35); }
+/* what does not pair up in「ちがいは いくつ」 */
+.item.coachleft{ outline: calc(var(--u)*.2) dashed var(--accent); outline-offset: calc(var(--u)*.1); border-radius: .3em; }
+.swatch{ width: calc(var(--u)*3); height: calc(var(--u)*3); }
+polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
+@keyframes polyPulse{ 50%{ stroke: var(--accent); stroke-width: 2.6px; } }
+.dot .ctag{ font-size: calc(var(--u)*1.1); }
+/* what went away in a subtraction, brought back faint so the rest can be counted */
+.coachgone{ opacity: .28 !important; filter: grayscale(.6); }
+/* equal marks along a bar's track */
+.track .ticks{ position: absolute; inset: 0; pointer-events: none; }
+.track .ticks i{ position: absolute; top: 12%; bottom: 12%; width: 0; border-left: 2px dashed color-mix(in srgb, var(--ink) 22%, transparent); }
+/* a strip of the numeral's own quantity beside it (すうじ どれかな) */
+.numdots{ display: grid; grid-template-columns: repeat(5, auto); gap: calc(var(--u)*.35); }
+.numdots i{ width: calc(var(--u)*2); height: calc(var(--u)*2); border-radius: 50%; background: var(--c-red); }
+.numwith{ display: flex; align-items: center; gap: calc(var(--u)*2); }
+/* the verb that decides ＋ or − */
+.storycard mark{ background: color-mix(in srgb, var(--accent) 35%, transparent); color: inherit; border-radius: .2em; padding: 0 .1em; }
+.hop{ font-family: var(--fs-num); font-weight: 800; font-size: calc(var(--u)*1.4); color: var(--accent-ink); align-self: flex-start; }
+.silhouette{ filter: brightness(0) opacity(.75); }
+/* the first-meeting questions: a ring, not a dot — they are not the child's to score */
+.pip.intro{ background: transparent; box-shadow: inset 0 0 0 calc(var(--u)*.22) var(--c-blue); }
+.pip.introdone{ background: color-mix(in srgb, var(--c-blue) 55%, var(--card)); box-shadow: none; }
+.pip.intro.now{ background: var(--accent); box-shadow: none; }
+/* a check on another day: a star-coloured ring */
+.pip.check{ background: transparent; box-shadow: inset 0 0 0 calc(var(--u)*.22) var(--star-edge); }
+.pip.check.now{ background: var(--accent); box-shadow: none; }
+/* a clear waiting for another day: the outline of the sticker, not yet its colour */
+.sticker.got.pending{ border-style: dashed; box-shadow: none; }
+.sticker.pending, .newsticker.pending .e, .shelf .strip .pending{ filter: grayscale(1); opacity: .5; }
+.newsticker.confirmed{ border-color: var(--good); border-style: solid; }
+.todochip.pending{ border-style: dashed; }

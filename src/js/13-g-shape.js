@@ -64,9 +64,21 @@ function findAllShapes(api){
       if (b.dataset.hit === '1' && !b.classList.contains('picked')) b.click();
     });
   });
-  api.onHint(() => {
-    if ($('.hint2', api.field)) return;
-    api.field.append(el('div.hintline.hint2', { text: KIND_JA[target] + 'は ぜんぶで ' + nTarget + 'こ。のこり ' + (nTarget - found) + 'こ' }));
+  api.coach({
+    text: () => KIND_JA[target] + 'は ぜんぶで ' + nTarget + 'こ。のこり ' + (nTarget - found) + 'こ',
+    say: () => `${KIND_JA[target]}は、全部で${koKana(nTarget)}。残りは、${koKana(nTarget - found)}。`,
+    // one plain example of the shape beside the tally, to hold in mind while looking
+    tool(){
+      if ($('.swatch', api.field)) return;
+      const s = shapeSVG(KIND_MEMBERS[target][0], 'var(--ink-faint)', 0);
+      s.classList.add('swatch');
+      tally.before(s);
+      Coach.pulse(s);
+    },
+    walk(){
+      return $$('.shapebtn', grid).filter(b => b.dataset.hit === '1' && !b.classList.contains('picked'))
+        .map(b => ({ at: b, act(){ Coach.pulse(b); }, say: `これも、${KIND_JA[target]}。`, ms: 1400 }));
+    }
   });
 }
 
@@ -82,16 +94,28 @@ function objectToShape(api){
   const o = pick(OBJ_SHAPE);
   api.item('obj:' + o.e, o.e + ' は ' + KIND_JA[o.k]);
   api.setPrompt(`${o.e} と おなじ かたちは どれ？`, '同じ形は、どれ？');
-  api.field.append(el('div', { style: { fontSize: 'calc(var(--u)*10)', lineHeight: 1 }, text: o.e }));
+  const pic = el('div', { style: { fontSize: 'calc(var(--u)*10)', lineHeight: 1 }, text: o.e });
+  api.field.append(pic);
   const kinds = shuffle(['circle', 'triangle', 'square']);
   api.buildChoices(kinds, o.k, {
     cls: 'pic',
     render: k => {
-      const wrap = el('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'calc(var(--u)*.2)' } });
+      const wrap = el('div', { dataset: { kind: k }, style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'calc(var(--u)*.2)' } });
       const s = shapeSVG(pick(KIND_MEMBERS[k]), SHAPE_COLORS[ri(0, 5)], 0);
       s.setAttribute('width', 'calc(var(--u)*6)'); s.setAttribute('height', 'calc(var(--u)*6)');
       wrap.append(s, el('div', { text: KIND_JA[k], style: { fontSize: 'calc(var(--u)*1.3)' } }));
       return wrap;
+    }
+  });
+  // a silhouette drops the colour and the detail: what is left is the outline
+  api.coach({
+    text: 'かげに すると かたちが みえるよ',
+    say: '影にすると、形が見えるよ。',
+    tool(){ pic.classList.add('silhouette'); },
+    walk(){
+      pic.classList.add('silhouette');
+      const btn = $$('.choice', api.choices).find(b => b.querySelector('[data-kind="' + o.k + '"]'));
+      return [{ at: pic, say: 'この形は…', ms: 1300 }, { at: btn, say: `${KIND_JA[o.k]}と、同じ。`, ms: 1900 }];
     }
   });
 }
@@ -268,12 +292,35 @@ function shapePuzzle(api){
     tray.append(t);
   });
   api.field.append(el('div.hintline', { text: 'ゆびで はめて みよう' }));
-  api.onHint(() => {
-    const t = $('.shapetile:not(.used)', tray);
-    if (!t) return;
-    dd.select(t);
-    const slot = slots.find(sl => sl.dataset.filled !== '1' && sl.dataset.sig === t.dataset.sig);
-    if (slot) slot.classList.add('glow');
+  /* Glowing the one hole a piece fits finished the puzzle for the child. The piece is
+     picked up and every open hole with as many corners is marked: which way round it
+     goes is still theirs to see (ちょうちょ's four triangles all light up). */
+  api.coach({
+    text: 'おなじ かたちの あなを さがそう。むきも みてね',
+    say: '同じ形の穴を探そう。向きも、よく見てね。',
+    tool(){
+      const t = $('.shapetile:not(.used)', tray);
+      if (!t) return;
+      dd.select(t);
+      const corners = pz.pieces[+t.dataset.idx].pts.length;
+      Coach.pulse(slots.filter((sl, i) => sl.dataset.filled !== '1' && pz.pieces[i].pts.length === corners));
+    },
+    walk(){
+      const t = $('.shapetile.sel:not(.used)', tray) || $('.shapetile:not(.used)', tray);
+      if (!t) return [];
+      const slot = slots.find(sl => sl.dataset.filled !== '1' && sl.dataset.sig === t.dataset.sig);
+      return [{ at: t, act(){ dd.select(t); }, say: 'この形は…', ms: 1300 },
+              { at: slot, act(){ if (slot) slot.classList.add('glow'); }, say: 'ここに、ぴったり。', ms: 1900 }];
+    }
+  });
+  // every piece into its own hole (SVG polygons have no .click(), so the event is sent)
+  api.onShow(() => {
+    $$('.shapetile:not(.used)', tray).forEach(t => {
+      const slot = slots.find(sl => sl.dataset.filled !== '1' && sl.dataset.sig === t.dataset.sig);
+      if (!slot) return;
+      dd.select(t);
+      slot.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
   });
 }
 
@@ -381,11 +428,22 @@ function sortGame(api, catset, nBins, byColor){
     tray.append(t);
   });
   api.field.append(el('div.hintline', { text: 'ゆびで はこに いれてね' }));
-  api.onHint(() => {
-    const t = $('.tile:not(.gone)', tray);
-    if (!t) return;
-    dd.select(t);
-    binMap[t.dataset.cat].classList.add('glow');
+  // the piece in hand and the pictures on the boxes — not a glow on the right box
+  api.coach({
+    text: byColor ? 'いろを よく みて はこを えらぼう' : 'なんの なかまかな？ はこの えを みてね',
+    say: byColor ? '色をよく見て、箱を選ぼう。' : '何の仲間かな？箱の絵を、見てね。',
+    tool(){
+      const t = $('.tile:not(.gone)', tray);
+      if (t) dd.select(t);
+      Coach.pulse($$('.bin .lbl', bins));
+    },
+    walk(){
+      const t = $('.tile.sel:not(.gone)', tray) || $('.tile:not(.gone)', tray);
+      if (!t) return [];
+      const bin = binMap[t.dataset.cat];
+      return [{ at: t, act(){ dd.select(t); }, ms: 1000 },
+              { at: $('.lbl', bin), act(){ bin.classList.add('glow'); }, say: `${catset[t.dataset.cat].lbl}の箱。`, ms: 1900 }];
+    }
   });
 }
 
@@ -403,6 +461,8 @@ Games.add({
    14. きまり さがし — patterns
    ============================================================ */
 const PAT_TOKENS = ['🔴','🔵','🟡','🟢','🟣','🟠','⭐️','🌙','🍎','🍌','🐰','🐻'];
+const TOKEN_NAME = { '🔴': 'あか', '🔵': 'あお', '🟡': 'きいろ', '🟢': 'みどり', '🟣': 'むらさき', '🟠': 'オレンジ',
+                     '⭐️': 'ほし', '🌙': 'つき', '🍎': 'りんご', '🍌': 'バナナ', '🐰': 'うさぎ', '🐻': 'くま' };
 
 function patternQuestion(api, unitKind, blanks){
   const kinds = { AB: [0, 1], AAB: [0, 0, 1], ABB: [0, 1, 1], ABC: [0, 1, 2], ABBA: [0, 1, 1, 0] };
@@ -450,10 +510,18 @@ function patternQuestion(api, unitKind, blanks){
     });
   }
   askHole();
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    cars.forEach((c, i) => { if (Math.floor(i / unit.length) % 2 === 0) c.classList.add('unitmark'); });
-    api.field.append(el('div.hintline', { text: unit.length + 'つずつ おなじ ならびが くりかえして いるよ' }));
+  api.coach({
+    text: unit.length + 'つずつ おなじ ならびが くりかえして いるよ',
+    say: `${tsuKana(unit.length)}ずつ、同じ並びが、繰り返しているよ。`,
+    tool(){ cars.forEach((c, i) => { if (Math.floor(i / unit.length) % 2 === 0) c.classList.add('unitmark'); }); },
+    // the hand reads the train aloud in its rhythm and stops at the gap
+    walk(){
+      const at = holes[hi];
+      const steps = [];
+      for (let i = 0; i < at; i++) steps.push({ at: cars[i], say: TOKEN_NAME[seq[i]] || '', ms: 560 });
+      steps.push({ at: cars[at], say: 'つぎは？', ms: 1500 });
+      return steps;
+    }
   });
 }
 
@@ -488,8 +556,14 @@ function createPattern(api){
     });
     api.choices.append(b);
   });
-  api.onHint(() => {
-    if (chosen.length) api.field.append(el('div.hintline', { text: chosen[0] + ' の つぎに くるものを えらぼう' }));
+  api.coach({
+    text: () => chosen.length ? chosen[0] + ' の つぎに くるものを えらぼう' : 'すきな えを 2つ えらぼう',
+    say: () => chosen.length ? '次に来るものを、選ぼう。' : '好きな絵を、二つ選ぼう。',
+    tool(){ Coach.pulse($$('.choice:not(.picked)', api.choices)); },
+    walk(){ return $$('.choice:not(.picked)', api.choices).slice(0, 2).map(b => ({ at: b, ms: 900 })); }
+  });
+  api.onShow(() => {
+    $$('.choice:not(.picked)', api.choices).slice(0, 2 - chosen.length).forEach(b => b.click());
   });
 }
 
@@ -500,7 +574,7 @@ Games.add({
     { t: '2つの くりかえし', d: '●▲●▲…', make: api => patternQuestion(api, 'AB', 1) },
     { t: '3つの くりかえし', d: '●●▲ / ●▲▲', make: api => patternQuestion(api, pick(['AAB', 'ABB', 'ABC']), 1) },
     { t: 'むずかしい きまり', d: 'あなを うめる・じぶんで つくる',
-      make: api => chance(.3) ? createPattern(api) : patternQuestion(api, pick(['ABC', 'ABBA', 'AAB']), 2) }
+      make: api => !api.check && chance(.3) ? createPattern(api) : patternQuestion(api, pick(['ABC', 'ABBA', 'AAB']), 2) }
   ]
 });
 
@@ -533,10 +607,22 @@ function readClock(api, half){
       return hh + 'じ' + (mm === '30' ? 'はん' : '');
     }
   });
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', {
-      text: m === 30 ? 'ながい はりが 6 のとき「はん」。みじかい はりは すぎた ほうの すうじ' : 'みじかい はりが さす すうじを よもう' }));
+  const handH = $('.hand-h', c), handM = $('.hand-m', c);
+  const numEl = v => $$('text', c).find(t => t.textContent === String(v));
+  api.coach({
+    text: m === 30 ? 'ながい はりが 6 なら「はん」。みじかい はりを みてね' : 'みじかい はりが さす すうじを よもう',
+    say: m === 30 ? '長い針が6なら、はん。短い針を、よく見てね。' : '短い針が指している数字を、読もう。',
+    tool(){ Coach.pulse(m === 30 ? [handH, handM] : handH); },
+    walk(){
+      const next = h % 12 + 1;
+      if (m === 30) return [
+        { at: numEl(6), act(){ numEl(6).classList.add('goal'); }, say: '長い針が6。だから、はん。', ms: 2300 },
+        { at: numEl(h), act(){ numEl(h).classList.add('goal'); numEl(next).classList.add('goal'); },
+          say: `短い針は、${numKana(h)}と${numKana(next)}の間。`, ms: 2500 },
+        { at: numEl(h), say: `過ぎたほうを読んで、${jiKana(h, true)}。`, ms: 2300 }];
+      return [{ at: handH, act(){ Coach.pulse(handH); }, say: '短い針は…', ms: 1300 },
+              { at: numEl(h), act(){ numEl(h).classList.add('goal'); }, say: `${numKana(h)}を指しているね。`, ms: 2100 }];
+    }
   });
 }
 
@@ -567,6 +653,19 @@ function pickClock(api, half){
       }
     });
     api.choices.append(wrap);
+  });
+  const next = h % 12 + 1;
+  api.coach({
+    text: m === 30 ? `ながい はりが 6、みじかい はりが ${h}と ${next}の あいだ` : `みじかい はりが ${h}を さす とけい`,
+    say: m === 30 ? `長い針が6で、短い針が、${numKana(h)}と${numKana(next)}の間の時計。`
+                  : `短い針が、${numKana(h)}を指している時計。`,
+    tool(){ Coach.pulse($$('.clock-choice .hand-h', api.choices)); },
+    walk(){
+      return $$('.clock-choice', api.choices).map(w => {
+        const [hh, mm] = w.dataset.t.split(':').map(Number);
+        return { at: w, say: `これは、${jiKana(hh, mm === 30)}。`, ms: 1800 };
+      });
+    }
   });
   api.onShow(() => {
     const w = $$('.clock-choice', api.choices).find(x => x.dataset.t === h + ':' + m);
@@ -683,14 +782,26 @@ function setClock(api, hand){
         })
       ];
   api.choices.append(...controls, check);
-  api.onHint(() => {
-    if ($('.hintline', api.field)) return;
-    api.field.append(el('div.hintline', { text: minuteMode
-      ? '「はん」の とき、ながい はりは 6を さすよ'
-      : 'みじかい はりが ' + targetHour + ' を さすように まわそう' }));
-    $$('text', clock).forEach(t => {
-      if (t.textContent === String(minuteMode ? 6 : targetHour)) t.classList.add('goal');
-    });
+  api.coach({
+    text: minuteMode ? '「はん」の とき、ながい はりは 6を さすよ' : 'みじかい はりが ' + targetHour + ' を さすように まわそう',
+    say: minuteMode ? 'はん、の時、長い針は6を指すよ。' : `短い針が、${numKana(targetHour)}を指すように、回そう。`,
+    tool(){
+      $$('text', clock).forEach(t => {
+        if (t.textContent === String(minuteMode ? 6 : targetHour)) t.classList.add('goal');
+      });
+    },
+    // the hand turns the hand, one number at a time, and leaves「これで いい？」to the child
+    walk(){
+      const goal = target, steps = [];
+      let v = cur;
+      for (let g = 0; g < 13 && v !== goal; g++){
+        v = minuteMode ? (v + 5) % 60 : v % 12 + 1;
+        const vv = v;
+        steps.push({ at: minuteMode ? minuteHand : hourHand, act(){ cur = vv; Sound.sfx.tap(); paint(); }, ms: 380 });
+      }
+      steps.push({ at: check, say: 'できたら、これでいい、を押そう。', ms: 1900 });
+      return steps;
+    }
   });
 }
 

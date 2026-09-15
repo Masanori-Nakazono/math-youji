@@ -21,6 +21,8 @@ const UI = (() => {
   function show(name, opts){
     const o = opts || {};
     Sound.hush();
+    // the coaching hand belongs to the question it was pointing at, never to the next screen
+    if (typeof Coach !== 'undefined') Coach.hide();
     for (const k in screens) screens[k].hidden = true;
     const n = screens[name];
     if (!n) return null;
