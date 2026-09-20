@@ -438,6 +438,7 @@ const Session = (() => {
       });
     });
     if (!pool.length){                       // nothing unlocked yet — never leave an empty plan
+      plan = [];
       Home.render();
       UI.show('home', { replace: true });
       return;

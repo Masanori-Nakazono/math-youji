@@ -970,6 +970,7 @@ body::before{
 .choice-audio{ display: grid; grid-template-columns: minmax(0, 1fr) var(--tap); gap: calc(var(--u)*.45); align-items: stretch; }
 .choice-audio .choice{ min-width: 0; width: 100%; }
 .choice-hear{ min-width: var(--tap); min-height: var(--tap); border: calc(var(--u)*.22) solid var(--card-edge); border-radius: var(--wob-b); background: var(--paper-2); font-size: calc(var(--u)*1.8); }
+.daily .t{ word-break: keep-all; }
 
 /* ===========================================================
    TEN FRAME  (十のわく)
@@ -4185,6 +4186,7 @@ const Session = (() => {
       });
     });
     if (!pool.length){                       // nothing unlocked yet — never leave an empty plan
+      plan = [];
       Home.render();
       UI.show('home', { replace: true });
       return;

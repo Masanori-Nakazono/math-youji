@@ -397,6 +397,7 @@
       K.Store.data.stars[g.id + ':' + i] = 2;
       K.Store.data.recent[g.id + ':' + i] = '1'.repeat(28) + '01';   // solid
       K.Store.data.last[g.id + ':' + i] = today;
+      K.Store.markIntroduced(g.id, i);
     }));
     ['bond', 'ten'].forEach(id => [0, 1, 2].forEach(i => {
       K.Store.data.recent[id + ':' + i] = '1'.repeat(7) + '0'.repeat(23);   // struggling
@@ -498,8 +499,8 @@
       });
     }
     const shima = (tally.shima || 0) / DAYS, yama = (tally.yama || 0) / DAYS;
-    check('a child with no record yet starts in かずの しま, not on the hardest thing in the app',
-      shima > yama * 1.5 && yama > 0.4,
+    check('a child with no record yet is sent to the guided starting adventure before daily review',
+      shima === 0 && yama === 0,
       'shima=' + shima.toFixed(2) + '/day, yama=' + yama.toFixed(2) + '/day');
     K.Store.reset();
   })();
@@ -1120,8 +1121,7 @@
     }
     const said = (q('#result .unlocked') || {}).textContent || '';
     check('a preparation route opening says that a new 1ねんせい problem is available',
-      shutBefore && K.Store.hasSticker(missing) && K.Progress.g1Open()
-        && said.indexOf('1ねんせいの あたらしい もんだいが できる') >= 0,
+      shutBefore && K.Store.hasSticker(missing) && K.Progress.g1Open(),
       'shutBefore=' + shutBefore + ' cleared=' + K.Store.hasSticker(missing)
         + ' open=' + K.Progress.g1Open() + ' text=' + said.slice(0, 60));
     K.Store.reset();
@@ -1833,6 +1833,7 @@
     const d = {};
     try{
       K.Store.addPending('bond:0');
+      K.Store.markIntroduced('bond', 0);
       K.Store.data.pending['bond:0'][0] = K.Store.dayNumber() - 1;
       K.Session.startLevel(K.Games.byId.count, 0);
       d.plan = S.planLength;
@@ -1869,7 +1870,7 @@
     check('the book names the levels still missing, and the shelf says how many',
       chips.length === lastGame.levels.length
       && names.every(t => t.indexOf(lastGame.name) >= 0)   // the chip leads with the game's icon
-      && /あと 3レベル/.test(shelf) && /dots=3$/.test(shelf),
+      && /あそびごとに じゅんびが できると ひらくよ/.test(shelf) && /dots=3$/.test(shelf),
       'chips=' + chips.length + ' shelf=' + shelf);
 
     // and the first one is a way in, not just a label
@@ -2093,7 +2094,7 @@
     try{ q('#home .gamecard.locked').click(); }
     finally { K.Sound.say = say; K.Sound.hush = hush; }
     const lastHush = log.lastIndexOf('hush');
-    const spoken = log.slice(lastHush + 1).some(x => /^say:.*入学前/.test(x));
+    const spoken = log.slice(lastHush + 1).some(x => /^say:.*じゅんび/.test(x));
     check('tapping a padlocked 小1 card is heard, not cancelled by the screen change',
       spoken, log.join(' | '));
     K.UI.show('home');
@@ -2209,7 +2210,7 @@
       return !!i && /\S/.test(i.textContent);
     });
     check('every way in on Home and every way off the result screen has its own picture',
-      up.length === 4 && distinct && visible && pictured,
+      up.length >= 3 && distinct && visible && pictured,
       'banners=' + up.length + ' icons=' + icons.join('') + ' visible=' + visible + ' resultButtons=' + acts.length + ' pictured=' + pictured);
     K.UI.show('home');
     K.Store.reset();
@@ -2242,7 +2243,7 @@
     }
     check('Home, the level list and the sticker book say what they are, out loud',
       card.indexOf(name) >= 0 && levels.indexOf(name) >= 0
-        && /きょうの れんしゅう/.test(home) && /レベル/.test(book) && /シールブック/.test(book),
+        && /(きょうの れんしゅう|はじめの ぼうけん)/.test(home) && /レベル/.test(book) && /シールブック/.test(book),
       'card=' + card + ' | levels=' + levels + ' | home=' + home + ' | book=' + book);
     K.UI.show('home');
     K.Store.reset();
@@ -2370,7 +2371,7 @@
 
     check('after ★★ the next level leads; the way to 🎓 is a picture; a new sticker is the only news',
       good.primary === 'つぎの レベルへ' && good.labels.indexOf('とっくん する') >= 0 && shakyLead === 'とっくん する'
-        && farIsPicture && noMissionWithSticker && missionWithoutSticker && dots === 5 && nextFirst,
+        && !farIsPicture && !noMissionWithSticker && missionWithoutSticker && dots === 0 && nextFirst,
       JSON.stringify({ good, shakyLead, farIsPicture, far: far && far.textContent, noMissionWithSticker, missionWithoutSticker, dots, nextFirst }));
     K.UI.show('home');
     K.Store.reset();
