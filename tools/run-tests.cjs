@@ -55,6 +55,7 @@ const server = http.createServer((req, res) => {
     }));
     out.rows.forEach(r => console.log(r));
     console.log('\n' + out.summary);
+    if (!out.ok) console.error('::error title=Regression suite failed::' + out.summary + ' | ' + out.rows.filter(r => /FAIL|✗|×/.test(r)).join(' | '));
     ok = out.ok;
   } finally {
     await browser.close();
