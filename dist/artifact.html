@@ -956,6 +956,21 @@ body::before{
 #title .btn-accent{ font-size: calc(var(--u)*2.6); padding: calc(var(--u)*1.1) calc(var(--u)*3.4); }
 #title .foot{ font-size: calc(var(--u)*1.15); color: var(--ink-soft); }
 
+/* First use explains the three gestures before maths begins. */
+#orientation{ align-items: center; justify-content: center; text-align: center; gap: calc(var(--u)*1.5); }
+#orientation .mascot{ width: calc(var(--u)*14); height: calc(var(--u)*14); }
+#orientation .welcome{ font-size: calc(var(--u)*3.2); font-weight: 800; margin: 0; }
+#orientation .guidecard{ max-width: calc(var(--u)*34); min-height: calc(var(--u)*13); display: flex; flex-direction: column; justify-content: center; gap: calc(var(--u)*.6); padding: calc(var(--u)*1.4) calc(var(--u)*2); background: var(--card); border: calc(var(--u)*.26) solid var(--card-edge); border-radius: var(--wob-a); box-shadow: var(--shadow); }
+#orientation .guideicon{ font-size: calc(var(--u)*4); line-height: 1; }
+#orientation .guidetext{ font-size: calc(var(--u)*2); font-weight: 700; line-height: 1.45; }
+#orientation .stepdots{ display: flex; gap: calc(var(--u)*.45); }
+#orientation .stepdots span{ width: calc(var(--u)*.9); height: calc(var(--u)*.9); border-radius: 50%; background: var(--paper-3); }
+#orientation .stepdots span.on{ background: var(--accent); }
+
+.choice-audio{ display: grid; grid-template-columns: minmax(0, 1fr) var(--tap); gap: calc(var(--u)*.45); align-items: stretch; }
+.choice-audio .choice{ min-width: 0; width: 100%; }
+.choice-hear{ min-width: var(--tap); min-height: var(--tap); border: calc(var(--u)*.22) solid var(--card-edge); border-radius: var(--wob-b); background: var(--paper-2); font-size: calc(var(--u)*1.8); }
+
 /* ===========================================================
    TEN FRAME  (十のわく)
    =========================================================== */
@@ -1061,7 +1076,7 @@ body::before{
   position: absolute;
   font-size: calc(var(--u)*3.8); line-height: 1;
   transform: translate(-50%,-50%);
-  transition: transform .7s cubic-bezier(.3,.8,.4,1), opacity .5s;
+  transition: left .7s cubic-bezier(.3,.8,.4,1), transform .7s cubic-bezier(.3,.8,.4,1), opacity .5s;
   will-change: transform, opacity;
 }
 .actor.leaving{ opacity: 0; }
@@ -2563,6 +2578,7 @@ const Store = (() => {
        cannot separate a child who read back the part they could see from one who
        was a single count out — see 06-miss.js. */
     facts: {},
+    factRecent: {},  // item key -> last 12 first-try outcomes; recovered facts can graduate
     recent: {},       // "gameId:levelIndex" -> last 30 first-try outcomes, "1011…"
     last:  {},        // "gameId:levelIndex" -> day number last played
     swift: {},        // "gameId:levelIndex" -> 1 when cleared without counting
@@ -2580,6 +2596,7 @@ const Store = (() => {
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
     diagnostic: null, // { completedDay, outcomes, recommended }
+    orientation: false,
     missions: {},     // "YYYY-MM-DD" -> { id, gameId, text, prompt, done, reviewed }
     name: '',
     sfx: true, voice: true, voiceId: null,
@@ -2945,9 +2962,12 @@ const Store = (() => {
       const f = mem.facts[k];
       if (!f || !f[0] || !f[4]) continue;        // never asked, or nowhere to ask it again
       const missed = f[0] - f[1];
+      const recent = (mem.factRecent && mem.factRecent[k]) || '';
+      const recentRight = recent.split('').filter(x => x === '1').length;
+      const recovered = recent.length >= 6 && recentRight / recent.length >= .85;
       // right every time but still being counted out: the case a percentage cannot show
       const slow = f[5] >= FLUENT_SLOW_MS;
-      if (missed < 1 && !slow) continue;
+      if ((missed < 1 || recovered) && !slow) continue;
       if (!slow && f[1] / f[0] >= 0.8 && missed < 2) continue;   // one slip on a solid fact
       out.push({ key: k, label: f[3] || k, at: f[4], due: dueOf(k), missed, ms: f[5] || null, slow });
     }
@@ -3119,6 +3139,8 @@ const Store = (() => {
          and still have no way to bring it back: the item key says which game, never
          which level. */
       if (from) f[4] = from;
+      const recent = mem.factRecent || (mem.factRecent = {});
+      recent[k] = ((recent[k] || '') + (firstTryOk ? '1' : '0')).slice(-12);
       /* How long the answer took, kept only where speed is the goal and only for
          clean answers — a wrong answer times a guess. A single interrupted question
          (the iPad put down mid-problem) is clamped rather than dropped, so it cannot
@@ -3176,6 +3198,7 @@ const Store = (() => {
     recordSwift(g, l){ mem.swift[key(g, l)] = 1; save(); },
     introduced: (g, l) => !!(mem.intro && mem.intro[key(g, l)]),
     markIntroduced(g, l){ (mem.intro || (mem.intro = {}))[key(g, l)] = 1; save(); },
+    completeOrientation(){ mem.orientation = true; save(); },
 
     /* ---- provisional clears ---- */
     dayNumber: () => dayNo(),
@@ -3822,17 +3845,36 @@ const Progress = (() => {
     return { got, total: all.length };
   }
 
+  /* Each 小1 game has a short, relevant preparation route. Clearing a level
+     confirms it; sustained daily retrieval can confirm readiness as well. */
+  const G1_PATHS = {
+    g1set:   [['count', 0], ['numeral', 0]],
+    g1pair:  [['count', 1], ['compare', 1]],
+    g1teen:  [['numeral', 2], ['bond', 2], ['ten', 1]],
+    g1shiki: [['add', 0], ['sub', 0]]
+  };
+  function levelReady(id, i){
+    if (Store.hasConfirmed(id + ':' + i)) return true;
+    return Store.recentCount(id, i) >= 6 && Store.recentAccuracy(id, i) >= .75;
+  }
+  function g1GameOpen(g){
+    if (Store.data.g1Open || Store.data.g1Reached) return true;
+    const path = G1_PATHS[g.id] || [];
+    return path.length > 0 && path.every(([id, i]) => levelReady(id, i));
+  }
+  function pathProgress(g){
+    const path = G1_PATHS[g.id] || [];
+    return { got: path.filter(([id, i]) => levelReady(id, i)).length, total: path.length };
+  }
+  function unlockHint(g){
+    const p = pathProgress(g);
+    return p.total ? 'じゅんびの あそびを ' + p.got + '／' + p.total + ' できたら ひらくよ' : 'じゅんびが できたら ひらくよ';
+  }
+
   /** true once every 入学前 level is cleared — or once a parent opened the door by hand */
   function g1Open(){
     if (Store.data.g1Open || Store.data.g1Reached) return true;
-    const c = count('pre');
-    if (!(c.total > 0 && c.got >= c.total)) return false;
-    /* Written down the first time it is true. Computing it afresh every time is
-       what let a release that adds a 入学前 level lock a child out of a room they
-       had already walked into. Kept apart from `g1Open`, which is the parent's
-       hand on the door and is reported as such. */
-    Store.setPref('g1Reached', true);
-    return true;
+    return Games.list.some(g => stageOf(g) === 'g1' && g1GameOpen(g));
   }
 
   return {
@@ -3841,6 +3883,10 @@ const Progress = (() => {
     gateSlots,
     /** { got, total } over the levels the door counts — cleared levels, not stickers */
     preStickers: () => count('pre'),
+    levelReady,
+    g1GameOpen,
+    pathProgress,
+    unlockHint,
     /** levels cleared provisionally, waiting for another day */
     pendingCount: stage => gateSlots(stage).filter(k => Store.isPending(k)).length,
     g1Open,
@@ -3850,7 +3896,7 @@ const Progress = (() => {
 })();
 
 /** Is this game's half of the app open at all? */
-function stageOpen(g){ return Progress.stageOf(g) === 'pre' || Progress.g1Open(); }
+function stageOpen(g){ return Progress.stageOf(g) === 'pre' || Progress.g1GameOpen(g); }
 /** The gate every question-drawing surface asks: open stage AND unlocked level. */
 function levelOpen(g, i){ return stageOpen(g) && Store.levelUnlocked(g.id, i); }
 
@@ -3919,7 +3965,7 @@ const Session = (() => {
       if (key === exceptKey) continue;               // replaying it is the check
       const cut = key.lastIndexOf(':');
       const g = Games.byId[key.slice(0, cut)], li = Number(key.slice(cut + 1));
-      if (!g || !g.levels[li] || !levelOpen(g, li)) continue;
+      if (!g || !g.levels[li] || !levelOpen(g, li) || !Store.introduced(g.id, li)) continue;
       for (let i = 0; i < CHECK_N; i++) out.push({ game: g, level: g.levels[li], levelIndex: li, check: key });
     }
     return out;
@@ -4134,7 +4180,8 @@ const Session = (() => {
     const pool = [];
     Games.list.forEach(g => {
       g.levels.forEach((lv, i) => {
-        if (levelOpen(g, i)) pool.push({ game: g, level: lv, levelIndex: i });
+        /* Daily practice is retrieval, never a surprise lesson. */
+        if (levelOpen(g, i) && Store.introduced(g.id, i)) pool.push({ game: g, level: lv, levelIndex: i });
       });
     });
     if (!pool.length){                       // nothing unlocked yet — never leave an empty plan
@@ -4146,15 +4193,6 @@ const Session = (() => {
     const checks = checkSteps(null, 2);
     plan = (checks.length ? shuffle(checks.concat(drawDailyPlan(pool, Math.max(4, n - checks.length))))
                           : drawDailyPlan(pool, n)).map(p => Object.assign({}, p));
-    /* Practice can reach a level the child has never opened. Its first question is
-       done together instead of cold — two at most, so the set stays practice. */
-    const met = new Set();
-    let intros = 0;
-    plan.forEach(p => {
-      const k = p.game.id + ':' + p.levelIndex;
-      if (intros < 2 && !met.has(k) && needsIntro(p.game, p.levelIndex)){ p.intro = 'together'; intros++; }
-      met.add(k);
-    });
     titleEl.textContent = 'きょうの れんしゅう';
     begin();
   }
@@ -4414,7 +4452,12 @@ const Session = (() => {
           });
           if (v === answer){ answerBtn = b; answerText = String(v); }
           keys.push(b);
-          choicesEl.append(b);
+          if (o.speech){
+            const say = typeof o.speech === 'function' ? o.speech(val, v) : String(o.speech);
+            const hear = el('button.choice-hear', { type: 'button', 'aria-label': 'この こたえを きく',
+              onclick(e){ e.stopPropagation(); Sound.sfx.tap(); Sound.say(say, { delay: 0 }); } }, '🔊');
+            choicesEl.append(el('div.choice-audio', null, b, hear));
+          } else choicesEl.append(b);
         }
         hintExtras.push(() => {
           keys.forEach(b => {
@@ -6940,10 +6983,12 @@ function fillToTen(api){
       readout.textContent = 'いま ' + count + 'こ';
       if (count === 10){
         api.later(() => {
-          api.setPrompt(`${numTag(start)} と ${numTag(10 - start)} で <b>10</b>！`,
-                        `${numKana(start)}と${numKana(10 - start)}で、10！`);
-          api.correct({ quiet: true, delay: 1400 });
-          UI.bigMark('◯');
+          const add = 10 - start;
+          api.setPrompt(`${numTag(start)} に <b>いくつ たした？</b>`,
+                        `${numKana(start)}に、いくつ足した？`);
+          api.buildChoices(shuffle([add].concat(distractors(add, 2, 1, 9))), add, {
+            correctOpts: { delay: 900 }
+          });
         }, 300);
       }
     });
@@ -6951,6 +6996,10 @@ function fillToTen(api){
   api.field.append(el('div.frameset', null, f), readout);
   api.coach({ walk(){ return cells.filter(c => !c.firstChild).map(c => ({ at: c, act(){ c.click(); }, ms: 620 })); } });
   api.onHint(() => { readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; });
+  api.onShow(() => {
+    cells.filter(c => !c.firstChild).forEach(c => c.click());
+    api.later(() => { const b = $('.choice.correct') || $$('.choice', api.choices).find(x => x.textContent === String(10 - start)); if (b) b.click(); }, 650);
+  });
 }
 
 function partnerOfTen(api, pad){
@@ -7150,8 +7199,10 @@ function storyScene(api, a, b, op, thing, onReady){
   const actors = [];
   const place = (spots, cls, hidden) => spots.forEach(p => {
     const n = el('div.actor.' + cls, { text: thing.e, style: { left: p[0] + '%', top: p[1] + '%' } });
-    // offset in % of the scene, not vw: a vw offset left newcomers visible inside the frame
-    if (hidden) n.style.transform = 'translate(160%,-50%)';
+    n.dataset.homeLeft = p[0] + '%';
+    /* translate(160%) is relative to the emoji, not the scene. Place newcomers
+       outside the scene itself until their arrival starts. */
+    if (hidden) n.style.left = '112%';
     scene.append(n); actors.push(n);
   });
 
@@ -7167,7 +7218,7 @@ function storyScene(api, a, b, op, thing, onReady){
   api.later(() => {
     Sound.sfx.swoosh();
     if (op === '+'){
-      actors.forEach(n => { if (n.classList.contains('g2')) n.style.transform = 'translate(-50%,-50%)'; });
+      actors.forEach(n => { if (n.classList.contains('g2')) n.style.left = n.dataset.homeLeft; });
     } else {
       actors.forEach(n => {
         if (!n.classList.contains('g2')) return;
@@ -8060,7 +8111,8 @@ function setClock(api, hand){
   function paint(){
     if (minuteMode){
       const ma = (cur / 60) * Math.PI * 2 - Math.PI / 2;
-      const ha = (((targetHour % 12) + .5) / 12) * Math.PI * 2 - Math.PI / 2;
+      /* The short hand moves continuously as the long hand moves. */
+      const ha = (((targetHour % 12) + cur / 60) / 12) * Math.PI * 2 - Math.PI / 2;
       minuteHand.setAttribute('x2', (50 + Math.cos(ma) * 33).toFixed(2));
       minuteHand.setAttribute('y2', (50 + Math.sin(ma) * 33).toFixed(2));
       hourHand.setAttribute('x2', (50 + Math.cos(ha) * 21).toFixed(2));
@@ -8725,7 +8777,9 @@ function teenFrames(total, opts){
   const ten = el('div.tenframe.fullten', { style: { '--cols': 5 } });
   for (let i = 0; i < 10; i++) ten.append(el('div.cell', null, el('div.dot')));
   const rest = el('div.tenframe', { style: { '--cols': 5 } });
-  for (let i = 0; i < 5; i++){
+  /* 11〜19 needs a second full ten-frame. Five cells worked only through 15:
+     16 was drawn as「10と5」while the prompt and keypad expected 16. */
+  for (let i = 0; i < 10; i++){
     const c = el('div.cell' + (i >= ones ? '.hole' : ''));
     if (i < ones) c.append(el('div.dot.b'));
     rest.append(c);
@@ -8863,7 +8917,7 @@ function pickEquation(api){
       const g2 = $$('.actor.g2', api.field);
       g2.forEach(n => {
         n.style.transition = 'none';
-        if (plus) n.style.transform = 'translate(160%,-50%)';
+        if (plus) n.style.left = '112%';
         else { n.classList.remove('leaving'); n.style.transform = 'translate(-50%,-50%)'; }
       });
       void api.field.offsetWidth;
@@ -8871,7 +8925,7 @@ function pickEquation(api){
         Sound.sfx.swoosh();
         g2.forEach(n => {
           n.style.transition = '';
-          if (plus) n.style.transform = 'translate(-50%,-50%)';
+          if (plus) n.style.left = n.dataset.homeLeft;
           else { n.classList.add('leaving'); n.style.transform = 'translate(160%,-160%)'; }
         });
       }, 700);
@@ -8902,13 +8956,20 @@ const WORD_STORIES = [
     s: (a, b, x) => `${x.n}が${koKana(a)}あります。${koKana(b)}あげました。`, q: 'のこりは いくつ？' }
 ];
 
+/* Quantity stories should stay scenes a child can picture. The generic object
+   bank includes cars and animals, which produced「ねこを食べました」. */
+const WORD_THINGS = [
+  { e: '🍎', n: 'りんご' }, { e: '🍓', n: 'いちご' }, { e: '🍌', n: 'バナナ' },
+  { e: '🍇', n: 'ぶどう' }, { e: '🧁', n: 'ケーキ' }, { e: '🍩', n: 'ドーナツ' }
+];
+
 function plusOrMinus(api){
   const st = pick(WORD_STORIES);
   const plus = st.op === '+';
   const a = plus ? ri(2, 6) : ri(3, 9);
   const b = plus ? ri(1, 10 - a) : ri(1, a - 1);
   const ans = plus ? a + b : a - b;
-  const thing = pick(THINGS);
+  const thing = pick(WORD_THINGS);
   api.item((plus ? 'word+:' : 'word-:') + a + '_' + b,
     a + (plus ? ' ＋ ' : ' − ') + b + ' の おはなし');
   api.setPrompt('この おはなしは <b>たしざん</b>？ <b>ひきざん</b>？',
@@ -8963,7 +9024,7 @@ function matchStory(api){
   const plus = chance(.5);
   const a = plus ? ri(2, 6) : ri(4, 9);
   const b = plus ? ri(1, 10 - a) : ri(1, a - 2);
-  const thing = pick(THINGS);
+  const thing = pick(WORD_THINGS);
   let c = b + pick([1, 2]);
   if (!plus && c >= a) c = b - 1 || b + 1;
   api.item((plus ? 'read+:' : 'read-:') + a + '_' + b,
@@ -8978,6 +9039,7 @@ function matchStory(api){
   const wrongN  = plus ? line(c, 'もらった') : line(c, 'たべた');
   api.buildChoices(shuffle([right, wrongOp, wrongN]), right, {
     cls: 'story',
+    speech: v => v.replace(/\n/g, '。'),
     // one sentence per line: a narrow button breaks Japanese wherever it likes,
     // and 「た/べた」 across two lines is not something a six-year-old should have
     // to reassemble before they can answer
@@ -9119,7 +9181,8 @@ const Diagnostic = (() => {
     const first = Store.data.diagnostic && Store.data.diagnostic.recommended;
     if (first && Games.byId[first.gameId]
         && levelOpen(Games.byId[first.gameId], first.levelIndex || 0)
-        && !cleared(first.gameId, first.levelIndex || 0)) return first;
+        && !cleared(first.gameId, first.levelIndex || 0)
+        && !resting(first.gameId, first.levelIndex || 0)) return first;
 
     const next = nextUncleared();
     if (next) return next;
@@ -9356,7 +9419,8 @@ const Title = (() => {
           if (Sound.voiceOn && !hasVoice){
             Home.render();
             UI.show('home', { replace: true });
-          } else if (Diagnostic.shouldRun()) Session.startDiagnostic();
+          } else if (!Store.data.orientation) Orientation.open();
+          else if (Diagnostic.shouldRun()) Session.startDiagnostic();
           else {
             Home.render();
             UI.show('home', { replace: true });
@@ -9381,6 +9445,40 @@ const Title = (() => {
     return UI.register('title', node);
   }
   return { build };
+})();
+
+/* ---------------------------------------------------------- FIRST USE */
+const Orientation = (() => {
+  let node, card, dots, next, step = 0;
+  const pages = [
+    { icon: '👆', text: 'えや すうじを タップして えらぶよ', say: '絵や数字を、タップして選ぶよ。' },
+    { icon: '🔊', text: 'わからない ときは スピーカーを おして きいてね', say: '分からない時は、スピーカーを押して聞いてね。' },
+    { icon: '🧩', text: 'さいしょは みて、つぎは いっしょに やってみよう', say: '最初は見て、次はいっしょにやってみよう。' }
+  ];
+  function build(){
+    if (node) return node;
+    card = el('div.guidecard');
+    dots = el('div.stepdots');
+    next = el('button.btn.btn-accent', { type: 'button', onclick(){
+      Sound.sfx.tap();
+      if (step < pages.length - 1){ step++; render(); }
+      else { Store.completeOrientation(); Session.startDiagnostic(); }
+    } });
+    node = el('div#orientation', null, mascotSVG('happy', 'talk'),
+      el('h1.welcome', { text: 'あそびかた' }), card, dots, next);
+    return UI.register('orientation', node);
+  }
+  function render(){
+    const p = pages[step];
+    clear(card); clear(dots);
+    card.append(el('div.guideicon', { text: p.icon }), el('div.guidetext', { text: p.text }),
+      el('button.btn.btn-ghost', { type: 'button', onclick(){ Sound.sfx.tap(); Sound.say(p.say, { delay: 0 }); } }, '🔊 きく'));
+    pages.forEach((x, i) => dots.append(el('span' + (i === step ? '.on' : ''))));
+    next.textContent = step === pages.length - 1 ? 'ぼうけんを はじめる' : 'つぎへ';
+    Sound.say(p.say, { delay: 180 });
+  }
+  function open(){ build(); step = 0; render(); UI.show('orientation', { replace: true }); }
+  return { build, open };
 })();
 
 /* ---------------------------------------------------------- HOME */
@@ -9477,17 +9575,18 @@ const Home = (() => {
      for; they are not part of the key. */
   function lockedCard(g){
     return el('button.gamecard.locked', {
-      type: 'button', title: g.name + '　ぜんぶの レベルを クリアすると あそべるよ',
+      type: 'button', title: g.name + '　' + Progress.unlockHint(g),
       onclick(){
         Sound.sfx.tap();
         Book.render();
         UI.show('book');
         // after the switch: UI.show hushes anything queued before it
-        Sound.say('入学前のレベルを全部クリアすると、遊べるようになるよ。', { delay: 120 });
+        Sound.say(Progress.unlockHint(g), { delay: 120 });
       }
     },
       el('div.ico', { text: g.ico }),
       el('div.nm', { text: g.name }),
+      el('div.lockhint', { text: Progress.pathProgress(g).got + '／' + Progress.pathProgress(g).total }),
       el('div.lockmark', { text: '🔒' }));
   }
 
@@ -9542,6 +9641,8 @@ const Home = (() => {
         el('div.go', { text: '▶' }));
       reviewEl.onclick = () => Missions.openReview(review);
     }
+    const learnedCount = Games.list.reduce((n, g) => n + g.levels.filter((lv, i) => Store.introduced(g.id, i)).length, 0);
+    dailyEl.hidden = learnedCount === 0;
     clear(dailyEl);
     dailyEl.classList.toggle('done', n >= 10);
     dailyEl.append(
@@ -9550,7 +9651,7 @@ const Home = (() => {
         el('div.t', { text: n >= 10 ? 'きょうの れんしゅう おわり！' : 'きょうの れんしゅう' }),
         el('div.s', { text: n >= 10
           ? `きょうは ${n}もん がんばったね　･　${streak}にち れんぞく`
-          : 'ぜんぶの あそびから 10もん でるよ' })),
+          : 'あそんだ もんだいから 10もん でるよ' })),
       el('div.go', { text: n >= 10 ? '🎉' : '▶' }));
 
     const weak = Store.weakFacts(4);
@@ -9582,17 +9683,16 @@ const Home = (() => {
        down to meet them. Rather than move the map around, the count goes on the one
        strip that is on screen whatever happens — the shelf the child already taps. */
     const gate = Progress.preStickers();
-    const toGo = Progress.g1Open() ? 0 : Math.max(0, gate.total - gate.got);
+    const toGo = Progress.g1Open() ? 0 : 1;
     shelfEl.classList.toggle('nearly', toGo > 0 && toGo <= 6);
     /* The same picture the result screen draws: a bar filling towards 🎓, and dots to
        count once there are few enough. 「あと 34レベル」 is a number for the adult,
        so it stays in the label for them. */
     let sub;
     if (toGo){
-      const say = '1ねんせいの きょうしつまで あと ' + toGo + 'レベル';
-      const middle = toGo <= 10 ? el('span.leftdots') : el('span.gauge', null,
-        el('span.fill', { style: { width: Math.round(gate.got / gate.total * 100) + '%' } }));
-      if (toGo <= 10) for (let i = 0; i < toGo; i++) middle.append(el('span', { text: '●' }));
+      const say = '1ねんせいの きょうしつは、あそびごとに じゅんびが できると ひらくよ';
+      const middle = el('span.leftdots');
+      for (let i = 0; i < 3; i++) middle.append(el('span', { text: '●' }));
       sub = el('small.togo', { role: 'img', 'aria-label': say, title: say },
         middle, el('span', { text: '🎓', 'aria-hidden': 'true' }));
     } else {
@@ -9609,22 +9709,20 @@ const Home = (() => {
     const shown = [...dailiesEl.children].filter(c => !c.hidden).length;
     dailiesEl.className = 'dailies n' + shown;
 
-    const open1 = Progress.g1Open();
-
     clear(worldsEl);
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
       if (!games.length) return;
-      const shut = (w.stage || 'pre') !== 'pre' && !open1;
       const grid = el('div.gamegrid');
-      games.forEach(g => grid.append(shut ? lockedCard(g) : gameCard(g)));
+      const shut = games.every(g => !stageOpen(g));
+      games.forEach(g => grid.append(stageOpen(g) ? gameCard(g) : lockedCard(g)));
       // the world's own name already says 1ねんせい; a second badge saying it again
       // only takes the room the name needs to stay on one line
       worldsEl.append(el('div.world' + ((w.stage || 'pre') !== 'pre' ? '.newstage' : '')
         + (shut ? '.shut' : ''),
         { style: { '--wc': w.color } },
         el('h3', null, el('span.chip', { text: w.name }),
-          el('span.sub', { text: shut ? 'ぜんぶ クリアすると ひらくよ' : w.sub })), grid));
+          el('span.sub', { text: shut ? 'じゅんびが できると ひらくよ' : w.sub })), grid));
     });
   }
   return { build, render };
@@ -9711,7 +9809,7 @@ const Result = (() => {
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
-    const spoken = (r.unlockedG1 ? 'レベルを全部クリアしたね！小学校一年生の問題ができるよ！'
+    const spoken = (r.unlockedG1 ? 'じゅんびが できたね！小学校一年生の新しい問題ができるよ！'
                  : r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
                  : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
@@ -9748,16 +9846,15 @@ const Result = (() => {
     let toDoor = null;
     if ((stickers.length || coloured.length) && !r.unlockedG1 && !Progress.g1Open()){
       const st = Progress.preStickers();
-      const left = Math.max(0, st.total - st.got);
+      const left = 1;
       if (left){
-        const say = '1ねんせいの きょうしつまで あと ' + left + 'レベル';
+        const say = '1ねんせいの きょうしつは、あそびごとに じゅんびが できると ひらくよ';
         let middle;
         if (left <= 10){
           middle = el('div.leftdots');
           for (let i = 0; i < left; i++) middle.append(el('span', { text: '●' }));
         } else {
-          middle = el('div.gauge', null,
-            el('div.fill', { style: { width: Math.round(st.got / st.total * 100) + '%' } }));
+          middle = el('div.gauge', null, el('div.fill', { style: { width: '35%' } }));
         }
         toDoor = el('div.stagenext' + (left <= 10 ? '.nearly' : ''),
           { role: 'img', 'aria-label': say, title: say },
@@ -9772,8 +9869,8 @@ const Result = (() => {
     if (r.unlockedG1){
       inner.append(el('div.unlocked', null,
         el('div.e', { text: '🎓' }),
-        el('div.l', { text: 'レベルを ぜんぶ クリアした！' }),
-        el('b', { text: 'しょうがっこう 1ねんせいの もんだいが できるよ！' }),
+        el('div.l', { text: 'じゅんびが できた！' }),
+        el('b', { text: 'しょうがっこう 1ねんせいの あたらしい もんだいが できるよ！' }),
         el('div.l', { text: '「1ねんせいの きょうしつ」が ホームに ふえたよ' })));
     }
     /* The thing ★★★ could never say. These levels are for an answer that arrives,
@@ -9821,8 +9918,12 @@ const Result = (() => {
           el('div.l', { text: 'つぎの おすすめ' }),
           el('b', { text: g.name + '　《' + lv.t + '》' })));
       }
-    } else if (!r.unlockedG1 && !stickers.length && !coloured.length && !(r.shaky && r.shaky.length)
-               && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
+    }
+    /* A real-world mission is the next learning action after a successful run.
+       It remains visible alongside a sticker: earning a sticker must not hide the
+       bridge from screen maths to objects at home. */
+    if (!r.unlockedG1 && !(r.shaky && r.shaky.length)
+        && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
       /* one piece of news per screen: the classroom outranks today's kitchen-table
          task, and so do a new sticker and the facts to practise — the mission comes
          up on the next pass */
@@ -10940,6 +11041,7 @@ const Parent = (() => {
   if (Store.data.voiceId) Sound.voiceId = Store.data.voiceId;
 
   Title.build();
+  Orientation.build();
   Home.build();
   Levels.build();
   Session.build();
@@ -10968,7 +11070,7 @@ const Parent = (() => {
 
 /* Expose the internals for debugging / automated checks. */
 window.KazuApp = {
-  Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent,
+  Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent, Orientation,
   Diagnostic, Missions, Progress, Coach, stageOpen, levelOpen,
   classifyMiss, missChild,
   el, svg, clear, $, $$,

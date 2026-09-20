@@ -706,7 +706,8 @@ function setClock(api, hand){
   function paint(){
     if (minuteMode){
       const ma = (cur / 60) * Math.PI * 2 - Math.PI / 2;
-      const ha = (((targetHour % 12) + .5) / 12) * Math.PI * 2 - Math.PI / 2;
+      /* The short hand moves continuously as the long hand moves. */
+      const ha = (((targetHour % 12) + cur / 60) / 12) * Math.PI * 2 - Math.PI / 2;
       minuteHand.setAttribute('x2', (50 + Math.cos(ma) * 33).toFixed(2));
       minuteHand.setAttribute('y2', (50 + Math.sin(ma) * 33).toFixed(2));
       hourHand.setAttribute('x2', (50 + Math.cos(ha) * 21).toFixed(2));

@@ -241,10 +241,12 @@ function fillToTen(api){
       readout.textContent = 'いま ' + count + 'こ';
       if (count === 10){
         api.later(() => {
-          api.setPrompt(`${numTag(start)} と ${numTag(10 - start)} で <b>10</b>！`,
-                        `${numKana(start)}と${numKana(10 - start)}で、10！`);
-          api.correct({ quiet: true, delay: 1400 });
-          UI.bigMark('◯');
+          const add = 10 - start;
+          api.setPrompt(`${numTag(start)} に <b>いくつ たした？</b>`,
+                        `${numKana(start)}に、いくつ足した？`);
+          api.buildChoices(shuffle([add].concat(distractors(add, 2, 1, 9))), add, {
+            correctOpts: { delay: 900 }
+          });
         }, 300);
       }
     });
@@ -252,6 +254,10 @@ function fillToTen(api){
   api.field.append(el('div.frameset', null, f), readout);
   api.coach({ walk(){ return cells.filter(c => !c.firstChild).map(c => ({ at: c, act(){ c.click(); }, ms: 620 })); } });
   api.onHint(() => { readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; });
+  api.onShow(() => {
+    cells.filter(c => !c.firstChild).forEach(c => c.click());
+    api.later(() => { const b = $('.choice.correct') || $$('.choice', api.choices).find(x => x.textContent === String(10 - start)); if (b) b.click(); }, 650);
+  });
 }
 
 function partnerOfTen(api, pad){
@@ -451,8 +457,10 @@ function storyScene(api, a, b, op, thing, onReady){
   const actors = [];
   const place = (spots, cls, hidden) => spots.forEach(p => {
     const n = el('div.actor.' + cls, { text: thing.e, style: { left: p[0] + '%', top: p[1] + '%' } });
-    // offset in % of the scene, not vw: a vw offset left newcomers visible inside the frame
-    if (hidden) n.style.transform = 'translate(160%,-50%)';
+    n.dataset.homeLeft = p[0] + '%';
+    /* translate(160%) is relative to the emoji, not the scene. Place newcomers
+       outside the scene itself until their arrival starts. */
+    if (hidden) n.style.left = '112%';
     scene.append(n); actors.push(n);
   });
 
@@ -468,7 +476,7 @@ function storyScene(api, a, b, op, thing, onReady){
   api.later(() => {
     Sound.sfx.swoosh();
     if (op === '+'){
-      actors.forEach(n => { if (n.classList.contains('g2')) n.style.transform = 'translate(-50%,-50%)'; });
+      actors.forEach(n => { if (n.classList.contains('g2')) n.style.left = n.dataset.homeLeft; });
     } else {
       actors.forEach(n => {
         if (!n.classList.contains('g2')) return;

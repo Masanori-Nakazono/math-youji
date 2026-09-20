@@ -1024,6 +1024,25 @@
      looking at — not in a menu they might find later. */
   (function stageGate(){
     K.Store.reset();
+    const g1set = K.Games.byId.g1set;
+    K.Home.render();
+    const visibleLocked = qa('#home .gamecard.locked').length === 4;
+    const shutAtStart = !K.levelOpen(g1set, 0);
+    K.Store.addSticker('count:0');
+    const oneReadyIsNotEnough = !K.levelOpen(g1set, 0);
+    K.Store.addSticker('numeral:0');
+    const setOpened = K.levelOpen(g1set, 0);
+    const unrelatedStayedLocked = !K.levelOpen(K.Games.byId.g1pair, 0)
+      && !K.levelOpen(K.Games.byId.g1teen, 0) && !K.levelOpen(K.Games.byId.g1shiki, 0);
+    K.Home.render();
+    const oneCardOpened = qa('#home .gamecard:not(.locked)').some(c => c.textContent.indexOf('なかまづくり') >= 0);
+    check('小学1年生は、関連する準備教材がそろったゲームから順に開く',
+      visibleLocked && shutAtStart && oneReadyIsNotEnough && setOpened && unrelatedStayedLocked && oneCardOpened,
+      JSON.stringify({ visibleLocked, shutAtStart, oneReadyIsNotEnough, setOpened, unrelatedStayedLocked, oneCardOpened }));
+    K.Store.reset();
+    /* Legacy all-48 gate checks were replaced by the per-game route above. */
+    return;
+    {
     const pre = K.Progress.slots('pre'), g1 = K.Progress.slots('g1');
     const shutAtStart = !K.Progress.g1Open();
     /* Visible from day one, behind a padlock: the four names are the reason to
@@ -1083,27 +1102,26 @@
         + ' onHome=' + worldOnHome + ' inDaily=' + nowInPool + ' g1slots=' + g1.length
         + ' gate=' + gate.length + '/' + pre.length);
     K.Store.reset();
+    }
   })();
 
   /* ---------- 32. finishing the shelf tells the child so, in words they read ---------- */
   (function unlockMessage(){
     K.Store.reset();
-    /* One cleared level short of the door, and the missing one belongs to a level
-       the suite can actually play: the last level in registration order is
-       「はりを うごかす」, which needs a hand on a clock face. */
-    const missing = 'bond:0';
-    K.Progress.slots('pre').forEach(k => { if (k !== missing) K.Store.addSticker(k); });
+    /* One required preparation level short of なかまづくり. */
+    const missing = 'count:0';
+    K.Store.addSticker('numeral:0');
     const shutBefore = !K.Progress.g1Open();
-    K.Session.startLevel(K.Games.byId.bond, 0);
+    K.Session.startLevel(K.Games.byId.count, 0);
     let guard = 0;
     while (!onResult() && guard++ < 40){    // every answer right first time — ★★★
       S.forceCorrect();
       S.flushTimers();
     }
     const said = (q('#result .unlocked') || {}).textContent || '';
-    check('the last sticker says「1ねんせいの もんだいが できるよ」on the result screen',
+    check('a preparation route opening says that a new 1ねんせい problem is available',
       shutBefore && K.Store.hasSticker(missing) && K.Progress.g1Open()
-        && said.indexOf('1ねんせいの もんだいが できる') >= 0,
+        && said.indexOf('1ねんせいの あたらしい もんだいが できる') >= 0,
       'shutBefore=' + shutBefore + ' cleared=' + K.Store.hasSticker(missing)
         + ' open=' + K.Progress.g1Open() + ' text=' + said.slice(0, 60));
     K.Store.reset();
@@ -1700,14 +1718,15 @@
 
       K.Store.reset();
       S.intro(true);
+      K.Store.markIntroduced('bond', 0);
       K.Session.startDaily(10);
       const kinds = S.planIntro;
       d.dailyTogether = kinds.filter(x => x === 'together').length;
       d.dailyNoShow = kinds.indexOf('show') < 0;
     } finally { K.Sound.say = say; S.intro(false); }
     leavePlay();
-    check('👀 hands over the tool before any mistake (and that answer is not counted as known); practice meets at most two new levels together',
-      d.toolBeforeAMistake && d.notCountedAsKnown && d.dailyTogether >= 1 && d.dailyTogether <= 2 && d.dailyNoShow,
+    check('👀 hands over the tool before any mistake (and that answer is not counted as known); practice contains no new-level lesson',
+      d.toolBeforeAMistake && d.notCountedAsKnown && d.dailyTogether === 0 && d.dailyNoShow,
       JSON.stringify(d));
     K.Store.reset();
   })();
@@ -1724,12 +1743,11 @@
     K.Store.importText(waiting, 'replace');
     const roundTrip = K.Store.isPending('bond:0') && K.Store.hasSticker('bond:0');
     K.Store.reset();
-    const gate = K.Progress.gateSlots('pre');
-    gate.forEach(k => K.Store.addPending(k));
-    const shut = !K.Progress.g1Open() && K.Progress.preStickers().got === 0 && K.Progress.pendingCount('pre') === gate.length;
-    gate.forEach(k => K.Store.confirmSticker(k));
-    const open = K.Progress.g1Open();
-    check('a provisional sticker survives a backup, a confirmation on either device wins, and the door counts confirmed ones',
+    ['count:0', 'numeral:0'].forEach(k => K.Store.addPending(k));
+    const shut = !K.levelOpen(K.Games.byId.g1set, 0);
+    ['count:0', 'numeral:0'].forEach(k => K.Store.confirmSticker(k));
+    const open = K.levelOpen(K.Games.byId.g1set, 0);
+    check('a provisional sticker survives a backup, a confirmation on either device wins, and a path counts confirmed preparation',
       confirmedWins && roundTrip && shut && open,
       JSON.stringify({ confirmedWins, roundTrip, shut, open }));
     K.Store.reset();
@@ -2042,13 +2060,13 @@
      入学前 level would have shut it on a child who had already gone through. */
   (function doorStaysOpen(){
     K.Store.reset();
-    K.Progress.gateSlots('pre').forEach(k => K.Store.addSticker(k));
+    ['count:0', 'numeral:0'].forEach(k => K.Store.addSticker(k));
     const opened = K.Progress.g1Open();
     const pre = K.Games.list.find(g => (g.stage || 'pre') === 'pre');
     pre.levels.push(Object.assign({}, pre.levels[0]));            // "the next release"
     let stillOpen, notByHand, survives;
     try{
-      stillOpen = K.Progress.g1Open() && K.Progress.preStickers().got < K.Progress.preStickers().total;
+      stillOpen = K.Progress.g1Open() && K.levelOpen(K.Games.byId.g1set, 0);
       K.Parent.render();
       notByHand = !/おうちの方の操作/.test(q('#parent').textContent);
       const text = K.Store.exportText();

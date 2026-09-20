@@ -110,7 +110,8 @@ const Diagnostic = (() => {
     const first = Store.data.diagnostic && Store.data.diagnostic.recommended;
     if (first && Games.byId[first.gameId]
         && levelOpen(Games.byId[first.gameId], first.levelIndex || 0)
-        && !cleared(first.gameId, first.levelIndex || 0)) return first;
+        && !cleared(first.gameId, first.levelIndex || 0)
+        && !resting(first.gameId, first.levelIndex || 0)) return first;
 
     const next = nextUncleared();
     if (next) return next;

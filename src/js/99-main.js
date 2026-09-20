@@ -32,6 +32,7 @@
   if (Store.data.voiceId) Sound.voiceId = Store.data.voiceId;
 
   Title.build();
+  Orientation.build();
   Home.build();
   Levels.build();
   Session.build();
@@ -60,7 +61,7 @@
 
 /* Expose the internals for debugging / automated checks. */
 window.KazuApp = {
-  Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent,
+  Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent, Orientation,
   Diagnostic, Missions, Progress, Coach, stageOpen, levelOpen,
   classifyMiss, missChild,
   el, svg, clear, $, $$,

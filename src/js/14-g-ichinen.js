@@ -552,7 +552,9 @@ function teenFrames(total, opts){
   const ten = el('div.tenframe.fullten', { style: { '--cols': 5 } });
   for (let i = 0; i < 10; i++) ten.append(el('div.cell', null, el('div.dot')));
   const rest = el('div.tenframe', { style: { '--cols': 5 } });
-  for (let i = 0; i < 5; i++){
+  /* 11〜19 needs a second full ten-frame. Five cells worked only through 15:
+     16 was drawn as「10と5」while the prompt and keypad expected 16. */
+  for (let i = 0; i < 10; i++){
     const c = el('div.cell' + (i >= ones ? '.hole' : ''));
     if (i < ones) c.append(el('div.dot.b'));
     rest.append(c);
@@ -690,7 +692,7 @@ function pickEquation(api){
       const g2 = $$('.actor.g2', api.field);
       g2.forEach(n => {
         n.style.transition = 'none';
-        if (plus) n.style.transform = 'translate(160%,-50%)';
+        if (plus) n.style.left = '112%';
         else { n.classList.remove('leaving'); n.style.transform = 'translate(-50%,-50%)'; }
       });
       void api.field.offsetWidth;
@@ -698,7 +700,7 @@ function pickEquation(api){
         Sound.sfx.swoosh();
         g2.forEach(n => {
           n.style.transition = '';
-          if (plus) n.style.transform = 'translate(-50%,-50%)';
+          if (plus) n.style.left = n.dataset.homeLeft;
           else { n.classList.add('leaving'); n.style.transform = 'translate(160%,-160%)'; }
         });
       }, 700);
@@ -729,13 +731,20 @@ const WORD_STORIES = [
     s: (a, b, x) => `${x.n}が${koKana(a)}あります。${koKana(b)}あげました。`, q: 'のこりは いくつ？' }
 ];
 
+/* Quantity stories should stay scenes a child can picture. The generic object
+   bank includes cars and animals, which produced「ねこを食べました」. */
+const WORD_THINGS = [
+  { e: '🍎', n: 'りんご' }, { e: '🍓', n: 'いちご' }, { e: '🍌', n: 'バナナ' },
+  { e: '🍇', n: 'ぶどう' }, { e: '🧁', n: 'ケーキ' }, { e: '🍩', n: 'ドーナツ' }
+];
+
 function plusOrMinus(api){
   const st = pick(WORD_STORIES);
   const plus = st.op === '+';
   const a = plus ? ri(2, 6) : ri(3, 9);
   const b = plus ? ri(1, 10 - a) : ri(1, a - 1);
   const ans = plus ? a + b : a - b;
-  const thing = pick(THINGS);
+  const thing = pick(WORD_THINGS);
   api.item((plus ? 'word+:' : 'word-:') + a + '_' + b,
     a + (plus ? ' ＋ ' : ' − ') + b + ' の おはなし');
   api.setPrompt('この おはなしは <b>たしざん</b>？ <b>ひきざん</b>？',
@@ -790,7 +799,7 @@ function matchStory(api){
   const plus = chance(.5);
   const a = plus ? ri(2, 6) : ri(4, 9);
   const b = plus ? ri(1, 10 - a) : ri(1, a - 2);
-  const thing = pick(THINGS);
+  const thing = pick(WORD_THINGS);
   let c = b + pick([1, 2]);
   if (!plus && c >= a) c = b - 1 || b + 1;
   api.item((plus ? 'read+:' : 'read-:') + a + '_' + b,
@@ -805,6 +814,7 @@ function matchStory(api){
   const wrongN  = plus ? line(c, 'もらった') : line(c, 'たべた');
   api.buildChoices(shuffle([right, wrongOp, wrongN]), right, {
     cls: 'story',
+    speech: v => v.replace(/\n/g, '。'),
     // one sentence per line: a narrow button breaks Japanese wherever it likes,
     // and 「た/べた」 across two lines is not something a six-year-old should have
     // to reassemble before they can answer

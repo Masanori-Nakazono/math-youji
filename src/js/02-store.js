@@ -25,6 +25,7 @@ const Store = (() => {
        cannot separate a child who read back the part they could see from one who
        was a single count out — see 06-miss.js. */
     facts: {},
+    factRecent: {},  // item key -> last 12 first-try outcomes; recovered facts can graduate
     recent: {},       // "gameId:levelIndex" -> last 30 first-try outcomes, "1011…"
     last:  {},        // "gameId:levelIndex" -> day number last played
     swift: {},        // "gameId:levelIndex" -> 1 when cleared without counting
@@ -42,6 +43,7 @@ const Store = (() => {
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
     diagnostic: null, // { completedDay, outcomes, recommended }
+    orientation: false,
     missions: {},     // "YYYY-MM-DD" -> { id, gameId, text, prompt, done, reviewed }
     name: '',
     sfx: true, voice: true, voiceId: null,
@@ -407,9 +409,12 @@ const Store = (() => {
       const f = mem.facts[k];
       if (!f || !f[0] || !f[4]) continue;        // never asked, or nowhere to ask it again
       const missed = f[0] - f[1];
+      const recent = (mem.factRecent && mem.factRecent[k]) || '';
+      const recentRight = recent.split('').filter(x => x === '1').length;
+      const recovered = recent.length >= 6 && recentRight / recent.length >= .85;
       // right every time but still being counted out: the case a percentage cannot show
       const slow = f[5] >= FLUENT_SLOW_MS;
-      if (missed < 1 && !slow) continue;
+      if ((missed < 1 || recovered) && !slow) continue;
       if (!slow && f[1] / f[0] >= 0.8 && missed < 2) continue;   // one slip on a solid fact
       out.push({ key: k, label: f[3] || k, at: f[4], due: dueOf(k), missed, ms: f[5] || null, slow });
     }
@@ -581,6 +586,8 @@ const Store = (() => {
          and still have no way to bring it back: the item key says which game, never
          which level. */
       if (from) f[4] = from;
+      const recent = mem.factRecent || (mem.factRecent = {});
+      recent[k] = ((recent[k] || '') + (firstTryOk ? '1' : '0')).slice(-12);
       /* How long the answer took, kept only where speed is the goal and only for
          clean answers — a wrong answer times a guess. A single interrupted question
          (the iPad put down mid-problem) is clamped rather than dropped, so it cannot
@@ -638,6 +645,7 @@ const Store = (() => {
     recordSwift(g, l){ mem.swift[key(g, l)] = 1; save(); },
     introduced: (g, l) => !!(mem.intro && mem.intro[key(g, l)]),
     markIntroduced(g, l){ (mem.intro || (mem.intro = {}))[key(g, l)] = 1; save(); },
+    completeOrientation(){ mem.orientation = true; save(); },
 
     /* ---- provisional clears ---- */
     dayNumber: () => dayNo(),

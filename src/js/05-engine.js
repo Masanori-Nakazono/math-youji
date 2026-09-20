@@ -98,17 +98,36 @@ const Progress = (() => {
     return { got, total: all.length };
   }
 
+  /* Each 小1 game has a short, relevant preparation route. Clearing a level
+     confirms it; sustained daily retrieval can confirm readiness as well. */
+  const G1_PATHS = {
+    g1set:   [['count', 0], ['numeral', 0]],
+    g1pair:  [['count', 1], ['compare', 1]],
+    g1teen:  [['numeral', 2], ['bond', 2], ['ten', 1]],
+    g1shiki: [['add', 0], ['sub', 0]]
+  };
+  function levelReady(id, i){
+    if (Store.hasConfirmed(id + ':' + i)) return true;
+    return Store.recentCount(id, i) >= 6 && Store.recentAccuracy(id, i) >= .75;
+  }
+  function g1GameOpen(g){
+    if (Store.data.g1Open || Store.data.g1Reached) return true;
+    const path = G1_PATHS[g.id] || [];
+    return path.length > 0 && path.every(([id, i]) => levelReady(id, i));
+  }
+  function pathProgress(g){
+    const path = G1_PATHS[g.id] || [];
+    return { got: path.filter(([id, i]) => levelReady(id, i)).length, total: path.length };
+  }
+  function unlockHint(g){
+    const p = pathProgress(g);
+    return p.total ? 'じゅんびの あそびを ' + p.got + '／' + p.total + ' できたら ひらくよ' : 'じゅんびが できたら ひらくよ';
+  }
+
   /** true once every 入学前 level is cleared — or once a parent opened the door by hand */
   function g1Open(){
     if (Store.data.g1Open || Store.data.g1Reached) return true;
-    const c = count('pre');
-    if (!(c.total > 0 && c.got >= c.total)) return false;
-    /* Written down the first time it is true. Computing it afresh every time is
-       what let a release that adds a 入学前 level lock a child out of a room they
-       had already walked into. Kept apart from `g1Open`, which is the parent's
-       hand on the door and is reported as such. */
-    Store.setPref('g1Reached', true);
-    return true;
+    return Games.list.some(g => stageOf(g) === 'g1' && g1GameOpen(g));
   }
 
   return {
@@ -117,6 +136,10 @@ const Progress = (() => {
     gateSlots,
     /** { got, total } over the levels the door counts — cleared levels, not stickers */
     preStickers: () => count('pre'),
+    levelReady,
+    g1GameOpen,
+    pathProgress,
+    unlockHint,
     /** levels cleared provisionally, waiting for another day */
     pendingCount: stage => gateSlots(stage).filter(k => Store.isPending(k)).length,
     g1Open,
@@ -126,7 +149,7 @@ const Progress = (() => {
 })();
 
 /** Is this game's half of the app open at all? */
-function stageOpen(g){ return Progress.stageOf(g) === 'pre' || Progress.g1Open(); }
+function stageOpen(g){ return Progress.stageOf(g) === 'pre' || Progress.g1GameOpen(g); }
 /** The gate every question-drawing surface asks: open stage AND unlocked level. */
 function levelOpen(g, i){ return stageOpen(g) && Store.levelUnlocked(g.id, i); }
 
@@ -195,7 +218,7 @@ const Session = (() => {
       if (key === exceptKey) continue;               // replaying it is the check
       const cut = key.lastIndexOf(':');
       const g = Games.byId[key.slice(0, cut)], li = Number(key.slice(cut + 1));
-      if (!g || !g.levels[li] || !levelOpen(g, li)) continue;
+      if (!g || !g.levels[li] || !levelOpen(g, li) || !Store.introduced(g.id, li)) continue;
       for (let i = 0; i < CHECK_N; i++) out.push({ game: g, level: g.levels[li], levelIndex: li, check: key });
     }
     return out;
@@ -410,7 +433,8 @@ const Session = (() => {
     const pool = [];
     Games.list.forEach(g => {
       g.levels.forEach((lv, i) => {
-        if (levelOpen(g, i)) pool.push({ game: g, level: lv, levelIndex: i });
+        /* Daily practice is retrieval, never a surprise lesson. */
+        if (levelOpen(g, i) && Store.introduced(g.id, i)) pool.push({ game: g, level: lv, levelIndex: i });
       });
     });
     if (!pool.length){                       // nothing unlocked yet — never leave an empty plan
@@ -422,15 +446,6 @@ const Session = (() => {
     const checks = checkSteps(null, 2);
     plan = (checks.length ? shuffle(checks.concat(drawDailyPlan(pool, Math.max(4, n - checks.length))))
                           : drawDailyPlan(pool, n)).map(p => Object.assign({}, p));
-    /* Practice can reach a level the child has never opened. Its first question is
-       done together instead of cold — two at most, so the set stays practice. */
-    const met = new Set();
-    let intros = 0;
-    plan.forEach(p => {
-      const k = p.game.id + ':' + p.levelIndex;
-      if (intros < 2 && !met.has(k) && needsIntro(p.game, p.levelIndex)){ p.intro = 'together'; intros++; }
-      met.add(k);
-    });
     titleEl.textContent = 'きょうの れんしゅう';
     begin();
   }
@@ -690,7 +705,12 @@ const Session = (() => {
           });
           if (v === answer){ answerBtn = b; answerText = String(v); }
           keys.push(b);
-          choicesEl.append(b);
+          if (o.speech){
+            const say = typeof o.speech === 'function' ? o.speech(val, v) : String(o.speech);
+            const hear = el('button.choice-hear', { type: 'button', 'aria-label': 'この こたえを きく',
+              onclick(e){ e.stopPropagation(); Sound.sfx.tap(); Sound.say(say, { delay: 0 }); } }, '🔊');
+            choicesEl.append(el('div.choice-audio', null, b, hear));
+          } else choicesEl.append(b);
         }
         hintExtras.push(() => {
           keys.forEach(b => {

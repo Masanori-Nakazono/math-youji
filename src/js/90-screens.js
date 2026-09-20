@@ -35,7 +35,8 @@ const Title = (() => {
           if (Sound.voiceOn && !hasVoice){
             Home.render();
             UI.show('home', { replace: true });
-          } else if (Diagnostic.shouldRun()) Session.startDiagnostic();
+          } else if (!Store.data.orientation) Orientation.open();
+          else if (Diagnostic.shouldRun()) Session.startDiagnostic();
           else {
             Home.render();
             UI.show('home', { replace: true });
@@ -60,6 +61,40 @@ const Title = (() => {
     return UI.register('title', node);
   }
   return { build };
+})();
+
+/* ---------------------------------------------------------- FIRST USE */
+const Orientation = (() => {
+  let node, card, dots, next, step = 0;
+  const pages = [
+    { icon: '👆', text: 'えや すうじを タップして えらぶよ', say: '絵や数字を、タップして選ぶよ。' },
+    { icon: '🔊', text: 'わからない ときは スピーカーを おして きいてね', say: '分からない時は、スピーカーを押して聞いてね。' },
+    { icon: '🧩', text: 'さいしょは みて、つぎは いっしょに やってみよう', say: '最初は見て、次はいっしょにやってみよう。' }
+  ];
+  function build(){
+    if (node) return node;
+    card = el('div.guidecard');
+    dots = el('div.stepdots');
+    next = el('button.btn.btn-accent', { type: 'button', onclick(){
+      Sound.sfx.tap();
+      if (step < pages.length - 1){ step++; render(); }
+      else { Store.completeOrientation(); Session.startDiagnostic(); }
+    } });
+    node = el('div#orientation', null, mascotSVG('happy', 'talk'),
+      el('h1.welcome', { text: 'あそびかた' }), card, dots, next);
+    return UI.register('orientation', node);
+  }
+  function render(){
+    const p = pages[step];
+    clear(card); clear(dots);
+    card.append(el('div.guideicon', { text: p.icon }), el('div.guidetext', { text: p.text }),
+      el('button.btn.btn-ghost', { type: 'button', onclick(){ Sound.sfx.tap(); Sound.say(p.say, { delay: 0 }); } }, '🔊 きく'));
+    pages.forEach((x, i) => dots.append(el('span' + (i === step ? '.on' : ''))));
+    next.textContent = step === pages.length - 1 ? 'ぼうけんを はじめる' : 'つぎへ';
+    Sound.say(p.say, { delay: 180 });
+  }
+  function open(){ build(); step = 0; render(); UI.show('orientation', { replace: true }); }
+  return { build, open };
 })();
 
 /* ---------------------------------------------------------- HOME */
@@ -156,17 +191,18 @@ const Home = (() => {
      for; they are not part of the key. */
   function lockedCard(g){
     return el('button.gamecard.locked', {
-      type: 'button', title: g.name + '　ぜんぶの レベルを クリアすると あそべるよ',
+      type: 'button', title: g.name + '　' + Progress.unlockHint(g),
       onclick(){
         Sound.sfx.tap();
         Book.render();
         UI.show('book');
         // after the switch: UI.show hushes anything queued before it
-        Sound.say('入学前のレベルを全部クリアすると、遊べるようになるよ。', { delay: 120 });
+        Sound.say(Progress.unlockHint(g), { delay: 120 });
       }
     },
       el('div.ico', { text: g.ico }),
       el('div.nm', { text: g.name }),
+      el('div.lockhint', { text: Progress.pathProgress(g).got + '／' + Progress.pathProgress(g).total }),
       el('div.lockmark', { text: '🔒' }));
   }
 
@@ -221,6 +257,8 @@ const Home = (() => {
         el('div.go', { text: '▶' }));
       reviewEl.onclick = () => Missions.openReview(review);
     }
+    const learnedCount = Games.list.reduce((n, g) => n + g.levels.filter((lv, i) => Store.introduced(g.id, i)).length, 0);
+    dailyEl.hidden = learnedCount === 0;
     clear(dailyEl);
     dailyEl.classList.toggle('done', n >= 10);
     dailyEl.append(
@@ -229,7 +267,7 @@ const Home = (() => {
         el('div.t', { text: n >= 10 ? 'きょうの れんしゅう おわり！' : 'きょうの れんしゅう' }),
         el('div.s', { text: n >= 10
           ? `きょうは ${n}もん がんばったね　･　${streak}にち れんぞく`
-          : 'ぜんぶの あそびから 10もん でるよ' })),
+          : 'あそんだ もんだいから 10もん でるよ' })),
       el('div.go', { text: n >= 10 ? '🎉' : '▶' }));
 
     const weak = Store.weakFacts(4);
@@ -261,17 +299,16 @@ const Home = (() => {
        down to meet them. Rather than move the map around, the count goes on the one
        strip that is on screen whatever happens — the shelf the child already taps. */
     const gate = Progress.preStickers();
-    const toGo = Progress.g1Open() ? 0 : Math.max(0, gate.total - gate.got);
+    const toGo = Progress.g1Open() ? 0 : 1;
     shelfEl.classList.toggle('nearly', toGo > 0 && toGo <= 6);
     /* The same picture the result screen draws: a bar filling towards 🎓, and dots to
        count once there are few enough. 「あと 34レベル」 is a number for the adult,
        so it stays in the label for them. */
     let sub;
     if (toGo){
-      const say = '1ねんせいの きょうしつまで あと ' + toGo + 'レベル';
-      const middle = toGo <= 10 ? el('span.leftdots') : el('span.gauge', null,
-        el('span.fill', { style: { width: Math.round(gate.got / gate.total * 100) + '%' } }));
-      if (toGo <= 10) for (let i = 0; i < toGo; i++) middle.append(el('span', { text: '●' }));
+      const say = '1ねんせいの きょうしつは、あそびごとに じゅんびが できると ひらくよ';
+      const middle = el('span.leftdots');
+      for (let i = 0; i < 3; i++) middle.append(el('span', { text: '●' }));
       sub = el('small.togo', { role: 'img', 'aria-label': say, title: say },
         middle, el('span', { text: '🎓', 'aria-hidden': 'true' }));
     } else {
@@ -288,22 +325,20 @@ const Home = (() => {
     const shown = [...dailiesEl.children].filter(c => !c.hidden).length;
     dailiesEl.className = 'dailies n' + shown;
 
-    const open1 = Progress.g1Open();
-
     clear(worldsEl);
     WORLDS.forEach(w => {
       const games = Games.list.filter(g => g.world === w.id);
       if (!games.length) return;
-      const shut = (w.stage || 'pre') !== 'pre' && !open1;
       const grid = el('div.gamegrid');
-      games.forEach(g => grid.append(shut ? lockedCard(g) : gameCard(g)));
+      const shut = games.every(g => !stageOpen(g));
+      games.forEach(g => grid.append(stageOpen(g) ? gameCard(g) : lockedCard(g)));
       // the world's own name already says 1ねんせい; a second badge saying it again
       // only takes the room the name needs to stay on one line
       worldsEl.append(el('div.world' + ((w.stage || 'pre') !== 'pre' ? '.newstage' : '')
         + (shut ? '.shut' : ''),
         { style: { '--wc': w.color } },
         el('h3', null, el('span.chip', { text: w.name }),
-          el('span.sub', { text: shut ? 'ぜんぶ クリアすると ひらくよ' : w.sub })), grid));
+          el('span.sub', { text: shut ? 'じゅんびが できると ひらくよ' : w.sub })), grid));
     });
   }
   return { build, render };
@@ -390,7 +425,7 @@ const Result = (() => {
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
     // is what lets a Japanese engine phrase it instead of droning it out
-    const spoken = (r.unlockedG1 ? 'レベルを全部クリアしたね！小学校一年生の問題ができるよ！'
+    const spoken = (r.unlockedG1 ? 'じゅんびが できたね！小学校一年生の新しい問題ができるよ！'
                  : r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
                  : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
@@ -427,16 +462,15 @@ const Result = (() => {
     let toDoor = null;
     if ((stickers.length || coloured.length) && !r.unlockedG1 && !Progress.g1Open()){
       const st = Progress.preStickers();
-      const left = Math.max(0, st.total - st.got);
+      const left = 1;
       if (left){
-        const say = '1ねんせいの きょうしつまで あと ' + left + 'レベル';
+        const say = '1ねんせいの きょうしつは、あそびごとに じゅんびが できると ひらくよ';
         let middle;
         if (left <= 10){
           middle = el('div.leftdots');
           for (let i = 0; i < left; i++) middle.append(el('span', { text: '●' }));
         } else {
-          middle = el('div.gauge', null,
-            el('div.fill', { style: { width: Math.round(st.got / st.total * 100) + '%' } }));
+          middle = el('div.gauge', null, el('div.fill', { style: { width: '35%' } }));
         }
         toDoor = el('div.stagenext' + (left <= 10 ? '.nearly' : ''),
           { role: 'img', 'aria-label': say, title: say },
@@ -451,8 +485,8 @@ const Result = (() => {
     if (r.unlockedG1){
       inner.append(el('div.unlocked', null,
         el('div.e', { text: '🎓' }),
-        el('div.l', { text: 'レベルを ぜんぶ クリアした！' }),
-        el('b', { text: 'しょうがっこう 1ねんせいの もんだいが できるよ！' }),
+        el('div.l', { text: 'じゅんびが できた！' }),
+        el('b', { text: 'しょうがっこう 1ねんせいの あたらしい もんだいが できるよ！' }),
         el('div.l', { text: '「1ねんせいの きょうしつ」が ホームに ふえたよ' })));
     }
     /* The thing ★★★ could never say. These levels are for an answer that arrives,
@@ -500,8 +534,12 @@ const Result = (() => {
           el('div.l', { text: 'つぎの おすすめ' }),
           el('b', { text: g.name + '　《' + lv.t + '》' })));
       }
-    } else if (!r.unlockedG1 && !stickers.length && !coloured.length && !(r.shaky && r.shaky.length)
-               && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
+    }
+    /* A real-world mission is the next learning action after a successful run.
+       It remains visible alongside a sticker: earning a sticker must not hide the
+       bridge from screen maths to objects at home. */
+    if (!r.unlockedG1 && !(r.shaky && r.shaky.length)
+        && (r.mode === 'daily' || (r.mode === 'level' && r.stars >= 1))) {
       /* one piece of news per screen: the classroom outranks today's kitchen-table
          task, and so do a new sticker and the facts to practise — the mission comes
          up on the next pass */
