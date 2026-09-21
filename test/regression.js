@@ -270,6 +270,29 @@
     K.Store.reset();
   })();
 
+  /* ---------- 10c. each level names its own gold sticker ---------- */
+  (function levelGoldCompletion(){
+    K.Store.reset();
+    const g = K.Games.byId.count;
+    [0, 1].forEach(i => {
+      K.Store.recordLevel(g.id, i, 3, 8, 8);
+      K.Store.addSticker(g.id + ':' + i);
+    });
+    K.Store.addSticker(g.id + ':1:g');
+    K.Levels.render(g);
+    const cards = qa('#levels .levelcard');
+    const plain = cards[0] && !cards[0].classList.contains('gold')
+      && !cards[0].querySelector('.goldmark') && /まだ/.test(cards[0].title);
+    const gold = cards[1] && cards[1].classList.contains('gold')
+      && !!cards[1].querySelector('.goldmark') && /ゲット/.test(cards[1].title);
+    check('each level gets a gold frame only after its own gold sticker is earned',
+      plain && gold, JSON.stringify({
+        hasGold: K.Store.hasSticker(g.id + ':1:g'),
+        cards: cards.map(x => ({ cls: x.className, title: x.title, mark: !!x.querySelector('.goldmark') }))
+      }));
+    K.Store.reset();
+  })();
+
   /* ---------- 11. records survive leaving this origin ---------- */
   (function backup(){
     K.Store.reset();

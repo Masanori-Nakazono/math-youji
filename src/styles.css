@@ -770,6 +770,7 @@ body::before{
   align-items: center; justify-content: center;
 }
 .levelcard{
+  position: relative;
   width: min(100%, calc(var(--u)*46));
   display: flex; align-items: center; gap: calc(var(--u)*1);
   padding: calc(var(--u)*.9) calc(var(--u)*1.2);
@@ -797,6 +798,24 @@ body::before{
 .levelcard .st svg{ width: calc(var(--u)*2); height: calc(var(--u)*2); }
 .levelcard.locked{ opacity: .5; }
 .levelcard.locked .num{ background: var(--ink-faint); }
+.levelcard.gold{
+  border-color: var(--star-edge);
+  background: color-mix(in srgb, var(--card) 84%, var(--star) 16%);
+  box-shadow:
+    0 0 0 calc(var(--u)*.22) color-mix(in srgb, var(--star) 72%, transparent),
+    var(--shadow);
+}
+.levelcard .goldmark{
+  position: absolute;
+  top: calc(var(--u)*-.7); right: calc(var(--u)*-.65);
+  display: grid; place-items: center;
+  width: calc(var(--u)*3); height: calc(var(--u)*3);
+  border: calc(var(--u)*.16) solid var(--star-edge);
+  border-radius: 50%;
+  background: var(--star);
+  box-shadow: var(--shadow-sm);
+  font-size: calc(var(--u)*1.75); line-height: 1;
+}
 
 .aim{
   width: min(100%, calc(var(--u)*46));

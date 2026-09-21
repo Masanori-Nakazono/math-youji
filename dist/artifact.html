@@ -775,6 +775,7 @@ body::before{
   align-items: center; justify-content: center;
 }
 .levelcard{
+  position: relative;
   width: min(100%, calc(var(--u)*46));
   display: flex; align-items: center; gap: calc(var(--u)*1);
   padding: calc(var(--u)*.9) calc(var(--u)*1.2);
@@ -802,6 +803,24 @@ body::before{
 .levelcard .st svg{ width: calc(var(--u)*2); height: calc(var(--u)*2); }
 .levelcard.locked{ opacity: .5; }
 .levelcard.locked .num{ background: var(--ink-faint); }
+.levelcard.gold{
+  border-color: var(--star-edge);
+  background: color-mix(in srgb, var(--card) 84%, var(--star) 16%);
+  box-shadow:
+    0 0 0 calc(var(--u)*.22) color-mix(in srgb, var(--star) 72%, transparent),
+    var(--shadow);
+}
+.levelcard .goldmark{
+  position: absolute;
+  top: calc(var(--u)*-.7); right: calc(var(--u)*-.65);
+  display: grid; place-items: center;
+  width: calc(var(--u)*3); height: calc(var(--u)*3);
+  border: calc(var(--u)*.16) solid var(--star-edge);
+  border-radius: 50%;
+  background: var(--star);
+  box-shadow: var(--shadow-sm);
+  font-size: calc(var(--u)*1.75); line-height: 1;
+}
 
 .aim{
   width: min(100%, calc(var(--u)*46));
@@ -9776,7 +9795,7 @@ const Levels = (() => {
     return UI.register('levels', node);
   }
   function speech(){
-    return game ? game.name + '。レベルを選んでね。鍵のついたレベルは、前のレベルをクリアすると遊べるよ。' : '';
+    return game ? game.name + '。レベルを選んでね。金色で囲まれたレベルは、金のシールをもらっているよ。鍵のついたレベルは、前のレベルをクリアすると遊べるよ。' : '';
   }
   function render(g){
     build();
@@ -9786,8 +9805,11 @@ const Levels = (() => {
     g.levels.forEach((lv, i) => {
       const stars = Store.stars(g.id, i);
       const unlocked = Store.levelUnlocked(g.id, i);
-      const card = el('button.levelcard' + (unlocked ? '' : '.locked'), {
+      const goldKey = g.id + ':' + i + ':g';
+      const gold = Store.hasSticker(goldKey);
+      const card = el('button.levelcard' + (unlocked ? '' : '.locked') + (gold ? '.gold' : ''), {
         type: 'button', style: { '--lc': g.color },
+        title: lv.t + (gold ? '　きんの シールを ゲット' : '　きんの シールは まだ'),
         onclick(){
           Sound.sfx.tap();
           if (!unlocked){ Sound.say('前のレベルをクリアすると、遊べるよ。', { delay: 120 }); return; }
@@ -9798,7 +9820,10 @@ const Levels = (() => {
         el('div.body', null, el('div.t', { text: lv.t }), el('div.d', { text: lv.d })),
         // ★★★ is "all right first time"; this is "and without counting"
         Store.isSwift(g.id, i) ? el('span.swiftmark', { title: 'すぐ こたえられた', text: '⚡️' }) : null,
-        UI.stars(stars));
+        UI.stars(stars),
+        gold ? el('span.goldmark', {
+          text: stickerFor(goldKey), 'aria-label': 'きんの シールを ゲット'
+        }) : null);
       listEl.append(card);
     });
 

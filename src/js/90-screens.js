@@ -369,7 +369,7 @@ const Levels = (() => {
     return UI.register('levels', node);
   }
   function speech(){
-    return game ? game.name + '。レベルを選んでね。鍵のついたレベルは、前のレベルをクリアすると遊べるよ。' : '';
+    return game ? game.name + '。レベルを選んでね。金色で囲まれたレベルは、金のシールをもらっているよ。鍵のついたレベルは、前のレベルをクリアすると遊べるよ。' : '';
   }
   function render(g){
     build();
@@ -379,8 +379,11 @@ const Levels = (() => {
     g.levels.forEach((lv, i) => {
       const stars = Store.stars(g.id, i);
       const unlocked = Store.levelUnlocked(g.id, i);
-      const card = el('button.levelcard' + (unlocked ? '' : '.locked'), {
+      const goldKey = g.id + ':' + i + ':g';
+      const gold = Store.hasSticker(goldKey);
+      const card = el('button.levelcard' + (unlocked ? '' : '.locked') + (gold ? '.gold' : ''), {
         type: 'button', style: { '--lc': g.color },
+        title: lv.t + (gold ? '　きんの シールを ゲット' : '　きんの シールは まだ'),
         onclick(){
           Sound.sfx.tap();
           if (!unlocked){ Sound.say('前のレベルをクリアすると、遊べるよ。', { delay: 120 }); return; }
@@ -391,7 +394,10 @@ const Levels = (() => {
         el('div.body', null, el('div.t', { text: lv.t }), el('div.d', { text: lv.d })),
         // ★★★ is "all right first time"; this is "and without counting"
         Store.isSwift(g.id, i) ? el('span.swiftmark', { title: 'すぐ こたえられた', text: '⚡️' }) : null,
-        UI.stars(stars));
+        UI.stars(stars),
+        gold ? el('span.goldmark', {
+          text: stickerFor(goldKey), 'aria-label': 'きんの シールを ゲット'
+        }) : null);
       listEl.append(card);
     });
 
