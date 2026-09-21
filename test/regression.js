@@ -247,6 +247,29 @@
       keys.length + ' slots / ' + K.STICKER_POOL.length + ' emoji / ' + new Set(emo).size + ' unique');
   })();
 
+  /* ---------- 10b. the home map says whether another sticker remains ---------- */
+  (function homeStickerCompletion(){
+    K.Store.reset();
+    const g = K.Games.byId.bond;
+    g.levels.forEach((lv, i) => {
+      K.Store.recordLevel(g.id, i, i === 1 ? 2 : 3, i === 1 ? 6 : 8, 8);
+      K.Store.addSticker(g.id + ':' + i);
+      if (i !== 1) K.Store.addSticker(g.id + ':' + i + ':g');
+    });
+    K.Home.render();
+    const card = () => qa('#home .gamecard').find(x => (x.querySelector('.nm') || {}).textContent === g.name);
+    const roundedButOpen = card() && card().querySelectorAll('.st .on').length === 3
+      && !card().classList.contains('collected') && /まだ シール/.test(card().title);
+    K.Store.addSticker(g.id + ':1:g');
+    K.Home.render();
+    const finished = card() && card().classList.contains('collected')
+      && !!card().querySelector('.collectmark') && /ぜんぶ ゲット/.test(card().title);
+    check('a rounded ★★★ stays plain while a sticker remains, and turns gold only when every sticker is earned',
+      roundedButOpen && finished,
+      'open=' + roundedButOpen + ' finished=' + finished);
+    K.Store.reset();
+  })();
+
   /* ---------- 11. records survive leaving this origin ---------- */
   (function backup(){
     K.Store.reset();

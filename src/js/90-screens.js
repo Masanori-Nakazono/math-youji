@@ -158,12 +158,18 @@ const Home = (() => {
        parent page showed for the same child. Same arithmetic on both screens now. */
     const earned = Store.gameStars(g.id, g.levels.length);
     const max = g.levels.length * 3;
-    const perfect = earned === max;
+    /* The three home stars are a rounded summary, so ★★★ can also mean a game
+       whose levels are ★3・★2・★3.  Stars therefore cannot say whether there is
+       another sticker to earn.  The gold frame uses the shelf itself as the
+       source of truth: every level must have both its clear and gold sticker. */
+    const collected = g.levels.every((lv, i) =>
+      Store.hasSticker(g.id + ':' + i) && Store.hasSticker(g.id + ':' + i + ':g'));
     const done = earned === 0 ? 0 : Math.max(1, Math.round((earned / max) * 3));
     const st = el('div.st');
     for (let i = 0; i < 3; i++) st.append(starSVG(i < done));
-    return el('button.gamecard', {
-      type: 'button', title: g.name + '　★ ' + earned + '/' + max,
+    return el('button.gamecard' + (collected ? '.collected' : ''), {
+      type: 'button', title: g.name + '　★ ' + earned + '/' + max
+        + (collected ? '　シール ぜんぶ ゲット' : '　まだ シールが あるよ'),
       onclick(){
         Sound.sfx.tap();
         Levels.render(g);
@@ -172,9 +178,12 @@ const Home = (() => {
         Sound.say(Levels.speech(), { delay: 120 });
       }
     },
-      el('div.ico', { text: perfect ? '👑' : g.ico }),
+      el('div.ico', { text: g.ico }),
       el('div.nm', { text: g.name }),
-      st);
+      st,
+      collected ? el('div.collectmark', {
+        text: '👑', 'aria-label': 'シール ぜんぶ ゲット'
+      }) : null);
   }
 
   /* The classroom is on this screen from the first day, behind a padlock.
