@@ -207,6 +207,61 @@
     check('clock hours read よじ / しちじ / くじ', !bad.length, bad.join(', '));
   })();
 
+  /* ---------- 7b. story objects, actions and counters agree ----------
+     A shared object bank used to produce「いぬが6つ、3つ食べた」.  This is
+     not merely awkward wording: it teaches the wrong counter while asking a child
+     to infer arithmetic from a scene that cannot happen. */
+  function naturalStoryLanguage(){
+    const bad = [];
+    const animalCount = /\d+(?:ぴき|ひき|びき)/g;
+    const foodCount = /\d+(?:こ|ぽん|ほん|ぼん|ふさ)/g;
+    const prompt = () => (q('#play .prompt .txt') || {}).textContent || '';
+
+    [[K.Games.byId.add, 0], [K.Games.byId.add, 1],
+     [K.Games.byId.sub, 0], [K.Games.byId.sub, 1],
+     [K.Games.byId.g1shiki, 0]].forEach(([game, level]) => {
+      for (let n = 0; n < 30; n++){
+        K.Session.startLevel(game, level);
+        const text = prompt(), counts = text.match(animalCount) || [];
+        if (counts.length !== 2 || /\d+(?:つ|こ)/.test(text) || !/いるよ/.test(text)){
+          bad.push(game.id + '/L' + level + ': ' + text);
+          break;
+        }
+      }
+    });
+
+    function checkFood(text, where){
+      const names = ['りんご','いちご','バナナ','ぶどう','ケーキ','ドーナツ'];
+      const name = names.find(x => text.indexOf(x) >= 0);
+      const counts = text.match(foodCount) || [];
+      const valid = name === 'バナナ' ? /^\d+(?:ぽん|ほん|ぼん)$/
+                  : name === 'ぶどう' ? /^\d+ふさ$/ : /^\d+こ$/;
+      if (!name || counts.length < 2 || counts.some(x => !valid.test(x))
+          || /(いぬ|ねこ|さかな|くるま).*(たべ|食べ)/.test(text))
+        bad.push(where + ': ' + text.replace(/\s+/g, ' '));
+    }
+
+    for (let n = 0; n < 80; n++){
+      K.Session.startLevel(K.Games.byId.g1shiki, 1);
+      const text = (q('#play .storycard .tx') || {}).textContent || '';
+      checkFood(text, 'g1shiki/L1');
+      if (!/(もらいました|いれました|たべました|あげました)/.test(text))
+        bad.push('g1shiki/L1 action: ' + text);
+    }
+    for (let n = 0; n < 40; n++){
+      K.Session.startLevel(K.Games.byId.g1shiki, 2);
+      checkFood(qa('#play .choices .choice').map(x => x.textContent).join(' / '), 'g1shiki/L2');
+    }
+
+    const dog = { counter: 'hiki' }, banana = { counter: 'hon' }, grapes = { counter: 'fusa' };
+    const forms = [K.thingCountText(dog, 1), K.thingCountText(dog, 3), K.thingCountText(dog, 6),
+                   K.thingCountText(banana, 1), K.thingCountText(banana, 3), K.thingCountText(banana, 6),
+                   K.thingCountKana(grapes, 1)].join('|');
+    check('story problems use natural objects, actions and counters',
+      !bad.length && forms === '1ぴき|3びき|6ぴき|1ぽん|3ぼん|6ぽん|ひとふさ',
+      bad.slice(0, 5).join(' | ') || forms);
+  }
+
   /* ---------- 8. every tappable thing is also keyboard operable ---------- */
   (function keyboard(){
     const bad = new Set();
@@ -2867,6 +2922,7 @@
     taughtSurvivesNextBlank();
     recommendationMovesOn();
     backButtonAsks();
+    naturalStoryLanguage();
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();
     return { pass: results.filter(r => r.ok).length, fail: results.filter(r => !r.ok).length, results };

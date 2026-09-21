@@ -503,10 +503,10 @@ function addStory(api, max){
   const aim = w && w[0] >= 1 && w[1] >= 1 && w[0] + w[1] <= max;
   const a = aim ? w[0] : ri(1, max - 1);
   const b = aim ? w[1] : ri(1, max - a), ans = a + b;
-  const thing = pick(THINGS);
+  const thing = pick(MOVING_THINGS);
   api.item('sum:' + a + '+' + b, a + ' ＋ ' + b);
-  api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ やってきたよ`,
-                `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、やってきたよ。`);
+  api.setPrompt(`${thing.e} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} やってきたよ`,
+                `${thing.n}が${thingCountKana(thing, a)}いるよ。${thingCountKana(thing, b)}、やってきたよ。`);
   storyScene(api, a, b, '+', thing, () => {
     api.setPrompt('ぜんぶで いくつ？', '全部でいくつ？');
     const eq = eqNode(a, b, '+');
@@ -530,10 +530,10 @@ function subStory(api, max){
   const aim = w && w[0] >= 2 && w[0] <= max && w[1] >= 1 && w[1] < w[0];
   const a = aim ? w[0] : ri(2, max);
   const b = aim ? w[1] : ri(1, a - 1), ans = a - b;
-  const thing = pick(THINGS);
+  const thing = pick(MOVING_THINGS);
   api.item('rest:' + a + '-' + b, a + ' − ' + b);
-  api.setPrompt(`${thing.e} が ${numTag(a)}つ。${numTag(b)}つ いなくなるよ`,
-                `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、いなくなるよ。`);
+  api.setPrompt(`${thing.e} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} いなくなるよ`,
+                `${thing.n}が${thingCountKana(thing, a)}いるよ。${thingCountKana(thing, b)}、いなくなるよ。`);
   storyScene(api, a, b, '-', thing, () => {
     api.setPrompt('のこりは いくつ？', '残りは、いくつ？');
     const eq = eqNode(a, b, '-');

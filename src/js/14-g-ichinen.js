@@ -669,15 +669,15 @@ Games.add({
    ＋ and − stop being buttons and start being meanings (合併・増加 / 求残・求差). */
 function pickEquation(api){
   const plus = chance(.5);
-  const a = ri(2, 7), b = ri(1, Math.min(4, a - 1)), thing = pick(THINGS);
+  const a = ri(2, 7), b = ri(1, Math.min(4, a - 1)), thing = pick(MOVING_THINGS);
   const ans = (plus ? a + '＋' + b : a + '−' + b);
   api.item((plus ? 'shiki+:' : 'shiki-:') + a + '_' + b,
     a + (plus ? ' ＋ ' : ' − ') + b + ' の しき');
   api.setPrompt(
-    plus ? `${thing.e} が ${numTag(a)}つ。${numTag(b)}つ やってきたよ`
-         : `${thing.e} が ${numTag(a)}つ。${numTag(b)}つ いなくなるよ`,
-    plus ? `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、やってきたよ。`
-         : `${thing.n}が${tsuKana(a)}。${tsuKana(b)}、いなくなるよ。`);
+    plus ? `${thing.e} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} やってきたよ`
+         : `${thing.e} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} いなくなるよ`,
+    plus ? `${thing.n}が${thingCountKana(thing, a)}いるよ。${thingCountKana(thing, b)}、やってきたよ。`
+         : `${thing.n}が${thingCountKana(thing, a)}いるよ。${thingCountKana(thing, b)}、いなくなるよ。`);
   storyScene(api, a, b, plus ? '+' : '-', thing, () => {
     api.setPrompt('この おはなしの <b>しき</b> は どれ？', 'このお話の式は、どれ？');
     // a third option with a different second number, kept inside 1..a-1 so that
@@ -721,21 +721,20 @@ function pickEquation(api){
 /* A story in words only. Without a picture to count, ＋ or − has to come from
    what happened — which is the thing that actually transfers to 文章題. */
 const WORD_STORIES = [
-  { op: '+', t: (a, b, x) => `${x.n}が ${a}こ あります。${b}こ もらいました。`,
-    s: (a, b, x) => `${x.n}が${koKana(a)}あります。${koKana(b)}もらいました。`, q: 'ぜんぶで いくつ？' },
-  { op: '+', t: (a, b, x) => `${x.n}が ${a}こ。あとから ${b}こ ふえました。`,
-    s: (a, b, x) => `${x.n}が${koKana(a)}。あとから${koKana(b)}増えました。`, q: 'ぜんぶで いくつ？' },
-  { op: '-', t: (a, b, x) => `${x.n}が ${a}こ あります。${b}こ たべました。`,
-    s: (a, b, x) => `${x.n}が${koKana(a)}あります。${koKana(b)}食べました。`, q: 'のこりは いくつ？' },
-  { op: '-', t: (a, b, x) => `${x.n}が ${a}こ あります。${b}こ あげました。`,
-    s: (a, b, x) => `${x.n}が${koKana(a)}あります。${koKana(b)}あげました。`, q: 'のこりは いくつ？' }
+  { op: '+', t: (a, b, x) => `${x.n}が ${thingCountText(x, a)} あります。${thingCountText(x, b)} もらいました。`,
+    s: (a, b, x) => `${x.n}が${thingCountKana(x, a)}あります。${thingCountKana(x, b)}もらいました。`, q: 'ぜんぶで いくつ？' },
+  { op: '+', t: (a, b, x) => `かごに ${x.n}が ${thingCountText(x, a)} あります。あとから ${thingCountText(x, b)} いれました。`,
+    s: (a, b, x) => `かごに${x.n}が${thingCountKana(x, a)}あります。あとから${thingCountKana(x, b)}入れました。`, q: 'ぜんぶで いくつ？' },
+  { op: '-', t: (a, b, x) => `${x.n}が ${thingCountText(x, a)} あります。${thingCountText(x, b)} たべました。`,
+    s: (a, b, x) => `${x.n}が${thingCountKana(x, a)}あります。${thingCountKana(x, b)}食べました。`, q: 'のこりは いくつ？' },
+  { op: '-', t: (a, b, x) => `${x.n}が ${thingCountText(x, a)} あります。${thingCountText(x, b)} あげました。`,
+    s: (a, b, x) => `${x.n}が${thingCountKana(x, a)}あります。${thingCountKana(x, b)}あげました。`, q: 'のこりは いくつ？' }
 ];
 
 /* Quantity stories should stay scenes a child can picture. The generic object
    bank includes cars and animals, which produced「ねこを食べました」. */
 const WORD_THINGS = [
-  { e: '🍎', n: 'りんご' }, { e: '🍓', n: 'いちご' }, { e: '🍌', n: 'バナナ' },
-  { e: '🍇', n: 'ぶどう' }, { e: '🧁', n: 'ケーキ' }, { e: '🍩', n: 'ドーナツ' }
+  ...THINGS.filter(thing => thing.edible)
 ];
 
 function plusOrMinus(api){
@@ -776,14 +775,14 @@ function plusOrMinus(api){
     const tx = $('.tx', card);
     if (!tx || $('mark', tx)) return;
     const s = tx.textContent;
-    const m = /(もらいました|ふえました|たべました|あげました)/.exec(s);
+    const m = /(もらいました|いれました|たべました|あげました)/.exec(s);
     if (!m) return;
     clear(tx);
     tx.append(s.slice(0, m.index), el('mark', { text: m[1] }), s.slice(m.index + m[1].length));
   };
   api.coach({
-    text: plus ? 'ふえた・もらった → ＋' : 'へった・たべた・あげた → −',
-    say: plus ? '増えた、もらった、は、たす。' : '食べた、あげた、は、ひく。',
+    text: plus ? 'もらった・いれた → ＋' : 'たべた・あげた → −',
+    say: plus ? 'もらった、入れた、は、たす。' : '食べた、あげた、は、ひく。',
     tool: markVerb,
     walk(){
       markVerb();
@@ -808,7 +807,7 @@ function matchStory(api){
                 `${numKana(a)}、${plus ? 'たす' : 'ひく'}、${numKana(b)}のお話は、どれ？`);
   const opEl = el('span.op', { text: plus ? '＋' : '−' });
   api.field.append(el('div.eq', null, String(a), opEl, String(b)));
-  const line = (n, verb) => `${thing.n}が ${a}こ。\n${n}こ ${verb}`;
+  const line = (n, verb) => `${thing.n}が ${thingCountText(thing, a)}。\n${thingCountText(thing, n)} ${verb}`;
   const right   = plus ? line(b, 'もらった') : line(b, 'たべた');
   const wrongOp = plus ? line(b, 'たべた')   : line(b, 'もらった');
   const wrongN  = plus ? line(c, 'もらった') : line(c, 'たべた');
@@ -828,14 +827,14 @@ function matchStory(api){
       const flat = s => s.replace(/\s/g, '');
       const btn = $$('.choice', api.choices).find(x => flat(x.textContent) === flat(right));
       return [{ at: opEl, say: plus ? 'たす、だから、増える。' : 'ひく、だから、減る。', ms: 1900 },
-              { at: btn, say: `${numKana(b)}こ、${plus ? 'もらった' : 'たべた'}お話。`, ms: 2000 }];
+              { at: btn, say: `${thingCountKana(thing, b)}、${plus ? 'もらった' : 'たべた'}お話。`, ms: 2000 }];
     }
   });
 }
 
 Games.add({
   id: 'g1shiki', name: 'しきに かこう', ico: '✍️', world: 'kyoshitsu', color: 'var(--c-orange)', stage: 'g1',
-  aim: '場面と式を<b>行き来する</b>力。たしざん・ひきざん が「答えはいくつ」を聞くのに対し、ここは「この話はどの式か」「この式はどの話か」を聞きます。文章題でつまずく子の多くは計算ではなく、この置きかえでつまずきます。増える・もらう＝＋、減る・食べる＝− を、言葉と結びつけておく単元です。',
+  aim: '場面と式を<b>行き来する</b>力。たしざん・ひきざん が「答えはいくつ」を聞くのに対し、ここは「この話はどの式か」「この式はどの話か」を聞きます。文章題でつまずく子の多くは計算ではなく、この置きかえでつまずきます。もらう・入れる＝＋、食べる・あげる＝− を、言葉と結びつけておく単元です。',
   levels: [
     { t: 'おはなしの しき', d: 'えを みて ＋か −か', make: pickEquation },
     { t: 'たす？ ひく？', d: 'ことばだけの おはなし', make: plusOrMinus },

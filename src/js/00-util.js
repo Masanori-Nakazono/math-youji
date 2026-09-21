@@ -104,6 +104,48 @@ const jiKana = (h, half) => (JI[h] || numKana(h) + 'じ') + (half ? 'はん' : '
 /** hiragana display text; digits get the numeral face via <b> */
 const numTag = n => `<b>${n}</b>`;
 
+/* A concrete thing has a concrete counter.  Keeping this beside the number
+   readings prevents a story from calling a dog「6つ」or a banana「3こ」.  The
+   questions that use these helpers only go up to ten; the fallback keeps the
+   function harmless if a larger number is ever introduced. */
+const COUNTERS = {
+  ko: {
+    end: ['こ','こ','こ','こ','こ','こ','こ','こ','こ','こ','こ'],
+    say: KO
+  },
+  hiki: {
+    end: ['ひき','ぴき','ひき','びき','ひき','ひき','ぴき','ひき','ぴき','ひき','ぴき'],
+    say: ['ゼロひき','いっぴき','にひき','さんびき','よんひき','ごひき','ろっぴき','ななひき','はっぴき','きゅうひき','じゅっぴき']
+  },
+  hon: {
+    end: ['ほん','ぽん','ほん','ぼん','ほん','ほん','ぽん','ほん','ぽん','ほん','ぽん'],
+    say: ['ゼロほん','いっぽん','にほん','さんぼん','よんほん','ごほん','ろっぽん','ななほん','はっぽん','きゅうほん','じゅっぽん']
+  },
+  dai: {
+    end: Array(11).fill('だい'),
+    say: range(0, 10).map(n => numKana(n) + 'だい')
+  },
+  fusa: {
+    end: Array(11).fill('ふさ'),
+    say: ['ゼロふさ','ひとふさ','ふたふさ','さんふさ','よんふさ','ごふさ','ろくふさ','ななふさ','はちふさ','きゅうふさ','じゅうふさ']
+  },
+  wa: {
+    end: Array(11).fill('わ'),
+    say: range(0, 10).map(n => numKana(n) + 'わ')
+  }
+};
+function thingCounter(thing){ return COUNTERS[(thing && thing.counter) || 'ko'] || COUNTERS.ko; }
+function thingCountEnd(thing, n){
+  const c = thingCounter(thing);
+  return c.end[n] || c.end[0];
+}
+function thingCountText(thing, n){ return String(n) + thingCountEnd(thing, n); }
+function thingCountTag(thing, n){ return numTag(n) + thingCountEnd(thing, n); }
+function thingCountKana(thing, n){
+  const c = thingCounter(thing);
+  return c.say[n] || numKana(n) + c.end[0];
+}
+
 /* ---- showing the child their own answer ----
    A question that ends with「?」still on screen never lets the child see what they
    said inside the sentence they said it about. 「7 と 1 で ?」 only finishes meaning

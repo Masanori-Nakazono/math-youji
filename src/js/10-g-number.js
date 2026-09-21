@@ -4,13 +4,28 @@
 'use strict';
 
 const THINGS = [
-  { e: '🍎', n: 'りんご' }, { e: '🍓', n: 'いちご' }, { e: '🍌', n: 'バナナ' },
-  { e: '🍇', n: 'ぶどう' }, { e: '🐟', n: 'さかな' }, { e: '🐤', n: 'ひよこ' },
-  { e: '🐱', n: 'ねこ' },   { e: '🐶', n: 'いぬ' },   { e: '🚗', n: 'くるま' },
-  { e: '⚽️', n: 'ボール' }, { e: '🌸', n: 'おはな' }, { e: '⭐️', n: 'ほし' },
-  { e: '🧁', n: 'ケーキ' }, { e: '🎈', n: 'ふうせん' }, { e: '🐞', n: 'てんとうむし' },
-  { e: '🦋', n: 'ちょうちょ' }, { e: '🍩', n: 'ドーナツ' }, { e: '🐸', n: 'かえる' }
+  { e: '🍎', n: 'りんご', counter: 'ko', edible: true },
+  { e: '🍓', n: 'いちご', counter: 'ko', edible: true },
+  { e: '🍌', n: 'バナナ', counter: 'hon', edible: true },
+  { e: '🍇', n: 'ぶどう', counter: 'fusa', edible: true },
+  { e: '🐟', n: 'さかな', counter: 'hiki', moving: true },
+  { e: '🐤', n: 'ひよこ', counter: 'wa' },
+  { e: '🐱', n: 'ねこ', counter: 'hiki', moving: true },
+  { e: '🐶', n: 'いぬ', counter: 'hiki', moving: true },
+  { e: '🚗', n: 'くるま', counter: 'dai' },
+  { e: '⚽️', n: 'ボール', counter: 'ko' },
+  { e: '🌸', n: 'おはな', counter: 'hon' },
+  { e: '⭐️', n: 'ほし', counter: 'ko' },
+  { e: '🧁', n: 'ケーキ', counter: 'ko', edible: true },
+  { e: '🎈', n: 'ふうせん', counter: 'ko' },
+  { e: '🐞', n: 'てんとうむし', counter: 'hiki', moving: true },
+  { e: '🦋', n: 'ちょうちょ', counter: 'hiki', moving: true },
+  { e: '🍩', n: 'ドーナツ', counter: 'ko', edible: true },
+  { e: '🐸', n: 'かえる', counter: 'hiki', moving: true }
 ];
+
+/* 「やってくる／いなくなる」が自然に言えるものだけを、動く文章題に出す。 */
+const MOVING_THINGS = THINGS.filter(thing => thing.moving);
 
 /* ============================================================
    1. かぞえよう — one-to-one correspondence & cardinality

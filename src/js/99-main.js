@@ -66,5 +66,6 @@ window.KazuApp = {
   classifyMiss, missChild,
   el, svg, clear, $, $$,
   STICKER_POOL, stickerFor,
-  numKana, koKana, tsuKana, banmeKana, jiKana, distractors
+  numKana, koKana, tsuKana, thingCountText, thingCountTag, thingCountKana,
+  banmeKana, jiKana, distractors
 };
