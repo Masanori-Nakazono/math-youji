@@ -45,6 +45,11 @@ const Store = (() => {
     diagnostic: null, // { completedDay, outcomes, recommended }
     orientation: false,
     missions: {},     // "YYYY-MM-DD" -> { id, gameId, text, prompt, done, reviewed }
+    /* A child can put the stickers they earned somewhere of their own.  This is
+       deliberately presentation-only: moving a rabbit around must not be able to
+       change a learning record or an unlock.  Coordinates are percentages so the
+       picture survives an iPad rotation and a different-sized iPad. */
+    stickerWorld: { background: 'meadow', items: {} },
     name: '',
     sfx: true, voice: true, voiceId: null,
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
@@ -244,6 +249,18 @@ const Store = (() => {
         if (m.doneDay !== undefined) out.missions[day].doneDay = m.doneDay;
       }
     }
+    if (data.stickerWorld !== undefined){
+      const w = data.stickerWorld;
+      if (!isRecord(w) || typeof w.background !== 'string' || !isRecord(w.items)) return null;
+      const items = {};
+      for (const k of Object.keys(w.items)){
+        const p = w.items[k];
+        if (!safeKey(k) || !isRecord(p) || !Number.isFinite(p.x) || !Number.isFinite(p.y)
+         || p.x < 0 || p.x > 100 || p.y < 0 || p.y > 100) return null;
+        items[k] = { x: p.x, y: p.y };
+      }
+      out.stickerWorld = { background: w.background.slice(0, 24), items };
+    }
     if (data.name !== undefined){
       if (typeof data.name !== 'string') return null;
       out.name = data.name.slice(0, 12);
@@ -354,6 +371,15 @@ const Store = (() => {
     out.backupAt = maxNum(base.backupAt, add.backupAt);
     out.schoolYear = base.schoolYear || add.schoolYear || 0;
     out.name = base.name || add.name || '';
+    /* A layout is personal rather than cumulative.  Keep every sticker placement
+       from either copy; when the same sticker was moved on both devices, preserve
+       this device's current position rather than silently jumping it elsewhere. */
+    const bw = base.stickerWorld || { background: 'meadow', items: {} };
+    const aw = add.stickerWorld || { background: 'meadow', items: {} };
+    out.stickerWorld = {
+      background: bw.background || aw.background || 'meadow',
+      items: Object.assign({}, aw.items || {}, bw.items || {})
+    };
     out.createdAt = Math.min(base.createdAt || Date.now(), add.createdAt || Date.now());
     return out;
   }
@@ -516,6 +542,30 @@ const Store = (() => {
       return true;
     },
     mission: day => mem.missions[day] || null,
+    /* ---- My sticker world -------------------------------------------------- */
+    stickerWorld(){
+      const w = mem.stickerWorld || (mem.stickerWorld = { background: 'meadow', items: {} });
+      return { background: w.background, items: Object.assign({}, w.items) };
+    },
+    setStickerWorldBackground(background){
+      const w = mem.stickerWorld || (mem.stickerWorld = { background: 'meadow', items: {} });
+      w.background = String(background || 'meadow').slice(0, 24);
+      save();
+    },
+    putWorldSticker(stickerKey, x, y){
+      if (typeof stickerKey !== 'string' || !this.hasSticker(stickerKey)) return false;
+      const w = mem.stickerWorld || (mem.stickerWorld = { background: 'meadow', items: {} });
+      w.items[stickerKey] = { x: clamp(Number(x) || 0, 0, 100), y: clamp(Number(y) || 0, 0, 100) };
+      save();
+      return true;
+    },
+    removeWorldSticker(stickerKey){
+      const w = mem.stickerWorld;
+      if (!w || !w.items || !w.items[stickerKey]) return false;
+      delete w.items[stickerKey];
+      save();
+      return true;
+    },
     practiceAccuracy(){
       const p = mem.practice;
       return (p && p[1]) ? p[0] / p[1] : null;

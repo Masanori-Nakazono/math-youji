@@ -99,7 +99,7 @@ const Orientation = (() => {
 
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
-  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl;
+  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl;
   let parentBtn;
 
   function build(){
@@ -123,6 +123,8 @@ const Home = (() => {
         speakBtn(homeSpeech),
         el('button.btn.btn-round', { 'aria-label': 'シールブック', title: 'シールブック',
           onclick(){ Sound.sfx.tap(); Book.open(); } }, '📖'),
+        el('button.btn.btn-round', { 'aria-label': 'じぶんの しま', title: 'じぶんの しま',
+          onclick(){ Sound.sfx.tap(); StickerWorld.open(); } }, '🏡'),
         parentBtn = el('button.btn.btn-round', { 'aria-label': 'おうちのかたへ', title: 'おうちのかたへ',
           onclick(){ Sound.sfx.tap(); Parent.open(); } }, '👤')));
     /* きょうの れんしゅう reviews everything the child has unlocked, which means a
@@ -138,7 +140,8 @@ const Home = (() => {
     /* one row, never a stack: four banners each on their own line pushed the
        map itself off the bottom of an iPad */
     dailiesEl = el('div.dailies', null, recommendEl, dailyEl, reviewEl, focusEl);
-    node.append(voiceWarnEl, dailiesEl, worldsEl, shelfEl);
+    questsEl = el('div.home-quests');
+    node.append(voiceWarnEl, questsEl, dailiesEl, worldsEl, shelfEl);
     return UI.register('home', node);
   }
 
@@ -294,6 +297,17 @@ const Home = (() => {
       focusEl.onclick = () => { Sound.sfx.tap(); Session.startFocus(weak.map(w => w.key), { n: 10 }); };
     }
 
+    /* The prize choice is a separate, picture-led entry point.  It must not be
+       squeezed into the four daily banners: those are routines, while this is a
+       child's choice of what to do next.  The short adventure sits alongside it
+       because it answers a different moment — "I want to try, but this is hard." */
+    clear(questsEl);
+    const stickerQuest = StickerMissions.homeCard();
+    const adventure = Adventures.homeCard();
+    if (stickerQuest) questsEl.append(stickerQuest);
+    if (adventure) questsEl.append(adventure);
+    questsEl.hidden = !questsEl.childElementCount;
+
     const got = Store.data.stickers;
     clear(shelfEl);
     const strip = el('div.strip');
@@ -430,9 +444,10 @@ const Result = (() => {
        voice both say try again, and a bright「とっくん」there started a different
        ten questions under a child who had pressed the button they were told about.
        Either way the facts stay one tap away as the second button. */
-    const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus';
+    const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus' && r.mode !== 'adventure';
     const lead = drill && !(canNext && r.stars >= 2) && !(r.mode === 'level' && r.stars === 0);
     const msg = r.mode === 'diagnostic' ? 'さいしょの ぼうけん クリア！'
+              : r.mode === 'adventure' ? 'ぼうけん かんせい！'
               : r.stars === 3 ? 'パーフェクト！'
               : r.stars === 2 ? 'よく できました！'
               : r.stars === 1 ? 'クリア！'
@@ -442,6 +457,7 @@ const Result = (() => {
     // is what lets a Japanese engine phrase it instead of droning it out
     const spoken = (r.unlockedG1 ? 'じゅんびが できたね！小学校一年生の新しい問題ができるよ！'
                  : r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
+                 : r.mode === 'adventure' ? '小さな冒険、完成！ヒントを使って、最後までできたね。'
                  : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
@@ -459,11 +475,12 @@ const Result = (() => {
       mascotSVG(tried ? 'happy' : 'cheer', tried ? 'talk' : 'cheer'),
       r.mode === 'diagnostic'
         ? el('div.diagnostic-badge', { text: '10もん たんけん できたね' })
+        : r.mode === 'adventure' ? el('div.diagnostic-badge', { text: '🧭　さいごまで できたね' })
         : tried ? el('div.tried', { text: 'さいごまで がんばったね' })
         : UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }));
     if (r.mode === 'diagnostic') inner.append(el('div.result-sub', { text: 'ぴったりの はじまりを みつけたよ' }));
-    else if (r.stars >= 2) inner.append(el('div.result-sub', { text: `${r.total}もんの うち ${r.right}もん いっかいめで せいかい` }));
+    else if (r.stars >= 2 && r.mode !== 'adventure') inner.append(el('div.result-sub', { text: `${r.total}もんの うち ${r.right}もん いっかいめで せいかい` }));
     /* Every level cleared is a step towards a door the child can already see on
        the home screen. Saying how many are left, at the moment one is earned, is
        what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
@@ -534,9 +551,13 @@ const Result = (() => {
     }
     if (stickers.length){
       const gold = stickers.some(x => x.gold), provisional = stickers.some(x => x.pending);
+      const adventure = stickers.some(x => x.adventure);
+      const chosen = r.rewardTarget && stickers.some(x => x.emoji === stickerFor(r.rewardTarget.key));
       inner.append(el('div.newsticker' + (gold ? '.gold' : '') + (provisional ? '.pending' : ''), null,
         el('div.e', { text: stickers.map(x => x.emoji).join(' ') }),
-        el('div.l', { text: provisional ? 'かりの シール！ べつの ひに また できたら いろが つくよ'
+        el('div.l', { text: adventure ? 'ぼうけんシール を ゲット！'
+                          : chosen ? 'えらんだ シールを ゲット！'
+                          : provisional ? 'かりの シール！ べつの ひに また できたら いろが つくよ'
                           : stickers.length > 1 ? 'シール と きんの シール を ゲット！'
                           : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' }),
         toDoor));
@@ -595,11 +616,14 @@ const Result = (() => {
     } else if (r.mode === 'daily'){
       actions.append(act(again ? '.btn-accent.primary' : '', '↻', 'もういちど',
         () => { Sound.sfx.tap(); Session.startDaily(10); }, 'もう一度できるよ。'));
+    } else if (r.mode === 'adventure'){
+      actions.append(act('', '🧭', 'もういちど',
+        () => { Sound.sfx.tap(); Session.startAdventure(r.adventureTarget); }, 'もう一度、小さな冒険ができるよ。'));
     }
     if (r.unlockedG1){
       actions.append(act('.btn-accent.primary', '🎓', '1ねんせいの きょうしつへ', home, '一年生の教室に行けるよ。'));
     }
-    const homeBtn = act(r.mode === 'level' || r.mode === 'diagnostic' || lead || again || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent',
+    const homeBtn = act(r.mode === 'level' || r.mode === 'diagnostic' || r.mode === 'adventure' || lead || again || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent',
       '🏠', 'あそびを えらぶ', home, '遊びを選べるよ。');
     actions.append(homeBtn);
     /* 1日10分 — one level and one れんしゅう — is the whole plan, and nothing on the
@@ -676,9 +700,10 @@ const Book = (() => {
        child cannot reach would make the goal look further away than it is. */
     const pre = Progress.preStickers();
     drawSlots(Progress.slots('pre'));
-    Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0).forEach(k => {
+    Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0 || k.indexOf('adventure:') === 0).forEach(k => {
       got++;
-      grid.append(el('div.sticker.got.gold', { text: stickerFor(k) }));
+      const isAdventureMemento = k.indexOf('adventure:') === 0;
+      grid.append(el('div.sticker.got' + (isAdventureMemento ? '.adventure' : '.gold'), { text: stickerFor(k) }));
     });
     if (Progress.g1Open()){
       grid.append(el('div.bookgroup', { text: '🎓　1ねんせいの きょうしつ' }));

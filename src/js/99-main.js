@@ -62,7 +62,7 @@
 /* Expose the internals for debugging / automated checks. */
 window.KazuApp = {
   Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent, Orientation,
-  Diagnostic, Missions, Progress, Coach, stageOpen, levelOpen,
+  Diagnostic, Missions, StickerMissions, Adventures, StickerWorld, Progress, Coach, stageOpen, levelOpen,
   classifyMiss, missChild,
   el, svg, clear, $, $$,
   STICKER_POOL, stickerFor,

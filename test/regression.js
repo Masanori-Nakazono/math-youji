@@ -2915,6 +2915,65 @@
     K.Store.reset();
   }
 
+  /* ---------- 84. a pictured prize leads only to an available level ---------- */
+  function chosenStickerMission(){
+    K.Store.reset();
+    const choices = K.StickerMissions.available();
+    const c = choices[0], d = {};
+    try{
+      K.Home.render(); K.UI.show('home');
+      d.pictures = qa('#home .sticker-mission-pick').length === choices.length && choices.length > 0;
+      d.open = !!c && K.levelOpen(c.game, c.levelIndex) && !K.Store.hasSticker(c.key);
+      K.StickerMissions.open(c);
+      const go = q('#sticker-mission .btn-accent');
+      go.click();
+      d.startsTarget = S.mode === 'level' && S.planGames.every(x => x === c.game.id + ':' + c.levelIndex);
+      let guard = 0;
+      while (!onResult() && guard++ < 16){ S.forceCorrect(); S.flushTimers(); }
+      d.earned = K.Store.hasSticker(c.key) && /えらんだ シールを ゲット/.test(q('#result').textContent);
+    } finally { K.Store.reset(); }
+    check('a chosen sticker names an open level, starts that level, and celebrates the chosen prize',
+      d.pictures && d.open && d.startsTarget && d.earned, JSON.stringify(d));
+  }
+
+  /* ---------- 85. small adventures are short rewards, never unlocks ---------- */
+  function smallAdventure(){
+    K.Store.reset();
+    const t = K.Adventures.target(), d = {};
+    try{
+      K.Adventures.open(t);
+      q('#adventure .btn-accent').click();
+      d.short = S.mode === 'adventure' && S.planLength === 4;
+      let guard = 0;
+      while (!onResult() && guard++ < 12){ S.forceCorrect(); S.flushTimers(); }
+      const key = 'adventure:' + K.Store.todayKey();
+      d.memento = K.Store.hasSticker(key) && /ぼうけんシール を ゲット/.test(q('#result').textContent);
+      d.notMastery = K.Store.stars(t.game.id, t.levelIndex) === 0 && K.Store.plays(t.game.id, t.levelIndex) === 0;
+    } finally { K.Store.reset(); }
+    check('a small adventure is four questions, earns its own memento, and cannot clear a level',
+      d.short && d.memento && d.notMastery, JSON.stringify(d));
+  }
+
+  /* ---------- 86. a sticker world saves only layout data ---------- */
+  function stickerWorld(){
+    K.Store.reset();
+    const key = 'count:0', d = {};
+    try{
+      K.Store.addSticker(key);
+      d.rejectsUnowned = !K.Store.putWorldSticker('count:1', 20, 20);
+      d.put = K.Store.putWorldSticker(key, 23.5, 64.5);
+      K.Store.setStickerWorldBackground('sea');
+      const w = K.Store.stickerWorld();
+      d.saved = w.background === 'sea' && w.items[key] && w.items[key].x === 23.5 && w.items[key].y === 64.5;
+      K.StickerWorld.open();
+      d.drawn = q('#sticker-world .world-sticker') && q('#sticker-world .world-sticker').textContent === K.stickerFor(key);
+      const imported = JSON.parse(K.Store.exportText());
+      d.exported = imported.data.stickerWorld.background === 'sea' && imported.data.stickerWorld.items[key].y === 64.5;
+    } finally { K.Store.reset(); }
+    check('the sticker world stores only owned stickers and keeps their layout in a backup',
+      d.rejectsUnowned && d.put && d.saved && d.drawn && d.exported, JSON.stringify(d));
+  }
+
   function finish(){
     instantAnswerKeepsItsSpeed();
     localDays();
@@ -2922,6 +2981,9 @@
     taughtSurvivesNextBlank();
     recommendationMovesOn();
     backButtonAsks();
+    chosenStickerMission();
+    smallAdventure();
+    stickerWorld();
     naturalStoryLanguage();
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();

@@ -159,6 +159,9 @@ const Session = (() => {
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
   let locked = false, mode = 'level', curGame = null, curLevelIdx = 0;
+  /* A chosen level sticker is a visual destination for this run.  An adventure
+     is a separate short practice path.  Neither is written as a learning result. */
+  let rewardTarget = null, adventureTarget = null;
   let hintBtns = [], hintExtras = [], hintShown = false, lastSpeech = '';
   /* Most questions keep their hint back until a second mistake, so the child
      gets a real second try first. A question whose picture is already hidden
@@ -409,10 +412,12 @@ const Session = (() => {
   }
 
   /* ---------- public entry points ---------- */
-  function startLevel(game, levelIndex){
+  function startLevel(game, levelIndex, opts){
     build();
     killTimers();
     mode = 'level'; curGame = game; curLevelIdx = levelIndex;
+    rewardTarget = opts && opts.stickerMission || null;
+    adventureTarget = null;
     const lv = game.levels[levelIndex];
     const n = lv.n || 8;
     plan = [];
@@ -429,7 +434,7 @@ const Session = (() => {
   function startDaily(count){
     build();
     killTimers();
-    mode = 'daily'; curGame = null;
+    mode = 'daily'; curGame = null; rewardTarget = null; adventureTarget = null;
     const pool = [];
     Games.list.forEach(g => {
       g.levels.forEach((lv, i) => {
@@ -456,7 +461,7 @@ const Session = (() => {
   function startDiagnostic(){
     build();
     killTimers();
-    mode = 'diagnostic'; curGame = null;
+    mode = 'diagnostic'; curGame = null; rewardTarget = null; adventureTarget = null;
     const picks = [
       ['count', 0], ['numeral', 0], ['seq', 0], ['compare', 0], ['ordinal', 0],
       ['measure', 0], ['bond', 0], ['shape', 0], ['pattern', 0], ['clock', 0]
@@ -506,7 +511,7 @@ const Session = (() => {
       want.push({ game: g, level: g.levels[li], levelIndex: li, want: k });
     });
     if (!want.length){ startDaily(10); return; }         // nothing to aim at yet
-    mode = 'focus'; curGame = null;
+    mode = 'focus'; curGame = null; rewardTarget = null; adventureTarget = null;
     focusKeys = want.map(x => x.want);
     plan = [];
     /* Round-robin, not shuffled. A B C A B C spaces each fact out inside the
@@ -515,6 +520,31 @@ const Session = (() => {
     const n = o.n || 10;
     for (let i = 0; i < n; i++) plan.push(want[i % want.length]);
     titleEl.textContent = 'とっくん';
+    begin();
+  }
+
+  /** A short, supported return to a hard idea.  A level clear keeps its existing
+      evidence threshold; an adventure only says that the child completed this
+      four-question attempt, so it never unlocks a level by itself. */
+  function startAdventure(target){
+    const t = target;
+    if (!t || !t.game || !t.level || !levelOpen(t.game, t.levelIndex)) return;
+    build();
+    killTimers();
+    mode = 'adventure'; curGame = null; curLevelIdx = t.levelIndex;
+    rewardTarget = null;
+    adventureTarget = { game: t.game, levelIndex: t.levelIndex, want: t.want || null };
+    const targetStep = () => ({ game: t.game, level: t.level, levelIndex: t.levelIndex, want: t.want || null });
+    if (needsIntro(t.game, t.levelIndex)){
+      /* show + together replace two scored questions, keeping the visit short */
+      plan = [Object.assign(targetStep(), { intro: 'show' }), Object.assign(targetStep(), { intro: 'together' }),
+              targetStep(), targetStep()];
+    } else {
+      const warmIndex = t.levelIndex > 0 && levelOpen(t.game, t.levelIndex - 1) ? t.levelIndex - 1 : t.levelIndex;
+      const warm = { game: t.game, level: t.game.levels[warmIndex], levelIndex: warmIndex };
+      plan = [warm, targetStep(), targetStep(), warm];
+    }
+    titleEl.textContent = 'ちいさな ぼうけん　' + t.game.name;
     begin();
   }
 
@@ -856,7 +886,8 @@ const Session = (() => {
     if (step.check) titleEl.textContent = 'たしかめ　' + step.game.name + '　' + step.level.t;
     else if (mode !== 'level'){
       const modeName = mode === 'daily' ? 'きょうの れんしゅう'
-                     : mode === 'focus' ? 'とっくん' : 'はじめの ぼうけん';
+                     : mode === 'focus' ? 'とっくん'
+                     : mode === 'adventure' ? 'ちいさな ぼうけん' : 'はじめの ぼうけん';
       titleEl.textContent = modeName + '　' + step.game.name;
     } else if (curGame) titleEl.textContent = curGame.name + '　' + curGame.levels[curLevelIdx].t;
     demo = step.intro || null;
@@ -1145,7 +1176,7 @@ const Session = (() => {
     if (graded && timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
     if (slipAt && wrongThisQ === 1 && performance.now() - slipAt < PAD_SLIP_MS
         && (missType === 'up' || missType === 'down')) missType = null;
-    if (scaffold === 'together' && mode === 'level') Store.markIntroduced(g.id, plan[idx].levelIndex);
+    if (scaffold === 'together' && (mode === 'level' || mode === 'adventure')) Store.markIntroduced(g.id, plan[idx].levelIndex);
     if (mode !== 'diagnostic' && !scaffold){
       Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
       if (curItem){
@@ -1237,6 +1268,12 @@ const Session = (() => {
       if (stars === 3 && Store.addSticker(key + ':g')){
         newStickers.push({ emoji: stickerFor(key + ':g'), gold: true });
       }
+    } else if (mode === 'adventure'){
+      /* This sticker is a completion memento, not a mastery badge.  It is one per
+         calendar day so a child can finish feeling successful without being led
+         into a reward loop of identical short sessions. */
+      const key = 'adventure:' + Store.todayKey();
+      if (Store.addSticker(key)) newStickers.push({ emoji: stickerFor(key), adventure: true });
     } else if (mode === 'diagnostic'){
       const recommended = Diagnostic.recommendFrom(sessionOutcomes);
       Store.recordDiagnostic(sessionOutcomes, recommended);
@@ -1265,11 +1302,11 @@ const Session = (() => {
                   shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
                   focusKeys: focusKeys.slice(), swift, unlockedG1: justOpenedG1,
                   recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
-                  lastGameId: primaryGameId });
+                  lastGameId: primaryGameId, rewardTarget, adventureTarget });
   }
 
   return {
-    startLevel, startDaily, startFocus, startDiagnostic, build,
+    startLevel, startDaily, startFocus, startAdventure, startDiagnostic, build,
     _test: {
       flushTimers,
       get idx(){ return idx; },
