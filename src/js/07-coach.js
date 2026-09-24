@@ -132,7 +132,9 @@ const Coach = (() => {
       n++;
       Sound.sfx.count(Math.min(n - 1, 10));
       Sound.say(numKana(n), { delay: 0, rate: 1.08 });
-      if (holes.every(c => c.firstChild) && o.onDone) api.later(() => o.onDone(n), 450);
+      if (holes.every(c => c.firstChild) && o.onDone) api.later(() => api.afterSpeech(() => {
+        if (!api.locked) o.onDone(n);
+      }), 450);
     }
     holes.forEach(c => {
       if (c.dataset.coach) return;

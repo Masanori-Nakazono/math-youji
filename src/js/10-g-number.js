@@ -61,7 +61,7 @@ function countQuestion(api, lo, hi, layout){
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done !== count) return;
-    if (!asked){ asked = true; api.later(ask, 620); }
+    if (!asked){ asked = true; api.later(() => api.afterSpeech(ask), 620); }
     else api.later(() => Coach.pulse(o), 300);     // a recount ends on the number that answers
   };
   objs.forEach(o => {
@@ -252,7 +252,7 @@ function flashQuestion(api, o){
     api.later(() => {
       board.classList.remove('open');
       Sound.sfx.place();
-      api.later(ask, 360);
+      api.later(() => api.afterSpeech(ask), 360);
     }, o.ms);
   });
   api.choices.append(go);
@@ -270,7 +270,7 @@ function flashQuestion(api, o){
        it, over the uncovered board, and the question waits for both. */
     const reveal = revealed(() => {
       board.classList.add('open');
-      api.later(() => Sound.say(said), 1050);
+      api.later(() => api.afterSpeech(() => Sound.say(said, { delay: 0 })), 1050);
     }, { delay: 2300 });
     if (o.two){
       api.setPrompt('ぜんぶで いくつ だった？', '全部でいくつだった？');

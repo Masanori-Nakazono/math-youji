@@ -12,6 +12,8 @@
 
   const K = window.KazuApp;
   const S = K.Session._test;
+  const narrationWasOn = K.Sound.voiceOn;
+  K.Sound.voiceOn = false; // synchronous interaction tests; narration timing has dedicated delayed tests
   // levels opened for the first time start with two lesson questions; those have
   // tests of their own (87–89), and everything else here counts questions exactly
   if (S.intro) S.intro(false);
@@ -25,6 +27,7 @@
   function check(name, ok, detail){ results.push({ name, ok: !!ok, detail: ok ? '' : (detail || '') }); }
 
   /* ---------- helpers ---------- */
+  function finishSpeech(text, opts){ if (opts && opts.onend) opts.onend(); }
   function liveChoices(){
     return qa('#play .choices .choice').filter(b => !b.disabled && !b.classList.contains('correct'));
   }
@@ -688,10 +691,12 @@
 
       // a previous deploy's cache has to go, or the child is stuck on an old build
       await caches.open('kazu-no-bouken-A-PREVIOUS-BUILD');
+      await caches.open('kazu-natural-voices-v1');
       const w2 = []; await H.activate({ waitUntil: p => w2.push(p) }); await Promise.all(w2);
       if (!claimed) problems.push('activate did not claim the page');
       const left = await caches.keys();
-      if (left.length !== 1) problems.push('old caches survived: ' + left.join(','));
+      if (left.filter(k => k.startsWith('kazu-no-bouken-')).length !== 1) problems.push('old app caches survived: ' + left.join(','));
+      if (!left.includes('kazu-natural-voices-v1')) problems.push('downloaded voices were deleted on update');
 
       const swGet = async req => {
         let p = null; const w = [];
@@ -1604,7 +1609,7 @@
   (function hintsAreHeardAndUsable(){
     K.Store.reset();
     const log = [], say = K.Sound.say;
-    K.Sound.say = t => log.push(String(t));
+    K.Sound.say = (t, o) => { log.push(String(t)); finishSpeech(t, o); };
     const generic = [], narrowed = [], noReplay = [];
     let levels = 0;
     try{
@@ -1650,7 +1655,7 @@
   (function hintsDoNotAnswer(){
     K.Store.reset();
     const say = K.Sound.say;
-    K.Sound.say = () => {};
+    K.Sound.say = finishSpeech;
     const bad = [];
     const twiceWrong = (id, li, targets) => {
       for (let t = 0; t < 30; t++){
@@ -1700,7 +1705,7 @@
   (function handShowsTheMethod(){
     K.Store.reset();
     const say = K.Sound.say;
-    K.Sound.say = () => {};
+    K.Sound.say = finishSpeech;
     const d = {};
     try{
       let a = null;
@@ -1739,7 +1744,7 @@
     K.Store.reset();
     S.intro(true);
     const say = K.Sound.say;
-    K.Sound.say = () => {};
+    K.Sound.say = finishSpeech;
     const d = {};
     try{
       K.Session.startLevel(K.Games.byId.bond, 0);
@@ -1779,7 +1784,7 @@
     K.Store.setPref('g1Open', true);
     S.intro(true);
     const say = K.Sound.say;
-    K.Sound.say = () => {};
+    K.Sound.say = finishSpeech;
     const stalled = [];
     try{
       eachLevel((g, li) => {
@@ -1803,7 +1808,7 @@
   (function askedForHelp(){
     K.Store.reset();
     const say = K.Sound.say;
-    K.Sound.say = () => {};
+    K.Sound.say = finishSpeech;
     const d = {};
     try{
       let m = null;
@@ -1860,7 +1865,7 @@
   (function checkedOnAnotherDay(){
     K.Store.reset();
     const say = K.Sound.say;
-    K.Sound.say = () => {};
+    K.Sound.say = finishSpeech;
     const d = {};
     const finishLevel = () => { let guard = 0; while (!onResult() && guard++ < 40){ S.forceCorrect(); S.flushTimers(); } };
     try{
@@ -1930,7 +1935,7 @@
     K.Store.reset();
     S.intro(true);
     const say = K.Sound.say;
-    K.Sound.say = () => {};
+    K.Sound.say = finishSpeech;
     const d = {};
     try{
       K.Store.addPending('bond:0');
@@ -2190,7 +2195,7 @@
     K.Home.render();
     K.UI.show('home');
     const log = [], say = K.Sound.say, hush = K.Sound.hush;
-    K.Sound.say = t => log.push('say:' + t);
+    K.Sound.say = (t, o) => { log.push('say:' + t); finishSpeech(t, o); };
     K.Sound.hush = () => log.push('hush');
     try{ q('#home .gamecard.locked').click(); }
     finally { K.Sound.say = say; K.Sound.hush = hush; }
@@ -2323,7 +2328,7 @@
   (function screensSpeak(){
     K.Store.reset();
     const log = [], say = K.Sound.say, hush = K.Sound.hush;
-    K.Sound.say = t => log.push('say:' + t);
+    K.Sound.say = (t, o) => { log.push('say:' + t); finishSpeech(t, o); };
     K.Sound.hush = () => log.push('hush');
     // what is still to be heard: anything said after the last hush
     const heard = () => log.slice(log.lastIndexOf('hush') + 1).filter(x => x.indexOf('say:') === 0).join(' ');
@@ -2486,7 +2491,7 @@
     K.Store.reset();
     K.Store.noteFact('bond:dec:10-4', false, '10 は 4 と 6', 'bond:2', 0, 'part');
     const log = [], say = K.Sound.say;
-    K.Sound.say = t => log.push(t);
+    K.Sound.say = (t, o) => { log.push(t); finishSpeech(t, o); };
     const d = {};
     try{
       K.Result.show({ stars: 0, right: 2, total: 8, mode: 'level', game: K.Games.byId.bond, levelIndex: 1,
@@ -2831,7 +2836,7 @@
   function taughtSurvivesNextBlank(){
     K.Store.reset();
     const say = K.Sound.say;
-    K.Sound.say = () => {};
+    K.Sound.say = finishSpeech;
     const d = {};
     const target = () => {
       const cells = qa('#play .numline .nn');
@@ -2891,7 +2896,7 @@
   function backButtonAsks(){
     K.Store.reset();
     const log = [], say = K.Sound.say;
-    K.Sound.say = t => log.push(t);
+    K.Sound.say = (t, o) => { log.push(t); finishSpeech(t, o); };
     const d = {};
     try{
       let ans = null;
@@ -2974,6 +2979,215 @@
       d.rejectsUnowned && d.put && d.saved && d.drawn && d.exported, JSON.stringify(d));
   }
 
+  /** Hold real speech completion independently of the question's visual timers.
+      The mock preserves replacement, onend, and idle-waiter ordering, so a flush
+      cannot pretend that a long natural recording has already finished. */
+  function narratedTransitions(){
+    const original = { say: K.Sound.say, hush: K.Sound.hush, afterSpeech: K.Sound.afterSpeech };
+    let current = null;
+    const waiters = new Set(), actions = [], d = {};
+    function drain(){
+      while (!current && waiters.size){
+        const fn = waiters.values().next().value;
+        waiters.delete(fn); fn();
+      }
+    }
+    function end(){
+      const old = current; current = null;
+      if (old) finishSpeech(old.text, old.opts);
+      drain();
+    }
+    K.Sound.say = (text, opts) => {
+      const old = current;
+      current = { text: String(text), opts };
+      if (old) finishSpeech(old.text, old.opts);
+    };
+    K.Sound.hush = end;
+    K.Sound.afterSpeech = fn => {
+      if (current) waiters.add(fn); else fn();
+      return () => waiters.delete(fn);
+    };
+    const game = Object.assign({}, K.Games.byId.pattern, { levels: [{ t: '音声の確認', n: 2,
+      make(api){
+        api.setPrompt('えらんでね', '選んでね。');
+        api.buildChoices(['まる', 'ちがう'], 'まる');
+        api.coach({ walk(){ return [
+          { act(){ actions.push(1); api.say('いち。', { delay: 0 }); }, ms: 1 },
+          { act(){ actions.push(2); }, say: 'に。', ms: 1 }
+        ]; } });
+      }
+    }] });
+    try{
+      K.Store.reset(); S.intro(true);
+      K.Session.startLevel(game, 0);
+      S.flushTimers(120);
+      d.introHeld = S.idx === 0 && S.introStep === 'show' && !actions.length
+        && current && current.text.startsWith('初めてだね。');
+      end(); S.flushTimers(120);
+      d.actionHeld = actions.join(',') === '1' && S.idx === 0 && current && current.text === 'いち。';
+      end(); S.flushTimers(120);
+      d.explicitHeld = actions.join(',') === '1,2' && S.idx === 0 && current && current.text === 'に。';
+      end(); S.flushTimers(120);
+      d.answerHeld = !S.locked && S.idx === 0 && current && current.text === '答えは、まるだよ。';
+      end(); S.flushTimers(120);
+      d.answerCompleted = S.idx === 1 && S.introStep === 'together';
+      check('the full introduction and every spoken demonstration step finish before the hand advances',
+        d.introHeld && d.actionHeld && d.explicitHeld, JSON.stringify(d));
+      check('an automatic demonstration leaves the answer highlighted until its narration finishes',
+        d.answerHeld && d.answerCompleted, JSON.stringify(d));
+
+      leavePlay(); S.intro(false); K.Store.reset();
+      K.Session.startLevel(game, 0);
+      end();
+      qa('#play .choice').find(b => b.textContent === 'まる').click();
+      const praise = current && current.text;
+      S.flushTimers(120);
+      d.praiseHeld = S.idx === 0 && S.locked && current && current.text === praise;
+      end(); S.flushTimers(120);
+      d.praiseCompleted = S.idx === 1;
+      check('correct-answer praise completes before the next question can replace it',
+        d.praiseHeld && d.praiseCompleted, JSON.stringify(d));
+
+      leavePlay(); K.Store.reset(); actions.length = 0;
+      K.Session.startLevel(game, 0); end();
+      q('#play .showbtn').click();
+      S.flushTimers(120);
+      d.helpHeld = !actions.length && current && current.text.startsWith('やり方を見せるね。');
+      end(); S.flushTimers(120);
+      const oldWaiters = Array.from(waiters);
+      d.helpStarted = actions.join(',') === '1';
+      leavePlay();
+      K.Session.startLevel(game, 0);
+      oldWaiters.forEach(fn => fn());
+      S.flushTimers(120);
+      d.oldIgnored = actions.join(',') === '1' && S.idx === 0 && !S.locked
+        && !q('#play').classList.contains('walking');
+      check('help narration precedes its walk and late speech completion cannot advance after leaving',
+        d.helpHeld && d.helpStarted && d.oldIgnored, JSON.stringify(d));
+
+      leavePlay(); K.Store.reset();
+      K.Session.startLevel(K.Games.byId.add, 0);
+      const story = q('#play .prompt .txt').textContent;
+      S.flushTimers(120);
+      d.storyHeld = !qa('#play .choices .choice').length && q('#play .prompt .txt').textContent === story;
+      end(); S.flushTimers(120);
+      d.storyCompleted = qa('#play .choices .choice').length > 0 && q('#play .prompt .txt').textContent !== story;
+      check('a story finishes its narration before the scene becomes an arithmetic question',
+        d.storyHeld && d.storyCompleted, JSON.stringify(d));
+
+      leavePlay(); K.Store.reset();
+      K.Session.startLevel(K.Games.byId.flash, 0); end();
+      q('#play .flashgo').click(); S.flushTimers(); end();
+      const answer = Number((S.item || '').split(':').pop());
+      qa('#play .choice').find(b => Number(b.textContent) === answer).click();
+      const praiseLine = current && current.text;
+      S.flushTimers(120);
+      d.flashPraiseHeld = S.idx === 0 && current && current.text === praiseLine;
+      end(); S.flushTimers(120);
+      d.explanationHeld = S.idx === 0 && current && /だったね。$/.test(current.text);
+      end(); S.flushTimers(120);
+      d.flashCompleted = S.idx === 1;
+      check('flash praise and its revealed arrangement are both heard before the next question',
+        d.flashPraiseHeld && d.explanationHeld && d.flashCompleted, JSON.stringify(d));
+
+      leavePlay(); K.Store.reset();
+      K.Session.startLevel(K.Games.byId.ten, 0); end();
+      const cells = qa('#play .cell.tappable');
+      cells.forEach((c, i) => { c.click(); if (i < cells.length - 1) end(); });
+      S.flushTimers(120);
+      d.tenHeld = current && current.text === 'じゅう' && !qa('#play .choices .choice').length;
+      end(); S.flushTimers(120);
+      d.tenAsked = current && /いくつ足した？$/.test(current.text) && qa('#play .choices .choice').length > 0;
+      check('filling a ten-frame finishes the final count before asking how many were added',
+        d.tenHeld && d.tenAsked, JSON.stringify(d));
+
+      leavePlay(); K.Store.reset();
+      K.Session.startLevel(K.Games.byId.ten, 1); end();
+      q('#play .showbtn').click(); end();
+      const holes = qa('#play .cell.coachhole');
+      holes.forEach((c, i) => { c.click(); if (i < holes.length - 1) end(); });
+      S.flushTimers(120);
+      d.filledCountHeld = holes.length > 0 && current && current.text === 'じゅう';
+      end(); S.flushTimers(120);
+      d.filledCountAsked = current && current.text === '赤い丸は、いくつ？';
+      check('a fillable hint finishes its last number before asking about the red counters',
+        d.filledCountHeld && d.filledCountAsked, JSON.stringify(d));
+
+      leavePlay(); K.Store.reset();
+      K.Session.startLevel(K.Games.byId.ten, 1); end();
+      q('#play .showbtn').click(); end();
+      const unfinished = qa('#play .cell.coachhole');
+      unfinished.forEach((c, i) => { c.click(); if (i < unfinished.length - 1) end(); });
+      const partner = 10 - Number((S.item || '').split(':').pop());
+      qa('#play .padkey').find(b => Number(b.textContent) === partner).click();
+      S.flushTimers(120); end(); S.flushTimers(120);
+      d.solvedFillNotReasked = S.idx === 1 && current && current.text !== '赤い丸は、いくつ？';
+      check('a queued counting hint cannot ask a question again after the child has answered it',
+        d.solvedFillNotReasked, JSON.stringify(d));
+
+      leavePlay(); K.Store.reset(); S.intro(true);
+      const random = Math.random;
+      try { Math.random = () => 0.1; K.Session.startLevel(K.Games.byId.bond, 1); }
+      finally { Math.random = random; }
+      end(); S.flushTimers(120);             // introductory question, then the method
+      end(); S.flushTimers(120);             // the method, then the rescue explanation
+      end(); S.flushTimers(120);             // the rescue, then the first construction
+      d.firstWayHeld = /^bond:ways:/.test(S.item || '') && qa('#play .way').length === 1
+        && current && /^いちと/.test(current.text);
+      end(); S.flushTimers(120);
+      d.secondWayHeld = qa('#play .way').length === 2 && S.idx === 0
+        && current && /^にと/.test(current.text);
+      end(); S.flushTimers(120);
+      d.waysCompleted = S.idx === 1;
+      check('the automatic two-way construction reads each decomposition completely',
+        d.firstWayHeld && d.secondWayHeld && d.waysCompleted, JSON.stringify(d));
+
+      leavePlay(); K.Store.reset();
+      K.Session.startLevel(K.Games.byId.flash, 0);
+      end(); S.flushTimers(120);
+      d.lookHeld = current && current.text === 'みる、を押すよ。'
+        && !qa('#play .choice:not(.flashgo)').length;
+      end(); S.flushTimers(120);
+      d.lookAsked = current && current.text === 'いくつだった？'
+        && qa('#play .choice:not(.flashgo)').length > 0;
+      check('the flash demonstration finishes its instruction before asking about the hidden dots',
+        d.lookHeld && d.lookAsked, JSON.stringify(d));
+    } finally {
+      leavePlay(); S.intro(false); K.Store.reset();
+      Object.assign(K.Sound, original);
+    }
+  }
+
+  function picturedAnswerSpeech(){
+    const original = K.Sound.say, lines = [];
+    K.Sound.say = (text, opts) => { lines.push(text); finishSpeech(text, opts); };
+    const heard = [];
+    try{
+      for (const answer of ['🐰', '5', 'まる', 'circle', 'triangle', 'square', '4:0', '7:30', '4じ', '7じはん', '9じ']){
+        K.Store.reset();
+        const game = Object.assign({}, K.Games.byId.pattern, { levels: [{ t: '音声の確認', n: 1,
+          make(api){
+            api.setPrompt('えらんでね', '選んでね。');
+            api.buildChoices([answer, 'ちがう'], answer);
+            api.coach({ say: 'よく見てみよう。', walk(){ return []; } });
+          }
+        }] });
+        K.Session.startLevel(game, 0);
+        const wrong = qa('#play .choice').find(b => b.textContent === 'ちがう');
+        for (let i = 0; i < 6 && !q('#play .teachbtn'); i++) wrong.click();
+        const teach = q('#play .teachbtn');
+        if (teach){ teach.click(); S.flushTimers(); }
+        heard.push(lines.findLast(t => /^答えは、/.test(t)) || '');
+        lines.length = 0;
+      }
+    } finally { K.Sound.say = original; K.Store.reset(); }
+    check('rescue speech names drawn shapes and clock times and preserves numeric and kana answers',
+      JSON.stringify(heard) === JSON.stringify(['答えは、これだよ。', '答えは、5だよ。', '答えは、まるだよ。',
+        '答えは、まるだよ。', '答えは、さんかくだよ。', '答えは、しかくだよ。', '答えは、よじだよ。', '答えは、しちじはんだよ。',
+        '答えは、よじだよ。', '答えは、しちじはんだよ。', '答えは、くじだよ。']),
+      JSON.stringify(heard));
+  }
+
   function finish(){
     instantAnswerKeepsItsSpeed();
     localDays();
@@ -2985,8 +3199,11 @@
     smallAdventure();
     stickerWorld();
     naturalStoryLanguage();
+    narratedTransitions();
+    picturedAnswerSpeech();
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();
+    K.Sound.voiceOn = narrationWasOn;
     return { pass: results.filter(r => r.ok).length, fail: results.filter(r => !r.ok).length, results };
   }
 

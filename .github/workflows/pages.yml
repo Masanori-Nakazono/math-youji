@@ -46,6 +46,7 @@ jobs:
           # and without these the installed app cannot open offline
           cp dist/sw.js dist/manifest.webmanifest _site/
           cp dist/icon-180.png dist/icon-192.png dist/icon-512.png _site/
+          cp -R dist/voices _site/voices
 
       # enablement lets the workflow turn Pages on itself, so there is no
       # manual repository setting to remember

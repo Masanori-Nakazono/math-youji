@@ -554,53 +554,130 @@ const Parent = (() => {
     return s;
   }
 
-  /** Which Japanese voice reads the questions.
-      The voice bundled with a device is the “compact” one — flat and robotic.
-      The enhanced / premium download is a different recording of the same name,
-      so we cannot tell them apart from here: the honest fix is to list what the
-      device actually has, let a parent hear each one, and remember the choice. */
-  let voiceWarning = null, voiceWaiting = false;
+  /* A single listener serves whichever settings row is currently attached. Sound
+     also reports delayed device voices here; status updates must not replace the
+     select itself or steal keyboard focus from the person choosing a voice. */
+  let currentVoiceUI = null;
+  window.addEventListener('kazu-voices-changed', () => {
+    if (currentVoiceUI && currentVoiceUI.node.isConnected) currentVoiceUI.update();
+  });
   function voiceRow(){
-    const wrap = el('div', { style: { marginTop: 'calc(var(--u)*.7)' } });
-    const list = Sound.voices;
-    if (!list.length){
-      wrap.append(el('p', { style: { color: 'var(--oops-ink)' },
-        text: '※ この端末で日本語の読み上げ音声が見つかりませんでした。iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 日本語 で音声を追加すると、問題文が音声で読まれます。文字だけでも遊べます。' }));
-      // Safari fills the voice list asynchronously, so an empty list here often
-      // just means "not yet" — swap the warning for the picker when it arrives.
-      // One listener however often the page is drawn: it swaps whichever warning
-      // is on screen, rather than every page drawn since keeping its own.
-      voiceWarning = wrap;
-      if (window.speechSynthesis && !voiceWaiting){
-        voiceWaiting = true;
-        speechSynthesis.addEventListener('voiceschanged', function again(){
-          if (!Sound.voices.length) return;
-          speechSynthesis.removeEventListener('voiceschanged', again);
-          voiceWaiting = false;
-          if (voiceWarning && voiceWarning.isConnected) voiceWarning.replaceWith(voiceRow());
-          voiceWarning = null;
-        });
-      }
-      return wrap;
-    }
-    const sel = el('select.btn', { style: { maxWidth: '100%' } });
-    list.forEach(v => {
-      const o = el('option', { value: v.voiceURI, text: v.name });
-      if (v.voiceURI === Sound.voiceId) o.selected = true;
-      sel.append(o);
+    const hosted = /^https?:$/.test(location.protocol);
+    const wrap = el('div.voice-settings');
+    const sel = el('select#reading-voice.voice-select', {
+      'aria-describedby': 'reading-voice-description reading-voice-mode'
     });
-    const apply = () => {
-      Sound.voiceId = sel.value;
-      Store.setPref('voiceId', sel.value);
-      Sound.say('こんにちは。今日も一緒に、数を数えよう！', { delay: 60 });
-    };
-    sel.addEventListener('change', apply);
-    const test = el('button.btn', { text: '試しに聴く', onclick: apply });
-    wrap.append(el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap', alignItems: 'center' } },
-      el('span', { text: '読み上げの声：' }), sel, test));
-    wrap.append(el('p', { style: { marginTop: 'calc(var(--u)*.4)' },
-      text: '※ 機械的な声に聞こえるときは、iPad の 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 日本語 で「高品質」または「プレミアム」の音声をダウンロードしてください（無料・オフラインで使えます）。同じ名前のまま、声だけが自然になります。' }));
+    const description = el('p#reading-voice-description.voice-description');
+    const mode = el('p#reading-voice-mode.voice-mode');
+    const status = el('p.voice-status', { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
+    let optionSignature = '', previewing = false, previewError = false;
+
+    function endPreview(error){
+      previewing = false;
+      previewError = !!error;
+      update();
+    }
+    const test = el('button.btn', { type: 'button', text: '試しに聴く', onclick(){
+      previewing = true;
+      previewError = false;
+      update();
+      Sound.preview({ onend: () => endPreview(previewError), onerror: () => endPreview(true) });
+    } });
+    const stop = el('button.btn.btn-ghost', { type: 'button', text: '停止', onclick(){
+      Sound.hush();
+      endPreview(false);
+    } });
+
+    function update(){
+      const natural = Sound.naturalVoices || [];
+      const devices = Sound.voices;
+      const preference = Sound.voicePreference || '';
+      const selectedNatural = natural.find(v => v.id === (preference || Sound.voiceId));
+      const selectedDevice = devices.find(v => v.voiceURI === (preference || Sound.voiceId));
+      const known = !preference || preference === 'device:auto'
+        || natural.some(v => v.id === preference) || devices.some(v => v.voiceURI === preference);
+      const signature = JSON.stringify([preference, natural.map(v => [v.id, v.name]), devices.map(v => [v.voiceURI, v.name])]);
+      if (signature !== optionSignature){
+        clear(sel);
+        sel.append(el('option', { value: '', text: hosted ? 'おすすめ（自然な声）' : 'おすすめ（この端末の声）' }));
+        if (natural.length){
+          const group = el('optgroup', { label: hosted ? '自然な声' : '自然な声（Web版で利用）', disabled: !hosted });
+          natural.forEach(v => group.append(el('option', { value: v.id, text: v.name })));
+          sel.append(group);
+        }
+        const group = el('optgroup', { label: 'この端末の声' });
+        group.append(el('option', { value: 'device:auto', text: '端末の声（自動）' }));
+        devices.forEach(v => group.append(el('option', { value: v.voiceURI,
+          text: v.name + (v.localService ? '' : '（通信を使う声）') })));
+        sel.append(group);
+        // A restored backup may name a voice installed on a different device.
+        // Keep that preference visible and intact, including while Safari loads.
+        if (!known) sel.append(el('option', { value: preference, text: '保存した声（この端末では見つかりません）' }));
+        sel.value = preference;
+        optionSignature = signature;
+      }
+
+      if (selectedNatural && hosted){
+        const size = selectedNatural.bytes > 0
+          ? ' 初回のダウンロード：約' + (selectedNatural.bytes / 1024 / 1024).toFixed(1) + '\u00a0MB。' : '';
+        description.textContent = selectedNatural.name + '。'
+          + (selectedNatural.description ? selectedNatural.description + '。' : '') + size;
+      } else if (!known){
+        description.textContent = '保存した声はまだ使えません。利用できる声で読み上げます。選び直すまで、元の設定を残します。';
+      } else if (selectedNatural && !hosted){
+        description.textContent = '保存した自然な声はWeb版で利用できます。このHTMLファイルでは端末の声で読み上げます。';
+      } else {
+        description.textContent = selectedDevice
+          ? selectedDevice.name + '。' + (selectedDevice.localService
+            ? 'この端末にある日本語の音声を使います。'
+            : 'ブラウザーが提供する、通信を使う日本語の音声です。')
+          : devices.length ? 'この端末にある日本語の音声を自動で選びます。'
+            : '日本語の端末音声がまだ見つかりません。端末の音声設定で日本語を追加すると、端末の声も選べます。';
+      }
+      mode.textContent = Sound.voiceOn
+        ? '読み上げはオンです。選んだ声で問題や声かけを読みます。'
+        : '読み上げはオフです。「試しに聴く」で声だけ確認できます。';
+      const voiceStatus = Sound.voiceStatus || { state: 'idle', text: '' };
+      status.dataset.state = previewError ? 'error' : voiceStatus.state;
+      status.textContent = previewError
+        ? ((voiceStatus.state === 'error' || voiceStatus.state === 'fallback') && voiceStatus.text
+          || '声を再生できませんでした。音量と通信状態を確認して、もう一度お試しください。')
+        : previewing && !['loading', 'error', 'fallback'].includes(voiceStatus.state)
+          ? '試聴しています。途中で止めるときは「停止」を押してください。'
+          : voiceStatus.text || '「試しに聴く」で、声を比べて選べます。';
+      test.disabled = previewing;
+      stop.disabled = !previewing;
+      test.textContent = previewing ? (voiceStatus.state === 'loading' ? '声を準備しています…' : '試聴中…') : '試しに聴く';
+    }
+    sel.addEventListener('change', () => {
+      const preference = sel.value || null;
+      Sound.hush();
+      previewing = false;
+      previewError = false;
+      Sound.voiceId = preference;
+      Store.setPref('voiceId', preference);
+      update();
+      if (Sound.prepareVoice) Promise.resolve(Sound.prepareVoice()).then(update, update);
+    });
+    wrap.append(el('label.voice-label', { for: 'reading-voice', text: '読み上げの声' }), sel, description, mode,
+      el('div.voice-actions', null, test, stop), status);
+    wrap.append(el('p.voice-note', { text: hosted
+      ? '自然な声は初回にダウンロードし、このブラウザーに保存します。保存後はオフラインでも使えます。ブラウザーが保存データを消した場合は、もう一度ダウンロードします。'
+      : '自然な声は、インターネットのURLから開くWeb版で使えます。このHTMLファイルを直接開いた場合は、端末の声を使います。' }));
+    wrap.append(el('p.voice-note', {
+      text: '自然な声は、あらかじめ用意した音声です。名前など未収録のことばは端末の声で読みます。自然な声を使うために、名前や問題文を外部へ送ることはありません。' }));
+    wrap.append(el('p.voice-credit', null, '音声：VOICEVOX Nemo ／ ',
+      el('a', { href: 'https://voicevox.hiroshiba.jp/nemo/term/', target: '_blank', rel: 'noopener noreferrer', text: '音声の利用規約' })));
+    currentVoiceUI = { node: wrap, update };
+    update();
     return wrap;
+  }
+
+  function restoreSoundSettings(){
+    Sound.hush();
+    Sound.sfxOn = Store.data.sfx;
+    Sound.voiceOn = Store.data.voice;
+    Sound.voiceId = Store.data.voiceId || null;
   }
 
   function settingsSection(){
@@ -643,7 +720,11 @@ const Parent = (() => {
     };
     const row = el('div', { style: { display: 'flex', gap: 'calc(var(--u)*.7)', flexWrap: 'wrap' } },
       toggle('効果音', () => Sound.sfxOn, v => { Sound.sfxOn = v; Store.setPref('sfx', v); }),
-      toggle('読み上げ', () => Sound.voiceOn, v => { Sound.voiceOn = v; Store.setPref('voice', v); }));
+      toggle('読み上げ', () => Sound.voiceOn, v => {
+        Sound.voiceOn = v;
+        Store.setPref('voice', v);
+        if (currentVoiceUI && currentVoiceUI.node.isConnected) currentVoiceUI.update();
+      }));
     s.append(row);
     s.append(voiceRow());
     const reset = el('button.btn', { text: justReset ? '消しました' : '記録をすべて消す',
@@ -658,6 +739,7 @@ const Parent = (() => {
         return;
       }
       Store.reset();
+      restoreSoundSettings();
       justReset = true;      // render() replaces this button, so the message goes on the new one
       Home.render();
       render();
@@ -836,7 +918,7 @@ const Parent = (() => {
 
     function apply(text){
       const r = Store.importText(text, mode);
-      if (r.ok){ lastBackupMsg = r; Home.render(); render(); return; }
+      if (r.ok){ lastBackupMsg = r; restoreSoundSettings(); Home.render(); render(); return; }
       status.textContent = r.msg;
       status.style.color = 'var(--oops-ink)';
     }

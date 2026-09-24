@@ -82,7 +82,7 @@ const StickerMissions = (() => {
       Session.startLevel(choice.game, choice.levelIndex, { stickerMission: choice });
     };
     UI.show('sticker-mission');
-    Sound.say(stickerFor(choice.key) + 'のシールを取りに行こう。' + choice.game.name + 'の、' + choice.level.t + 'をクリアすると、もらえるよ。', { delay: 180 });
+    Sound.say('このシールを取りに行こう。' + choice.game.name + 'の、' + choice.level.t + 'をクリアすると、もらえるよ。', { delay: 180 });
   }
 
   return { available, homeCard, build, open, get active(){ return active; } };

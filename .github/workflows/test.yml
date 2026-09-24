@@ -33,5 +33,13 @@ jobs:
           npm install --no-save --no-package-lock playwright@1.63.0
           npx playwright install --with-deps chromium
 
+      - name: Check voice loading and playback lifecycle
+        run: node tools/test-voices.cjs
+
+      - name: Verify natural voices and offline settings in a browser
+        env:
+          SILENT_AUDIO: '1'
+        run: node tools/test-voice-browser.cjs
+
       - name: Run the regression suite in a browser
         run: node tools/run-tests.cjs

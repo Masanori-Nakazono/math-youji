@@ -195,7 +195,7 @@ function makeTwoWays(api){
     const taken = new Set(made.map(x => Math.min(x, whole - x)));
     const picks = [1, 2, 3].filter(v => !taken.has(v)).slice(0, 2 - made.length);
     press(picks[0]);
-    if (picks[1] != null) api.later(() => press(picks[1]), 450);
+    if (picks[1] != null) api.later(() => api.afterSpeech(() => press(picks[1])), 450);
   });
 }
 
@@ -240,14 +240,14 @@ function fillToTen(api){
       Sound.say(numKana(count), { delay: 0, rate: 1.08 });
       readout.textContent = 'いま ' + count + 'こ';
       if (count === 10){
-        api.later(() => {
+        api.later(() => api.afterSpeech(() => {
           const add = 10 - start;
           api.setPrompt(`${numTag(start)} に <b>いくつ たした？</b>`,
                         `${numKana(start)}に、いくつ足した？`);
           api.buildChoices(shuffle([add].concat(distractors(add, 2, 1, 9))), add, {
             correctOpts: { delay: 900 }
           });
-        }, 300);
+        }), 300);
       }
     });
   });
@@ -256,7 +256,7 @@ function fillToTen(api){
   api.onHint(() => { readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; });
   api.onShow(() => {
     cells.filter(c => !c.firstChild).forEach(c => c.click());
-    api.later(() => { const b = $('.choice.correct') || $$('.choice', api.choices).find(x => x.textContent === String(10 - start)); if (b) b.click(); }, 650);
+    api.later(() => api.afterSpeech(() => { const b = $('.choice.correct') || $$('.choice', api.choices).find(x => x.textContent === String(10 - start)); if (b) b.click(); }), 650);
   });
 }
 
@@ -451,6 +451,13 @@ function clusterSpots(n, cx){
 }
 
 function storyScene(api, a, b, op, thing, onReady){
+  let animationDone = false, narrationDone = false, completed = false;
+  const ready = () => {
+    if (completed || !animationDone || !narrationDone) return;
+    completed = true;
+    api.later(onReady, 0);
+  };
+  api.afterSpeech(() => { narrationDone = true; ready(); });
   const scene = el('div.scene');
   scene.append(el('div.' + (thing.e === '🐟' ? 'pond' : 'ground')));
   api.field.append(scene);
@@ -484,7 +491,7 @@ function storyScene(api, a, b, op, thing, onReady){
         n.style.transform = 'translate(160%,-160%)';
       });
     }
-    api.later(onReady, 900);
+    api.later(() => { animationDone = true; ready(); }, 900);
   }, 950);
 }
 

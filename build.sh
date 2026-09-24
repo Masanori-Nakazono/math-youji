@@ -22,10 +22,13 @@ trap 'rm -rf "$TMP"' EXIT
   echo "})();"
 } > "$TMP/bundle.js"
 
+# Natural speech is an optional static download; keep the single HTML portable
+# with device speech while hosting the generated voice packs alongside it.
+node tools/bundle-voices.cjs "$TMP/bundle.js" "$TMP/with-voices.js"
+mv "$TMP/with-voices.js" "$TMP/bundle.js"
+
 # fail the build on a syntax error rather than shipping a blank page
-if command -v node >/dev/null 2>&1; then
-  node --check "$TMP/bundle.js"
-fi
+node --check "$TMP/bundle.js"
 
 # ---- 1. Artifact build: body-level content only (host supplies doctype/head/body)
 {

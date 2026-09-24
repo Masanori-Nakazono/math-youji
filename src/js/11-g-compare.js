@@ -175,10 +175,10 @@ function conserveNumber(api){
   api.later(() => {
     row.classList.add('spread');
     Sound.sfx.swoosh();
-    api.later(() => {
+    api.later(() => api.afterSpeech(() => {
       api.setPrompt('ひろげたら、かずは かわった？', '広げたら、数は変わった？');
       api.buildChoices(['おなじ', 'かわった'], 'おなじ');
-    }, 650);
+    }), 650);
   }, 650);
   const things = Array.from(row.children);
   api.coach({

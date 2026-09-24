@@ -102,6 +102,14 @@ const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl;
   let parentBtn;
 
+  function updateVoiceWarning(){
+    if (!voiceWarnEl) return;
+    voiceWarnEl.hidden = !Sound.voiceOn || Sound.hasVoice;
+    voiceWarnEl.textContent = voiceWarnEl.hidden ? ''
+      : 'よみあげる こえが みつかりません。おうちの ひとと せっていを みてね。';
+  }
+  window.addEventListener('kazu-voices-changed', updateVoiceWarning);
+
   function build(){
     if (node) return node;
     starEl   = el('span', { text: '0' });
@@ -249,9 +257,7 @@ const Home = (() => {
         if (firstRun) Session.startDiagnostic(); else Diagnostic.startRecommended();
       };
     }
-    voiceWarnEl.hidden = !Sound.voiceOn || (!!window.speechSynthesis && Sound.hasVoice);
-    voiceWarnEl.textContent = voiceWarnEl.hidden ? ''
-      : 'よみあげる こえが みつかりません。おうちの ひとと せっていを みてね。';
+    updateVoiceWarning();
     if (!voiceWarnEl.hidden){
       Sound.probeVoice(3000).then(ok => {
         if (ok){ voiceWarnEl.hidden = true; voiceWarnEl.textContent = ''; }

@@ -1,6 +1,6 @@
 /* ===========================================================
    01 — sound & speech
-   All effects are synthesised: nothing to download, works offline.
+   Effects are synthesised locally. Natural speech uses optional cached audio packs.
    =========================================================== */
 'use strict';
 
@@ -26,7 +26,8 @@ const Sound = (() => {
   /** Must run inside a user gesture (iOS). */
   function unlock(){
     const c = ensure();
-    if (c && c.state === 'suspended') c.resume().catch(() => {});
+    if (c && (c.state === 'suspended' || c.state === 'interrupted')) c.resume().catch(() => {});
+    if (voiceOn) prepareVoice();
     // prime the speech engine with an empty-ish utterance
     if (window.speechSynthesis){
       try{
@@ -53,7 +54,7 @@ const Sound = (() => {
 
   function seq(notes, type, step, gain){
     const c = ensure(); if (!c || !sfxOn) return;
-    if (c.state === 'suspended') c.resume().catch(() => {});
+    if (c.state === 'suspended' || c.state === 'interrupted') c.resume().catch(() => {});
     const t0 = c.currentTime + .01, st = step || .09;
     notes.forEach((f, i) => tone(f, t0 + i * st, st * 1.9, type || 'triangle', gain));
   }
@@ -85,19 +86,12 @@ const Sound = (() => {
   };
 
   /* ---------- speech ----------
-     How natural this sounds is decided by which voice the device has installed,
-     not by anything we do here: the bundled "compact" Kyoko is the flat, robotic
-     one, while the enhanced / premium download (設定 → アクセシビリティ →
-     読み上げコンテンツ → 声) and the Siri voices sound like a person reading.
-     So rank the candidates instead of taking the first ja voice, and let the
-     parent page override the pick for the device actually in their hands. */
+     Voice names do not reliably identify the installed quality tier. Prefer
+     explicitly marked enhanced/natural voices, and let parents compare them. */
   const VOICE_RANK = [
     [/siri/i,                                     60],
     [/premium|プレミアム/i,                        50],
     [/enhanced|拡張|高品質/i,                       40],
-    // Apple's current voice family (Ventura / iOS 16 onward) shares the engine
-    // behind Siri, so it phrases a sentence instead of reciting it — it beats the
-    // old compact Kyoko even though Kyoko is the name everyone recognises.
     [/^(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/i, 30],
     [/^(sandy|flo)\b/i,                            4],  // warmest of that family for a 5-year-old
     [/neural|natural|wavenet|google|microsoft/i,   25],
@@ -113,9 +107,10 @@ const Sound = (() => {
 
   function loadVoices(){
     if (!window.speechSynthesis) return;
-    const vs = speechSynthesis.getVoices();
-    if (!vs || !vs.length) return;
-    voicesReady = true;
+    let vs;
+    try{ vs = speechSynthesis.getVoices(); }catch(e){ return; }
+    if (!vs) return;
+    voicesReady = vs.length > 0;
     jaVoices = vs.filter(v => /^ja(-|_|$)/i.test(v.lang || ''))
                  .sort((a, b) => voiceScore(b) - voiceScore(a));
     jaVoice = (prefVoice && jaVoices.find(v => v.voiceURI === prefVoice || v.name === prefVoice))
@@ -123,12 +118,14 @@ const Sound = (() => {
   }
   if (window.speechSynthesis){
     loadVoices();
-    speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    speechSynthesis.addEventListener('voiceschanged', () => { loadVoices(); VoicePacks.notify(); });
   }
 
   /** iOS may populate voices asynchronously after the first user gesture. */
   function probeVoice(timeout){
-    if (!voiceOn || !window.speechSynthesis) return Promise.resolve(false);
+    if (!voiceOn) return Promise.resolve(false);
+    if (naturalVoice() && VoicePacks.supported() && VoicePacks.status(naturalVoice().id).state !== 'error') return Promise.resolve(true);
+    if (!window.speechSynthesis) return Promise.resolve(false);
     loadVoices();
     if (jaVoice) return Promise.resolve(true);
     return new Promise(resolve => {
@@ -160,71 +157,217 @@ const Sound = (() => {
       .trim();
   }
 
-  let speakTimer = null;
-  /* `opts.onend` hears when a line is over: finished, cut off by a newer line or by
-     hush(), or never going to be spoken at all (voice off, no engine). The engine
-     times an answer from the end of the question, not from the first word of it —
-     a question read aloud for four seconds is not four seconds of thinking. */
-  let ending = null;                  // { f } for the line currently owed an onend
-  /* The utterance being spoken, held on purpose: Chrome can collect one nothing
-     references and then never fire its onend — and a line whose end never comes
-     leaves every answer timed as instant. */
-  let speaking = null;
-  /* And if the end still never comes (some engines drop it on iOS too), stop
-     waiting after roughly how long the line takes to say. */
-  const sayMs = (t, rate) => 700 + t.length * 250 / (rate || 1);
-  function ended(){
-    const t = ending; ending = null;
-    if (t) try{ t.f(); }catch(e){}
+  function naturalVoice(){
+    if (prefVoice) return VoicePacks.get(prefVoice);
+    return VoicePacks.supported() ? VoicePacks.get((VoicePacks.voices[0] || {}).id) : null;
   }
+  function prepareVoice(retry){
+    const v = naturalVoice();
+    return v ? VoicePacks.load(v.id, retry).then(Boolean) : Promise.resolve(!!jaVoice);
+  }
+  let playbackStatus = null;
+  function report(state, text){ playbackStatus = { state, text }; VoicePacks.notify(); }
+  function voiceStatus(){
+    const v = naturalVoice();
+    if (v){
+      const state = VoicePacks.status(v.id);
+      return state.state === 'ready' && playbackStatus ? playbackStatus : state;
+    }
+    if (prefVoice && prefVoice !== 'device:auto' && !jaVoices.some(v => v.voiceURI === prefVoice || v.name === prefVoice)){
+      return { state: 'fallback', text: '選んだ声はこの端末で見つかりません。利用できる端末の声で読み上げます。選択はそのまま保存しています。' };
+    }
+    return playbackStatus || { state: jaVoice ? 'ready' : 'fallback', text: jaVoice
+      ? '端末の声「' + jaVoice.name + '」で読み上げます。'
+      : '日本語の音声が見つかりません。自然な声を選ぶか、端末に日本語音声を追加してください。' };
+  }
+
+  // A single cancellable owner covers the delay, download, decoding, each
+  // sentence, and onend. A late async result can never speak on the next screen.
+  let current = null;
+  const idleWaiters = new Set();
+  let idleCheck = false;
+  function notifyIdle(){
+    if (idleCheck) return;
+    idleCheck = true;
+    // say() replaces the old owner in the same stack. Do not mistake that
+    // cancellation for silence and interrupt a replacement introduction.
+    Promise.resolve().then(() => {
+      idleCheck = false;
+      if (current) return;
+      for (const fn of Array.from(idleWaiters)){
+        // A callback can begin another sentence or unsubscribe a later waiter.
+        // Keep those remaining callbacks until the new narration has ended.
+        if (current) break;
+        if (idleWaiters.delete(fn)) try{ fn(); }catch(e){}
+      }
+    });
+  }
+  function afterSpeech(fn){
+    if (!current){ try{ fn(); }catch(e){} return () => {}; }
+    idleWaiters.add(fn);
+    return () => idleWaiters.delete(fn);
+  }
+  const sayMs = (t, rate) => 700 + t.length * 250 / (rate || 1);
+  function finish(job){
+    if (job.done) return;
+    job.done = true;
+    clearTimeout(job.timer);
+    if (job.stop){ const stop = job.stop; job.stop = null; stop(); }
+    if (current === job) current = null;
+    if (job.opts.onend) try{ job.opts.onend(); }catch(e){}
+    notifyIdle();
+  }
+  function hush(){
+    const old = current;
+    current = null;
+    if (old) finish(old);
+    try{ if (window.speechSynthesis) speechSynthesis.cancel(); }catch(e){}
+    notifyIdle();
+  }
+  const live = job => current === job && !job.done;
+
+  function deviceLine(job, text){
+    return new Promise(resolve => {
+      if (!live(job) || !window.speechSynthesis){ resolve(false); return; }
+      let u = null, timer = null, settled = false;
+      const end = ok => {
+        if (settled) return;
+        settled = true; clearTimeout(timer);
+        if (u){ u.onend = u.onerror = null; }
+        job.utterance = null; job.stop = null;
+        resolve(ok);
+      };
+      job.stop = () => { end(false); try{ speechSynthesis.cancel(); }catch(e){} };
+      try{
+        loadVoices();
+        u = new SpeechSynthesisUtterance(text);
+        job.utterance = u; // keep alive: some engines otherwise drop onend
+        u.lang = 'ja-JP';
+        if (jaVoice) u.voice = jaVoice;
+        u.rate = job.opts.rate == null ? .95 : job.opts.rate;
+        u.pitch = job.opts.pitch == null ? 1 : job.opts.pitch;
+        u.volume = job.opts.volume == null ? 1 : job.opts.volume;
+        u.onend = () => end(true);
+        u.onerror = () => end(false);
+        timer = setTimeout(() => { end(false); try{ speechSynthesis.cancel(); }catch(e){} }, sayMs(text, u.rate));
+        speechSynthesis.speak(u);
+      }catch(e){ end(false); }
+    });
+  }
+
+  function recordedLine(job, audio, context){
+    return new Promise(resolve => {
+      if (!live(job) || context.state !== 'running'){ resolve(false); return; }
+      let source = null, gain = null;
+      let timer = null, settled = false;
+      const end = ok => {
+        if (settled) return;
+        settled = true; clearTimeout(timer);
+        if (source){
+          source.onended = null;
+          try{ source.stop(); }catch(e){}
+          try{ source.disconnect(); }catch(e){}
+        }
+        if (gain) try{ gain.disconnect(); }catch(e){}
+        job.stop = null;
+        resolve(ok);
+      };
+      job.stop = () => end(false);
+      try{
+        source = context.createBufferSource(); gain = context.createGain();
+        source.buffer = audio;
+        // Keep the recorded intonation and pitch intact. This gain is separate
+        // from the effects, so switching effects off never mutes narration.
+        gain.gain.value = job.opts.volume == null ? 1 : Math.max(0, Math.min(1, job.opts.volume));
+        source.connect(gain); gain.connect(context.destination);
+        source.onended = () => end(true);
+        timer = setTimeout(() => end(false), audio.duration * 1000 + 1500);
+        source.start();
+      }catch(e){ end(false); }
+    });
+  }
+
+  async function speak(job, text){
+    const v = naturalVoice(), context = v && ensure();
+    const parts = v && !VoicePacks.has(v.id, text) ? VoicePacks.sentences(text) : [text];
+    let missing = false, failed = false;
+    for (const part of parts){
+      if (!live(job)) return;
+      let heard = false;
+      if (v && context && VoicePacks.supported() && VoicePacks.has(v.id, part)){
+        // A slow first download must not hold a question's timing open forever.
+        // Preview can wait for the full download; normal play uses the device
+        // voice for this line while the download continues in the background.
+        let timer;
+        const waitMs = job.opts.preview ? 310000 : 1800;
+        const audio = await Promise.race([
+          VoicePacks.decode(v.id, part, context),
+          new Promise(resolve => { timer = setTimeout(() => resolve(null), waitMs); })
+        ]).finally(() => clearTimeout(timer));
+        if (!live(job)) return;
+        if (audio) heard = await recordedLine(job, audio, context);
+      }
+      if (!live(job)) return;
+      if (!heard){
+        missing = !!v;
+        heard = await deviceLine(job, part);
+      }
+      if (!live(job)) return;
+      if (!heard) failed = true;
+    }
+    if (!live(job)) return;
+    if (failed){
+      report('error', '読み上げできない文がありました。「試しに聴く」を押して音声を確認してください。');
+      if (job.opts.onerror) try{ job.opts.onerror(); }catch(e){}
+    } else if (missing){
+      report('fallback', '名前や未収録の文、自然な声を読み込めないときは、端末の声で読み上げます。');
+    }
+    finish(job);
+  }
+
   function say(text, opts){
     const o = opts || {};
-    if (!voiceOn || !text || !window.speechSynthesis){
+    hush();
+    if ((!voiceOn && !o.preview) || !text){
       if (o.onend) try{ o.onend(); }catch(e){}
       return;
     }
-    clearTimeout(speakTimer);
-    ended();                          // the line this one replaces will not be heard
-    const mine = o.onend ? { f: o.onend } : null;
-    ending = mine;
-    let guard = null;
-    const fire = () => { clearTimeout(guard); if (mine && ending === mine) ended(); };
-    const go = () => {
-      try{
-        if (!voicesReady) loadVoices();
-        speechSynthesis.cancel();
-        const line = forSpeech(text);
-        const u = new SpeechSynthesisUtterance(line);
-        speaking = u;
-        u.lang  = 'ja-JP';
-        if (jaVoice) u.voice = jaVoice;
-        // 1.0 is the voice's own recorded prosody; pushing rate or pitch away
-        // from it is what made this sound synthetic. Only nudge, never shove.
-        u.rate   = o.rate   == null ? 0.95 : o.rate;
-        u.pitch  = o.pitch  == null ? 1 : o.pitch;
-        u.volume = o.volume == null ? 1 : o.volume;
-        u.onend = u.onerror = () => { if (speaking === u) speaking = null; fire(); };
-        speechSynthesis.speak(u);
-        if (mine) guard = setTimeout(fire, sayMs(line, u.rate));
-      }catch(e){ fire(); }
-    };
-    // a beat of delay lets the sfx land first and avoids iOS cancel/speak races
-    speakTimer = setTimeout(go, o.delay == null ? 90 : o.delay);
+    const job = { opts: o, done: false, timer: null, stop: null, utterance: null };
+    current = job;
+    playbackStatus = null;
+    // Safari may suspend an already-unlocked context when the app backgrounds.
+    // Request resumption here, while a tap may still supply user activation.
+    if (naturalVoice()){
+      const c = ensure();
+      if (c && (c.state === 'suspended' || c.state === 'interrupted')) c.resume().catch(() => {});
+    }
+    job.timer = setTimeout(() => {
+      if (live(job)) speak(job, forSpeech(text)).catch(() => {
+        if (live(job)){
+          report('error', '音声を再生できませんでした。もう一度「試しに聴く」を押してください。');
+          if (o.onerror) try{ o.onerror(); }catch(e){}
+          finish(job);
+        }
+      });
+    }, o.delay == null ? 90 : o.delay);
   }
-  function hush(){
-    clearTimeout(speakTimer);
-    try{ window.speechSynthesis && speechSynthesis.cancel(); }catch(e){}
-    ended();
+  function preview(opts){
+    unlock();
+    prepareVoice(true);
+    say('こんにちは。今日も一緒に、数を数えよう！', { ...opts, preview: true, delay: 60 });
   }
 
   return {
-    sfx: S, unlock, say, hush, probeVoice,
+    sfx: S, unlock, say, hush, probeVoice, preview, prepareVoice, afterSpeech,
     get sfxOn(){ return sfxOn; },  set sfxOn(v){ sfxOn = !!v; },
-    get voiceOn(){ return voiceOn; }, set voiceOn(v){ voiceOn = !!v; if (!v) hush(); },
-    get hasVoice(){ return !!jaVoice; },
+    get voiceOn(){ return voiceOn; }, set voiceOn(v){ voiceOn = !!v; if (!v) hush(); VoicePacks.notify(); },
+    get hasVoice(){ return !!jaVoice || !!(naturalVoice() && VoicePacks.supported() && VoicePacks.status(naturalVoice().id).state !== 'error'); },
     /** The parent page lists these so a device with a better voice installed can use it. */
     get voices(){ if (!voicesReady) loadVoices(); return jaVoices.slice(); },
-    get voiceId(){ return jaVoice ? jaVoice.voiceURI : null; },
-    set voiceId(id){ prefVoice = id || null; loadVoices(); }
+    get naturalVoices(){ return VoicePacks.voices; },
+    get voicePreference(){ return prefVoice; },
+    get voiceStatus(){ return voiceStatus(); },
+    get voiceId(){ const v = naturalVoice(); return v ? v.id : jaVoice ? jaVoice.voiceURI : null; },
+    set voiceId(id){ hush(); prefVoice = id || null; playbackStatus = null; loadVoices(); VoicePacks.notify(); }
   };
 })();

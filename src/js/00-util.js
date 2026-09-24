@@ -101,6 +101,19 @@ const banmeKana = n => numKana(n) + 'ばんめ';
 const JI = ['','いちじ','にじ','さんじ','よじ','ごじ','ろくじ','しちじ','はちじ','くじ','じゅうじ','じゅういちじ','じゅうにじ'];
 const jiKana = (h, half) => (JI[h] || numKana(h) + 'じ') + (half ? 'はん' : '');
 
+/** A drawn answer may carry an internal shape/time value or just an emoji.
+    Rescue speech must name what the highlighted choice means to the child. */
+function spokenAnswerLabel(value){
+  if (value == null) return null;
+  const text = String(value);
+  const shape = { circle: 'まる', triangle: 'さんかく', square: 'しかく' }[text];
+  if (shape) return shape;
+  const clock = /^([1-9]|1[0-2])(?::(0|30)|じ(はん)?)$/.exec(text);
+  if (clock) return jiKana(Number(clock[1]), clock[2] === '30' || !!clock[3]);
+  if (!/[\p{L}\p{N}]/u.test(text) && /\p{Extended_Pictographic}/u.test(text)) return 'これ';
+  return text;
+}
+
 /** hiragana display text; digits get the numeral face via <b> */
 const numTag = n => `<b>${n}</b>`;
 

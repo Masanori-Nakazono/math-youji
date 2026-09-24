@@ -277,6 +277,16 @@ const Session = (() => {
     timers.set(id, { fn, epoch: mine });
     return id;
   }
+  /** Automatic teaching waits for both the board's animation and its narration.
+      Observe speech after the minimum delay: an action can replace the prompt,
+      and that replacement must finish too. Leaving a question invalidates even
+      callbacks whose audio has already begun. */
+  function afterNarration(fn, ms, valid){
+    const mine = epoch;
+    later(() => Sound.afterSpeech(() => {
+      if (mine === epoch && (!valid || valid())) fn();
+    }), ms);
+  }
   function killTimers(){
     epoch++;
     timers.forEach((v, id) => clearTimeout(id));
@@ -626,6 +636,7 @@ const Session = (() => {
         Sound.say(lastSpeech, { delay: 220, onend(){ if (!stale()) spokenAt = performance.now(); } });
       },
       say(t, o){ if (stale()) return; lastSpeech = t; Sound.say(t, o); },
+      afterSpeech(fn){ return Sound.afterSpeech(() => { if (!stale()) fn(); }); },
       /** Name the fact this question asks. `label` is what the result screen and
           the parent page will call it. Optional: a game that names nothing simply
           keeps the old purely-random behaviour. */
@@ -953,9 +964,9 @@ const Session = (() => {
       if (at) Coach.point(at);
       if (s.act){ try{ s.act(); }catch(e){ console.error('walk step failed', e); } }
       if (s.say) Sound.say(s.say, { delay: 0 });
-      later(next, s.ms || Math.max(700, 400 + String(s.say || '').length * 170));
+      afterNarration(next, s.ms || Math.max(700, 400 + String(s.say || '').length * 170), () => mine === walkToken);
     };
-    later(next, startMs == null ? 500 : startMs);
+    afterNarration(next, startMs == null ? 500 : startMs, () => mine === walkToken);
     return true;
   }
 
@@ -1011,16 +1022,30 @@ const Session = (() => {
       otherwise let the game show it, and end the question either way. */
   /** Answer the question the way a child would: press its own right button (which
       runs its reveal), or let the game do its right action, and end it either way. */
-  function pressAnswer(){
+  function pressAnswer(onDone){
     showFeedback('hint', 'こたえは これだよ');
-    Sound.say(answerText != null ? `答えは、${answerText}だよ。` : 'こうすると、できるよ。', { delay: 150 });
+    // A pictured answer has no spoken name in its emoji. The highlighted choice
+    // supplies the reference; do not let TTS say an incomplete「答えは、だよ」.
+    const spoken = spokenAnswerLabel(answerText);
+    Sound.say(spoken != null ? `答えは、${spoken}だよ。` : 'こうすると、できるよ。', { delay: 150 });
     if (answerBtn && answerBtn.isConnected && !answerBtn.disabled){
-      answerBtn.classList.add('showme');
-      later(() => { if (!locked) answerBtn.click(); }, 900);
+      const button = answerBtn;
+      button.classList.add('showme');
+      afterNarration(() => {
+        if (locked) return;
+        if (button.isConnected && !button.disabled) button.click();
+        if (onDone) afterNarration(onDone, 800);
+      }, 900);
       return;
     }
-    if (showFn){ try{ showFn(); }catch(e){ console.error('show failed', e); } }
-    later(() => { if (!locked) onCorrect({ quiet: true, delay: 1400 }); }, 1000);
+    afterNarration(() => {
+      if (locked) return;
+      if (showFn){ try{ showFn(); }catch(e){ console.error('show failed', e); } }
+      afterNarration(() => {
+        if (!locked) onCorrect({ quiet: true, delay: 1400 });
+        if (onDone) onDone();
+      }, 1000);
+    }, 0);
   }
 
   function startIntro(){
@@ -1030,7 +1055,7 @@ const Session = (() => {
       showFeedback('hint', 'はじめて だね。やりかたを みせるね');
       const line = '初めてだね。見ててね。' + lastSpeech;
       Sound.say(line, { delay: 350 });
-      later(demoStep, Math.min(6000, 900 + line.length * 150));
+      afterNarration(demoStep, Math.min(6000, 900 + line.length * 150));
       return;
     }
     later(() => {                        // after togetherHint has had its turn
@@ -1051,8 +1076,9 @@ const Session = (() => {
       if (runWalk(() => { if (demoRunning){ node.classList.add('walking'); later(demoStep, 350); } }, 150)) return;
     }
     if ((answerBtn && answerBtn.isConnected && !answerBtn.disabled) || showFn){
-      pressAnswer();
-      later(demoStep, 1700);             // a question with another blank comes round again
+      pressAnswer(() => {
+        if (demoRunning && !locked) later(demoStep, 350);
+      });                              // another blank waits for this one's reveal
       return;
     }
     if (++demoWaits > 14){
@@ -1201,7 +1227,7 @@ const Session = (() => {
       Sound.say(praise, { delay: 320 });
     }
     if ((idx + 1) % 4 === 0) UI.confetti(22);
-    later(() => {
+    afterNarration(() => {
       idx++;
       if (idx >= plan.length) finish();
       else nextQuestion();

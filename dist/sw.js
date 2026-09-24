@@ -12,7 +12,7 @@
    less likely to throw away the localStorage the records live in. */
 'use strict';
 
-const VERSION = '60810c79f0ac';
+const VERSION = '564ab65bc6d6';
 const CACHE   = 'kazu-no-bouken-' + VERSION;
 /* Every name the app itself is served under. Pages publishes the one file twice
    (index.html and kazu-no-bouken.html), and a name missing here was only cached
@@ -46,7 +46,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('kazu-no-bouken-') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -64,6 +64,9 @@ function offlineAnswer(req){
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  // Voice packs have immutable hashed URLs and their own verified cache. Do not
+  // download tens of MB again behind each cache hit or duplicate them here.
+  if (/\/voices\/[^/]+\.bin$/.test(new URL(req.url).pathname)) return;
   let stored = Promise.resolve();
   const network = fetch(req).then(res => {
     // opaque responses are the Google Fonts files; worth keeping too

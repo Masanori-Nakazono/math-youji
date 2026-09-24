@@ -69,7 +69,7 @@ function collectSame(api){
     o.append(el('span.tag', { text: String(done) }));
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
-    if (done === n) api.later(ask, 640);
+    if (done === n) api.later(() => api.afterSpeech(ask), 640);
   }));
 
   function ask(){
@@ -256,12 +256,12 @@ function ownGroup(api){
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done === per){
-      api.later(() => {
+      api.later(() => api.afterSpeech(() => {
         api.setPrompt(`${CATS[chosen].lbl} の なかまが <b>${per}</b>こ あつまったね！`,
                       `${CATS[chosen].lbl}の仲間が、${koKana(per)}集まったね。`);
         api.correct({ quiet: true, delay: 1200 });
         UI.bigMark('◯');
-      }, 320);
+      }), 320);
     }
   }
 
@@ -347,7 +347,7 @@ function pairUp(api, na, nb, onSettled, opts){
     marked = null;
     Sound.sfx.count(made.pairs - 1);
     Sound.say(numKana(made.pairs), { delay: 0, rate: 1.08 });
-    if (made.pairs === Math.min(na, nb)) api.later(settle, 620);
+    if (made.pairs === Math.min(na, nb)) api.later(() => api.afterSpeech(settle), 620);
   }
 
   const fill = (row, thing, n, side) => {
