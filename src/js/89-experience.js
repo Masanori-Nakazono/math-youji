@@ -131,7 +131,10 @@ const Diagnostic = (() => {
 
   function startRecommended(){
     const r = current(), g = r && Games.byId[r.gameId];
-    if (g && g.levels[r.levelIndex]) Session.startLevel(g, r.levelIndex);
+    if (g && g.levels[r.levelIndex]){
+      if (g.intro !== false && !Store.introduced(g.id, r.levelIndex)) FirstSteps.open(g, r.levelIndex);
+      else Session.startLevel(g, r.levelIndex);
+    }
     else Session.startDaily(10);
   }
 

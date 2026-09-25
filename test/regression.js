@@ -971,7 +971,10 @@
     const saved = K.Store.data.diagnostic;
     const allOpen = K.Games.list.every(g => K.Store.levelUnlocked(g.id, 0));
     K.Diagnostic.startRecommended();
-    const started = S.planGames[0] === saved.recommended.gameId + ':' + saved.recommended.levelIndex;
+    const first = K.FirstSteps.active;
+    const started = (K.UI.currentName() === 'first-steps' && first
+      && first.game.id === saved.recommended.gameId && first.levelIndex === saved.recommended.levelIndex)
+      || S.planGames[0] === saved.recommended.gameId + ':' + saved.recommended.levelIndex;
     check('the first-run adventure records a recommendation without locking any game',
       offered && length === 10 && saved && saved.recommended && allOpen && started,
       'offered=' + offered + ' length=' + length + ' saved=' + !!saved
@@ -2483,10 +2486,7 @@
     K.Store.reset();
   })();
 
-  /* ---------- 75b. ★0: the words, the bright button and the voice agree ----------
-     The heading and the voice said「もう いちど」and the bright button was「とっくん」,
-     so a child who pressed what they were told about started a different ten
-     questions — under three empty stars, a sad face and「8もん中 2もん」. */
+  /* ---------- 75b. ★0: a supported next step matches the words and voice ---------- */
   (function zeroStarsAgree(){
     K.Store.reset();
     K.Store.noteFact('bond:dec:10-4', false, '10 は 4 と 6', 'bond:2', 0, 'part');
@@ -2507,9 +2507,9 @@
       if (speak) speak.click();
       d.again = log.join(' ');
     } finally { K.Sound.say = say; }
-    check('after ★0 in a level, もういちど is the bright button, the voice names it, and no empty stars',
-      d.primary === 'もういちど' && d.drill && d.tried && d.tall
-        && /もう一度やってみよう/.test(d.spoken) && /オレンジのボタンで、もう一度/.test(d.spoken)
+    check('after ★0 in a level, one supported step is bright, spoken, and no empty stars appear',
+      d.primary === 'いっしょに ひとつ' && d.drill && d.tried && d.tall
+        && /一緒に一つやってみよう/.test(d.spoken) && /オレンジのボタンで、一緒に一つ/.test(d.spoken)
         && d.again === d.spoken, JSON.stringify(d));
     K.UI.show('home');
     K.Store.reset();
@@ -2932,13 +2932,18 @@
       K.StickerMissions.open(c);
       const go = q('#sticker-mission .btn-accent');
       go.click();
+      d.firstChoice = c.game.intro === false || K.UI.currentName() === 'first-steps';
+      if (K.UI.currentName() === 'first-steps'){
+        const direct = qa('#first-steps .first-actions .btn').find(b => /じぶんで/.test(b.textContent));
+        if (direct) direct.click();
+      }
       d.startsTarget = S.mode === 'level' && S.planGames.every(x => x === c.game.id + ':' + c.levelIndex);
       let guard = 0;
       while (!onResult() && guard++ < 16){ S.forceCorrect(); S.flushTimers(); }
       d.earned = K.Store.hasSticker(c.key) && /えらんだ シールを ゲット/.test(q('#result').textContent);
     } finally { K.Store.reset(); }
     check('a chosen sticker names an open level, starts that level, and celebrates the chosen prize',
-      d.pictures && d.open && d.startsTarget && d.earned, JSON.stringify(d));
+      d.pictures && d.open && d.firstChoice && d.startsTarget && d.earned, JSON.stringify(d));
   }
 
   /* ---------- 85. small adventures are short rewards, never unlocks ---------- */
@@ -3188,6 +3193,57 @@
       JSON.stringify(heard));
   }
 
+  function firstCourseAndAlbum(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = finishSpeech;
+    const d = {};
+    try{
+      K.FirstSteps.open(K.Games.byId.bond, 0);
+      d.choiceBeforePlay = K.UI.currentName() === 'first-steps' && K.Store.plays('bond', 0) === 0;
+      q('#first-steps .first-actions .btn-accent').click();
+      d.showOnly = S.mode === 'first' && S.planLength === 1;
+      S.flushTimers(120);
+      d.stopAfterShow = K.UI.currentName() === 'first-finish'
+        && !K.Store.introduced('bond', 0) && K.Store.stars('bond', 0) === 0;
+      qa('#first-finish .first-actions .btn').find(b => /いっしょに/.test(b.textContent)).click();
+      d.oneTurn = S.mode === 'first' && S.planLength === 1;
+      S.forceCorrect(); S.flushTimers(20);
+      d.completed = K.UI.currentName() === 'first-finish' && K.Store.introduced('bond', 0)
+        && K.Store.plays('bond', 0) === 0 && K.Store.stars('bond', 0) === 0;
+      const kinds = K.Store.milestones().map(m => m.kind);
+      d.honestAlbum = kinds.includes('viewed') && kinds.includes('together') && !kinds.includes('independent');
+      K.ProgressAlbum.open();
+      d.visibleAlbum = K.UI.currentName() === 'progress-album' && qa('#progress-album .album-card').length === 2;
+    } finally { K.Sound.say = say; K.UI.show('home'); K.Store.reset(); }
+    check('first course stops after a view or one answer without granting a level clear, and the album keeps them distinct',
+      Object.values(d).every(Boolean), JSON.stringify(d));
+  }
+
+  function islandJobsKeepArtwork(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = finishSpeech;
+    const d = {};
+    try{
+      K.IslandJobs.open('boat');
+      d.choice = K.UI.currentName() === 'island-jobs' && K.Store.islandJob('boat').size === 5;
+      q('#island-jobs .job-slot.next').click();
+      d.savedHalfway = K.Store.islandJob('boat').placed === 1;
+      K.StickerWorld.open(); K.IslandJobs.open('boat');
+      d.resumed = K.Store.islandJob('boat').placed === 1;
+      q('#island-jobs .job-slot.next').click();
+      const answer = qa('#island-jobs .job-actions .btn').find(b => /2ひき/.test(b.textContent));
+      if (answer) answer.click();
+      K.StickerWorld.open();
+      d.completed = K.Store.islandJob('boat').completed && !!q('#sticker-world .world-job.boat');
+      K.Store.startIslandJob('boat', true);
+      d.lasts = K.Store.islandJob('boat').completed && K.Store.islandJob('boat').placed === 0;
+    } finally { K.Sound.say = say; K.UI.show('home'); K.Store.reset(); }
+    check('an island job resumes after leaving and its completed scene remains after a new job',
+      Object.values(d).every(Boolean), JSON.stringify(d));
+  }
+
   function finish(){
     instantAnswerKeepsItsSpeed();
     localDays();
@@ -3201,6 +3257,8 @@
     naturalStoryLanguage();
     narratedTransitions();
     picturedAnswerSpeech();
+    firstCourseAndAlbum();
+    islandJobsKeepArtwork();
     check('no uncaught errors during the whole suite', uncaught === 0, uncaught + ' errors');
     K.Store.reset();
     K.Sound.voiceOn = narrationWasOn;

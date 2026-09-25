@@ -79,7 +79,9 @@ const StickerMissions = (() => {
       el('small', { text: 'いろが つくのは、べつの ひに たしかめてから' }));
     goBtn.onclick = () => {
       Sound.sfx.tap();
-      Session.startLevel(choice.game, choice.levelIndex, { stickerMission: choice });
+      if (choice.game.intro !== false && !Store.introduced(choice.game.id, choice.levelIndex))
+        FirstSteps.open(choice.game, choice.levelIndex, { stickerMission: choice });
+      else Session.startLevel(choice.game, choice.levelIndex, { stickerMission: choice });
     };
     UI.show('sticker-mission');
     Sound.say('このシールを取りに行こう。' + choice.game.name + 'の、' + choice.level.t + 'をクリアすると、もらえるよ。', { delay: 180 });
@@ -153,6 +155,204 @@ const Adventures = (() => {
   return { target, homeCard, build, open, get active(){ return active; } };
 })();
 
+const FirstSteps = (() => {
+  let node, detail, choices, result, active = null, finishSpeech = '';
+  function target(){
+    const rec = Diagnostic.current();
+    const g = rec && Games.byId[rec.gameId];
+    if (g && g.intro !== false && g.levels[rec.levelIndex]
+        && levelOpen(g, rec.levelIndex) && !Store.introduced(g.id, rec.levelIndex))
+      return { game: g, levelIndex: rec.levelIndex };
+    for (const game of Games.list){
+      if (game.intro === false) continue;
+      for (let i = 0; i < game.levels.length; i++)
+        if (levelOpen(game, i) && !Store.introduced(game.id, i)) return { game, levelIndex: i };
+    }
+    return null;
+  }
+  function homeCard(){
+    const t = target();
+    if (!t) return null;
+    return el('button.home-quest.adventure-card.first-card', { type: 'button',
+      onclick(){ Sound.sfx.tap(); open(t.game, t.levelIndex); } },
+      el('span.icon', { text: '👀', 'aria-hidden': 'true' }),
+      el('span.copy', null, el('b', { text: 'まず みてみる' }),
+        el('small', { text: t.game.name + '　ひとつから' })),
+      el('span.arrow', { text: '▶', 'aria-hidden': 'true' }));
+  }
+  const button = (icon, label, fn, accent) => el('button.btn' + (accent ? '.btn-accent' : ''),
+    { type: 'button', onclick(){ Sound.sfx.tap(); fn(); } },
+    el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
+  function build(){
+    if (node) return node;
+    detail = el('div.first-detail'); choices = el('div.first-actions');
+    node = el('div#first-steps', null,
+      el('div.topbar', null,
+        el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+        el('h2', { text: 'はじめてコース' }), speakBtn(() => 'まず、見るだけでもいいよ。ひとつやったら、そこで終われるよ。')),
+      el('div.reward-sheet', null, mascotSVG('happy', 'talk'), detail, choices));
+    UI.register('first-steps', node);
+    result = el('div#first-finish', null,
+      speakBtn(() => finishSpeech),
+      el('div.reward-sheet', null, mascotSVG('happy', 'talk'),
+        el('h2', { text: 'きょうは ここまででも いいよ' }),
+        el('div.first-detail'), el('div.first-actions')));
+    UI.register('first-finish', result);
+    return node;
+  }
+  function open(game, levelIndex, opts){
+    if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
+    build(); active = { game, levelIndex, opts: opts || null };
+    detail.textContent = game.ico + '　' + game.name + '　《' + game.levels[levelIndex].t + '》';
+    const previous = Store.milestones().find(m => m.gameId === game.id && m.levelIndex < levelIndex);
+    if (previous) detail.append(el('small', { text: '📒 まえは「' + Store.milestoneText(previous.kind) + '」' }));
+    clear(choices);
+    choices.append(
+      button('👀', 'まず みてみる', () => Session.startFirst(game, levelIndex, 'show'), true),
+      button('🤝', 'みてから ひとつ', () => Session.startFirst(game, levelIndex, 'together')),
+      button('▶', 'じぶんで あそぶ', () => Session.startLevel(game, levelIndex, active.opts)));
+    UI.show('first-steps');
+    Sound.say('初めてのことは、まず見るだけでもいいよ。一つやったら、そこで終われるよ。', { delay: 180 });
+  }
+  function finish(game, levelIndex, phase, milestone){
+    build();
+    const info = $('.first-detail', result), actions = $('.first-actions', result);
+    const answered = milestone && milestone.kind === 'together';
+    info.textContent = phase === 'show' || !answered ? 'やりかたを みたね' : 'いっしょに ひとつ できたね';
+    clear(actions);
+    if (phase === 'show') actions.append(button('🤝', 'いっしょに ひとつ',
+      () => Session.startFirst(game, levelIndex, 'afterShow'), true));
+    actions.append(button('🏠', 'きょうは ここまで', () => {
+      Home.render(); UI.show('home', { replace: true });
+    }, phase !== 'show'));
+    actions.append(button('▶', 'もっと あそぶ', () => Session.startLevel(game, levelIndex, active && active.opts)));
+    if (milestone && milestone.label) info.append(el('small', { text: '📒 ' + milestone.label }));
+    UI.show('first-finish', { replace: true });
+    finishSpeech = phase === 'show' || !answered ? 'やり方を見たね。今日はここまででもいいよ。'
+      : '一緒に一つできたね。今日はここまででもいいよ。';
+    Sound.say(finishSpeech, { delay: 200 });
+  }
+  return { target, homeCard, build, open, finish, get active(){ return active; } };
+})();
+
+const ProgressAlbum = (() => {
+  let node, cards;
+  function build(){
+    if (node) return node;
+    cards = el('div.album-cards');
+    node = el('div#progress-album', null,
+      el('div.topbar', null,
+        el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+        el('h2', { text: 'できたアルバム' }),
+        speakBtn(() => 'できたことを、いっしょに見てみよう。')),
+      el('p.album-intro', { text: 'ちいさな「できた」を あつめたよ' }), cards);
+    return UI.register('progress-album', node);
+  }
+  function open(){
+    build(); clear(cards);
+    const entries = Store.milestones();
+    if (!entries.length) cards.append(el('div.album-empty', { text: 'まだ からっぽ。 まずは みるだけでも いいよ 👀' }));
+    entries.forEach(m => {
+      const g = Games.byId[m.gameId], lv = g && g.levels[m.levelIndex];
+      if (!lv) return;
+      cards.append(el('button.album-card', { type: 'button',
+        onclick(){ Sound.sfx.tap(); Sound.say(g.name + '。' + (m.label || lv.t) + '。'
+          + Store.milestoneText(m.kind), { delay: 80 }); } },
+        el('span.album-icon', { text: g.ico, 'aria-hidden': 'true' }),
+        el('div', null, el('b', { text: g.name + '　' + (m.label || lv.t) }),
+          el('span', { text: Store.milestoneText(m.kind) }))));
+    });
+    UI.show('progress-album');
+    Sound.say(entries.length ? 'できたことを、いっしょに見てみよう。'
+      : 'まだ空っぽだよ。まずは見るだけでもいいよ。', { delay: 150 });
+  }
+  return { build, open };
+})();
+
+const IslandJobs = (() => {
+  const SCENES = {
+    boat: { icon: '⛵️', item: '🐥', label: 'ふねに のせる', unit: 'ひき' },
+    snack: { icon: '🧺', item: '🍎', label: 'おやつを つめる', unit: 'こ' }
+  };
+  let node, sceneButtons, prompt, slots, actions, message, scene = 'boat';
+  function build(){
+    if (node) return node;
+    sceneButtons = el('div.job-scenes'); prompt = el('div.job-prompt');
+    slots = el('div.job-slots'); actions = el('div.job-actions');
+    message = el('div.job-message', { role: 'status', 'aria-live': 'polite' });
+    node = el('div#island-jobs', null,
+      el('div.topbar', null,
+        el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'しまに もどる',
+          onclick(){ Sound.sfx.tap(); StickerWorld.open(); } }, '←'),
+        el('h2', { text: 'しまの おしごと' }), speakBtn(() => jobSpeech())),
+      sceneButtons, prompt, slots, message, actions);
+    Object.keys(SCENES).forEach(k => sceneButtons.append(el('button.btn.job-scene', {
+      type: 'button', onclick(){ Sound.sfx.tap(); scene = k; Store.startIslandJob(k); render(); Sound.say(jobSpeech(), { delay: 120 }); }
+    }, SCENES[k].icon + ' ' + SCENES[k].label)));
+    return UI.register('island-jobs', node);
+  }
+  function jobSpeech(){
+    const j = Store.islandJob(scene), s = SCENES[scene];
+    if (!j) return '島のお仕事を選んでね。';
+    if (j.done) return j.start + 'と' + (j.size - j.start) + 'で' + j.size + '。できた場面が島に残ったよ。';
+    if (j.placed === j.size - j.start) return 'いくつ増やしたかな。新しく置いたものを数えてね。';
+    return j.size + 'この場所に、' + j.start + s.unit + 'いるよ。空いているところに一つずつ置こう。';
+  }
+  const action = (label, fn, accent) => el('button.btn' + (accent ? '.btn-accent' : ''),
+    { type: 'button', onclick(){ Sound.sfx.tap(); fn(); } }, label);
+  function render(){
+    build();
+    const j = Store.startIslandJob(scene), s = SCENES[scene];
+    $$('.job-scene', sceneButtons).forEach((b, i) => b.classList.toggle('selected',
+      Object.keys(SCENES)[i] === scene));
+    prompt.textContent = j.done ? s.icon + '　' + s.label + '　かんせい！'
+      : j.placed === j.size - j.start ? 'あたらしく いくつ いれたかな？'
+      : s.icon + '　' + j.size + 'この ばしょに ' + j.start + s.unit + '。あいた ところに いれよう';
+    clear(slots);
+    for (let i = 0; i < j.size; i++){
+      const next = !j.done && i === j.start + j.placed && j.placed < j.size - j.start;
+      slots.append(el((next ? 'button' : 'span') + '.job-slot' + (i >= j.start ? '.new' : '')
+        + (next ? '.next' : ''), {
+        type: next ? 'button' : undefined,
+        text: i < j.start + j.placed ? s.item : '·',
+        'aria-label': next ? 'ここに ひとつ いれる'
+          : i < j.start + j.placed ? (i < j.start ? 'はじめから いた' : 'あたらしく いれた') : 'あいている',
+        onclick: next ? () => { Store.addIslandJobPiece(scene); Sound.sfx.place(); render();
+          Sound.say(jobSpeech(), { delay: 100 }); } : undefined
+      }));
+    }
+    clear(actions); message.textContent = '';
+    if (j.done){
+      message.textContent = j.start + ' と ' + (j.size - j.start) + ' で ' + j.size + '！';
+      actions.append(action('🏡 しまを みる', () => StickerWorld.open(), true),
+        action('🔄 あたらしい おしごと', () => { Store.startIslandJob(scene, true); render(); Sound.say(jobSpeech(), { delay: 120 }); }));
+    } else if (j.placed < j.size - j.start){
+      actions.append(action('+1 ' + s.item + ' ひとつ いれる', () => {
+        Store.addIslandJobPiece(scene); render(); Sound.say(jobSpeech(), { delay: 100 });
+      }, true));
+    } else {
+      const answer = j.size - j.start;
+      const options = [answer, answer - 1, answer + 1].filter(x => x >= 1 && x <= 10).sort((a, b) => a - b);
+      options.forEach(n => actions.append(action(n + s.unit, () => {
+        if (n !== answer){
+          message.textContent = 'あたらしく いれた ' + s.item + ' を かぞえてみよう';
+          Sound.say('新しく入れたものを数えてみよう。', { delay: 100 });
+          return;
+        }
+        Store.finishIslandJob(scene); Sound.sfx.finish(); render();
+        Sound.say(jobSpeech(), { delay: 180 });
+      }, false)));
+    }
+  }
+  function open(which){
+    if (SCENES[which]) scene = which;
+    render(); UI.show('island-jobs'); Sound.say(jobSpeech(), { delay: 150 });
+  }
+  return { build, render, open };
+})();
+
 const StickerWorld = (() => {
   const BACKGROUNDS = [
     { id: 'meadow', label: 'はらっぱ', icon: '🌳' },
@@ -193,7 +393,9 @@ const StickerWorld = (() => {
         el('span', { text: 'ばしょを えらぶ' }),
         BACKGROUNDS.map(bg => el('button.world-background', { type: 'button', dataset: { background: bg.id },
           onclick(){ Store.setStickerWorldBackground(bg.id); Sound.sfx.tap(); render(); }
-        }, bg.icon + ' ' + bg.label))),
+        }, bg.icon + ' ' + bg.label)),
+        el('button.btn.btn-accent.world-job-open', { type: 'button',
+          onclick(){ Sound.sfx.tap(); IslandJobs.open(); } }, '⛵️ しまの おしごと')),
       board, hint, palette);
     return UI.register('sticker-world', node);
   }
@@ -205,6 +407,10 @@ const StickerWorld = (() => {
     clear(board);
     board.append(el('span.world-starter.sun', { text: '☀️', 'aria-hidden': 'true' }),
       el('span.world-starter.home', { text: '🏡', 'aria-hidden': 'true' }));
+    if (Store.islandJob('boat') && Store.islandJob('boat').completed)
+      board.append(el('span.world-job.boat', { text: '⛵️', title: 'つくった ふね' }));
+    if (Store.islandJob('snack') && Store.islandJob('snack').completed)
+      board.append(el('span.world-job.snack', { text: '🧺', title: 'つくった おやつ' }));
     Object.keys(world.items).filter(k => keys.indexOf(k) >= 0).forEach(k => {
       const p = world.items[k];
       board.append(el('button.world-sticker', { type: 'button', text: stickerFor(k),

@@ -33,6 +33,8 @@ const Store = (() => {
        child has done one alongside it. Until then, opening the level starts with
        those two questions instead of a test. */
     intro: {},
+    /* Observed progress only; seeing a method and solving alone stay distinct. */
+    milestones: {},  // "game:level:kind" -> {day, label of an actual question}
     /* "gameId:levelIndex" -> [clearDay, lastCheckDay, failedChecks]. A clear below
        ★★★ goes on the shelf provisionally: eight questions at 4 right is a pass that
        random tapping reaches on a three-choice level about one time in four. It is
@@ -50,6 +52,7 @@ const Store = (() => {
        change a learning record or an unlock.  Coordinates are percentages so the
        picture survives an iPad rotation and a different-sized iPad. */
     stickerWorld: { background: 'meadow', items: {} },
+    islandJobs: {}, // boat/snack -> current hands-on work and a lasting completed scene
     name: '',
     sfx: true, voice: true, voiceId: null,
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
@@ -135,6 +138,14 @@ const Store = (() => {
   addEventListener('visibilitychange', () => { if (document.hidden) writeNow(); });
 
   const key = (g, l) => g + ':' + l;
+  const MILESTONE_TEXT = {
+    viewed: 'やりかたを みたね',
+    together: 'いっしょに こたえたね',
+    supported: 'ヒントを つかって こたえたね',
+    revised: 'もういちど ためして こたえたね',
+    independent: 'ひとりで こたえたね'
+  };
+  const MILESTONE_RANK = { viewed: 0, together: 1, supported: 2, revised: 3, independent: 4 };
   /* Whole-day resolution keeps six months of daily use small enough for
      localStorage, and days are the only unit the scheduling actually needs. */
   const DAY = 86400000;
@@ -190,6 +201,8 @@ const Store = (() => {
      || !copyMap('last', isCount)
      || !copyMap('swift', v => v === 0 || v === 1)
      || !copyMap('intro', v => v === 1)
+     || !copyMap('milestones', v => isRecord(v) && isCount(v.day)
+          && typeof v.label === 'string' && v.label.length <= 80)
      || !copyMap('pending', v => Array.isArray(v) && v.length >= 3 && v.slice(0, 3).every(isCount))
      || !copyMap('recent', v => typeof v === 'string' && /^[01]{0,30}$/.test(v))
      || !copyMap('firstTry', v => Array.isArray(v) && v.length >= 2
@@ -200,6 +213,8 @@ const Store = (() => {
           && (v[4] == null || typeof v[4] === 'string')
           && (v[5] == null || isCount(v[5]))
           && (v[6] == null || isMissMap(v[6])))) return null;
+    for (const k of Object.keys(out.milestones))
+      if (!/^[a-z0-9]+:\d+:(viewed|together|supported|revised|independent)$/.test(k)) return null;
 
     if (data.stickers !== undefined){
       if (!Array.isArray(data.stickers) || data.stickers.some(v => typeof v !== 'string')) return null;
@@ -261,6 +276,20 @@ const Store = (() => {
       }
       out.stickerWorld = { background: w.background.slice(0, 24), items };
     }
+    if (data.islandJobs !== undefined){
+      if (!isRecord(data.islandJobs)) return null;
+      out.islandJobs = {};
+      for (const scene of Object.keys(data.islandJobs)){
+        const j = data.islandJobs[scene];
+        if (!['boat', 'snack'].includes(scene) || !isRecord(j)
+          || ![5, 10].includes(j.size) || !Number.isInteger(j.start) || j.start < 1 || j.start >= j.size
+          || !Number.isInteger(j.placed) || j.placed < 0 || j.placed > j.size - j.start
+          || typeof j.done !== 'boolean' || typeof j.completed !== 'boolean'
+          || (j.done && (j.placed !== j.size - j.start || !j.completed))) return null;
+        out.islandJobs[scene] = { size: j.size, start: j.start, placed: j.placed,
+          done: j.done, completed: j.completed };
+      }
+    }
     if (data.name !== undefined){
       if (typeof data.name !== 'string') return null;
       out.name = data.name.slice(0, 12);
@@ -293,6 +322,11 @@ const Store = (() => {
       // max, never sum: importing the same backup twice must not inflate anything
       for (const id in src) out[k][id] = maxNum(out[k][id], src[id]);
     });
+    out.milestones = Object.assign({}, add.milestones || {}, base.milestones || {});
+    for (const k of Object.keys(add.milestones || {})){
+      const a = add.milestones[k], b = base.milestones && base.milestones[k];
+      if (!b || a.day < b.day) out.milestones[k] = Object.assign({}, a);
+    }
     out.firstTry = Object.assign({}, base.firstTry || {});
     const af = add.firstTry || {};
     for (const g in af){
@@ -380,6 +414,13 @@ const Store = (() => {
       background: bw.background || aw.background || 'meadow',
       items: Object.assign({}, aw.items || {}, bw.items || {})
     };
+    out.islandJobs = Object.assign({}, add.islandJobs || {}, base.islandJobs || {});
+    for (const scene of ['boat', 'snack']){
+      const a = add.islandJobs && add.islandJobs[scene], b = base.islandJobs && base.islandJobs[scene];
+      if (a || b) out.islandJobs[scene] = Object.assign({}, b || a, {
+        completed: !!((a && a.completed) || (b && b.completed))
+      });
+    }
     out.createdAt = Math.min(base.createdAt || Date.now(), add.createdAt || Date.now());
     return out;
   }
@@ -566,6 +607,28 @@ const Store = (() => {
       save();
       return true;
     },
+    islandJob(scene){ return (mem.islandJobs || {})[scene] || null; },
+    startIslandJob(scene, fresh){
+      if (!['boat', 'snack'].includes(scene)) return null;
+      const jobs = mem.islandJobs || (mem.islandJobs = {});
+      if (jobs[scene] && !fresh) return jobs[scene];
+      const size = this.stars('bond', 0) >= 1 ? 10 : 5;
+      const prior = jobs[scene];
+      const start = size === 10 ? (prior && prior.start === 7 ? 6 : 7)
+        : (prior && prior.start === 3 ? 2 : 3);
+      jobs[scene] = { size, start, placed: 0, done: false, completed: !!(prior && prior.completed) };
+      save(); return jobs[scene];
+    },
+    addIslandJobPiece(scene){
+      const j = this.islandJob(scene);
+      if (!j || j.done || j.placed >= j.size - j.start) return false;
+      j.placed++; save(); return true;
+    },
+    finishIslandJob(scene){
+      const j = this.islandJob(scene);
+      if (!j || j.placed !== j.size - j.start) return false;
+      j.done = true; j.completed = true; save(); return true;
+    },
     practiceAccuracy(){
       const p = mem.practice;
       return (p && p[1]) ? p[0] / p[1] : null;
@@ -622,6 +685,26 @@ const Store = (() => {
       const ft = mem.firstTry[g];
       if (!ft || !ft[1]) return null;
       return ft[0] / ft[1];
+    },
+
+    milestoneText(kind){ return MILESTONE_TEXT[kind] || ''; },
+    milestoneRank(kind){ return MILESTONE_RANK[kind] || 0; },
+    recordMilestone(gameId, levelIndex, kind, label){
+      if (!/^[a-z0-9]+$/.test(gameId) || !Number.isInteger(levelIndex) || levelIndex < 0
+          || !Object.prototype.hasOwnProperty.call(MILESTONE_TEXT, kind)) return null;
+      const k = gameId + ':' + levelIndex + ':' + kind;
+      if (mem.milestones[k] != null) return null;
+      mem.milestones[k] = { day: dayNo(), label: String(label || '').slice(0, 80) };
+      save();
+      return { gameId, levelIndex, kind, day: mem.milestones[k].day, label: mem.milestones[k].label };
+    },
+    milestones(){
+      return Object.keys(mem.milestones || {}).map(k => {
+        const m = /^([a-z0-9]+):(\d+):(viewed|together|supported|revised|independent)$/.exec(k);
+        const rec = mem.milestones[k];
+        return m ? { gameId: m[1], levelIndex: Number(m[2]), kind: m[3],
+          day: rec.day, label: rec.label } : null;
+      }).filter(Boolean).sort((a, b) => b.day - a.day || MILESTONE_RANK[b.kind] - MILESTONE_RANK[a.kind]);
     },
 
     /* ---- item-level memory ---- */

@@ -561,7 +561,7 @@ body::before{
    banners would make both labels and tap targets too small on an iPad. */
 .home-quests{
   flex:0 0 auto;
-  display:flex; align-items:stretch; gap:calc(var(--u)*.7);
+  display:flex; align-items:stretch; flex-wrap:wrap; gap:calc(var(--u)*.7);
 }
 .home-quest{
   min-width:0; border:calc(var(--u)*.2) solid var(--card-edge);
@@ -591,6 +591,7 @@ body::before{
 .adventure-card b{ font-size:calc(var(--u)*1.3); white-space:nowrap; }
 .adventure-card small{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-soft); font-size:calc(var(--u)*1.05); }
 .adventure-card .arrow{ margin-left:auto; }
+.first-card{ background:color-mix(in srgb,var(--c-green) 15%,var(--card)); border-color:var(--c-green); }
 
 /* worlds */
 .worlds{
@@ -682,6 +683,49 @@ body::before{
   padding:calc(var(--u)*.3) calc(var(--u)*.6); border-radius:999px;
   background:color-mix(in srgb,var(--c-blue) 15%,var(--card)); font-size:calc(var(--u)*1.2); font-weight:800;
 }
+.first-detail{ width:min(100%,calc(var(--u)*48)); display:grid; gap:calc(var(--u)*.5);
+  padding:calc(var(--u)*1.2); border:calc(var(--u)*.2) solid var(--card-edge);
+  border-radius:var(--wob-a); background:var(--card); font-size:calc(var(--u)*1.65); font-weight:800; }
+.first-detail small{ font-size:calc(var(--u)*1.1); color:var(--ink-soft); }
+.first-actions,.job-actions{ display:flex; justify-content:center; flex-wrap:wrap; gap:calc(var(--u)*.7); }
+.first-actions .btn,.job-actions .btn{ min-height:var(--tap); }
+#first-finish .reward-sheet h2{ font-size:calc(var(--u)*2.1); }
+#first-finish{ position:relative; }
+#first-finish > .speakbtn{ position:absolute; top:calc(var(--u)*.6); right:calc(var(--u)*.6); z-index:2; }
+#progress-album{ gap:calc(var(--u)*.7); }
+.album-intro{ margin:0; text-align:center; font-size:calc(var(--u)*1.4); font-weight:800; }
+.album-cards{ flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; align-content:start;
+  gap:calc(var(--u)*.6); padding:calc(var(--u)*.5); }
+.album-card,.album-empty{ display:flex; align-items:center; gap:calc(var(--u)*.8);
+  background:var(--card); border:calc(var(--u)*.15) solid var(--card-edge);
+  border-radius:var(--wob-a); padding:calc(var(--u)*.7); }
+.album-card{ width:100%; font:inherit; color:var(--ink); text-align:left; cursor:pointer; }
+.album-icon{ font-size:calc(var(--u)*3); }
+.album-card div{ display:grid; gap:calc(var(--u)*.15); }
+.album-card b{ font-size:calc(var(--u)*1.3); }
+.album-card div span{ font-size:calc(var(--u)*1.45); }
+.album-empty{ justify-content:center; font-size:calc(var(--u)*1.5); }
+.result-milestone{ display:flex; gap:calc(var(--u)*.6); align-items:center; border:calc(var(--u)*.15) solid var(--c-green);
+  border-radius:var(--wob-b); padding:calc(var(--u)*.5) calc(var(--u)*.9);
+  background:color-mix(in srgb,var(--c-green) 12%,var(--card)); color:var(--ink);
+  font:inherit; font-size:calc(var(--u)*1.35); font-weight:800; cursor:pointer; }
+
+#island-jobs{ gap:calc(var(--u)*.7); align-items:center; }
+.job-scenes{ display:flex; justify-content:center; flex-wrap:wrap; gap:calc(var(--u)*.7); }
+.job-scene.selected{ border-color:var(--accent); background:color-mix(in srgb,var(--accent) 20%,var(--card)); }
+.job-prompt{ text-align:center; font-size:calc(var(--u)*1.55); font-weight:800; }
+.job-slots{ width:min(95%,calc(var(--u)*53)); flex:1 1 auto; min-height:calc(var(--u)*18);
+  display:grid; grid-template-columns:repeat(5,1fr); align-content:center; gap:calc(var(--u)*.55);
+  padding:calc(var(--u)*1.2); border:calc(var(--u)*.25) solid var(--c-blue);
+  border-radius:var(--wob-a); background:var(--card); }
+.job-slot{ aspect-ratio:1; display:grid; place-items:center; border:calc(var(--u)*.14) solid var(--card-edge);
+  border-radius:calc(var(--u)*.7); background:var(--paper-2); font-size:calc(var(--u)*2.5); }
+.job-slot.new{ border-color:var(--c-green); background:color-mix(in srgb,var(--c-green) 14%,var(--card)); }
+.job-slot.next{ color:var(--ink); cursor:pointer; font:inherit; font-size:calc(var(--u)*2.5);
+  border-style:dashed; border-color:var(--accent); }
+.job-message{ min-height:calc(var(--u)*2); font-size:calc(var(--u)*1.35); font-weight:800; text-align:center; }
+.world-job{ position:absolute; z-index:0; font-size:calc(var(--u)*4); pointer-events:none; }
+.world-job.boat{ right:18%; bottom:18%; }.world-job.snack{ left:33%; bottom:15%; }
 
 #sticker-world{ gap:calc(var(--u)*.55); }
 .sticker-world-tools{ flex:0 0 auto; display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:calc(var(--u)*.4); }
@@ -897,6 +941,9 @@ body::before{
   display: flex; flex-direction: column; gap: calc(var(--u)*.8);
   align-items: center; justify-content: center;
 }
+.level-entry{ width:min(100%,calc(var(--u)*53)); display:flex; align-items:stretch; gap:calc(var(--u)*.5); }
+.level-entry .levelcard{ width:auto; flex:1 1 auto; min-width:0; }
+.first-retry{ flex:0 0 auto; min-width:var(--tap); font-size:calc(var(--u)*2); }
 .levelcard{
   position: relative;
   width: min(100%, calc(var(--u)*46));

@@ -162,6 +162,7 @@ const Session = (() => {
   /* A chosen level sticker is a visual destination for this run.  An adventure
      is a separate short practice path.  Neither is written as a learning result. */
   let rewardTarget = null, adventureTarget = null;
+  let firstTarget = null, firstPhase = null, visitMilestone = null;
   let hintBtns = [], hintExtras = [], hintShown = false, lastSpeech = '';
   /* Most questions keep their hint back until a second mistake, so the child
      gets a real second try first. A question whose picture is already hidden
@@ -417,6 +418,12 @@ const Session = (() => {
     killTimers();
     Sound.hush();
     Sound.sfx.tap();
+    if (mode === 'first' && firstTarget){
+      const prior = FirstSteps.active;
+      FirstSteps.open(firstTarget.game, firstTarget.levelIndex,
+        prior && prior.game === firstTarget.game && prior.levelIndex === firstTarget.levelIndex ? prior.opts : null);
+      return;
+    }
     if (mode === 'level') Levels.render(curGame); else Home.render();
     UI.show(mode === 'level' ? 'levels' : 'home', { replace: true });
   }
@@ -428,6 +435,7 @@ const Session = (() => {
     mode = 'level'; curGame = game; curLevelIdx = levelIndex;
     rewardTarget = opts && opts.stickerMission || null;
     adventureTarget = null;
+    firstTarget = null; firstPhase = null;
     const lv = game.levels[levelIndex];
     const n = lv.n || 8;
     plan = [];
@@ -558,6 +566,22 @@ const Session = (() => {
     begin();
   }
 
+  /** A child may see the method and stop, or choose one supported turn. Neither
+      visit is a level attempt or evidence for a sticker or unlock. */
+  function startFirst(game, levelIndex, phase){
+    if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
+    build(); killTimers();
+    mode = 'first'; curGame = game; curLevelIdx = levelIndex;
+    rewardTarget = null; adventureTarget = null;
+    firstTarget = { game, levelIndex }; firstPhase = phase === 'show' ? 'show' : 'together';
+    const step = { game, level: game.levels[levelIndex], levelIndex };
+    plan = phase === 'afterShow' ? [Object.assign({}, step, { intro: 'together' })]
+      : firstPhase === 'show' ? [Object.assign({}, step, { intro: 'show' })]
+      : [Object.assign({}, step, { intro: 'show' }), Object.assign({}, step, { intro: 'together' })];
+    titleEl.textContent = 'はじめてコース　' + game.name;
+    begin();
+  }
+
   /** How badly this child needs this level today.
       The old round-robin handed every game the same ~0.66 questions a day whether
       the child was at 10% or 97%, which made the daily set a sampler rather than
@@ -610,7 +634,7 @@ const Session = (() => {
     disarmQuit();
     idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0;
     if (mode !== 'focus') focusKeys = [];
-    usedItems = new Set(); shaky = []; sessionOutcomes = [];
+    usedItems = new Set(); shaky = []; sessionOutcomes = []; visitMilestone = null;
     clear(pipsEl);
     checkTally = {}; announced = new Set();
     plan.forEach(p => pipsEl.append(el('div.pip' + (p.intro ? '.intro' : p.check ? '.check' : ''))));
@@ -898,7 +922,8 @@ const Session = (() => {
     else if (mode !== 'level'){
       const modeName = mode === 'daily' ? 'きょうの れんしゅう'
                      : mode === 'focus' ? 'とっくん'
-                     : mode === 'adventure' ? 'ちいさな ぼうけん' : 'はじめの ぼうけん';
+                     : mode === 'adventure' ? 'ちいさな ぼうけん'
+                     : mode === 'first' ? 'はじめてコース' : 'はじめの ぼうけん';
       titleEl.textContent = modeName + '　' + step.game.name;
     } else if (curGame) titleEl.textContent = curGame.name + '　' + curGame.levels[curLevelIdx].t;
     demo = step.intro || null;
@@ -1202,7 +1227,15 @@ const Session = (() => {
     if (graded && timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
     if (slipAt && wrongThisQ === 1 && performance.now() - slipAt < PAD_SLIP_MS
         && (missType === 'up' || missType === 'down')) missType = null;
-    if (scaffold === 'together' && (mode === 'level' || mode === 'adventure')) Store.markIntroduced(g.id, plan[idx].levelIndex);
+    if (scaffold === 'together' && !taughtQ && (mode === 'level' || mode === 'adventure' || mode === 'first'))
+      Store.markIntroduced(g.id, plan[idx].levelIndex);
+    if (mode !== 'diagnostic'){
+      const kind = scaffold === 'show' || taughtQ ? 'viewed' : scaffold === 'together' ? 'together'
+        : wrongThisQ ? 'revised' : helped ? 'supported' : 'independent';
+      Store.recordMilestone(g.id, plan[idx].levelIndex, kind, curLabel);
+      if (!visitMilestone || Store.milestoneRank(kind) >= Store.milestoneRank(visitMilestone.kind))
+        visitMilestone = { gameId: g.id, levelIndex: plan[idx].levelIndex, kind, label: curLabel || '' };
+    }
     if (mode !== 'diagnostic' && !scaffold){
       Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
       if (curItem){
@@ -1244,6 +1277,11 @@ const Session = (() => {
 
   function finish(){
     killTimers();
+    if (mode === 'first'){
+      Store.countToday(plan.length);
+      FirstSteps.finish(firstTarget.game, firstTarget.levelIndex, firstPhase, visitMilestone);
+      return;
+    }
     // the lesson questions are not graded, and neither are another level's checks
     const total = plan.filter(p => !p.intro && !(mode === 'level' && p.check)).length;
     /* Stars used to be `mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1` — one star was
@@ -1328,11 +1366,11 @@ const Session = (() => {
                   shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
                   focusKeys: focusKeys.slice(), swift, unlockedG1: justOpenedG1,
                   recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
-                  lastGameId: primaryGameId, rewardTarget, adventureTarget });
+                  lastGameId: primaryGameId, rewardTarget, adventureTarget, milestone: visitMilestone });
   }
 
   return {
-    startLevel, startDaily, startFocus, startAdventure, startDiagnostic, build,
+    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, build,
     _test: {
       flushTimers,
       get idx(){ return idx; },

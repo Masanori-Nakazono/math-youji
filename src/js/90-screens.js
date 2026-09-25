@@ -131,6 +131,8 @@ const Home = (() => {
         speakBtn(homeSpeech),
         el('button.btn.btn-round', { 'aria-label': 'シールブック', title: 'シールブック',
           onclick(){ Sound.sfx.tap(); Book.open(); } }, '📖'),
+        el('button.btn.btn-round', { 'aria-label': 'できたアルバム', title: 'できたアルバム',
+          onclick(){ Sound.sfx.tap(); ProgressAlbum.open(); } }, '📒'),
         el('button.btn.btn-round', { 'aria-label': 'じぶんの しま', title: 'じぶんの しま',
           onclick(){ Sound.sfx.tap(); StickerWorld.open(); } }, '🏡'),
         parentBtn = el('button.btn.btn-round', { 'aria-label': 'おうちのかたへ', title: 'おうちのかたへ',
@@ -310,7 +312,9 @@ const Home = (() => {
     clear(questsEl);
     const stickerQuest = StickerMissions.homeCard();
     const adventure = Adventures.homeCard();
+    const firstStep = FirstSteps.homeCard();
     if (stickerQuest) questsEl.append(stickerQuest);
+    if (firstStep) questsEl.append(firstStep);
     if (adventure) questsEl.append(adventure);
     questsEl.hidden = !questsEl.childElementCount;
 
@@ -407,7 +411,8 @@ const Levels = (() => {
         onclick(){
           Sound.sfx.tap();
           if (!unlocked){ Sound.say('前のレベルをクリアすると、遊べるよ。', { delay: 120 }); return; }
-          Session.startLevel(g, i);
+          if (g.intro !== false && !Store.introduced(g.id, i)) FirstSteps.open(g, i);
+          else Session.startLevel(g, i);
         }
       },
         el('div.num', { text: unlocked ? String(i + 1) : '🔒' }),
@@ -418,7 +423,12 @@ const Levels = (() => {
         gold ? el('span.goldmark', {
           text: stickerFor(goldKey), 'aria-label': 'きんの シールを ゲット'
         }) : null);
-      listEl.append(card);
+      const entry = el('div.level-entry', null, card);
+      if (unlocked && g.intro !== false) entry.append(el('button.btn.first-retry', {
+        type: 'button', 'aria-label': lv.t + 'の やりかたを みる', title: 'もういちど やりかたを みる',
+        onclick(){ Sound.sfx.tap(); FirstSteps.open(g, i); }
+      }, '👀'));
+      listEl.append(entry);
     });
 
   }
@@ -452,11 +462,13 @@ const Result = (() => {
        Either way the facts stay one tap away as the second button. */
     const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus' && r.mode !== 'adventure';
     const lead = drill && !(canNext && r.stars >= 2) && !(r.mode === 'level' && r.stars === 0);
+    const supportedRetry = r.mode === 'level' && r.stars === 0 && r.game.intro !== false;
     const msg = r.mode === 'diagnostic' ? 'さいしょの ぼうけん クリア！'
               : r.mode === 'adventure' ? 'ぼうけん かんせい！'
               : r.stars === 3 ? 'パーフェクト！'
               : r.stars === 2 ? 'よく できました！'
               : r.stars === 1 ? 'クリア！'
+              : supportedRetry ? 'やりかたを みてみよう'
               : lead ? 'おしい！ とっくん してみよう'
               : 'おしい！ もう いちど やってみよう';
     // the children read `msg`, so it stays hiragana; the voice gets kanji, which
@@ -468,6 +480,7 @@ const Result = (() => {
                  : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
                  : r.stars === 1 ? 'クリア！'
+                 : supportedRetry ? '一緒に一つやってみよう。'
                  : lead ? '惜しい！特訓してみよう。'
                  : '惜しい！もう一度やってみよう。');
     // 「やったね」 and 「やったね、みおちゃん」 are not the same sentence to a five-year-old
@@ -533,6 +546,13 @@ const Result = (() => {
     if (r.swift){
       inner.append(el('div.swift', null,
         el('span.mk', { text: '⚡️' }), 'かぞえないで こたえられたね！'));
+    }
+    if (r.milestone){
+      inner.append(el('button.result-milestone', { type: 'button',
+        onclick(){ Sound.sfx.tap(); ProgressAlbum.open(); } },
+        el('span', { text: '📒', 'aria-hidden': 'true' }),
+        el('span', { text: (r.milestone.label ? r.milestone.label + '　' : '')
+          + Store.milestoneText(r.milestone.kind) })));
     }
     /* Name what went wrong. "62%" tells a child nothing; "3と7" is something they
        can carry to tomorrow — and it is exactly what the app will bring back.
@@ -610,10 +630,15 @@ const Result = (() => {
         () => { Sound.sfx.tap(); Diagnostic.startRecommended(); }, 'おすすめを遊べるよ。'));
     } else if (r.mode === 'level'){
       // when nothing was earned, another go is the obvious next step, not a footnote
-      const againBtn = act(again ? '.btn-accent.primary' : '', '↻', 'もういちど',
+      const againBtn = act(again && !supportedRetry ? '.btn-accent.primary' : '', '↻', 'もういちど',
         () => { Sound.sfx.tap(); Session.startLevel(r.game, r.levelIndex); }, 'もう一度できるよ。');
+      if (supportedRetry) actions.append(act('.btn-accent.primary', '👀', 'いっしょに ひとつ',
+        () => { Sound.sfx.tap(); FirstSteps.open(r.game, r.levelIndex); }, '一緒に一つできるよ。'));
       const nextBtn = canNext ? act(lead || again ? '' : '.btn-accent.primary', '▶', 'つぎの レベルへ',
-        () => { Sound.sfx.tap(); Session.startLevel(r.game, nxt); }, '次のレベルに行けるよ。') : null;
+        () => { Sound.sfx.tap();
+          if (r.game.intro !== false && !Store.introduced(r.game.id, nxt)) FirstSteps.open(r.game, nxt);
+          else Session.startLevel(r.game, nxt);
+        }, '次のレベルに行けるよ。') : null;
       /* the way on is also the first button, not only the brightest: after a good
          run「もういちど」 in front of it read as the suggestion */
       if (nextBtn && !lead && !again) actions.append(nextBtn, againBtn);
@@ -650,7 +675,9 @@ const Result = (() => {
     UI.show('result', { replace: true });
     const news = (coloured.length ? 'シールに、色がついたね！' : '')
       + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '');
-    lastSpoken = called + spoken + news + nextLine;
+    const albumNews = r.milestone ? (r.milestone.label ? r.milestone.label + '。' : '')
+      + Store.milestoneText(r.milestone.kind) + '。' : '';
+    lastSpoken = called + spoken + albumNews + news + nextLine;
     Sound.say(lastSpoken, { delay: 700 });
     for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
@@ -744,7 +771,11 @@ const Book = (() => {
           title: g.name + '　' + lv.t,
           onclick(){
             Sound.sfx.tap();
-            if (open){ Session.startLevel(g, i); return; }
+            if (open){
+              if (g.intro !== false && !Store.introduced(g.id, i)) FirstSteps.open(g, i);
+              else Session.startLevel(g, i);
+              return;
+            }
             // not open yet: show the child where it lives, and what comes first
             Levels.render(g);
             UI.show('levels');
