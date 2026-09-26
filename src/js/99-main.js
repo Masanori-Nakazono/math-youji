@@ -63,7 +63,7 @@
 window.KazuApp = {
   Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent, Orientation,
   Diagnostic, Missions, StickerMissions, Adventures, FirstSteps, ProgressAlbum, IslandJobs,
-  StickerWorld, Progress, Coach, stageOpen, levelOpen,
+  StickerWorld, Treasures, Progress, Coach, stageOpen, levelOpen,
   classifyMiss, missChild,
   el, svg, clear, $, $$,
   STICKER_POOL, stickerFor,

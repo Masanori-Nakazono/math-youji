@@ -8,6 +8,7 @@
    counting. Between the two it is on its way. These are deliberately generous:
    the point is to tell retrieval from counting, not to run a race. */
 const FLUENT_FAST_MS = 3000, FLUENT_SLOW_MS = 9000;
+const TREASURE_WORLDS = ['shima', 'umi', 'yama', 'mori', 'kyoshitsu'];
 
 const Store = (() => {
   const KEY = 'kazu-no-bouken.v1';
@@ -42,6 +43,7 @@ const Store = (() => {
        another day, or by ★★★). The door and おすすめ count confirmed clears. */
     pending: {},
     stickers: [],     // earned sticker keys
+    treasures: [],    // world IDs whose chest was opened; separate from stickers
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
     diagnostic: null, // { completedDay, outcomes, recommended }
@@ -220,6 +222,10 @@ const Store = (() => {
       if (!Array.isArray(data.stickers) || data.stickers.some(v => typeof v !== 'string')) return null;
       out.stickers = Array.from(new Set(data.stickers));
     }
+    if (data.treasures !== undefined){
+      if (!Array.isArray(data.treasures) || data.treasures.some(id => !TREASURE_WORLDS.includes(id))) return null;
+      out.treasures = Array.from(new Set(data.treasures));
+    }
     if (data.practice !== undefined){
       if (!Array.isArray(data.practice) || data.practice.length < 2
        || !isCount(data.practice[0]) || !isCount(data.practice[1])
@@ -368,6 +374,7 @@ const Store = (() => {
     }
     for (const k in (add.last || {})) out.last[k] = maxNum(out.last[k], add.last[k]);
     out.stickers = Array.from(new Set((base.stickers || []).concat(add.stickers || [])));
+    out.treasures = Array.from(new Set((base.treasures || []).concat(add.treasures || [])));
     const bp = base.practice || [0, 0], ap = add.practice || [0, 0];
     out.practice = (ap[1] || 0) > (bp[1] || 0) ? ap.slice() : bp.slice();
     const bd = base.diagnostic, ad = add.diagnostic;
@@ -584,6 +591,15 @@ const Store = (() => {
     },
     mission: day => mem.missions[day] || null,
     /* ---- My sticker world -------------------------------------------------- */
+    hasTreasure: worldId => mem.treasures.includes(worldId),
+    claimTreasure(worldId){
+      if (!TREASURE_WORLDS.includes(worldId) || this.hasTreasure(worldId)) return false;
+      const games = Games.list.filter(g => g.world === worldId);
+      if (!games.length || !games.every(g => g.levels.every((lv, i) => this.hasSticker(g.id + ':' + i + ':g')))) return false;
+      mem.treasures.push(worldId);
+      save();
+      return true;
+    },
     stickerWorld(){
       const w = mem.stickerWorld || (mem.stickerWorld = { background: 'meadow', items: {} });
       return { background: w.background, items: Object.assign({}, w.items) };
@@ -594,7 +610,10 @@ const Store = (() => {
       save();
     },
     putWorldSticker(stickerKey, x, y){
-      if (typeof stickerKey !== 'string' || !this.hasSticker(stickerKey)) return false;
+      if (typeof stickerKey !== 'string') return false;
+      const owned = stickerKey.startsWith('treasure:')
+        ? this.hasTreasure(stickerKey.slice(9)) : this.hasSticker(stickerKey);
+      if (!owned) return false;
       const w = mem.stickerWorld || (mem.stickerWorld = { background: 'meadow', items: {} });
       w.items[stickerKey] = { x: clamp(Number(x) || 0, 0, 100), y: clamp(Number(y) || 0, 0, 100) };
       save();

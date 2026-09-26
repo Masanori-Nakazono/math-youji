@@ -763,6 +763,55 @@ body::before{
   border-radius:calc(var(--u)*.8); background:var(--card); font-size:calc(var(--u)*2.5); cursor:pointer;
 }
 
+/* A chest belongs to its world; its keepsake has its own shelf and artwork. */
+.world-heading{ display:flex; align-items:center; gap:calc(var(--u)*.5); margin-top:calc(var(--u)*-1.5); margin-bottom:calc(var(--u)*.6); }
+.world-heading h3{ flex:1; min-width:0; flex-direction:column; align-items:flex-start; gap:calc(var(--u)*.3); margin:0; }
+.world .world-heading h3 .sub{ margin-left:calc(var(--u)*.5); font-size:calc(var(--u)*1.05); }
+.world-heading .chip{ max-width:100%; box-sizing:border-box; }
+.world-chest{
+  flex:0 0 auto; display:flex; align-items:center; gap:calc(var(--u)*.35);
+  min-height:var(--tap); padding:calc(var(--u)*.2) calc(var(--u)*.55);
+  font:inherit; font-size:calc(var(--u)*1.05); font-weight:800; color:var(--ink);
+  border:calc(var(--u)*.15) solid var(--star-edge); border-radius:calc(var(--u)*.9);
+  background:color-mix(in srgb,var(--star) 15%,var(--card)); cursor:pointer;
+}
+.world-heading .world-chest{ flex-direction:column; gap:0; font-size:calc(var(--u)*.9); }
+.world-chest svg{ width:calc(var(--u)*3.6); height:calc(var(--u)*3); flex:0 0 auto; }
+.world-chest.ready{ background:color-mix(in srgb,var(--star) 35%,var(--card)); box-shadow:0 0 0 calc(var(--u)*.16) var(--star); }
+.world-chest.opened{ background:color-mix(in srgb,var(--c-blue) 12%,var(--card)); border-color:var(--c-blue); }
+.world-chest:focus-visible,.treasure-keepsake:focus-visible{ outline:calc(var(--u)*.25) solid var(--ring); outline-offset:calc(var(--u)*.15); }
+.level-treasure{ display:flex; justify-content:center; flex:0 0 auto; }
+.result-treasure{ display:flex; flex-direction:column; align-items:center; gap:calc(var(--u)*.5); }
+.treasure-sheet{
+  flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column;
+  align-items:center; justify-content:safe center; text-align:center; gap:calc(var(--u)*.7);
+  padding:calc(var(--u)*1); border-radius:var(--wob-a); background:var(--card);
+}
+.treasure-sheet h3{ font-size:calc(var(--u)*1.9); margin:0; }
+.treasure-sheet p{ font-size:calc(var(--u)*1.3); color:var(--ink-soft); margin:0; }
+.treasure-showcase{ flex:0 0 auto; width:min(70%,calc(var(--u)*18)); }
+.treasure-showcase svg{ display:block; width:100%; height:auto; }
+.treasure-showcase.reveal{ animation:treasureReveal .65s ease-out both; }
+@keyframes treasureReveal{ from{ transform:scale(.55) rotate(-12deg); opacity:0; } to{ transform:scale(1); opacity:1; } }
+.treasure-todo{ display:flex; flex-wrap:wrap; justify-content:center; gap:calc(var(--u)*.6); }
+.treasure-todo .btn{ font-size:calc(var(--u)*1.15); }
+.treasure-collection{ grid-column:1 / -1; padding:calc(var(--u)*.8); border-radius:var(--wob-b); background:color-mix(in srgb,var(--star) 15%,var(--card)); }
+.treasure-collection h3{ margin:0 0 calc(var(--u)*.5); font-size:calc(var(--u)*1.4); }
+.treasure-collection-row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(calc(var(--u)*9),1fr)); gap:calc(var(--u)*.5); }
+.treasure-keepsake{
+  display:flex; flex-direction:column; align-items:center; gap:calc(var(--u)*.2); min-height:var(--tap);
+  padding:calc(var(--u)*.5); border:calc(var(--u)*.15) dashed var(--star-edge); border-radius:calc(var(--u)*.8);
+  background:var(--card); font:inherit; font-size:calc(var(--u)*1.05); font-weight:800; color:var(--ink); cursor:pointer;
+}
+.treasure-keepsake.owned{ border-style:solid; background:color-mix(in srgb,var(--star) 8%,var(--card)); }
+.treasure-keepsake svg{ width:calc(var(--u)*6); height:calc(var(--u)*5); }
+.treasure-keepsake small{ font-size:calc(var(--u)*.85); color:var(--ink-soft); }
+.world-treasure{ width:calc(var(--u)*7); font-size:inherit; }
+.world-treasure svg{ display:block; width:100%; height:auto; }
+.world-palette-treasure{ width:calc(var(--u)*6.5); background:color-mix(in srgb,var(--star) 15%,var(--card)); border-color:var(--star-edge); }
+.world-palette-treasure svg{ display:block; width:100%; height:calc(var(--u)*4.5); }
+@media (prefers-reduced-motion:reduce){ .treasure-showcase.reveal{ animation:none; } }
+
 #parent .namein{
   font: inherit; font-size: calc(var(--u)*1.4);
   padding: calc(var(--u)*.4) calc(var(--u)*.8);

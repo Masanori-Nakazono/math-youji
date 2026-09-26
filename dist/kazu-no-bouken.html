@@ -782,6 +782,55 @@ body::before{
   border-radius:calc(var(--u)*.8); background:var(--card); font-size:calc(var(--u)*2.5); cursor:pointer;
 }
 
+/* A chest belongs to its world; its keepsake has its own shelf and artwork. */
+.world-heading{ display:flex; align-items:center; gap:calc(var(--u)*.5); margin-top:calc(var(--u)*-1.5); margin-bottom:calc(var(--u)*.6); }
+.world-heading h3{ flex:1; min-width:0; flex-direction:column; align-items:flex-start; gap:calc(var(--u)*.3); margin:0; }
+.world .world-heading h3 .sub{ margin-left:calc(var(--u)*.5); font-size:calc(var(--u)*1.05); }
+.world-heading .chip{ max-width:100%; box-sizing:border-box; }
+.world-chest{
+  flex:0 0 auto; display:flex; align-items:center; gap:calc(var(--u)*.35);
+  min-height:var(--tap); padding:calc(var(--u)*.2) calc(var(--u)*.55);
+  font:inherit; font-size:calc(var(--u)*1.05); font-weight:800; color:var(--ink);
+  border:calc(var(--u)*.15) solid var(--star-edge); border-radius:calc(var(--u)*.9);
+  background:color-mix(in srgb,var(--star) 15%,var(--card)); cursor:pointer;
+}
+.world-heading .world-chest{ flex-direction:column; gap:0; font-size:calc(var(--u)*.9); }
+.world-chest svg{ width:calc(var(--u)*3.6); height:calc(var(--u)*3); flex:0 0 auto; }
+.world-chest.ready{ background:color-mix(in srgb,var(--star) 35%,var(--card)); box-shadow:0 0 0 calc(var(--u)*.16) var(--star); }
+.world-chest.opened{ background:color-mix(in srgb,var(--c-blue) 12%,var(--card)); border-color:var(--c-blue); }
+.world-chest:focus-visible,.treasure-keepsake:focus-visible{ outline:calc(var(--u)*.25) solid var(--ring); outline-offset:calc(var(--u)*.15); }
+.level-treasure{ display:flex; justify-content:center; flex:0 0 auto; }
+.result-treasure{ display:flex; flex-direction:column; align-items:center; gap:calc(var(--u)*.5); }
+.treasure-sheet{
+  flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column;
+  align-items:center; justify-content:safe center; text-align:center; gap:calc(var(--u)*.7);
+  padding:calc(var(--u)*1); border-radius:var(--wob-a); background:var(--card);
+}
+.treasure-sheet h3{ font-size:calc(var(--u)*1.9); margin:0; }
+.treasure-sheet p{ font-size:calc(var(--u)*1.3); color:var(--ink-soft); margin:0; }
+.treasure-showcase{ flex:0 0 auto; width:min(70%,calc(var(--u)*18)); }
+.treasure-showcase svg{ display:block; width:100%; height:auto; }
+.treasure-showcase.reveal{ animation:treasureReveal .65s ease-out both; }
+@keyframes treasureReveal{ from{ transform:scale(.55) rotate(-12deg); opacity:0; } to{ transform:scale(1); opacity:1; } }
+.treasure-todo{ display:flex; flex-wrap:wrap; justify-content:center; gap:calc(var(--u)*.6); }
+.treasure-todo .btn{ font-size:calc(var(--u)*1.15); }
+.treasure-collection{ grid-column:1 / -1; padding:calc(var(--u)*.8); border-radius:var(--wob-b); background:color-mix(in srgb,var(--star) 15%,var(--card)); }
+.treasure-collection h3{ margin:0 0 calc(var(--u)*.5); font-size:calc(var(--u)*1.4); }
+.treasure-collection-row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(calc(var(--u)*9),1fr)); gap:calc(var(--u)*.5); }
+.treasure-keepsake{
+  display:flex; flex-direction:column; align-items:center; gap:calc(var(--u)*.2); min-height:var(--tap);
+  padding:calc(var(--u)*.5); border:calc(var(--u)*.15) dashed var(--star-edge); border-radius:calc(var(--u)*.8);
+  background:var(--card); font:inherit; font-size:calc(var(--u)*1.05); font-weight:800; color:var(--ink); cursor:pointer;
+}
+.treasure-keepsake.owned{ border-style:solid; background:color-mix(in srgb,var(--star) 8%,var(--card)); }
+.treasure-keepsake svg{ width:calc(var(--u)*6); height:calc(var(--u)*5); }
+.treasure-keepsake small{ font-size:calc(var(--u)*.85); color:var(--ink-soft); }
+.world-treasure{ width:calc(var(--u)*7); font-size:inherit; }
+.world-treasure svg{ display:block; width:100%; height:auto; }
+.world-palette-treasure{ width:calc(var(--u)*6.5); background:color-mix(in srgb,var(--star) 15%,var(--card)); border-color:var(--star-edge); }
+.world-palette-treasure svg{ display:block; width:100%; height:calc(var(--u)*4.5); }
+@media (prefers-reduced-motion:reduce){ .treasure-showcase.reveal{ animation:none; } }
+
 #parent .namein{
   font: inherit; font-size: calc(var(--u)*1.4);
   padding: calc(var(--u)*.4) calc(var(--u)*.8);
@@ -3133,6 +3182,7 @@ const Sound = (() => {
    counting. Between the two it is on its way. These are deliberately generous:
    the point is to tell retrieval from counting, not to run a race. */
 const FLUENT_FAST_MS = 3000, FLUENT_SLOW_MS = 9000;
+const TREASURE_WORLDS = ['shima', 'umi', 'yama', 'mori', 'kyoshitsu'];
 
 const Store = (() => {
   const KEY = 'kazu-no-bouken.v1';
@@ -3167,6 +3217,7 @@ const Store = (() => {
        another day, or by ★★★). The door and おすすめ count confirmed clears. */
     pending: {},
     stickers: [],     // earned sticker keys
+    treasures: [],    // world IDs whose chest was opened; separate from stickers
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
     diagnostic: null, // { completedDay, outcomes, recommended }
@@ -3345,6 +3396,10 @@ const Store = (() => {
       if (!Array.isArray(data.stickers) || data.stickers.some(v => typeof v !== 'string')) return null;
       out.stickers = Array.from(new Set(data.stickers));
     }
+    if (data.treasures !== undefined){
+      if (!Array.isArray(data.treasures) || data.treasures.some(id => !TREASURE_WORLDS.includes(id))) return null;
+      out.treasures = Array.from(new Set(data.treasures));
+    }
     if (data.practice !== undefined){
       if (!Array.isArray(data.practice) || data.practice.length < 2
        || !isCount(data.practice[0]) || !isCount(data.practice[1])
@@ -3493,6 +3548,7 @@ const Store = (() => {
     }
     for (const k in (add.last || {})) out.last[k] = maxNum(out.last[k], add.last[k]);
     out.stickers = Array.from(new Set((base.stickers || []).concat(add.stickers || [])));
+    out.treasures = Array.from(new Set((base.treasures || []).concat(add.treasures || [])));
     const bp = base.practice || [0, 0], ap = add.practice || [0, 0];
     out.practice = (ap[1] || 0) > (bp[1] || 0) ? ap.slice() : bp.slice();
     const bd = base.diagnostic, ad = add.diagnostic;
@@ -3709,6 +3765,15 @@ const Store = (() => {
     },
     mission: day => mem.missions[day] || null,
     /* ---- My sticker world -------------------------------------------------- */
+    hasTreasure: worldId => mem.treasures.includes(worldId),
+    claimTreasure(worldId){
+      if (!TREASURE_WORLDS.includes(worldId) || this.hasTreasure(worldId)) return false;
+      const games = Games.list.filter(g => g.world === worldId);
+      if (!games.length || !games.every(g => g.levels.every((lv, i) => this.hasSticker(g.id + ':' + i + ':g')))) return false;
+      mem.treasures.push(worldId);
+      save();
+      return true;
+    },
     stickerWorld(){
       const w = mem.stickerWorld || (mem.stickerWorld = { background: 'meadow', items: {} });
       return { background: w.background, items: Object.assign({}, w.items) };
@@ -3719,7 +3784,10 @@ const Store = (() => {
       save();
     },
     putWorldSticker(stickerKey, x, y){
-      if (typeof stickerKey !== 'string' || !this.hasSticker(stickerKey)) return false;
+      if (typeof stickerKey !== 'string') return false;
+      const owned = stickerKey.startsWith('treasure:')
+        ? this.hasTreasure(stickerKey.slice(9)) : this.hasSticker(stickerKey);
+      if (!owned) return false;
       const w = mem.stickerWorld || (mem.stickerWorld = { background: 'meadow', items: {} });
       w.items[stickerKey] = { x: clamp(Number(x) || 0, 0, 100), y: clamp(Number(y) || 0, 0, 100) };
       save();
@@ -9898,6 +9966,172 @@ Games.add({
   ]
 });
 
+/* ---- 87-treasures.js ---- */
+/* ===========================================================
+   87 — one chest per world, with keepsakes distinct from stickers
+   =========================================================== */
+'use strict';
+
+const Treasures = (() => {
+  const REWARDS = {
+    shima: { name: 'にじの クリスタル', color: '#6cbde8' },
+    umi: { name: 'しんじゅの コンパス', color: '#58b8ac' },
+    yama: { name: 'ひかりの ランタン', color: '#f39b55' },
+    mori: { name: 'もりの ステッキ', color: '#ae88d9' },
+    kyoshitsu: { name: 'ほしの メダル', color: '#f1c855' }
+  };
+  let node, heading, sheet, worldId = 'shima';
+
+  function status(id){
+    const keys = [];
+    Games.list.filter(g => g.world === id).forEach(g =>
+      g.levels.forEach((lv, i) => keys.push(g.id + ':' + i + ':g')));
+    const got = keys.filter(k => Store.hasSticker(k)).length;
+    return { got, total: keys.length, ready: keys.length > 0 && got === keys.length,
+      opened: Store.hasTreasure(id) };
+  }
+
+  function chestSVG(opened){
+    const line = { stroke: '#704932', 'stroke-width': 4, 'stroke-linejoin': 'round' };
+    return svg('svg', { viewBox: '0 0 120 100', class: 'treasure-chest-art', 'aria-hidden': 'true' },
+      svg('ellipse', { cx: 60, cy: 91, rx: 49, ry: 5, fill: '#704932', opacity: .15 }),
+      opened ? svg('path', { d: 'M20 49 L15 18 Q60 0 105 18 L100 49 Z', fill: '#e0a551', ...line }) : null,
+      svg('rect', { x: 16, y: 44, width: 88, height: 44, rx: 7, fill: '#b9713d', ...line }),
+      svg('path', { d: opened ? 'M16 44 Q60 26 104 44 L100 55 Q60 41 20 55 Z'
+        : 'M16 48 L16 36 Q16 12 60 12 Q104 12 104 36 L104 48 Z', fill: opened ? '#49372e' : '#e0a551', ...line }),
+      svg('path', { d: 'M32 22 V84 M88 22 V84', stroke: '#ffd86b', 'stroke-width': 8 }),
+      svg('rect', { x: 16, y: 49, width: 88, height: 8, rx: 2, fill: '#ffd86b' }),
+      svg('rect', { x: 50, y: 46, width: 20, height: 25, rx: 4, fill: '#fff1a4', ...line }),
+      svg('circle', { cx: 60, cy: 56, r: 3, fill: '#704932' }),
+      svg('path', { d: 'M60 58 V64', stroke: '#704932', 'stroke-width': 3 }));
+  }
+
+  // Dedicated artwork: these never go through the ordinary emoji sticker pool.
+  function artwork(id){
+    const reward = REWARDS[id];
+    if (!reward) return null;
+    const edge = { stroke: '#584b63', 'stroke-width': 3, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' };
+    const shapes = [];
+    if (id === 'shima'){
+      shapes.push(svg('path', { d: 'M22 28 L42 10 H78 L98 28 L60 91 Z', fill: reward.color, ...edge }),
+        svg('path', { d: 'M22 28 H98 M42 10 L39 28 L60 91 L81 28 L78 10', fill: 'none', ...edge }),
+        svg('path', { d: 'M39 28 L60 10 L81 28 L60 91 Z', fill: '#c6a2eb', opacity: .8 }),
+        svg('path', { d: 'M22 28 H39 L60 91 Z', fill: '#88ded0', opacity: .8 }));
+    } else if (id === 'umi'){
+      shapes.push(svg('circle', { cx: 60, cy: 53, r: 36, fill: reward.color, ...edge }),
+        svg('circle', { cx: 60, cy: 53, r: 28, fill: '#fff9e9', ...edge }),
+        svg('path', { d: 'M60 28 L73 53 L60 78 L47 53 Z', fill: '#f69cae', ...edge }),
+        svg('path', { d: 'M60 28 V78 L47 53 Z', fill: '#91dce0' }),
+        svg('circle', { cx: 60, cy: 53, r: 5, fill: '#fff', ...edge }),
+        svg('circle', { cx: 60, cy: 11, r: 8, fill: '#fff', ...edge }));
+    } else if (id === 'yama'){
+      shapes.push(svg('path', { d: 'M46 20 V13 Q60 0 74 13 V20', fill: 'none', ...edge }),
+        svg('path', { d: 'M42 22 H78 L90 78 H30 Z', fill: '#ffe5a0', ...edge }),
+        svg('path', { d: 'M60 37 Q80 58 60 73 Q40 58 60 37 Z', fill: '#ff9e52' }),
+        svg('path', { d: 'M60 52 Q70 65 60 71 Q50 65 60 52 Z', fill: '#fff' }),
+        svg('path', { d: 'M38 21 H82 M30 80 H90 M38 89 H82', stroke: reward.color, 'stroke-width': 9, 'stroke-linecap': 'round' }));
+    } else if (id === 'mori'){
+      shapes.push(svg('path', { d: 'M48 48 L82 88', stroke: '#584b63', 'stroke-width': 12, 'stroke-linecap': 'round' }),
+        svg('path', { d: 'M48 48 L82 88', stroke: reward.color, 'stroke-width': 7, 'stroke-linecap': 'round' }),
+        svg('path', { d: 'M48 7 L57 30 L82 33 L63 49 L68 73 L48 60 L27 73 L32 49 L13 33 L38 30 Z', fill: '#c3eba2', ...edge }),
+        svg('circle', { cx: 48, cy: 40, r: 9, fill: '#fff5ac', ...edge }));
+    } else {
+      shapes.push(svg('path', { d: 'M31 5 H49 L67 43 L46 51 Z', fill: '#91c7f5', ...edge }),
+        svg('path', { d: 'M71 5 H89 L74 51 L53 43 Z', fill: '#f49bad', ...edge }),
+        svg('circle', { cx: 60, cy: 63, r: 29, fill: reward.color, ...edge }),
+        svg('circle', { cx: 60, cy: 63, r: 23, fill: '#ffe9a0', ...edge }),
+        svg('path', { d: 'M60 45 L65 57 L79 58 L68 67 L71 81 L60 73 L49 81 L52 67 L41 58 L55 57 Z', fill: '#f2b84e', ...edge }));
+    }
+    return svg('svg', { viewBox: '0 0 120 100', class: 'treasure-art', 'aria-hidden': 'true' },
+      svg('ellipse', { cx: 60, cy: 94, rx: 35, ry: 4, fill: reward.color, opacity: .2 }), shapes,
+      svg('path', { d: 'M105 12 V26 M98 19 H112 M13 70 V80 M8 75 H18', fill: 'none', stroke: '#e2b53b', 'stroke-width': 3, 'stroke-linecap': 'round' }));
+  }
+
+  function speech(){
+    const w = WORLDS.find(w => w.id === worldId), s = status(worldId);
+    return w.name + 'の宝箱。' + (s.opened ? REWARDS[worldId].name + 'を手に入れたよ。自分の島に飾れるよ。'
+      : s.ready ? '金のシールが全部そろったね！宝箱をタップして、開けてみよう。'
+      : 'この場所の金のシールを全部集めると開くよ。あと' + (s.total - s.got) + '枚だよ。');
+  }
+
+  function card(id){
+    const s = status(id), w = WORLDS.find(w => w.id === id);
+    const label = s.opened ? 'たからもの ゲット' : s.ready ? 'たからばこを あけよう' : 'きんの シール ' + s.got + '／' + s.total;
+    return el('button.world-chest' + (s.opened ? '.opened' : s.ready ? '.ready' : '.locked'), {
+      type: 'button', dataset: { world: id }, 'aria-label': w.name + 'の たからばこ　' + label,
+      onclick(){ Sound.sfx.tap(); open(id); }
+    }, s.opened ? artwork(id) : chestSVG(false), el('span', { text: label }));
+  }
+
+  function collection(){
+    const row = el('div.treasure-collection-row');
+    WORLDS.filter(w => REWARDS[w.id]).forEach(w => {
+      const owned = Store.hasTreasure(w.id);
+      row.append(el('button.treasure-keepsake' + (owned ? '.owned' : ''), {
+        type: 'button', 'aria-label': w.name + '　' + (owned ? REWARDS[w.id].name : 'まだ あけていない たからばこ'),
+        onclick(){ Sound.sfx.tap(); open(w.id); }
+      }, owned ? artwork(w.id) : chestSVG(false),
+      el('span', { text: owned ? REWARDS[w.id].name : '？？？' }), el('small', { text: w.name })));
+    });
+    return el('section.treasure-collection', { 'aria-label': 'たからもの コレクション' },
+      el('h3', { text: 'たからもの　' + Store.data.treasures.length + '／' + TREASURE_WORLDS.length }), row);
+  }
+
+  function build(){
+    if (node) return node;
+    heading = el('h2'); sheet = el('div.treasure-sheet');
+    node = el('div#treasure', null,
+      el('div.topbar', null,
+        el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+        heading, speakBtn(speech)), sheet);
+    return UI.register('treasure', node);
+  }
+
+  function render(celebrate){
+    build();
+    const w = WORLDS.find(w => w.id === worldId), s = status(worldId);
+    heading.textContent = w.name + 'の たからばこ';
+    clear(sheet);
+    sheet.append(el('div.treasure-showcase' + (celebrate ? '.reveal' : ''), null, s.opened ? artwork(worldId) : chestSVG(false)),
+      el('h3', { text: s.opened ? REWARDS[worldId].name : s.ready ? 'きんの シールが ぜんぶ そろった！' : 'きんの シールで ひらくよ' }),
+      el('p', { role: 'status', text: s.opened ? 'とくべつな たからものを ゲット！ じぶんの しまに かざれるよ'
+        : s.ready ? 'どんな たからものが でるかな？' : 'きんの シール ' + s.got + '／' + s.total + '　あと ' + (s.total - s.got) + 'まい' }));
+    if (s.opened){
+      sheet.append(el('button.btn.btn-accent', { type: 'button', text: 'じぶんの しまに かざる',
+        onclick(){ Sound.sfx.tap(); StickerWorld.open('treasure:' + worldId); } }));
+    } else if (s.ready){
+      sheet.append(el('button.btn.btn-accent.treasure-open', { type: 'button', text: 'たからばこを あける', onclick(){
+        if (!Store.claimTreasure(worldId)) return;
+        Sound.sfx.unlockSfx(); render(true); UI.confetti(70);
+        Sound.say(REWARDS[worldId].name + 'を手に入れたよ！自分の島に飾れるよ。', { delay: 150 });
+        const next = $('button', sheet); if (next) next.focus();
+      } }));
+    } else {
+      const choices = el('div.treasure-todo');
+      Games.list.filter(g => g.world === worldId).forEach(g => {
+        const remaining = g.levels.filter((lv, i) => !Store.hasSticker(g.id + ':' + i + ':g')).length;
+        if (!remaining) return;
+        choices.append(el('button.btn.btn-ghost', { type: 'button', text: g.ico + ' ' + g.name + '　あと ' + remaining + 'まい',
+          onclick(){
+            Sound.sfx.tap();
+            if (!stageOpen(g)){ Book.open(); Sound.say(Progress.unlockHint(g), { delay: 150 }); return; }
+            Levels.render(g); UI.show('levels'); Sound.say(Levels.speech(), { delay: 120 });
+          }
+        }));
+      });
+      sheet.append(choices);
+    }
+  }
+
+  function open(id){
+    if (!REWARDS[id]) return;
+    worldId = id; render(); UI.show('treasure'); Sound.say(speech(), { delay: 150 });
+  }
+  return { status, card, collection, artwork, chestSVG, open,
+    name: id => REWARDS[id] ? REWARDS[id].name : '' };
+})();
+
 /* ---- 88-rewards.js ---- */
 /* ===========================================================
    88 — a chosen sticker, a small adventure, and a world of one's own
@@ -10263,8 +10497,12 @@ const StickerWorld = (() => {
   let node, board, palette, hint, selected = null;
 
   function owned(){
-    return Store.data.stickers.filter(k => /^[a-z0-9]+:\d+$/.test(k));
+    return Store.data.stickers.filter(k => /^[a-z0-9]+:\d+$/.test(k))
+      .concat(Store.data.treasures.map(id => 'treasure:' + id));
   }
+  const isTreasure = k => k.startsWith('treasure:');
+  const itemName = k => isTreasure(k) ? Treasures.name(k.slice(9)) : 'シール';
+  const itemArt = k => isTreasure(k) ? Treasures.artwork(k.slice(9)) : stickerFor(k);
   function build(){
     if (node) return node;
     board = el('div.sticker-world-board', { role: 'application', 'aria-label': 'じぶんの しま' });
@@ -10273,7 +10511,7 @@ const StickerWorld = (() => {
     board.onclick = e => {
       if (e.target.closest('.world-sticker')) return;
       if (!selected){
-        Sound.say('下から、置きたいシールをえらんでね。', { delay: 40 });
+        Sound.say('下から、置きたいシールや宝物をえらんでね。', { delay: 40 });
         return;
       }
       const r = board.getBoundingClientRect();
@@ -10289,7 +10527,7 @@ const StickerWorld = (() => {
         el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
         el('h2', { text: 'じぶんの しま' }),
-        speakBtn(() => '集めたシールを、好きな場所に置けるよ。下から選んで、島をタップしよう。')),
+        speakBtn(() => '集めたシールや宝物を、好きな場所に置けるよ。下から選んで、島をタップしよう。')),
       el('div.sticker-world-tools', null,
         el('span', { text: 'ばしょを えらぶ' }),
         BACKGROUNDS.map(bg => el('button.world-background', { type: 'button', dataset: { background: bg.id },
@@ -10314,22 +10552,27 @@ const StickerWorld = (() => {
       board.append(el('span.world-job.snack', { text: '🧺', title: 'つくった おやつ' }));
     Object.keys(world.items).filter(k => keys.indexOf(k) >= 0).forEach(k => {
       const p = world.items[k];
-      board.append(el('button.world-sticker', { type: 'button', text: stickerFor(k),
-        title: 'このシールを うごかす', style: { left: p.x + '%', top: p.y + '%' },
+      board.append(el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : ''), { type: 'button',
+        'aria-label': itemName(k) + 'を うごかす', title: itemName(k) + 'を うごかす', style: { left: p.x + '%', top: p.y + '%' },
         onclick(e){ e.stopPropagation(); selected = k; render(); Sound.sfx.tap(); }
-      }));
+      }, itemArt(k)));
     });
     $$('.world-background', node).forEach(b => b.classList.toggle('selected', b.dataset.background === world.background));
     clear(palette);
-    keys.forEach(k => palette.append(el('button.world-palette-sticker' + (selected === k ? '.selected' : ''), {
-      type: 'button', text: stickerFor(k), title: 'このシールを おく',
+    keys.forEach(k => palette.append(el('button.world-palette-sticker' + (isTreasure(k) ? '.world-palette-treasure' : '') + (selected === k ? '.selected' : ''), {
+      type: 'button', title: itemName(k) + 'を おく', 'aria-label': itemName(k) + 'を おく', 'aria-pressed': String(selected === k),
       onclick(){ selected = k; Sound.sfx.tap(); render(); Sound.say('島の置きたい場所をタップしてね。', { delay: 60 }); }
-    })));
+    }, itemArt(k))));
     hint.textContent = keys.length
-      ? (selected ? '🌟　しまの おきたい ばしょを タップしてね' : '下の シールを えらんで、しまに おこう')
+      ? (selected ? '🌟　しまの おきたい ばしょを タップしてね' : '下の シールや たからものを えらんで、しまに おこう')
       : 'さいしょの シールを もらったら、ここに おけるよ';
   }
-  function open(){ render(); UI.show('sticker-world'); Sound.say('自分の島だよ。集めたシールを、好きな場所に置けるよ。', { delay: 150 }); }
+  function open(item){
+    if (item && owned().includes(item)) selected = item;
+    render(); UI.show('sticker-world');
+    Sound.say(item && selected === item ? itemName(item) + 'を、島の好きな場所に置いてね。'
+      : '自分の島だよ。集めたシールや宝物を、好きな場所に置けるよ。', { delay: 150 });
+  }
   return { build, render, open };
 })();
 
@@ -11022,8 +11265,10 @@ const Home = (() => {
       worldsEl.append(el('div.world' + ((w.stage || 'pre') !== 'pre' ? '.newstage' : '')
         + (shut ? '.shut' : ''),
         { style: { '--wc': w.color } },
-        el('h3', null, el('span.chip', { text: w.name }),
-          el('span.sub', { text: shut ? 'じゅんびが できると ひらくよ' : w.sub })), grid));
+        el('div.world-heading', null,
+          el('h3', null, el('span.chip', { text: w.name }),
+            el('span.sub', { text: shut ? 'じゅんびが できると ひらくよ' : w.sub })),
+          Treasures.card(w.id)), grid));
     });
   }
   return { build, render };
@@ -11031,17 +11276,18 @@ const Home = (() => {
 
 /* ---------------------------------------------------------- LEVELS */
 const Levels = (() => {
-  let node, titleEl, listEl, game = null;
+  let node, titleEl, listEl, chestEl, game = null;
   function build(){
     if (node) return node;
     titleEl = el('h2');
     listEl  = el('div.levels');
+    chestEl = el('div.level-treasure');
     node = el('div#levels', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
         titleEl, speakBtn(() => speech())),
-      listEl);
+      chestEl, listEl);
     return UI.register('levels', node);
   }
   function speech(){
@@ -11051,6 +11297,7 @@ const Levels = (() => {
     build();
     game = g;
     titleEl.textContent = g.ico + '　' + g.name;
+    clear(chestEl); chestEl.append(Treasures.card(g.world));
     clear(listEl);
     g.levels.forEach((lv, i) => {
       const stars = Store.stars(g.id, i);
@@ -11240,6 +11487,10 @@ const Result = (() => {
                           : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' }),
         toDoor));
     }
+    const treasureReady = r.mode === 'level' && r.game && stickers.some(x => x.gold)
+      && Treasures.status(r.game.world).ready && !Store.hasTreasure(r.game.world);
+    if (treasureReady) inner.append(el('div.result-treasure', null,
+      el('b', { text: 'きんの シールが ぜんぶ そろった！' }), Treasures.card(r.game.world)));
     if (r.mode === 'diagnostic' && r.recommended){
       const g = Games.byId[r.recommended.gameId];
       if (g){
@@ -11326,7 +11577,8 @@ const Result = (() => {
     inner.append(actions);
     UI.show('result', { replace: true });
     const news = (coloured.length ? 'シールに、色がついたね！' : '')
-      + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '');
+      + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '')
+      + (treasureReady ? '金のシールが全部そろったね！宝箱を開けられるよ。' : '');
     const albumNews = r.milestone ? (r.milestone.label ? r.milestone.label + '。' : '')
       + Store.milestoneText(r.milestone.kind) + '。' : '';
     lastSpoken = called + spoken + albumNews + news + nextLine;
@@ -11371,6 +11623,7 @@ const Book = (() => {
     build();
     headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
     clear(grid);
+    grid.append(Treasures.collection());
     let got = 0;
     const drawSlots = keys => keys.forEach(key => {
       const has = Store.hasSticker(key);
@@ -12499,7 +12752,7 @@ const Parent = (() => {
 window.KazuApp = {
   Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent, Orientation,
   Diagnostic, Missions, StickerMissions, Adventures, FirstSteps, ProgressAlbum, IslandJobs,
-  StickerWorld, Progress, Coach, stageOpen, levelOpen,
+  StickerWorld, Treasures, Progress, Coach, stageOpen, levelOpen,
   classifyMiss, missChild,
   el, svg, clear, $, $$,
   STICKER_POOL, stickerFor,

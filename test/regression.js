@@ -1758,8 +1758,9 @@
       d.shownAndAnswered = S.idx === 1 && S.introStep === 'together';
       d.toolOut = qa('#play .cell.coachhole').length > 0 && !q('#play .feedback').hidden;
       d.fingersFree = !q('#play').classList.contains('walking');
-      const m = /^bond:dec:(\d+)-(\d+)$/.exec(S.item || '');
-      const right = m && qa('#play .choices .choice').find(b => Number(b.textContent) === m[1] - m[2]);
+      const m = /^bond:(?:dec:(\d+)-(\d+)|com:(\d+)\+(\d+))$/.exec(S.item || '');
+      const answer = m && (m[1] ? Number(m[1]) - Number(m[2]) : Number(m[3]) + Number(m[4]));
+      const right = answer != null && qa('#play .choices .choice').find(b => Number(b.textContent) === answer);
       if (right) right.click();
       S.flushTimers(8);
       d.togetherDone = S.idx === 2 && !S.introStep;
@@ -1985,8 +1986,9 @@
     // and the first one is a way in, not just a label
     const before = K.UI.currentName();
     chips[0].click();
-    check('tapping a missing level starts it',
-      K.UI.currentName() === 'play' && S.planGames[0] === lastGame.id + ':0',
+    check('tapping a missing level starts its first course',
+      K.UI.currentName() === 'first-steps' && K.FirstSteps.active
+        && K.FirstSteps.active.game.id === lastGame.id && K.FirstSteps.active.levelIndex === 0,
       'from ' + before + ' to ' + K.UI.currentName() + ' / ' + S.planGames[0]);
     K.Store.reset();
   })();

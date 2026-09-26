@@ -43,3 +43,6 @@ jobs:
 
       - name: Run the regression suite in a browser
         run: node tools/run-tests.cjs
+
+      - name: Verify island treasure chests and saved keepsakes
+        run: node tools/test-treasures.cjs

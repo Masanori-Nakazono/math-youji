@@ -370,8 +370,10 @@ const Home = (() => {
       worldsEl.append(el('div.world' + ((w.stage || 'pre') !== 'pre' ? '.newstage' : '')
         + (shut ? '.shut' : ''),
         { style: { '--wc': w.color } },
-        el('h3', null, el('span.chip', { text: w.name }),
-          el('span.sub', { text: shut ? 'じゅんびが できると ひらくよ' : w.sub })), grid));
+        el('div.world-heading', null,
+          el('h3', null, el('span.chip', { text: w.name }),
+            el('span.sub', { text: shut ? 'じゅんびが できると ひらくよ' : w.sub })),
+          Treasures.card(w.id)), grid));
     });
   }
   return { build, render };
@@ -379,17 +381,18 @@ const Home = (() => {
 
 /* ---------------------------------------------------------- LEVELS */
 const Levels = (() => {
-  let node, titleEl, listEl, game = null;
+  let node, titleEl, listEl, chestEl, game = null;
   function build(){
     if (node) return node;
     titleEl = el('h2');
     listEl  = el('div.levels');
+    chestEl = el('div.level-treasure');
     node = el('div#levels', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
         titleEl, speakBtn(() => speech())),
-      listEl);
+      chestEl, listEl);
     return UI.register('levels', node);
   }
   function speech(){
@@ -399,6 +402,7 @@ const Levels = (() => {
     build();
     game = g;
     titleEl.textContent = g.ico + '　' + g.name;
+    clear(chestEl); chestEl.append(Treasures.card(g.world));
     clear(listEl);
     g.levels.forEach((lv, i) => {
       const stars = Store.stars(g.id, i);
@@ -588,6 +592,10 @@ const Result = (() => {
                           : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' }),
         toDoor));
     }
+    const treasureReady = r.mode === 'level' && r.game && stickers.some(x => x.gold)
+      && Treasures.status(r.game.world).ready && !Store.hasTreasure(r.game.world);
+    if (treasureReady) inner.append(el('div.result-treasure', null,
+      el('b', { text: 'きんの シールが ぜんぶ そろった！' }), Treasures.card(r.game.world)));
     if (r.mode === 'diagnostic' && r.recommended){
       const g = Games.byId[r.recommended.gameId];
       if (g){
@@ -674,7 +682,8 @@ const Result = (() => {
     inner.append(actions);
     UI.show('result', { replace: true });
     const news = (coloured.length ? 'シールに、色がついたね！' : '')
-      + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '');
+      + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '')
+      + (treasureReady ? '金のシールが全部そろったね！宝箱を開けられるよ。' : '');
     const albumNews = r.milestone ? (r.milestone.label ? r.milestone.label + '。' : '')
       + Store.milestoneText(r.milestone.kind) + '。' : '';
     lastSpoken = called + spoken + albumNews + news + nextLine;
@@ -719,6 +728,7 @@ const Book = (() => {
     build();
     headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
     clear(grid);
+    grid.append(Treasures.collection());
     let got = 0;
     const drawSlots = keys => keys.forEach(key => {
       const has = Store.hasSticker(key);
