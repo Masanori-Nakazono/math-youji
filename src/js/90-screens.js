@@ -310,6 +310,8 @@ const Home = (() => {
        child's choice of what to do next.  The short adventure sits alongside it
        because it answers a different moment — "I want to try, but this is hard." */
     clear(questsEl);
+    const transfer = TransferAdventure.homeCard();
+    if (transfer) questsEl.append(transfer);
     const stickerQuest = StickerMissions.homeCard();
     const adventure = Adventures.homeCard();
     const firstStep = FirstSteps.homeCard();
@@ -322,7 +324,8 @@ const Home = (() => {
     clear(shelfEl);
     const strip = el('div.strip');
     if (got.length){
-      got.slice(-16).reverse().forEach(k => strip.append(el('span' + (Store.isPending(k) ? '.pending' : ''), { text: stickerFor(k) })));
+      got.slice(-16).reverse().forEach(k => strip.append(TransferAdventure.artwork(k)
+        || el('span' + (Store.isPending(k) ? '.pending' : ''), { text: stickerFor(k) })));
     } else {
       strip.append(el('span.empty', { text: 'レベルを クリアすると シールが たまるよ' }));
     }
@@ -729,7 +732,9 @@ const Book = (() => {
     headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
     clear(grid);
     grid.append(Treasures.collection());
-    let got = 0;
+    const specialCollection = TransferAdventure.collection();
+    if (specialCollection) grid.append(specialCollection);
+    let got = Store.data.stickers.filter(k => TransferAdventure.missionFor(k)).length;
     const drawSlots = keys => keys.forEach(key => {
       const has = Store.hasSticker(key);
       if (has) got++;

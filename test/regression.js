@@ -1756,7 +1756,11 @@
       d.heldForShow = S.introStep === 'show' && q('#play').classList.contains('walking');
       S.flushTimers(120);                                   // the hand shows it, and answers
       d.shownAndAnswered = S.idx === 1 && S.introStep === 'together';
-      d.toolOut = qa('#play .cell.coachhole').length > 0 && !q('#play .feedback').hidden;
+      // L1 randomly asks composition as well as decomposition. Composition's
+      // tool is tappable dots; only decomposition has empty fillable cells.
+      const toolSelector = (S.item || '').startsWith('bond:com:')
+        ? '#play .dot.coachable' : '#play .cell.coachhole';
+      d.toolOut = qa(toolSelector).length > 0 && !q('#play .feedback').hidden;
       d.fingersFree = !q('#play').classList.contains('walking');
       const m = /^bond:(?:dec:(\d+)-(\d+)|com:(\d+)\+(\d+))$/.exec(S.item || '');
       const answer = m && (m[1] ? Number(m[1]) - Number(m[2]) : Number(m[3]) + Number(m[4]));

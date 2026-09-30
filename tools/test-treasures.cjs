@@ -22,7 +22,9 @@ const server = http.createServer((req, res) => {
   try {
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
-    const page = await browser.newPage({ viewport: { width: 1180, height: 820 }, reducedMotion: 'reduce' });
+    // Worker/offline behavior is covered by regression.js; block workers here so
+    // the HTTPS route block also applies after reloading the isolated test page.
+    const page = await browser.newPage({ viewport: { width: 1180, height: 820 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     await page.route('https://**', r => r.abort()); // all new artwork must work offline

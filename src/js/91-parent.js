@@ -948,6 +948,7 @@ const Parent = (() => {
         el('p', { text: 'はじめて開くレベルは、テストから始めません。最初の1問は指のアニメがやり方を見せ（「みてて」）、次の1問は道具を出したまま一緒に解き（「いっしょに」）、そのあとに本番の問題が続きます。この2問は★にも記録にも数えません。問題の横の 👀 を押すと、まちがえる前でも道具が出ます（押した問題は自力の正解には数えません）。' }));
     sheetInner.append(
       nextUpSection(),
+      ...[TransferAdventure.parentSummary()].filter(Boolean),
       scheduleSection(),
       statsSection(),
       stageSection(),

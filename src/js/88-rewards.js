@@ -366,8 +366,9 @@ const StickerWorld = (() => {
       .concat(Store.data.treasures.map(id => 'treasure:' + id));
   }
   const isTreasure = k => k.startsWith('treasure:');
-  const itemName = k => isTreasure(k) ? Treasures.name(k.slice(9)) : 'シール';
-  const itemArt = k => isTreasure(k) ? Treasures.artwork(k.slice(9)) : stickerFor(k);
+  const itemName = k => isTreasure(k) ? Treasures.name(k.slice(9))
+    : TransferAdventure.missionFor(k) ? TransferAdventure.missionFor(k).reward : 'シール';
+  const itemArt = k => isTreasure(k) ? Treasures.artwork(k.slice(9)) : TransferAdventure.artwork(k) || stickerFor(k);
   function build(){
     if (node) return node;
     board = el('div.sticker-world-board', { role: 'application', 'aria-label': 'じぶんの しま' });

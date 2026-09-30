@@ -55,6 +55,8 @@ const Store = (() => {
        picture survives an iPad rotation and a different-sized iPad. */
     stickerWorld: { background: 'meadow', items: {} },
     islandJobs: {}, // boat/snack -> current hands-on work and a lasting completed scene
+    transferReached: false,
+    transferRecords: {}, // mission index -> last actual run, separate from mastery/stars
     name: '',
     sfx: true, voice: true, voiceId: null,
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
@@ -203,6 +205,11 @@ const Store = (() => {
      || !copyMap('last', isCount)
      || !copyMap('swift', v => v === 0 || v === 1)
      || !copyMap('intro', v => v === 1)
+     || !copyMap('transferRecords', v => isRecord(v) && Number.isInteger(v.day) && v.day >= 0
+          && Number.isInteger(v.independent) && v.independent >= 0 && v.independent <= 3
+          && Number.isInteger(v.supported) && v.supported >= 0 && v.supported <= 3
+          && Number.isInteger(v.revised) && v.revised >= 0 && v.revised <= 3
+          && v.independent + v.supported + v.revised === 3)
      || !copyMap('milestones', v => isRecord(v) && isCount(v.day)
           && typeof v.label === 'string' && v.label.length <= 80)
      || !copyMap('pending', v => Array.isArray(v) && v.length >= 3 && v.slice(0, 3).every(isCount))
@@ -217,6 +224,7 @@ const Store = (() => {
           && (v[6] == null || isMissMap(v[6])))) return null;
     for (const k of Object.keys(out.milestones))
       if (!/^[a-z0-9]+:\d+:(viewed|together|supported|revised|independent)$/.test(k)) return null;
+    if (Object.keys(out.transferRecords).some(k => !/^[0-5]$/.test(k))) return null;
 
     if (data.stickers !== undefined){
       if (!Array.isArray(data.stickers) || data.stickers.some(v => typeof v !== 'string')) return null;
@@ -300,7 +308,7 @@ const Store = (() => {
       if (typeof data.name !== 'string') return null;
       out.name = data.name.slice(0, 12);
     }
-    for (const k of ['sfx', 'voice', 'g1Open', 'g1Reached']){
+    for (const k of ['sfx', 'voice', 'g1Open', 'g1Reached', 'transferReached']){
       if (data[k] !== undefined){
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];
@@ -409,6 +417,12 @@ const Store = (() => {
     // a stage that has been opened on either device stays open
     out.g1Open = !!(base.g1Open || add.g1Open);
     out.g1Reached = !!(base.g1Reached || add.g1Reached);
+    out.transferReached = !!(base.transferReached || add.transferReached);
+    out.transferRecords = Object.assign({}, base.transferRecords || {});
+    for (const k of Object.keys(add.transferRecords || {})){
+      const incoming = add.transferRecords[k], current = out.transferRecords[k];
+      if (!current || incoming.day > current.day) out.transferRecords[k] = Object.assign({}, incoming);
+    }
     out.backupAt = maxNum(base.backupAt, add.backupAt);
     out.schoolYear = base.schoolYear || add.schoolYear || 0;
     out.name = base.name || add.name || '';

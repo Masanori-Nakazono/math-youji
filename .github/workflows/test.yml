@@ -46,3 +46,6 @@ jobs:
 
       - name: Verify island treasure chests and saved keepsakes
         run: node tools/test-treasures.cjs
+
+      - name: Verify post-clear adventures and special stickers
+        run: node tools/test-transfer.cjs
