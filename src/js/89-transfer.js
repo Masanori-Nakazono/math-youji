@@ -1,9 +1,10 @@
 /* Learn it, then use it: six hands-on adventures after the original 60 levels.
-   Completion medals acknowledge a finished adventure, including supported work;
-   they never feed the level mastery, fluency, or classroom unlock counters. */
+   A medal needs four independent first-try answers in five questions; finishing
+   with support is still celebrated but cannot award a medal. */
 'use strict';
 
 const TransferAdventure = (() => {
+  const QUESTIONS = 5, REQUIRED = 4;
   const missions = [
     { title: 'ピクニックの じゅんび', kind: 'fill', icon: '🧺', thing: '🍎', unit: 'こ',
       place: 'おやつ', reward: 'にじの バスケット', goal: 'たりない ぶんを もってこよう' },
@@ -57,7 +58,7 @@ const TransferAdventure = (() => {
     if (!unlocked() && !missions.some((m, i) => Store.hasSticker(key(i)))) return null;
     return el('section.transfer-collection', { 'aria-label': 'とくべつな ぼうけんシール' },
       el('h3', { text: '✦ とくべつな ぼうけんシール' }),
-      el('p', { text: '３もん やりとげた しるし。ヒントを つかっても もらえるよ。' }),
+      el('p', { text: '５もんのうち ４もんを、ヒントなしで さいしょから できた しるし。' }),
       el('div.transfer-collection-grid', null, missions.map((m, i) => el('button.transfer-collectible', {
         type: 'button', onclick(){ Store.hasSticker(key(i)) ? StickerWorld.open(key(i)) : open(); }
       }, artwork(key(i), !Store.hasSticker(key(i))), el('span', { text: m.reward })))));
@@ -67,9 +68,10 @@ const TransferAdventure = (() => {
     if (!rows.length) return null;
     return el('section.section.transfer-parent', null,
       el('h3', { text: '学んだことを使う冒険' }),
-      el('p', { text: '特別シールは３問をやりとげた記念です。習得の認定とは別に、各冒険の直近の取り組みを記録します。' }),
+      el('p', { text: '特別シールは５問中４問をヒントなしで初回正解したときに獲得します。各冒険の直近の取り組みを記録します。旧条件で獲得したシールは、３問すべて初回正解だった場合だけ残します。' }),
       rows.map(([i, r]) => el('p', { text: missions[Number(i)].title + '：自力で初回正解 ' + r.independent
-        + '問／答え直して正解 ' + r.revised + '問／ヒント・見本を使用 ' + r.supported + '問' })));
+        + '問／答え直して正解 ' + r.revised + '問／ヒント・見本を使用 ' + r.supported
+        + '問（' + (r.independent + r.revised + r.supported) + '問中）' })));
   }
   function say(text){ speech = text; Sound.say(text, { delay: 80 }); }
   function button(text, fn, className){
@@ -100,15 +102,15 @@ const TransferAdventure = (() => {
     heading.textContent = 'さんすうの ぼうけん';
     body.append(el('div.transfer-intro', null, el('span.transfer-eyebrow', { text: 'ぜんぶ クリアした きみへ' }),
       el('h3', { text: 'できることを、つかってみよう。' }),
-      el('p', { text: 'ひとつの ぼうけんは ３もん。ヒントを つかっても、やりとげると とくべつな シール！' })));
+      el('p', { text: 'ひとつの ぼうけんは ５もん。４もんを じぶんで できたら、とくべつな シール！ ヒントも つかえるよ。' })));
     const cards = el('div.transfer-map');
     missions.forEach((m, i) => cards.append(el('button.transfer-card', { type: 'button',
       dataset: { mission: i }, onclick(){ start(i); }
     }, artwork(key(i)), el('span.transfer-card-title', { text: m.title }),
       el('span.transfer-card-goal', { text: m.goal }),
-      el('span.transfer-card-status', { text: Store.hasSticker(key(i)) ? '✓ シール ゲット！　もういちど ▶' : '３もんで このシール ▶' }))));
+      el('span.transfer-card-status', { text: Store.hasSticker(key(i)) ? '✓ シール ゲット！　もういちど ▶' : '５もんちゅう ４もんで シール ▶' }))));
     body.append(cards);
-    say('できることを使ってみよう。好きな冒険をえらんでね。３問やりとげると、特別なシールがもらえるよ。');
+    say('できることを使ってみよう。好きな冒険をえらんでね。５問のうち４問を、ヒントなしで初めから正しくできると、特別なシールがもらえるよ。');
   }
   function open(){
     if (!unlocked()) return;
@@ -151,7 +153,7 @@ const TransferAdventure = (() => {
     clear(body); body.scrollTop = 0;
     const m = missions[run.id], q = question;
     heading.textContent = m.title;
-    body.append(el('div.transfer-progress', { text: '●'.repeat(run.step) + '○'.repeat(3 - run.step), 'aria-label': (run.step + 1) + 'もんめ／３もん' }),
+    body.append(el('div.transfer-progress', { text: '●'.repeat(run.step) + '○'.repeat(QUESTIONS - run.step), 'aria-label': (run.step + 1) + 'もんめ／５もん' }),
       el('h3.transfer-prompt', { text: prompt() }));
     const scene = el('div.transfer-scene');
     if (m.kind === 'fill'){
@@ -261,8 +263,8 @@ const TransferAdventure = (() => {
     $$('.transfer-scene button', body).forEach(b => { b.disabled = true; });
     feedback(message);
     const actions = clear($('.transfer-actions', body));
-    actions.append(button(run.step === 2 ? 'とくべつな シールへ ✦' : 'つぎへ ▶', () => {
-      if (++run.step === 3) finish(); else nextQuestion();
+    actions.append(button(run.step === QUESTIONS - 1 ? 'けっかを みる ✦' : 'つぎへ ▶', () => {
+      if (++run.step === QUESTIONS) finish(); else nextQuestion();
     }, 'btn-accent.transfer-next'));
   }
   function finish(){
@@ -270,21 +272,29 @@ const TransferAdventure = (() => {
     const record = { day: Store.dayNumber(), independent: 0, revised: 0, supported: 0 };
     results.forEach(r => record[r]++);
     Store.setPref('transferRecords', Object.assign({}, Store.data.transferRecords, { [id]: record }));
-    const fresh = Store.addSticker(key(id));
+    const passed = record.independent >= REQUIRED;
+    const fresh = passed && Store.addSticker(key(id));
+    const owned = Store.hasSticker(key(id));
     Store.flush(); run = null; clear(body);
     const done = missions.filter((m, i) => Store.hasSticker(key(i))).length;
-    heading.textContent = '３もん やりとげたね！';
-    body.append(el('div.transfer-result', null, artwork(key(id)),
-      el('h3', { text: fresh ? 'とくべつな シール ゲット！' : 'もういちど できたね！' }),
-      el('p', { text: m.reward }), el('p', { text: 'とくべつな シール ' + done + '／6' }),
-      el('p', { text: done === 6 ? '６つの ぼうけんを ぜんぶ やりとげたね！' : '「' + m.title + '」を やりとげたね。' }),
-      el('p', { text: record.supported ? 'ヒントを つかって、さいごまで つくれたね。' : 'じぶんで かんがえて、つくれたね。' }),
+    heading.textContent = '５もん やりとげたね！';
+    body.append(el('div.transfer-result', null, artwork(key(id), !owned),
+      el('h3', { text: fresh ? 'とくべつな シール ゲット！' : passed ? 'もういちど できたね！' : 'さいごまで できたね！' }),
+      el('p', { text: 'じぶんで できたよ：' + record.independent + '／' + QUESTIONS + 'もん' }),
+      el('p', { text: owned ? m.reward + '　とくべつな シール ' + done + '／6'
+        : '４もん できたら「' + m.reward + '」の シールが もらえるよ' }),
+      el('p', { text: owned && done === 6 ? '６つの ぼうけんの シールが ぜんぶ そろったね！'
+        : passed ? '「' + m.title + '」を じぶんで できたね。'
+          : 'ヒントを つかっても だいじょうぶ。べつのひに また やってみよう。' }),
       el('div.transfer-actions', null,
-        button('じぶんの しまに かざる', () => StickerWorld.open(key(id)), 'btn-accent'),
+        owned ? button('じぶんの しまに かざる', () => StickerWorld.open(key(id)), 'btn-accent')
+          : button('もういちど あそぶ', () => start(id), 'btn-accent'),
         button('きょうは ここまで', () => { Home.render(); UI.show('home'); }),
         button('ぼうけんを えらぶ', menu))));
     if (fresh) UI.confetti(45);
-    say(fresh ? m.reward + 'の、特別なシールをもらったよ！自分の島に飾れるよ。' : 'もういちど、３問やりとげたね！');
+    say(fresh ? m.reward + 'の、特別なシールをもらったよ！自分の島に飾れるよ。'
+      : passed ? '５問中' + record.independent + '問、じぶんでできたね！'
+        : '５問やりとげたね。自分でできたのは' + record.independent + '問だよ。４問できたらシールがもらえるよ。');
   }
   return { open, homeCard, collection, artwork, missionFor, parentSummary, unlocked, progress };
 })();

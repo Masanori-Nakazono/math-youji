@@ -57,6 +57,7 @@ const Store = (() => {
     islandJobs: {}, // boat/snack -> current hands-on work and a lasting completed scene
     transferReached: false,
     transferRecords: {}, // mission index -> last actual run, separate from mastery/stars
+    transferStickerRule: 2, // version 1 awarded a sticker for finishing even with no right answers
     name: '',
     sfx: true, voice: true, voiceId: null,
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
@@ -101,6 +102,7 @@ const Store = (() => {
       try{ parsed = JSON.parse(raw); }catch(e){}
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)){
         mem = Object.assign(blank(), parsed);
+        if (parsed.transferStickerRule === undefined) mem.transferStickerRule = 0;
         /* It parsed, but a field can still have the wrong shape — `stickers` that is
            not a list stopped Home from drawing at all, so the app never opened and
            the record could not even be written out. A field like that goes back to
@@ -206,10 +208,10 @@ const Store = (() => {
      || !copyMap('swift', v => v === 0 || v === 1)
      || !copyMap('intro', v => v === 1)
      || !copyMap('transferRecords', v => isRecord(v) && Number.isInteger(v.day) && v.day >= 0
-          && Number.isInteger(v.independent) && v.independent >= 0 && v.independent <= 3
-          && Number.isInteger(v.supported) && v.supported >= 0 && v.supported <= 3
-          && Number.isInteger(v.revised) && v.revised >= 0 && v.revised <= 3
-          && v.independent + v.supported + v.revised === 3)
+          && Number.isInteger(v.independent) && v.independent >= 0 && v.independent <= 5
+          && Number.isInteger(v.supported) && v.supported >= 0 && v.supported <= 5
+          && Number.isInteger(v.revised) && v.revised >= 0 && v.revised <= 5
+          && [3, 5].includes(v.independent + v.supported + v.revised))
      || !copyMap('milestones', v => isRecord(v) && isCount(v.day)
           && typeof v.label === 'string' && v.label.length <= 80)
      || !copyMap('pending', v => Array.isArray(v) && v.length >= 3 && v.slice(0, 3).every(isCount))
@@ -324,8 +326,32 @@ const Store = (() => {
         out[k] = data[k];
       }
     }
+    if (data.transferStickerRule !== undefined && ![0, 2].includes(data.transferStickerRule)) return null;
+    if (data.transferStickerRule === undefined) out.transferStickerRule = 0;
+    upgradeTransferStickers(out);
     return out;
   }
+
+  /** A legacy medal only has evidence of three questions. Keep it when all three
+      were independent first tries; re-earn the others under the new 4/5 rule.
+      This also runs on imported backups so an old file cannot restore a medal
+      that was earned only by finishing. Ordinary stickers and records are intact. */
+  function upgradeTransferStickers(data){
+    if (data.transferStickerRule === 2) return false;
+    const retain = k => {
+      const m = /^transfer:([0-5])$/.exec(k);
+      return !m || !!(data.transferRecords && data.transferRecords[m[1]]
+        && data.transferRecords[m[1]].independent === 3);
+    };
+    if (Array.isArray(data.stickers)) data.stickers = data.stickers.filter(retain);
+    const items = data.stickerWorld && data.stickerWorld.items;
+    if (items && typeof items === 'object'){
+      Object.keys(items).forEach(k => { if (!retain(k)) delete items[k]; });
+    }
+    data.transferStickerRule = 2;
+    return true;
+  }
+  if (upgradeTransferStickers(mem)) save();
 
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
   function mergeInto(base, add){
@@ -418,6 +444,7 @@ const Store = (() => {
     out.g1Open = !!(base.g1Open || add.g1Open);
     out.g1Reached = !!(base.g1Reached || add.g1Reached);
     out.transferReached = !!(base.transferReached || add.transferReached);
+    out.transferStickerRule = 2;
     out.transferRecords = Object.assign({}, base.transferRecords || {});
     for (const k of Object.keys(add.transferRecords || {})){
       const incoming = add.transferRecords[k], current = out.transferRecords[k];

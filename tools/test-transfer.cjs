@@ -28,6 +28,28 @@ const server = http.createServer((req, res) => {
     page.on('pageerror', e => errors.push(e.message));
     await page.route('https://**', r => r.abort());
     await page.goto(`http://127.0.0.1:${server.address().port}/dist/kazu-no-bouken.html`, { waitUntil: 'domcontentloaded' });
+    const legacy = await page.evaluate(() => {
+      const store = KazuApp.Store;
+      store.reset();
+      store.flush();
+      const legacy = JSON.parse(store.exportText()).data;
+      delete legacy.transferStickerRule;
+      legacy.stickers = ['count:0', 'transfer:0', 'transfer:1'];
+      legacy.transferRecords = {
+        0: { day: store.dayNumber(), independent: 0, revised: 0, supported: 3 },
+        1: { day: store.dayNumber(), independent: 3, revised: 0, supported: 0 }
+      };
+      legacy.stickerWorld.items = { 'transfer:0': { x: 40, y: 40 }, 'transfer:1': { x: 60, y: 60 } };
+      return legacy;
+    });
+    // pagehide saves the old in-memory record; inject the legacy fixture before
+    // the new page's app script reads localStorage, and do it only once.
+    await page.addInitScript(data => {
+      if (localStorage.getItem('transfer-migration-fixture') === '1') return;
+      localStorage.setItem('kazu-no-bouken.v1', JSON.stringify(data));
+      localStorage.setItem('transfer-migration-fixture', '1');
+    }, legacy);
+    await page.reload({ waitUntil: 'domcontentloaded' });
     const checks = await page.evaluate(() => {
       const K = KazuApp, store = K.Store, T = K.TransferAdventure, names = [];
       const check = (name, ok) => { if (!ok) throw new Error(name); names.push(name); };
@@ -40,6 +62,18 @@ const server = http.createServer((req, res) => {
       const move = n => { for (let i = 0; i < n; i++) click('#transfer [aria-label="１つ うごかす"]'); };
       const verify = () => click('.transfer-check');
       K.Sound.voiceOn = false; K.Sound.sfxOn = false;
+      check('old all-supported medal is removed on reload while a 3/3 independent medal survives',
+        !store.hasSticker('transfer:0') && store.hasSticker('transfer:1') && store.hasSticker('count:0')
+        && !store.stickerWorld().items['transfer:0'] && !!store.stickerWorld().items['transfer:1']
+        && store.data.transferRecords[0].supported === 3 && store.data.transferStickerRule === 2);
+      store.flush();
+      const oldBackup = JSON.parse(store.exportText());
+      delete oldBackup.data.transferStickerRule;
+      oldBackup.data.stickers.push('transfer:2');
+      oldBackup.data.transferRecords[2] = { day: store.dayNumber(), independent: 0, revised: 3, supported: 0 };
+      oldBackup.data.stickerWorld.items['transfer:2'] = { x: 25, y: 25 };
+      check('importing an old backup cannot restore a finish-only medal', store.importText(JSON.stringify(oldBackup)).ok
+        && !store.hasSticker('transfer:2') && !store.stickerWorld().items['transfer:2']);
       store.reset();
       check('new child does not see or enter the post-clear adventure', !T.homeCard() && (T.open(), K.UI.currentName() !== 'transfer'));
       const old = JSON.parse(store.exportText()); delete old.data.transferReached; delete old.data.transferRecords;
@@ -62,9 +96,26 @@ const server = http.createServer((req, res) => {
         check('first back tap asks before abandoning work', !!$('.transfer-exit') && !!$('.transfer-check'));
         click('#transfer .topbar button');
         check('leaving an unfinished adventure awards nothing', !store.hasSticker('transfer:0') && !!$('.transfer-map'));
+        // Finishing with help, or with only three clean answers, cannot award a medal.
+        T.open(); click('[data-mission="0"]');
+        for (let step = 0; step < 5; step++){
+          tapText('👀 ヒント'); tapText('いっしょに つくる'); verify(); click('.transfer-next');
+        }
+        check('zero clean answers still earns no medal', !store.hasSticker('transfer:0')
+          && store.data.transferRecords[0].supported === 5
+          && !document.querySelector('#transfer .transfer-result .transfer-sticker:not(.unearned)')
+          && ![...document.querySelectorAll('#transfer button')].some(b => b.textContent.includes('しまに かざる')));
+        T.open(); click('[data-mission="0"]');
+        for (let step = 0; step < 5; step++){
+          if (step < 2){ tapText('👀 ヒント'); tapText('いっしょに つくる'); }
+          else move(4);
+          verify(); click('.transfer-next');
+        }
+        check('three of five clean answers is below the medal threshold', !store.hasSticker('transfer:0')
+          && store.data.transferRecords[0].independent === 3);
         for (let id = 0; id < 6; id++){
           T.open(); click('[data-mission="' + id + '"]');
-          for (let step = 0; step < 3; step++){
+          for (let step = 0; step < 5; step++){
             if (id < 2){
               if (id === 1 && step === 0){
                 verify(); check('empty answer is rejected', !$('.transfer-next'));
@@ -91,21 +142,21 @@ const server = http.createServer((req, res) => {
               move(4); verify();
             }
             check('hands-on answer accepted: mission ' + id + ', question ' + step, !!$('.transfer-next'));
-            if (step < 2) check('sticker not awarded before all three problems', !store.hasSticker('transfer:' + id));
+            if (step < 4) check('sticker not awarded before all five problems', !store.hasSticker('transfer:' + id));
             click('.transfer-next');
           }
           check('unique special sticker awarded for mission ' + id, store.hasSticker('transfer:' + id) && !!$('.transfer-result .transfer-sticker'));
         }
-        check('six adventures count exactly eighteen completed problems', store.todayCount() === 18);
-        check('clean, revised, and supported work remain distinct', store.data.transferRecords[0].independent === 3
+        check('completed problems count toward the daily total', store.todayCount() === 40);
+        check('four of five clean answers earns a medal; help and revisions stay distinct', store.data.transferRecords[0].independent === 5
           && store.data.transferRecords[1].supported === 1 && store.data.transferRecords[2].revised === 1
-          && store.data.transferRecords[5].supported === 1);
+          && store.data.transferRecords[5].supported === 1 && store.data.transferRecords[5].independent === 4);
         check('adventure completion does not modify level mastery', JSON.stringify([store.data.stars, store.data.facts, store.data.pending]) === mastery);
         // Replay with support cannot create duplicate stickers.
         T.open(); click('[data-mission="0"]');
-        for (let i = 0; i < 3; i++){ tapText('👀 ヒント'); tapText('いっしょに つくる'); verify(); click('.transfer-next'); }
+        for (let i = 0; i < 5; i++){ tapText('👀 ヒント'); tapText('いっしょに つくる'); verify(); click('.transfer-next'); }
         check('replay awards no duplicates and records actual support', store.data.stickers.filter(k => k.startsWith('transfer:')).length === 6
-          && store.data.transferRecords[0].supported === 3);
+          && store.data.transferRecords[0].supported === 5);
         tapText('じぶんの しまに かざる');
         check('result opens island with the special sticker selected', K.UI.currentName() === 'sticker-world'
           && !!$('.world-palette-sticker.selected .transfer-sticker'));
@@ -114,16 +165,16 @@ const server = http.createServer((req, res) => {
         check('special sticker can be placed using the island UI', !!$('.world-sticker .transfer-sticker') && !!store.stickerWorld().items['transfer:0']);
         K.Book.open();
         check('book renders six unique foil stickers', document.querySelectorAll('#book .transfer-sticker').length === 6);
-        check('parent summary distinguishes supported answers', T.parentSummary().textContent.includes('ヒント・見本を使用 3問'));
+        check('parent summary distinguishes supported answers', T.parentSummary().textContent.includes('ヒント・見本を使用 5問'));
         const backup = store.exportText();
         store.reset();
         check('backup restores rewards, observations and placement', store.importText(backup, 'replace').ok
-          && store.data.transferRecords[0].supported === 3 && store.hasSticker('transfer:0')
+          && store.data.transferRecords[0].supported === 5 && store.hasSticker('transfer:0')
           && !!store.stickerWorld().items['transfer:0'] && T.unlocked());
         store.importText(backup); store.importText(backup);
         check('repeated backup merges are idempotent', store.data.stickers.filter(k => k.startsWith('transfer:')).length === 6);
-        const bad = JSON.parse(backup); bad.data.transferRecords[0].supported = 4;
-        check('malformed completion records are rejected without changing data', !store.importText(JSON.stringify(bad)).ok && store.data.transferRecords[0].supported === 3);
+        const bad = JSON.parse(backup); bad.data.transferRecords[0].supported = 6;
+        check('malformed completion records are rejected without changing data', !store.importText(JSON.stringify(bad)).ok && store.data.transferRecords[0].supported === 5);
         store.flush();
       } finally { Math.random = random; }
       return names;
@@ -131,7 +182,7 @@ const server = http.createServer((req, res) => {
     checks.forEach(n => console.log('PASS ' + n));
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.evaluate(() => KazuApp.Store.hasSticker('transfer:0')
-      && KazuApp.Store.data.transferRecords[0].supported === 3
+      && KazuApp.Store.data.transferRecords[0].supported === 5
       && !!KazuApp.Store.stickerWorld().items['transfer:0']), true);
     console.log('PASS rewards, observations and island layout survive reload');
     const dir = process.env.TRANSFER_SCREENSHOT_DIR;
