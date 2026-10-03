@@ -4,13 +4,9 @@
 'use strict';
 
 const Treasures = (() => {
-  const REWARDS = {
-    shima: { name: 'にじの クリスタル', color: '#6cbde8' },
-    umi: { name: 'しんじゅの コンパス', color: '#58b8ac' },
-    yama: { name: 'ひかりの ランタン', color: '#f39b55' },
-    mori: { name: 'もりの ステッキ', color: '#ae88d9' },
-    kyoshitsu: { name: 'ほしの メダル', color: '#f1c855' }
-  };
+  const REWARDS = Object.fromEntries(WORLDS.map(w => [w.id, {
+    name: stickerFor('treasure:' + w.id)
+  }]));
   let node, heading, sheet, worldId = 'shima';
 
   function status(id){
@@ -37,45 +33,12 @@ const Treasures = (() => {
       svg('path', { d: 'M60 58 V64', stroke: '#704932', 'stroke-width': 3 }));
   }
 
-  // Dedicated artwork: these never go through the ordinary emoji sticker pool.
+  // Chest acquisition still lives in the separate treasure record.
   function artwork(id){
-    const reward = REWARDS[id];
-    if (!reward) return null;
-    const edge = { stroke: '#584b63', 'stroke-width': 3, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' };
-    const shapes = [];
-    if (id === 'shima'){
-      shapes.push(svg('path', { d: 'M22 28 L42 10 H78 L98 28 L60 91 Z', fill: reward.color, ...edge }),
-        svg('path', { d: 'M22 28 H98 M42 10 L39 28 L60 91 L81 28 L78 10', fill: 'none', ...edge }),
-        svg('path', { d: 'M39 28 L60 10 L81 28 L60 91 Z', fill: '#c6a2eb', opacity: .8 }),
-        svg('path', { d: 'M22 28 H39 L60 91 Z', fill: '#88ded0', opacity: .8 }));
-    } else if (id === 'umi'){
-      shapes.push(svg('circle', { cx: 60, cy: 53, r: 36, fill: reward.color, ...edge }),
-        svg('circle', { cx: 60, cy: 53, r: 28, fill: '#fff9e9', ...edge }),
-        svg('path', { d: 'M60 28 L73 53 L60 78 L47 53 Z', fill: '#f69cae', ...edge }),
-        svg('path', { d: 'M60 28 V78 L47 53 Z', fill: '#91dce0' }),
-        svg('circle', { cx: 60, cy: 53, r: 5, fill: '#fff', ...edge }),
-        svg('circle', { cx: 60, cy: 11, r: 8, fill: '#fff', ...edge }));
-    } else if (id === 'yama'){
-      shapes.push(svg('path', { d: 'M46 20 V13 Q60 0 74 13 V20', fill: 'none', ...edge }),
-        svg('path', { d: 'M42 22 H78 L90 78 H30 Z', fill: '#ffe5a0', ...edge }),
-        svg('path', { d: 'M60 37 Q80 58 60 73 Q40 58 60 37 Z', fill: '#ff9e52' }),
-        svg('path', { d: 'M60 52 Q70 65 60 71 Q50 65 60 52 Z', fill: '#fff' }),
-        svg('path', { d: 'M38 21 H82 M30 80 H90 M38 89 H82', stroke: reward.color, 'stroke-width': 9, 'stroke-linecap': 'round' }));
-    } else if (id === 'mori'){
-      shapes.push(svg('path', { d: 'M48 48 L82 88', stroke: '#584b63', 'stroke-width': 12, 'stroke-linecap': 'round' }),
-        svg('path', { d: 'M48 48 L82 88', stroke: reward.color, 'stroke-width': 7, 'stroke-linecap': 'round' }),
-        svg('path', { d: 'M48 7 L57 30 L82 33 L63 49 L68 73 L48 60 L27 73 L32 49 L13 33 L38 30 Z', fill: '#c3eba2', ...edge }),
-        svg('circle', { cx: 48, cy: 40, r: 9, fill: '#fff5ac', ...edge }));
-    } else {
-      shapes.push(svg('path', { d: 'M31 5 H49 L67 43 L46 51 Z', fill: '#91c7f5', ...edge }),
-        svg('path', { d: 'M71 5 H89 L74 51 L53 43 Z', fill: '#f49bad', ...edge }),
-        svg('circle', { cx: 60, cy: 63, r: 29, fill: reward.color, ...edge }),
-        svg('circle', { cx: 60, cy: 63, r: 23, fill: '#ffe9a0', ...edge }),
-        svg('path', { d: 'M60 45 L65 57 L79 58 L68 67 L71 81 L60 73 L49 81 L52 67 L41 58 L55 57 Z', fill: '#f2b84e', ...edge }));
-    }
-    return svg('svg', { viewBox: '0 0 120 100', class: 'treasure-art', 'aria-hidden': 'true' },
-      svg('ellipse', { cx: 60, cy: 94, rx: 35, ry: 4, fill: reward.color, opacity: .2 }), shapes,
-      svg('path', { d: 'M105 12 V26 M98 19 H112 M13 70 V80 M8 75 H18', fill: 'none', stroke: '#e2b53b', 'stroke-width': 3, 'stroke-linecap': 'round' }));
+    if (!REWARDS[id]) return null;
+    const art = PokemonStickers.artwork('treasure:' + id);
+    art.classList.add('treasure-art');
+    return art;
   }
 
   function speech(){
@@ -102,7 +65,7 @@ const Treasures = (() => {
         type: 'button', 'aria-label': w.name + '　' + (owned ? REWARDS[w.id].name : 'まだ あけていない たからばこ'),
         onclick(){ Sound.sfx.tap(); open(w.id); }
       }, owned ? artwork(w.id) : chestSVG(false),
-      el('span', { text: owned ? REWARDS[w.id].name : '？？？' }), el('small', { text: w.name })));
+      owned ? null : el('span', { text: '？？？' }), el('small', { text: w.name })));
     });
     return el('section.treasure-collection', { 'aria-label': 'たからもの コレクション' },
       el('h3', { text: 'たからもの　' + Store.data.treasures.length + '／' + TREASURE_WORLDS.length }), row);

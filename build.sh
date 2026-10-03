@@ -26,6 +26,8 @@ trap 'rm -rf "$TMP"' EXIT
 # with device speech while hosting the generated voice packs alongside it.
 node tools/bundle-voices.cjs "$TMP/bundle.js" "$TMP/with-voices.js"
 mv "$TMP/with-voices.js" "$TMP/bundle.js"
+node tools/bundle-pokemon.cjs "$TMP/bundle.js" "$TMP/with-pokemon.js"
+mv "$TMP/with-pokemon.js" "$TMP/bundle.js"
 
 # fail the build on a syntax error rather than shipping a blank page
 node --check "$TMP/bundle.js"

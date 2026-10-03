@@ -49,3 +49,6 @@ jobs:
 
       - name: Verify post-clear adventures and special stickers
         run: node tools/test-transfer.cjs
+
+      - name: Verify offline Pokémon artwork and rarity rewards
+        run: node tools/test-pokemon.cjs

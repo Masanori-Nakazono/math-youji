@@ -300,9 +300,9 @@
     const keys = [];
     K.Games.list.forEach(g => g.levels.forEach((lv, li) => { keys.push(g.id + ':' + li, g.id + ':' + li + ':g'); }));
     const emo = keys.map(K.stickerFor);
-    check('every sticker slot has its own emoji',
+    check('every sticker slot has its own Pokémon',
       new Set(emo).size === emo.length && keys.length <= K.STICKER_POOL.length,
-      keys.length + ' slots / ' + K.STICKER_POOL.length + ' emoji / ' + new Set(emo).size + ' unique');
+      keys.length + ' slots / ' + K.STICKER_POOL.length + ' Pokémon / ' + new Set(emo).size + ' unique');
   })();
 
   /* ---------- 10b. the home map says whether another sticker remains ---------- */
@@ -2982,7 +2982,8 @@
       const w = K.Store.stickerWorld();
       d.saved = w.background === 'sea' && w.items[key] && w.items[key].x === 23.5 && w.items[key].y === 64.5;
       K.StickerWorld.open();
-      d.drawn = q('#sticker-world .world-sticker') && q('#sticker-world .world-sticker').textContent === K.stickerFor(key);
+      d.drawn = q('#sticker-world .world-sticker .pokemon-name')?.textContent === K.stickerFor(key)
+        && !!q('#sticker-world .world-sticker img.pokemon-image');
       const imported = JSON.parse(K.Store.exportText());
       d.exported = imported.data.stickerWorld.background === 'sea' && imported.data.stickerWorld.items[key].y === 64.5;
     } finally { K.Store.reset(); }

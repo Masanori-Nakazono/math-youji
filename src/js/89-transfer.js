@@ -7,17 +7,17 @@ const TransferAdventure = (() => {
   const QUESTIONS = 5, REQUIRED = 4;
   const missions = [
     { title: 'ピクニックの じゅんび', kind: 'fill', icon: '🧺', thing: '🍎', unit: 'こ',
-      place: 'おやつ', reward: 'にじの バスケット', goal: 'たりない ぶんを もってこよう' },
+      place: 'おやつ', reward: stickerFor('transfer:0'), goal: 'たりない ぶんを もってこよう' },
     { title: 'どうぶつバス', kind: 'fill', icon: '🚌', thing: '🐰', unit: 'ひき',
-      place: 'バス', reward: 'ほしぞら バス', goal: 'あと なんびき のれるかな' },
+      place: 'バス', reward: stickerFor('transfer:1'), goal: 'あと なんびき のれるかな' },
     { title: 'おやつを わけよう', kind: 'split', icon: '🍓', thing: '🍓', unit: 'こ',
-      reward: 'きらめく いちご', goal: 'ふたつの わけかたを つくろう' },
+      reward: stickerFor('transfer:2'), goal: 'ふたつの わけかたを つくろう' },
     { title: 'おはなの おくりもの', kind: 'split', icon: '💐', thing: '🌷', unit: 'ほん',
-      reward: 'にじいろ ブーケ', goal: 'ちがう わけかたを みつけよう' },
+      reward: stickerFor('transfer:3'), goal: 'ちがう わけかたを みつけよう' },
     { title: 'あつまる おはなし', kind: 'add', icon: '🦆', thing: '🦆', unit: 'わ',
-      reward: 'ひかりの あひる', goal: 'たしざんの おはなしを つくろう' },
+      reward: stickerFor('transfer:4'), goal: 'たしざんの おはなしを つくろう' },
     { title: 'とんでいく おはなし', kind: 'sub', icon: '🦋', thing: '🦋', unit: 'ひき',
-      reward: 'ほしの ちょうちょ', goal: 'ひきざんの おはなしを つくろう' }
+      reward: stickerFor('transfer:5'), goal: 'ひきざんの おはなしを つくろう' }
   ];
   let node, body, heading, back, speech = '', run = null, question = null, exitArmed = false;
   const key = id => 'transfer:' + id;
@@ -38,13 +38,11 @@ const TransferAdventure = (() => {
   function artwork(k, silhouette){
     const m = missionFor(k);
     if (!m) return null;
-    return el('span.transfer-sticker' + (silhouette ? '.unearned' : ''), {
-      role: 'img', 'aria-label': silhouette ? 'まだ もっていない ' + m.reward : m.reward
-    }, el('span.transfer-sticker-inner', null,
-      el('span.transfer-sticker-star', { text: '✦', 'aria-hidden': 'true' }),
-      el('span.transfer-sticker-icon', { text: silhouette ? '？' : m.icon, 'aria-hidden': 'true' }),
-      el('span.transfer-sticker-ribbon', { text: 'ぼうけん', 'aria-hidden': 'true' })));
+    const art = PokemonStickers.artwork(k, { silhouette });
+    art.classList.add('transfer-sticker');
+    return art;
   }
+
   function homeCard(){
     if (!unlocked()) return null;
     const got = missions.filter((m, i) => Store.hasSticker(key(i))).length;
@@ -61,7 +59,7 @@ const TransferAdventure = (() => {
       el('p', { text: '５もんのうち ４もんを、ヒントなしで さいしょから できた しるし。' }),
       el('div.transfer-collection-grid', null, missions.map((m, i) => el('button.transfer-collectible', {
         type: 'button', onclick(){ Store.hasSticker(key(i)) ? StickerWorld.open(key(i)) : open(); }
-      }, artwork(key(i), !Store.hasSticker(key(i))), el('span', { text: m.reward })))));
+      }, artwork(key(i), !Store.hasSticker(key(i))), el('span', { text: m.title })))));
   }
   function parentSummary(){
     const rows = Object.entries(Store.data.transferRecords || {}).filter(([i]) => /^[0-5]$/.test(i));

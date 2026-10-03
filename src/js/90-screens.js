@@ -324,8 +324,8 @@ const Home = (() => {
     clear(shelfEl);
     const strip = el('div.strip');
     if (got.length){
-      got.slice(-16).reverse().forEach(k => strip.append(TransferAdventure.artwork(k)
-        || el('span' + (Store.isPending(k) ? '.pending' : ''), { text: stickerFor(k) })));
+      got.slice(-16).reverse().forEach(k => strip.append(el('span' + (Store.isPending(k) ? '.pending' : ''), null,
+        TransferAdventure.artwork(k) || PokemonStickers.artwork(k, { rarity: false }))));
     } else {
       strip.append(el('span.empty', { text: 'レベルを クリアすると シールが たまるよ' }));
     }
@@ -428,8 +428,8 @@ const Levels = (() => {
         Store.isSwift(g.id, i) ? el('span.swiftmark', { title: 'すぐ こたえられた', text: '⚡️' }) : null,
         UI.stars(stars),
         gold ? el('span.goldmark', {
-          text: stickerFor(goldKey), 'aria-label': 'きんの シールを ゲット'
-        }) : null);
+          'aria-label': 'きんの シールを ゲット　' + stickerFor(goldKey)
+        }, PokemonStickers.artwork(goldKey, { rarity: false })) : null);
       const entry = el('div.level-entry', null, card);
       if (unlocked && g.intro !== false) entry.append(el('button.btn.first-retry', {
         type: 'button', 'aria-label': lv.t + 'の やりかたを みる', title: 'もういちど やりかたを みる',
@@ -576,18 +576,24 @@ const Result = (() => {
     }
     /* A sticker confirmed by today's check turns from outline to colour — and that
        is the moment the door gauge moves, so the gauge rides with it. */
+    const rewardArt = x => {
+      // Older debug fixtures may contain only the old display string.
+      const key = x.key || PokemonStickers.keyForName(x.emoji);
+      return key ? el('span' + (x.pending ? '.pending' : ''), null, PokemonStickers.artwork(key))
+        : el('span', { text: x.emoji });
+    };
     if (coloured.length){
       inner.append(el('div.newsticker.confirmed', null,
-        el('div.e', { text: coloured.map(x => x.emoji).join(' ') }),
+        el('div.e', null, coloured.map(rewardArt)),
         el('div.l', { text: 'シールに いろが ついた！' }),
         stickers.length ? null : toDoor));
     }
     if (stickers.length){
       const gold = stickers.some(x => x.gold), provisional = stickers.some(x => x.pending);
       const adventure = stickers.some(x => x.adventure);
-      const chosen = r.rewardTarget && stickers.some(x => x.emoji === stickerFor(r.rewardTarget.key));
+      const chosen = r.rewardTarget && stickers.some(x => x.key === r.rewardTarget.key || x.emoji === stickerFor(r.rewardTarget.key));
       inner.append(el('div.newsticker' + (gold ? '.gold' : '') + (provisional ? '.pending' : ''), null,
-        el('div.e', { text: stickers.map(x => x.emoji).join(' ') }),
+        el('div.e', null, stickers.map(rewardArt)),
         el('div.l', { text: adventure ? 'ぼうけんシール を ゲット！'
                           : chosen ? 'えらんだ シールを ゲット！'
                           : provisional ? 'かりの シール！ べつの ひに また できたら いろが つくよ'
@@ -731,6 +737,7 @@ const Book = (() => {
     build();
     headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
     clear(grid);
+    grid.append(PokemonStickers.legend());
     grid.append(Treasures.collection());
     const specialCollection = TransferAdventure.collection();
     if (specialCollection) grid.append(specialCollection);
@@ -740,7 +747,8 @@ const Book = (() => {
       if (has) got++;
       grid.append(el('div.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : '')
           + (has && Store.isPending(key) ? '.pending' : ''),
-        { text: has ? stickerFor(key) : '･' }));
+        { title: stickerFor(key) + (has ? '　ゲット！' : '　' + (key.endsWith(':g') ? 'ぜんもん さいしょから せいかいで ゲット' : 'クリアで ゲット')) },
+        PokemonStickers.artwork(key, { silhouette: !has })));
     });
     /* The 入学前 shelf is the one that opens the 小1 classroom, so it is the one
        this page counts towards a goal. The classroom's own stickers go in a second
@@ -751,7 +759,7 @@ const Book = (() => {
     Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0 || k.indexOf('adventure:') === 0).forEach(k => {
       got++;
       const isAdventureMemento = k.indexOf('adventure:') === 0;
-      grid.append(el('div.sticker.got' + (isAdventureMemento ? '.adventure' : '.gold'), { text: stickerFor(k) }));
+      grid.append(el('div.sticker.got' + (isAdventureMemento ? '.adventure' : '.gold'), null, PokemonStickers.artwork(k)));
     });
     if (Progress.g1Open()){
       grid.append(el('div.bookgroup', { text: '🎓　1ねんせいの きょうしつ' }));

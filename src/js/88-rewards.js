@@ -47,7 +47,7 @@ const StickerMissions = (() => {
       type: 'button', title: choice.game.name + '　' + choice.level.t,
       onclick(){ Sound.sfx.tap(); open(choice); }
     },
-      el('span.prize', { text: stickerFor(choice.key), 'aria-hidden': 'true' }),
+      el('span.prize', null, PokemonStickers.artwork(choice.key, { rarity: false })),
       el('span.name', { text: choice.game.name }),
       el('span.go', { text: '▶', 'aria-hidden': 'true' }))));
     return el('section.home-quest.sticker-mission', { 'aria-label': 'ほしいシールをえらぶ' },
@@ -71,11 +71,11 @@ const StickerMissions = (() => {
   function open(choice){
     if (!choice || !choice.game || !choice.level) return;
     build(); active = choice;
-    prizeEl.textContent = stickerFor(choice.key);
+    clear(prizeEl).append(PokemonStickers.artwork(choice.key));
     clear(detailEl);
     detailEl.append(
       el('b', { text: choice.game.name + '　《' + choice.level.t + '》' }),
-      el('span', { text: 'クリアすると この シールが もらえるよ' }),
+      el('span', { text: 'クリアすると「' + stickerFor(choice.key) + '」の シールが もらえるよ' }),
       el('small', { text: 'いろが つくのは、べつの ひに たしかめてから' }));
     goBtn.onclick = () => {
       Sound.sfx.tap();
@@ -84,7 +84,7 @@ const StickerMissions = (() => {
       else Session.startLevel(choice.game, choice.levelIndex, { stickerMission: choice });
     };
     UI.show('sticker-mission');
-    Sound.say('このシールを取りに行こう。' + choice.game.name + 'の、' + choice.level.t + 'をクリアすると、もらえるよ。', { delay: 180 });
+    Sound.say(stickerFor(choice.key) + 'のシールを取りに行こう。' + choice.game.name + 'の、' + choice.level.t + 'をクリアすると、もらえるよ。', { delay: 180 });
   }
 
   return { available, homeCard, build, open, get active(){ return active; } };
@@ -362,13 +362,15 @@ const StickerWorld = (() => {
   let node, board, palette, hint, selected = null;
 
   function owned(){
-    return Store.data.stickers.filter(k => /^[a-z0-9]+:\d+$/.test(k))
+    return Store.data.stickers.filter(k => /^[a-z0-9]+:\d+(?::g)?$/.test(k)
+      || /^(daily|focus|adventure):/.test(k))
       .concat(Store.data.treasures.map(id => 'treasure:' + id));
   }
   const isTreasure = k => k.startsWith('treasure:');
   const itemName = k => isTreasure(k) ? Treasures.name(k.slice(9))
-    : TransferAdventure.missionFor(k) ? TransferAdventure.missionFor(k).reward : 'シール';
-  const itemArt = k => isTreasure(k) ? Treasures.artwork(k.slice(9)) : TransferAdventure.artwork(k) || stickerFor(k);
+    : stickerFor(k);
+  const itemArt = k => isTreasure(k) ? Treasures.artwork(k.slice(9))
+    : TransferAdventure.artwork(k) || PokemonStickers.artwork(k, { rarity: false });
   function build(){
     if (node) return node;
     board = el('div.sticker-world-board', { role: 'application', 'aria-label': 'じぶんの しま' });

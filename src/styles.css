@@ -2386,7 +2386,7 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .pip.check.now{ background: var(--accent); box-shadow: none; }
 /* a clear waiting for another day: the outline of the sticker, not yet its colour */
 .sticker.got.pending{ border-style: dashed; box-shadow: none; }
-.sticker.pending, .newsticker.pending .e, .shelf .strip .pending{ filter: grayscale(1); opacity: .5; }
+.sticker.pending, .newsticker .e > .pending, .shelf .strip .pending{ filter: grayscale(1); opacity: .5; }
 .newsticker.confirmed{ border-color: var(--good); border-style: solid; }
 .todochip.pending{ border-style: dashed; }
 
@@ -2479,4 +2479,69 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
   .transfer-plate{ padding:8px; }
   .transfer-object{ width:42px; height:50px; font-size:32px; }
   .transfer-collection-grid{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+
+/* Pokémon rewards: names stay readable; rarity is visible in words and colour. */
+.pokemon-sticker{
+  --pokemon-size:110px;
+  display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+  width:var(--pokemon-size); min-width:0; flex:0 0 auto; box-sizing:border-box;
+  padding:5px; gap:3px; border:2px solid #bfd6bc; border-radius:18px;
+  background:linear-gradient(145deg,#fff,#eff7e9); color:var(--ink); line-height:1.25;
+  vertical-align:middle; font-style:normal; text-align:center; transform:none;
+}
+.pokemon-image{ display:block; width:100%; height:calc(var(--pokemon-size)*.72); object-fit:contain; pointer-events:none; }
+.pokemon-name{ display:block; max-width:100%; font-size:clamp(10px,calc(var(--pokemon-size)*.14),22px); font-weight:900; line-height:1.25; overflow-wrap:anywhere; }
+.pokemon-rarity{ display:block; max-width:100%; padding:2px 5px; border-radius:9px; background:#dcecd5; font-size:clamp(9px,calc(var(--pokemon-size)*.1),16px); font-weight:800; line-height:1.25; }
+.pokemon-sticker.rarity-2{ border-color:#77b6db; background:linear-gradient(145deg,#fff,#dff1ff); }
+.rarity-2 .pokemon-rarity{ background:#d3eafb; color:#23567b; }
+.pokemon-sticker.rarity-3{ border-color:#d6aa38; background:linear-gradient(135deg,#fff7cc,#fff,#ffe395); }
+.rarity-3 .pokemon-rarity{ background:#ffdf81; color:#694700; }
+.pokemon-sticker.rarity-4{ border-color:#ad8cdd; background:linear-gradient(135deg,#f2deff,#fff5c1,#e2e9ff); box-shadow:0 3px 0 #b79ac8; }
+.rarity-4 .pokemon-rarity{ background:#e4d2fa; color:#633d89; }
+.pokemon-sticker.rarity-5{ border-color:#bc83bc; background:linear-gradient(135deg,#fff1ab,#d0f8ea,#d2e8ff,#f7d2ea); box-shadow:0 3px 0 #ad87aa,0 6px 16px #9475ab28; }
+.rarity-5 .pokemon-rarity{ background:#f4d7eb; color:#733c71; }
+.pokemon-sticker.unearned{ border-style:dashed; background:var(--paper-2); box-shadow:none; }
+.pokemon-sticker.unearned .pokemon-image{ filter:brightness(0); opacity:.17; }
+.pokemon-sticker.unearned .pokemon-name,.pokemon-sticker.unearned .pokemon-rarity{ opacity:.65; }
+.pokemon-legend{ grid-column:1/-1; display:flex; flex-direction:column; gap:6px; background:var(--card); padding:14px 18px; border-radius:18px; font-size:clamp(12px,calc(var(--u)*1.05),18px); line-height:1.6; }
+.pokemon-legend b{ font-size:1.2em; }
+.sticker{ aspect-ratio:auto; padding:5px; }
+.sticker .pokemon-sticker{ --pokemon-size:calc(var(--u)*7); width:100%; border:0; border-radius:12px; }
+.shelf .strip{ align-items:center; }
+.shelf .strip .pokemon-sticker{ --pokemon-size:calc(var(--u)*4.5); border-width:1px; padding:2px; gap:1px; border-radius:8px; }
+.shelf .strip .pokemon-image{ height:calc(var(--u)*2.6); }
+.sticker-mission-pick .pokemon-sticker{ --pokemon-size:calc(var(--u)*5); border:0; padding:2px; background:transparent; }
+.sticker-mission-pick .pokemon-image{ height:calc(var(--u)*3); }
+.sticker-mission-prize .pokemon-sticker{ --pokemon-size:calc(var(--u)*15); }
+.newsticker .e{ display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
+.newsticker .e .pokemon-sticker{ --pokemon-size:clamp(110px,calc(var(--u)*10),190px); }
+.levelcard .goldmark{ width:auto; height:auto; top:calc(var(--u)*-.6); right:calc(var(--u)*-.4); border-radius:12px; }
+.levelcard .goldmark .pokemon-sticker{ --pokemon-size:calc(var(--u)*4.4); border:0; padding:2px; gap:0; border-radius:10px; }
+.levelcard .goldmark .pokemon-image{ height:calc(var(--u)*2.6); }
+.world-palette-sticker,.world-palette-treasure{ width:calc(var(--u)*8); padding:3px; }
+.world-palette-sticker .pokemon-sticker{ --pokemon-size:calc(var(--u)*7.2); width:100%; padding:2px; }
+.world-sticker .pokemon-sticker{ --pokemon-size:calc(var(--u)*7); pointer-events:none; }
+.world-treasure{ width:auto; }
+.world-chest .pokemon-sticker{ --pokemon-size:calc(var(--u)*5); padding:2px; }
+.world-chest .pokemon-rarity,.shelf .strip .pokemon-rarity{ display:none; }
+.treasure-keepsake .pokemon-sticker{ --pokemon-size:calc(var(--u)*8); }
+.treasure-showcase .pokemon-sticker{ --pokemon-size:calc(var(--u)*18); width:100%; }
+/* Preserve the special collection's hooks, with the same Pokémon card in every view. */
+.pokemon-sticker.transfer-sticker{ --pokemon-size:var(--medal-size); height:auto; border-radius:18px; transform:none; padding:5px; isolation:auto; color:var(--ink); }
+.pokemon-sticker.transfer-sticker.unearned{ filter:none; opacity:1; }
+.transfer-collectible .pokemon-sticker{ --medal-size:110px; }
+.transfer-home .pokemon-sticker{ --medal-size:90px; }
+.world-sticker .pokemon-sticker.transfer-sticker{ --medal-size:calc(var(--u)*8); }
+.world-palette-sticker .pokemon-sticker.transfer-sticker{ --medal-size:calc(var(--u)*7.2); }
+.shelf .strip .pokemon-sticker.transfer-sticker{ --medal-size:calc(var(--u)*4.5); }
+@media(max-width:700px){
+  .sticker-mission-pick{ grid-template-columns:minmax(0,1fr) auto; }
+  .sticker-mission-pick .prize{ grid-column:1/-1; justify-self:center; }
+  .sticker-mission-pick .pokemon-sticker{ --pokemon-size:calc(var(--u)*6.5); }
+  .transfer-collection-grid{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .treasure-collection-row{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .treasure-keepsake .pokemon-sticker{ --pokemon-size:clamp(75px,20vw,110px); }
+  .treasure-keepsake small{ font-size:11px; }
+  .transfer-collectible .pokemon-sticker{ --medal-size:clamp(75px,20vw,110px); }
 }

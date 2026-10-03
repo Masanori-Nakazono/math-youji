@@ -22,29 +22,9 @@ const WORLDS = [
     color: 'var(--c-orange)', stage: 'g1' }
 ];
 
-const STICKER_POOL = ['🐰','🐻','🐼','🦊','🐯','🦁','🐨','🐸','🐵','🐧','🐤','🦉','🦄','🐢','🐬','🐳','🦋','🐝','🐞','🦕','🦖','🐙','🦀','🐡','🐘','🦒','🦓','🦔','🐿','🦥','🐠','🐟','🦈','🐌','🐛','🕊','🦩','🦜','🐴','🐑','🌻','🌸','🌈','🍎','🍓','🍇','🍑','🍉','🍌','🥕','🌽','🍄','🍒','🥝','🍍','🥥','🌷','🌼','🌺','🍀','🍰','🧁','🍩','🎂','🍬','🍭','🍦','🍪','🍫','🥐','🚀','🚂','⛵️','🎈','🎁','🏆','👑','💎','🔔','🎨','🎺','🪁','🧸','🪀','🎏','🎐','🛼','🎠','🎪','🏰','⚽️','🏀','🎾','🥁','🎹','⭐️','🌙','☀️','⛄️','🌟',
-/* the 小1 classroom adds 12 levels, and a sticker slot must never reuse an emoji another slot already has */
-'🦭','🦦','🦫','🦃','🕊️','🦚','🦢','🐖','🐄','🦌','🐫','🦙','🐊','🦎','🦂','🪰','🍋','🍈','🥭','🫐','🍅','🥦','🌰','🥨','🍿','🍮','🍯','🧃','🎃','🎄','🪗','🪄','🧭','🔭','🎲','🪩','🛴','🚁','🚤','🗿'];
-/* Stickers are handed out by slot position, not by hash, so no level shares an
-   emoji with another while the pool is large enough. */
-let STICKER_INDEX = null;
-function stickerSlots(){
-  if (STICKER_INDEX) return STICKER_INDEX;
-  STICKER_INDEX = {};
-  let i = 0;
-  Games.list.forEach(g => g.levels.forEach((lv, li) => {
-    STICKER_INDEX[g.id + ':' + li] = i++;
-    STICKER_INDEX[g.id + ':' + li + ':g'] = i++;
-  }));
-  return STICKER_INDEX;
-}
-function stickerFor(key){
-  const slots = stickerSlots();
-  if (key in slots) return STICKER_POOL[slots[key] % STICKER_POOL.length];
-  let h = 0;                                   // daily-streak stickers etc.
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
-  return STICKER_POOL[h % STICKER_POOL.length];
-}
+// The stable reward key remains the storage identity; artwork is a display layer.
+const STICKER_POOL = Object.values(POKEMON_MANIFEST.pokemon).map(p => p.name);
+function stickerFor(key){ return PokemonStickers.reward(key).name; }
 
 /* ===========================================================
    stages — what has to be finished before 小学1年生 opens
@@ -1324,20 +1304,20 @@ const Session = (() => {
       if (stars >= 1){
         if (!Store.hasSticker(key)){
           if (stars === 3) Store.addSticker(key); else Store.addPending(key);
-          newStickers.push({ emoji: stickerFor(key), gold: false, pending: stars < 3 });
+          newStickers.push({ key, emoji: stickerFor(key), gold: false, pending: stars < 3 });
         } else if (Store.isPending(key) && (stars === 3 || Store.pendingFrom(key) < Store.dayNumber())){
           if (Store.confirmSticker(key)) confirmed.push(key);
         }
       }
       if (stars === 3 && Store.addSticker(key + ':g')){
-        newStickers.push({ emoji: stickerFor(key + ':g'), gold: true });
+        newStickers.push({ key: key + ':g', emoji: stickerFor(key + ':g'), gold: true });
       }
     } else if (mode === 'adventure'){
       /* This sticker is a completion memento, not a mastery badge.  It is one per
          calendar day so a child can finish feeling successful without being led
          into a reward loop of identical short sessions. */
       const key = 'adventure:' + Store.todayKey();
-      if (Store.addSticker(key)) newStickers.push({ emoji: stickerFor(key), adventure: true });
+      if (Store.addSticker(key)) newStickers.push({ key, emoji: stickerFor(key), adventure: true });
     } else if (mode === 'diagnostic'){
       const recommended = Diagnostic.recommendFrom(sessionOutcomes);
       Store.recordDiagnostic(sessionOutcomes, recommended);
@@ -1346,7 +1326,7 @@ const Session = (() => {
       else Store.recordFocus(firstTryRight, total);
       // one sticker per calendar day, per set
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
-      if (Store.addSticker(key)) newStickers.push({ emoji: stickerFor(key), gold: stars === 3 });
+      if (Store.addSticker(key)) newStickers.push({ key, emoji: stickerFor(key), gold: stars === 3 });
     }
     /* The two lesson questions and another level's three checks are not graded, but
        they were answered: leaving them out of today's count let a first-time level with
