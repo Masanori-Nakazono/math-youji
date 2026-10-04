@@ -121,9 +121,14 @@ const server=http.createServer((req,res)=>{
         }
       }
     }
+    const lightInk=await page.evaluate(()=>getComputedStyle(document.querySelector('.review-body')).color);
     await page.emulateMedia({colorScheme:'dark'});await page.evaluate(()=>KazuApp.SecondRound.open(12));
+    // Wait for the new color scheme to reach existing elements, independently
+    // of whether optional screenshots give the browser time to repaint.
+    await page.waitForFunction(()=>matchMedia('(prefers-color-scheme: dark)').matches&&getComputedStyle(document.querySelector('.review-body')).color===getComputedStyle(document.querySelector('.review-field')).color,null,{timeout:3000});
     if(dir)await page.screenshot({path:path.join(dir,'dark.png')});
     const dark=await page.evaluate(()=>({body:getComputedStyle(document.querySelector('.review-body')).color,field:getComputedStyle(document.querySelector('.review-field')).color,heading:getComputedStyle(document.querySelector('#review h2')).color,tray:getComputedStyle(document.querySelector('.review-tray-label')).color,progress:getComputedStyle(document.querySelector('.review-progress')).color}));
+    assert.notEqual(dark.body,lightInk,'dark mode actually updates the ink');
     assert.equal(dark.body,dark.field,JSON.stringify(dark));assert.equal(dark.body,dark.heading,JSON.stringify(dark));assert.equal(dark.body,dark.tray,JSON.stringify(dark));assert.equal(dark.body,dark.progress,JSON.stringify(dark));
     if(dir)await page.screenshot({path:path.join(dir,'dark.png')});
     assert.deepEqual(errors,[]);console.log('PASS tablet, phone, narrow phone and dark layouts; no browser errors');
