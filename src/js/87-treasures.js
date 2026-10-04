@@ -92,6 +92,7 @@ const Treasures = (() => {
       el('p', { role: 'status', text: s.opened ? 'とくべつな たからものを ゲット！ じぶんの しまに かざれるよ'
         : s.ready ? 'どんな たからものが でるかな？' : 'きんの シール ' + s.got + '／' + s.total + '　あと ' + (s.total - s.got) + 'まい' }));
     if (s.opened){
+      if (SecondRound.unlocked()) sheet.append(el('button.btn.btn-accent', { type:'button', text:'ほんを うらがえす', onclick(){ SecondRound.open(); } }));
       sheet.append(el('button.btn.btn-accent', { type: 'button', text: 'じぶんの しまに かざる',
         onclick(){ Sound.sfx.tap(); StickerWorld.open('treasure:' + worldId); } }));
     } else if (s.ready){

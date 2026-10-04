@@ -288,7 +288,8 @@ const TransferAdventure = (() => {
         owned ? button('じぶんの しまに かざる', () => StickerWorld.open(key(id)), 'btn-accent')
           : button('もういちど あそぶ', () => start(id), 'btn-accent'),
         button('きょうは ここまで', () => { Home.render(); UI.show('home'); }),
-        button('ぼうけんを えらぶ', menu))));
+        button('ぼうけんを えらぶ', menu),
+        SecondRound.unlocked() ? button('ほんを うらがえす', () => SecondRound.open(), 'btn-accent') : null)));
     if (fresh) UI.confetti(45);
     say(fresh ? m.reward + 'の、特別なシールをもらったよ！自分の島に飾れるよ。'
       : passed ? '５問中' + record.independent + '問、じぶんでできたね！'

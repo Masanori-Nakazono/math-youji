@@ -36,8 +36,10 @@ const server = http.createServer((req, res) => {
       S.reset();
       const levelKeys = K.Games.list.flatMap(g => g.levels.map((lv, i) => g.id + ':' + i));
       const fixed = Object.keys(P.manifest.slots);
-      check('131 fixed rewards have distinct Pokémon and katakana names', fixed.length === 131
-        && new Set(fixed.map(k => P.reward(k).id)).size === 131
+      check('156 fixed rewards include 131 originals and 25 distinct second-round Pokémon', fixed.length === 156
+        && K.SecondRound.progress().groups.flatMap(g=>g.keys).length === 131
+        && K.SecondRound.rewardKeys().length === 25
+        && new Set(fixed.map(k => P.reward(k).id)).size === 156
         && fixed.every(k => /^[ァ-ヶー]+$/.test(K.stickerFor(k))));
       check('all 60 levels have a stable normal and rarer gold reward', levelKeys.length === 60
         && levelKeys.every(k => Object.hasOwn(P.manifest.slots, k) && Object.hasOwn(P.manifest.slots, k + ':g')

@@ -310,6 +310,8 @@ const Home = (() => {
        child's choice of what to do next.  The short adventure sits alongside it
        because it answers a different moment — "I want to try, but this is hard." */
     clear(questsEl);
+    const secondRound = SecondRound.homeCard();
+    if (secondRound) questsEl.append(secondRound);
     const transfer = TransferAdventure.homeCard();
     if (transfer) questsEl.append(transfer);
     const stickerQuest = StickerMissions.homeCard();
@@ -689,6 +691,7 @@ const Result = (() => {
       nextLine = '今日は、ここまでで十分だよ。オレンジのボタンで、おしまいにしよう。';
     }
     inner.append(actions);
+    if (SecondRound.unlocked()) actions.append(act('', '📖', 'ほんを うらがえす', () => SecondRound.open()));
     UI.show('result', { replace: true });
     const news = (coloured.length ? 'シールに、色がついたね！' : '')
       + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '')
@@ -741,7 +744,8 @@ const Book = (() => {
     grid.append(Treasures.collection());
     const specialCollection = TransferAdventure.collection();
     if (specialCollection) grid.append(specialCollection);
-    let got = Store.data.stickers.filter(k => TransferAdventure.missionFor(k)).length;
+    grid.append(SecondRound.collection());
+    let got = Store.data.treasures.length + Store.data.stickers.filter(k => TransferAdventure.missionFor(k) || SecondRound.rewardKeys().includes(k)).length;
     const drawSlots = keys => keys.forEach(key => {
       const has = Store.hasSticker(key);
       if (has) got++;

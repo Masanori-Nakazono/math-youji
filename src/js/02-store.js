@@ -9,6 +9,13 @@
    the point is to tell retrieval from counting, not to run a race. */
 const FLUENT_FAST_MS = 3000, FLUENT_SLOW_MS = 9000;
 const TREASURE_WORLDS = ['shima', 'umi', 'yama', 'mori', 'kyoshitsu'];
+const reviewRecordValid = (k, v) => !!v && typeof v === 'object' && !Array.isArray(v)
+  && (/^r2:(?:[0-9]|1[0-9])$/.test(k) || /^r2chapter:[0-4]$/.test(k))
+  && Number.isInteger(v.day) && v.day >= 0 && Number.isSafeInteger(v.at) && v.at >= 0
+  && Number.isInteger(v.runs) && v.runs >= 1 && ['lesson', 'check', 'chapter'].includes(v.kind)
+  && (k.startsWith('r2chapter:') ? v.kind === 'chapter' : v.kind !== 'chapter')
+  && [v.independent, v.revised, v.supported].every(n => Number.isInteger(n) && n >= 0 && n <= 8)
+  && v.independent + v.revised + v.supported === ({lesson:8, check:3, chapter:5})[v.kind];
 
 const Store = (() => {
   const KEY = 'kazu-no-bouken.v1';
@@ -58,6 +65,8 @@ const Store = (() => {
     transferReached: false,
     transferRecords: {}, // mission index -> last actual run, separate from mastery/stars
     transferStickerRule: 2, // version 1 awarded a sticker for finishing even with no right answers
+    secondRoundReached: false, // original 131 rewards; once opened, future editions cannot close it
+    reviewRecords: {}, // separate second-round observations, never first-round stars/facts
     name: '',
     sfx: true, voice: true, voiceId: null,
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
@@ -117,6 +126,9 @@ const Store = (() => {
           if ((k === 'diagnostic' && got === 'object') || (k === 'voiceId' && got === 'string')) continue;
           mem[k] = fresh[k];
           bent = true;
+        }
+        for (const [k, v] of Object.entries(mem.reviewRecords)){
+          if (!reviewRecordValid(k, v)){ delete mem.reviewRecords[k]; bent = true; }
         }
         if (bent){ try{ localStorage.setItem(ASIDE, raw); }catch(e){} }
       } else {
@@ -207,6 +219,7 @@ const Store = (() => {
      || !copyMap('last', isCount)
      || !copyMap('swift', v => v === 0 || v === 1)
      || !copyMap('intro', v => v === 1)
+     || !copyMap('reviewRecords', isRecord)
      || !copyMap('transferRecords', v => isRecord(v) && Number.isInteger(v.day) && v.day >= 0
           && Number.isInteger(v.independent) && v.independent >= 0 && v.independent <= 5
           && Number.isInteger(v.supported) && v.supported >= 0 && v.supported <= 5
@@ -227,6 +240,7 @@ const Store = (() => {
     for (const k of Object.keys(out.milestones))
       if (!/^[a-z0-9]+:\d+:(viewed|together|supported|revised|independent)$/.test(k)) return null;
     if (Object.keys(out.transferRecords).some(k => !/^[0-5]$/.test(k))) return null;
+    if (Object.entries(out.reviewRecords).some(([k, v]) => !reviewRecordValid(k, v))) return null;
 
     if (data.stickers !== undefined){
       if (!Array.isArray(data.stickers) || data.stickers.some(v => typeof v !== 'string')) return null;
@@ -310,7 +324,7 @@ const Store = (() => {
       if (typeof data.name !== 'string') return null;
       out.name = data.name.slice(0, 12);
     }
-    for (const k of ['sfx', 'voice', 'g1Open', 'g1Reached', 'transferReached']){
+    for (const k of ['sfx', 'voice', 'g1Open', 'g1Reached', 'transferReached', 'secondRoundReached']){
       if (data[k] !== undefined){
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];
@@ -444,6 +458,13 @@ const Store = (() => {
     out.g1Open = !!(base.g1Open || add.g1Open);
     out.g1Reached = !!(base.g1Reached || add.g1Reached);
     out.transferReached = !!(base.transferReached || add.transferReached);
+    out.secondRoundReached = !!(base.secondRoundReached || add.secondRoundReached);
+    out.reviewRecords = Object.assign({}, base.reviewRecords || {});
+    for (const [k, incoming] of Object.entries(add.reviewRecords || {})){
+      const current = out.reviewRecords[k];
+      out.reviewRecords[k] = Object.assign({}, !current || incoming.at > current.at ? incoming : current,
+        { runs: Math.max(current ? current.runs : 0, incoming.runs) });
+    }
     out.transferStickerRule = 2;
     out.transferRecords = Object.assign({}, base.transferRecords || {});
     for (const k of Object.keys(add.transferRecords || {})){
@@ -584,6 +605,14 @@ const Store = (() => {
       mem.firstTry[g] = [ft[0] + right, ft[1] + total];
       const t = todayKey();
       mem.daily[t] = (mem.daily[t] || 0) + total;
+      save();
+    },
+    recordReview(k, outcomes, kind){
+      const old = mem.reviewRecords[k];
+      mem.reviewRecords[k] = { day: dayNo(), at: Date.now(), runs: (old ? old.runs : 0) + 1, kind,
+        independent: outcomes.filter(x => x === 'independent').length,
+        revised: outcomes.filter(x => x === 'revised').length,
+        supported: outcomes.filter(x => x === 'supported').length };
       save();
     },
     recordPractice(right, total){

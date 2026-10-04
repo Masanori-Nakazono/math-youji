@@ -526,6 +526,106 @@
     "transfer:5": {
       "id": 493,
       "rarity": 5
+    },
+    "r2:0": {
+      "id": 387,
+      "rarity": 2
+    },
+    "r2:1": {
+      "id": 388,
+      "rarity": 2
+    },
+    "r2:2": {
+      "id": 389,
+      "rarity": 2
+    },
+    "r2:3": {
+      "id": 390,
+      "rarity": 2
+    },
+    "r2:4": {
+      "id": 391,
+      "rarity": 2
+    },
+    "r2:5": {
+      "id": 392,
+      "rarity": 2
+    },
+    "r2:6": {
+      "id": 393,
+      "rarity": 2
+    },
+    "r2:7": {
+      "id": 394,
+      "rarity": 2
+    },
+    "r2:8": {
+      "id": 395,
+      "rarity": 2
+    },
+    "r2:9": {
+      "id": 495,
+      "rarity": 2
+    },
+    "r2:10": {
+      "id": 496,
+      "rarity": 2
+    },
+    "r2:11": {
+      "id": 497,
+      "rarity": 2
+    },
+    "r2:12": {
+      "id": 498,
+      "rarity": 2
+    },
+    "r2:13": {
+      "id": 499,
+      "rarity": 2
+    },
+    "r2:14": {
+      "id": 500,
+      "rarity": 2
+    },
+    "r2:15": {
+      "id": 501,
+      "rarity": 2
+    },
+    "r2:16": {
+      "id": 502,
+      "rarity": 2
+    },
+    "r2:17": {
+      "id": 503,
+      "rarity": 2
+    },
+    "r2:18": {
+      "id": 427,
+      "rarity": 2
+    },
+    "r2:19": {
+      "id": 428,
+      "rarity": 2
+    },
+    "r2chapter:0": {
+      "id": 385,
+      "rarity": 5
+    },
+    "r2chapter:1": {
+      "id": 251,
+      "rarity": 5
+    },
+    "r2chapter:2": {
+      "id": 480,
+      "rarity": 5
+    },
+    "r2chapter:3": {
+      "id": 481,
+      "rarity": 5
+    },
+    "r2chapter:4": {
+      "id": 482,
+      "rarity": 5
     }
   },
   "pokemon": {
@@ -1707,6 +1807,231 @@
       "file": "493.webp",
       "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/493.png",
       "sha256": "695c0e0a1b6b5212ba796a434dc481e821fd363d3e88b7e6ee0069f107492032"
+    },
+    "387": {
+      "id": 387,
+      "name": "ナエトル",
+      "legendary": false,
+      "mythical": false,
+      "file": "387.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/387.png",
+      "sha256": "37f583b77863b06239621f6ae39f39956343b09bbc39684539d8b5ac5e25cd6e"
+    },
+    "388": {
+      "id": 388,
+      "name": "ハヤシガメ",
+      "legendary": false,
+      "mythical": false,
+      "file": "388.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/388.png",
+      "sha256": "612c91d7ab7271a40b39f1bb1014f4b8506e937932faca383b192028a7da6783"
+    },
+    "389": {
+      "id": 389,
+      "name": "ドダイトス",
+      "legendary": false,
+      "mythical": false,
+      "file": "389.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/389.png",
+      "sha256": "dc1d8db3b561c1e9d83999621a0ea93e983a4dce2fb8a193961f37824f74b06b"
+    },
+    "390": {
+      "id": 390,
+      "name": "ヒコザル",
+      "legendary": false,
+      "mythical": false,
+      "file": "390.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/390.png",
+      "sha256": "646e09662fa6acf68bc5f63c8a16875a006bceaf871a04eccf66fead2c828587"
+    },
+    "391": {
+      "id": 391,
+      "name": "モウカザル",
+      "legendary": false,
+      "mythical": false,
+      "file": "391.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/391.png",
+      "sha256": "82802b33e6e0b4141784e2ed1bde643fa05141eeeea8ef96ec1d645d5e0eae08"
+    },
+    "392": {
+      "id": 392,
+      "name": "ゴウカザル",
+      "legendary": false,
+      "mythical": false,
+      "file": "392.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/392.png",
+      "sha256": "979232c9db3fb6225918917794007e0ad5881f68cd23e9d905466f91456e56a0"
+    },
+    "393": {
+      "id": 393,
+      "name": "ポッチャマ",
+      "legendary": false,
+      "mythical": false,
+      "file": "393.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/393.png",
+      "sha256": "1492f905a04ef0747231e6dc8c9e856444b38d314a662d648fc69835f7d693e6"
+    },
+    "394": {
+      "id": 394,
+      "name": "ポッタイシ",
+      "legendary": false,
+      "mythical": false,
+      "file": "394.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/394.png",
+      "sha256": "4dd97a86d96c6bae46c3d39fdc26f152fd6081b85836bffebad914888d62a534"
+    },
+    "395": {
+      "id": 395,
+      "name": "エンペルト",
+      "legendary": false,
+      "mythical": false,
+      "file": "395.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/395.png",
+      "sha256": "cc2187a9dc7953479f7836ed03e154554b0b03e428d34a01c988f5b3a2c7a3ef"
+    },
+    "495": {
+      "id": 495,
+      "name": "ツタージャ",
+      "legendary": false,
+      "mythical": false,
+      "file": "495.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/495.png",
+      "sha256": "5c432ce733b16f489ea6350f6f26a911f7f88f21e059fb9a01d5139fff68abd1"
+    },
+    "496": {
+      "id": 496,
+      "name": "ジャノビー",
+      "legendary": false,
+      "mythical": false,
+      "file": "496.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/496.png",
+      "sha256": "1b6a199bf4dc6b3434c38ed1c13d071164c9fcadcd25b7d9eabb730ef6f32387"
+    },
+    "497": {
+      "id": 497,
+      "name": "ジャローダ",
+      "legendary": false,
+      "mythical": false,
+      "file": "497.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/497.png",
+      "sha256": "25bfa6fb52c0ae2dd75fb2aea97f13a2dfb60031ca118066b1db72805376178a"
+    },
+    "498": {
+      "id": 498,
+      "name": "ポカブ",
+      "legendary": false,
+      "mythical": false,
+      "file": "498.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/498.png",
+      "sha256": "55fd933cac20bb695f8d0aca0f52963b5f7ecda5a8019613e25726729968d15d"
+    },
+    "499": {
+      "id": 499,
+      "name": "チャオブー",
+      "legendary": false,
+      "mythical": false,
+      "file": "499.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/499.png",
+      "sha256": "8b9f1b1f8e048784d0d996e4a50048f9ba7c58029c1386c2c97b1ea810e889e4"
+    },
+    "500": {
+      "id": 500,
+      "name": "エンブオー",
+      "legendary": false,
+      "mythical": false,
+      "file": "500.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/500.png",
+      "sha256": "fe3ee22682335ebcdad67e1f19303318408ba6915fdf7f2ef8a2674a75bafddc"
+    },
+    "501": {
+      "id": 501,
+      "name": "ミジュマル",
+      "legendary": false,
+      "mythical": false,
+      "file": "501.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/501.png",
+      "sha256": "ff4de0bd39ad9a3314f14b073c62aa68275e86a4f6f0ab744aeb19abc2749896"
+    },
+    "502": {
+      "id": 502,
+      "name": "フタチマル",
+      "legendary": false,
+      "mythical": false,
+      "file": "502.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/502.png",
+      "sha256": "3f41c0aefd371e7b6352af2e6e06aaa38aff43509545d4d40ddebc2069df9218"
+    },
+    "503": {
+      "id": 503,
+      "name": "ダイケンキ",
+      "legendary": false,
+      "mythical": false,
+      "file": "503.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/503.png",
+      "sha256": "44984abe2f7434939471bc97df9c1a1a76424f7a2a59bef195dba552e2f2be6f"
+    },
+    "427": {
+      "id": 427,
+      "name": "ミミロル",
+      "legendary": false,
+      "mythical": false,
+      "file": "427.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/427.png",
+      "sha256": "b6429af6d970d0e70c7ec117093b4d7a5079b6aa14e877c484065c1f02184b0c"
+    },
+    "428": {
+      "id": 428,
+      "name": "ミミロップ",
+      "legendary": false,
+      "mythical": false,
+      "file": "428.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/428.png",
+      "sha256": "6fbaa248a49c1e3aa3d98a629cb6614dfcefac5273c5f13d106495defb9a93af"
+    },
+    "385": {
+      "id": 385,
+      "name": "ジラーチ",
+      "legendary": false,
+      "mythical": true,
+      "file": "385.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/385.png",
+      "sha256": "bc3350198ee669e5850ec96343dfd36c243f00beb1faf6e72b702e9e88ee2d43"
+    },
+    "251": {
+      "id": 251,
+      "name": "セレビィ",
+      "legendary": false,
+      "mythical": true,
+      "file": "251.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/251.png",
+      "sha256": "c8ad6b5b2babd7fc53b28f8db9c52fb94572c8babd8c03b9ce87b26abc7f5ab7"
+    },
+    "480": {
+      "id": 480,
+      "name": "ユクシー",
+      "legendary": true,
+      "mythical": false,
+      "file": "480.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/480.png",
+      "sha256": "3af3efd47310f1d481a88ccda7916f5b6a847f4a2880c12e4f4c81c91bf4af4a"
+    },
+    "481": {
+      "id": 481,
+      "name": "エムリット",
+      "legendary": true,
+      "mythical": false,
+      "file": "481.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/481.png",
+      "sha256": "280e6366017b9ff767498eb181695dfce00a904dbd61d60645aef87c3dd5e422"
+    },
+    "482": {
+      "id": 482,
+      "name": "アグノム",
+      "legendary": true,
+      "mythical": false,
+      "file": "482.webp",
+      "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/482.png",
+      "sha256": "ce876c3f179e2a6f7d91a52ed6fe8dd99ae8b7e2b7b556535669ee932e50e0be"
     }
   },
   "dailyPool": [

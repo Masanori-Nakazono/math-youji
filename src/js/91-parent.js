@@ -949,6 +949,7 @@ const Parent = (() => {
     sheetInner.append(
       nextUpSection(),
       ...[TransferAdventure.parentSummary()].filter(Boolean),
+      ...[SecondRound.parentSummary()].filter(Boolean),
       scheduleSection(),
       statsSection(),
       stageSection(),
