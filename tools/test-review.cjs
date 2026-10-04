@@ -104,9 +104,12 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.evaluate(()=>KazuApp.Store.data.secondRoundReached&&KazuApp.Store.hasSticker('r2:19')&&!!KazuApp.Store.stickerWorld().items['r2chapter:0']),true);
     console.log('PASS review progress and island placement survive reload');
     const dir=process.env.REVIEW_SCREENSHOTS;if(dir)fs.mkdirSync(dir,{recursive:true});
-    for(const size of [{width:1024,height:768},{width:768,height:1024},{width:390,height:844},{width:320,height:740}]){
+    // Always exercise the largest generated groups, so layout checks cannot
+    // pass just because this run happened to draw fewer objects.
+    await page.evaluate(()=>{Math.random=()=>0.999999;});
+    for(const size of [{width:1024,height:768},{width:901,height:900},{width:900,height:900},{width:768,height:1024},{width:390,height:844},{width:320,height:740}]){
       await page.setViewportSize(size);
-      for(const id of [null,0,3,4,5,8,10,12,14,18,19]){
+      for(const id of [null,0,3,4,5,6,7,8,10,12,14,18,19]){
         await page.evaluate(id=>{KazuApp.Sound.voiceOn=false;KazuApp.Sound.sfxOn=false;KazuApp.SecondRound.open(id);},id);
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1&&document.querySelector('.review-body').scrollWidth<=document.querySelector('.review-body').clientWidth+1),true,'no body overflow '+size.width+' lesson '+id);
         if(id!==null){await page.locator('.review-check').scrollIntoViewIfNeeded();assert.equal(await page.locator('.review-check').isVisible(),true);}
