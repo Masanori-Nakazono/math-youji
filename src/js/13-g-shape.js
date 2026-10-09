@@ -172,8 +172,9 @@ function shapePuzzle(api){
   api.item('puz:' + pz.name, pz.name + ' を つくる');
   api.setPrompt(`かたちを はめて <b>${pz.name}</b> を つくろう`, `形をはめて、${pz.name}を作ろう。`);
   const box = el('div.shapefield');
+  const picture = el('div.shape-picture');
   const s = svg('svg', { viewBox: '0 0 100 80', preserveAspectRatio: 'xMidYMid meet' });
-  box.append(s);
+  picture.append(s); box.append(picture);
   const tray = el('div.shapes-tray');
   api.field.append(box, tray);
 
@@ -181,16 +182,40 @@ function shapePuzzle(api){
   const biggest = Math.max.apply(null, boxes.map(b => Math.max(b.w, b.h)));
   const edge = c => 'color-mix(in srgb, ' + c + ' 60%, var(--ink) 40%)';
 
+  const shapeName = p => {
+    const b = bbox(p.pts);
+    if (p.pts.length !== 3) return b.w > b.h * 1.3 ? 'よこながの しかく' : b.h > b.w * 1.3 ? 'たてながの しかく' : 'しかく';
+    const corner = [[b.x0,b.y0,'ひだりうえ'],[b.x1,b.y0,'みぎうえ'],[b.x0,b.y1,'ひだりした'],[b.x1,b.y1,'みぎした']]
+      .find(([x,y]) => p.pts.some(q => q[0] === x && q[1] === y)
+        && p.pts.some(q => q[0] === x && q[1] !== y) && p.pts.some(q => q[1] === y && q[0] !== x));
+    return corner ? corner[2] + 'が かどの さんかく' : 'うえむきの さんかく';
+  };
+  const targetLayers = [];
   const slots = pz.pieces.map((p, i) => {
+    const b = boxes[i];
     const poly = svg('polygon', {
       points: p.pts.map(q => q.join(',')).join(' '),
       fill: 'var(--trace-guide)', stroke: 'var(--ink-faint)', 'stroke-width': 1.6,
-      'stroke-dasharray': '3 2.4', 'data-drop': '', style: 'cursor:pointer'
+      'stroke-dasharray': '3 2.4', 'aria-hidden': 'true', style: 'cursor:pointer'
     });
     poly.dataset.sig = signature(p.pts);
+    const slot = el('button.shapeslot', { type: 'button',
+      'aria-label': pz.name + 'の ' + (i + 1) + 'ばんの あな、' + shapeName(p),
+      style: { left:b.x0 + '%', top:(b.y0 / 80 * 100) + '%', width:b.w + '%', height:(b.h / 80 * 100) + '%',
+        clipPath: 'polygon(' + p.pts.map(q => ((q[0]-b.x0)/b.w*100) + '% ' + ((q[1]-b.y0)/b.h*100) + '%').join(',') + ')' }
+    });
+    slot.dataset.sig = poly.dataset.sig;
+    slot._shape = poly; poly._button = slot;
+    slot.addEventListener('focus', () => poly.classList.add('slot-focus'));
+    slot.addEventListener('blur', () => poly.classList.remove('slot-focus'));
+    targetLayers.push(slot);
     s.append(poly);
-    return poly;
+    return slot;
   });
+  // Native HTML targets stay beside the SVG, sharing its 5:4 picture bounds.
+  // Their clip paths exactly match the holes,
+  // so overlapping triangle bounding boxes cannot catch a neighbouring hole's tap.
+  targetLayers.forEach(layer => picture.append(layer));
 
   /* One viewBox unit in screen pixels. The picture is letterboxed inside its box
      (preserveAspectRatio="meet"), so the scale is whichever axis runs out first. */
@@ -247,40 +272,43 @@ function shapePuzzle(api){
     },
     onDrop(item, target, pt){
       if (api.locked) return;
+      target = target._button || target;
       const slot = (target.dataset.sig && target.dataset.filled !== '1')
         ? target : nearestSlot(pt);
       if (!slot) return;
       if (item.dataset.sig === slot.dataset.sig){
-        slot.setAttribute('fill', item.dataset.color);
-        slot.setAttribute('stroke', edge(item.dataset.color));
-        slot.setAttribute('stroke-dasharray', '');
-        slot.setAttribute('stroke-width', '1.6');
-        slot.classList.remove('glow');
-        slot.dataset.filled = '1';
+        const poly = slot._shape;
+        poly.setAttribute('fill', item.dataset.color);
+        poly.setAttribute('stroke', edge(item.dataset.color));
+        poly.setAttribute('stroke-dasharray', '');
+        poly.setAttribute('stroke-width', '1.6');
+        poly.classList.remove('glow', 'slot-focus');
+        poly.dataset.filled = slot.dataset.filled = '1';
+        slot.disabled = true;
         item.classList.add('used');
         filled++;
         Sound.sfx.place();
         if (filled === slots.length) api.later(() => api.correct(), 260);
       } else {
-        slot.animate([{ opacity: 1 }, { opacity: .35 }, { opacity: 1 }], { duration: 300 });
+        slot._shape.animate([{ opacity: 1 }, { opacity: .35 }, { opacity: 1 }], { duration: 300 });
         api.wrong(item);
         dd.select(item);            // stay picked up so the next slot is one tap away
       }
     }
   });
-  slots.forEach(sl => dd.bindTarget(sl));
+  slots.forEach(sl => { dd.bindTarget(sl); dd.bindTarget(sl._shape); });
   dd.bindTarget(box);               // a near miss still reaches the hole it aimed at
 
   /* Every tray tile is drawn on one scale, so a piece that is half the size of
      another looks half the size here too — that is the only clue the child has for
      which hole a tile belongs in. The square root softens the ratio: at true scale
      the tree's trunk would be a 10px sliver in a tap-sized box. */
-  shuffle(pz.pieces.map((p, i) => ({ p, i }))).forEach(({ p, i }) => {
+  shuffle(pz.pieces.map((p, i) => ({ p, i }))).forEach(({ p, i }, trayIndex) => {
     const color = colors[i % colors.length];
     const b = boxes[i];
     const span = Math.max(b.w, b.h);
     const S = span / (Math.sqrt(span / biggest) * 0.82);
-    const t = el('div.shapetile');
+    const t = el('button.shapetile', { type: 'button', 'aria-label': (trayIndex + 1) + 'ばんの ピース、' + shapeName(p) });
     const mini = svg('svg', { viewBox: `${b.cx - S / 2} ${b.cy - S / 2} ${S} ${S}` },
       svg('polygon', { points: p.pts.map(q => q.join(',')).join(' '), fill: color,
         stroke: edge(color), 'stroke-width': S * 0.028, 'stroke-linejoin': 'round' }));
@@ -303,23 +331,23 @@ function shapePuzzle(api){
       if (!t) return;
       dd.select(t);
       const corners = pz.pieces[+t.dataset.idx].pts.length;
-      Coach.pulse(slots.filter((sl, i) => sl.dataset.filled !== '1' && pz.pieces[i].pts.length === corners));
+      Coach.pulse(slots.filter((sl, i) => sl.dataset.filled !== '1' && pz.pieces[i].pts.length === corners).map(sl => sl._shape));
     },
     walk(){
       const t = $('.shapetile.sel:not(.used)', tray) || $('.shapetile:not(.used)', tray);
       if (!t) return [];
       const slot = slots.find(sl => sl.dataset.filled !== '1' && sl.dataset.sig === t.dataset.sig);
       return [{ at: t, act(){ dd.select(t); }, say: 'この形は…', ms: 1300 },
-              { at: slot, act(){ if (slot) slot.classList.add('glow'); }, say: 'ここに、ぴったり。', ms: 1900 }];
+              { at: slot, act(){ if (slot) slot._shape.classList.add('glow'); }, say: 'ここに、ぴったり。', ms: 1900 }];
     }
   });
-  // every piece into its own hole (SVG polygons have no .click(), so the event is sent)
+  // Every piece into its own native target; this is the same path as keyboard input.
   api.onShow(() => {
     $$('.shapetile:not(.used)', tray).forEach(t => {
       const slot = slots.find(sl => sl.dataset.filled !== '1' && sl.dataset.sig === t.dataset.sig);
       if (!slot) return;
       dd.select(t);
-      slot.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      slot.click();
     });
   });
 }
@@ -371,7 +399,7 @@ function sortGame(api, catset, nBins, byColor){
   const binMap = {};
   keys.forEach(k => {
     const c = catset[k];
-    const b = el('div.bin', { style: { '--bc': c.c } },
+    const b = el('button.bin', { type: 'button', 'aria-label': c.lbl + 'の はこ', style: { '--bc': c.c } },
       el('div.lbl', null, mark(k), ' ' + c.lbl),
       el('div.hold'));
     b.dataset.cat = k;
@@ -414,14 +442,14 @@ function sortGame(api, catset, nBins, byColor){
       binMap[t.dataset.cat].click();
     });
   });
-  shuffle(picks).forEach(p => {
+  shuffle(picks).forEach((p, index) => {
     let t;
     if (byColor){
       const sv = shapeSVG(p.shape, catset[p.k].c, 0);
       sv.setAttribute('width', 'calc(var(--u)*3.4)'); sv.setAttribute('height', 'calc(var(--u)*3.4)');
-      t = el('div.tile.shapetile2', null, sv);
+      t = el('button.tile.shapetile2', { type: 'button', 'aria-label': (index + 1) + 'ばんの ' + catset[p.k].lbl + 'の ' + (SHAPES[p.shape] || {}).ja }, sv);
     } else {
-      t = el('div.tile', { text: p.e });
+      t = el('button.tile', { type: 'button', text: p.e, 'aria-label': (index + 1) + 'ばんの ピース、' + p.e });
     }
     t.dataset.cat = p.k;
     dd.bindItem(t);

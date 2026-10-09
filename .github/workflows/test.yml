@@ -44,6 +44,11 @@ jobs:
       - name: Run the regression suite in a browser
         run: node tools/run-tests.cjs
 
+      - name: Verify review fixes, backup compatibility and keyboard controls
+        run: |
+          node tools/test-motivation.cjs
+          node tools/test-review-fixes.cjs
+
       - name: Verify island treasure chests and saved keepsakes
         run: node tools/test-treasures.cjs
 

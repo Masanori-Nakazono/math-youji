@@ -195,12 +195,13 @@ const UI = (() => {
   function makeDragDrop(opts){
     // opts: { items(), targets(), onDrop(item, target), tapSelect: bool }
     let selected = null, dragging = null, ghost = null, sx = 0, sy = 0, moved = false, overEl = null;
-    let activeId = null;
+    let activeId = null, skipPointerClick = false;
+    const unavailable = it => !it || it.disabled || it.classList.contains('gone') || it.classList.contains('used');
     // a five-year-old's "tap" slides a few millimetres; 8px turned taps into drags
     const THRESH = 18;
 
     function clearSel(){
-      if (selected) selected.classList.remove('sel');
+      if (selected){ selected.classList.remove('sel'); selected.setAttribute('aria-pressed', 'false'); }
       selected = null;
     }
     function setOver(t){
@@ -221,15 +222,16 @@ const UI = (() => {
       const it = dragging; dragging = null;
       if (it && moved){
         // where the finger let go, so a target can be generous about a near miss
-        if (t) opts.onDrop(it, t, { x, y });
-        return true;
+        if (t) drop(it, t, { x, y });
+        return !!t;
       }
       return false;
     }
 
     function onDown(e){
       const it = e.currentTarget;
-      if (e.button != null && e.button > 0) return;
+      skipPointerClick = false;
+      if (unavailable(it) || (e.button != null && e.button > 0)) return;
       if (dragging) return;                 // a second finger must not hijack the first
       activeId = e.pointerId;
       dragging = it; moved = false;
@@ -270,31 +272,52 @@ const UI = (() => {
       window.removeEventListener('pointercancel', onUp);
       activeId = null;
       const it = dragging;
-      const dropped = endDrag(moved ? e.clientX : null, moved ? e.clientY : null);
-      if (!it) return;
-      if (!dropped){
-        // a tap, or a drag that landed on nothing — either way, leave it selected
-        // so the child can just tap the bin instead of dragging again
-        if (!moved && selected === it) clearSel();
-        else { clearSel(); selected = it; it.classList.add('sel'); Sound.sfx.tap(); }
+      const wasDrag = moved;
+      const cancelled = e.type === 'pointercancel';
+      const dropped = endDrag(wasDrag && !cancelled ? e.clientX : null, wasDrag && !cancelled ? e.clientY : null);
+      // A native button supplies click for taps, Enter, Space and switch control.
+      // Only drags are settled here; their following pointer click must not act twice.
+      skipPointerClick = wasDrag && !cancelled;
+      if (it && wasDrag && !dropped && !cancelled && !unavailable(it)) select(it);
+    }
+    function skipClick(e){
+      if (!skipPointerClick || e.detail === 0) return false;
+      skipPointerClick = false; e.preventDefault(); e.stopPropagation();
+      return true;
+    }
+    function drop(it, target, pt){
+      if (unavailable(it) || target.disabled) return;
+      opts.onDrop(it, target, pt);
+      if (unavailable(it)){
+        it.disabled = true;
+        it.setAttribute('aria-pressed', 'false');
+        if (selected === it) clearSel();
       }
     }
-    function bindItem(it){ it.addEventListener('pointerdown', onDown); }
-    function bindTarget(t){
-      t.setAttribute('data-drop', '');
-      t.addEventListener('click', e => {
-        if (!selected) return;
-        // targets may nest (a puzzle hole inside the picture field): the inner one
-        // wins, or one tap would be counted twice
+    function bindItem(it){
+      it.setAttribute('aria-pressed', 'false');
+      it.addEventListener('pointerdown', onDown);
+      it.addEventListener('click', e => {
+        if (skipClick(e) || unavailable(it)) return;
         e.stopPropagation();
-        const s = selected;
-        opts.onDrop(s, t, { x: e.clientX, y: e.clientY });
-        // a piece that has been used up must not stay in the child's hand: the next
-        // tap on the board would otherwise be scored as putting it in the wrong place
-        if (s.classList.contains('gone') || s.classList.contains('used')) clearSel();
+        if (selected === it) clearSel(); else select(it);
+        Sound.sfx.tap();
       });
     }
-    function select(it){ clearSel(); selected = it; it.classList.add('sel'); }
+    function bindTarget(t){
+      t.setAttribute('data-drop', '');
+      t.addEventListener('pointerdown', () => { skipPointerClick = false; });
+      t.addEventListener('click', e => {
+        if (skipClick(e) || !selected || t.disabled) return;
+        // A hole inside the picture wins, so one activation is never counted twice.
+        e.stopPropagation();
+        drop(selected, t, { x: e.clientX, y: e.clientY });
+      });
+    }
+    function select(it){
+      if (unavailable(it)) return;
+      clearSel(); selected = it; it.classList.add('sel'); it.setAttribute('aria-pressed', 'true');
+    }
     return { bindItem, bindTarget, clearSel, select, get selected(){ return selected; } };
   }
 

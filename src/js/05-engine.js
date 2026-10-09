@@ -27,26 +27,13 @@ const STICKER_POOL = Object.values(POKEMON_MANIFEST.pokemon).map(p => p.name);
 function stickerFor(key){ return PokemonStickers.reward(key).name; }
 
 /* ===========================================================
-   stages — what has to be finished before 小学1年生 opens
+   stages — relevant preparation for each 小学1年生 game
    ===========================================================
-   The 入学前 half of the app is 48 levels and 96 sticker slots: one sticker for
-   clearing a level, a gold one for clearing it with every answer right first time.
-   Clearing all 48 — the plain stickers — is the 小1 classroom's entrance
-   requirement, so the goal a child is already working towards is the same goal
-   that opens the next room: no separate test, no adult judgement.
-
-   The gold stickers are NOT part of the key. Each one needs a run with every
-   answer right first time, and needing forty-eight of those put the classroom
-   somewhere around the three-hundredth day of use for a child working at the
-   pace this app recommends (one level a day) — which is to say, after 1年生 had
-   already started, and after the material in the classroom had stopped being
-   preparation. They stay on the shelf as something to come back for; they are
-   not a door the child has to get through.
-
-   Two things this deliberately does NOT do. It never counts 小1's own stickers
-   (that would be circular), and it never *closes* again: a shelf cannot lose a
-   sticker, but a future release could add a 入学前 level, and a child who walked
-   through the door must not find it locked afterwards. */
+   Each classroom game opens after its own short preparation route: confirmed
+   clears or sustained unaided first answers. Collection progress is counted
+   separately. Once a game opens, its saved entrance stays open through errors,
+   backup restoration and future catalog changes. Legacy global entrances and
+   a parent's manual entrance continue to open the whole classroom. */
 const Progress = (() => {
   const stageOf = g => g.stage || 'pre';
 
@@ -60,7 +47,7 @@ const Progress = (() => {
     return out;
   }
 
-  /** the slots the door actually counts: one per level, earned by clearing it */
+  /** one plain sticker per level, used by collection progress and named gaps */
   function gateSlots(stage){
     const out = [];
     Games.list.forEach(g => {
@@ -91,9 +78,24 @@ const Progress = (() => {
     return Store.recentCount(id, i) >= 6 && Store.recentAccuracy(id, i) >= .75;
   }
   function g1GameOpen(g){
+    if (stageOf(g) !== 'g1') return false;
     if (Store.data.g1Open || Store.data.g1Reached) return true;
+    if (Store.hasG1GameOpen(g.id)) return true;
+    // Older records have no per-game latch. Actual lessons/checks already met
+    // are evidence that this game was open; preserve only that game's entrance.
+    const previouslyMet = g.levels.some((lv, i) => Store.hasSticker(g.id + ':' + i)
+      || Store.stars(g.id, i) > 0 || Store.plays(g.id, i) > 0
+      || Store.recentCount(g.id, i) > 0 || Store.introduced(g.id, i))
+      || Store.milestones().some(m => m.gameId === g.id);
     const path = G1_PATHS[g.id] || [];
-    return path.length > 0 && path.every(([id, i]) => levelReady(id, i));
+    if (!previouslyMet && (!path.length || !path.every(([id, i]) => levelReady(id, i)))) return false;
+    Store.markG1GameOpen(g.id);
+    return true;
+  }
+  function preparation(g){
+    return (G1_PATHS[g.id] || []).map(([id, levelIndex]) => ({
+      game: Games.byId[id], levelIndex, ready: levelReady(id, levelIndex)
+    })).filter(p => p.game);
   }
   function pathProgress(g){
     const path = G1_PATHS[g.id] || [];
@@ -104,7 +106,7 @@ const Progress = (() => {
     return p.total ? 'じゅんびの あそびを ' + p.got + '／' + p.total + ' できたら ひらくよ' : 'じゅんびが できたら ひらくよ';
   }
 
-  /** true once every 入学前 level is cleared — or once a parent opened the door by hand */
+  /** true when at least one classroom game is open, including legacy/manual entrances */
   function g1Open(){
     if (Store.data.g1Open || Store.data.g1Reached) return true;
     return Games.list.some(g => stageOf(g) === 'g1' && g1GameOpen(g));
@@ -114,10 +116,11 @@ const Progress = (() => {
     stageOf,
     slots,
     gateSlots,
-    /** { got, total } over the levels the door counts — cleared levels, not stickers */
+    /** { got, total } over confirmed 入学前 clears, separate from classroom readiness */
     preStickers: () => count('pre'),
     levelReady,
     g1GameOpen,
+    preparation,
     pathProgress,
     unlockHint,
     /** levels cleared provisionally, waiting for another day */
@@ -185,9 +188,10 @@ const Session = (() => {
        'show'     — the hand goes through the method and answers; input waits
        'together' — the tool is on the board from the start and the child answers
      Neither is recorded or graded: they are the lesson, not the child's work.
-     `helped` is the 👀 button — help asked for before a mistake, which is fine and
-     also means the answer was not the child's alone. */
+     `helped` records both requested and automatic hints, so the answer is recorded
+     as supported even when the child first tried it without help. */
   let introOn = true, demo = null, demoRunning = false, demoWalked = null, demoWaits = 0;
+  // Help belongs to the whole question; a new answer surface must not erase it.
   let touched = false, helped = false;
   /* ---------- checking a clear on another day ----------
      Three questions from a provisionally cleared level, asked on a later day, first
@@ -978,6 +982,7 @@ const Session = (() => {
   /** First rung: the game's tool, in words the child hears. */
   function hint(prefix){
     hintShown = true;
+    helped = true;
     const c = coach || {};
     if (c.tool){ try{ c.tool(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
     let text = null, say = null;
@@ -1211,7 +1216,7 @@ const Session = (() => {
       Store.markIntroduced(g.id, plan[idx].levelIndex);
     if (mode !== 'diagnostic'){
       const kind = scaffold === 'show' || taughtQ ? 'viewed' : scaffold === 'together' ? 'together'
-        : wrongThisQ ? 'revised' : helped ? 'supported' : 'independent';
+        : helped ? 'supported' : wrongThisQ ? 'revised' : 'independent';
       Store.recordMilestone(g.id, plan[idx].levelIndex, kind, curLabel);
       if (!visitMilestone || Store.milestoneRank(kind) >= Store.milestoneRank(visitMilestone.kind))
         visitMilestone = { gameId: g.id, levelIndex: plan[idx].levelIndex, kind, label: curLabel || '' };
@@ -1322,8 +1327,10 @@ const Session = (() => {
       const recommended = Diagnostic.recommendFrom(sessionOutcomes);
       Store.recordDiagnostic(sessionOutcomes, recommended);
     } else {
-      if (mode === 'daily') Store.recordPractice(firstTryRight, total);
-      else Store.recordFocus(firstTryRight, total);
+      if (mode === 'daily'){
+        Store.recordPractice(firstTryRight, total);
+        Store.completePracticeToday();
+      } else Store.recordFocus(firstTryRight, total);
       // one sticker per calendar day, per set
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
       if (Store.addSticker(key)) newStickers.push({ key, emoji: stickerFor(key), gold: stars === 3 });

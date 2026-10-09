@@ -85,13 +85,53 @@ const server = http.createServer((req, res) => {
       return names;
     });
     names.forEach(n => console.log('PASS ' + n));
+    // Book.open() creates fresh nodes. Verify their loads separately from their
+    // sources: Chromium can reject decode() on a loaded offscreen DOM image even
+    // when that exact source decodes in a fresh Image and the DOM supplies pixels.
+    // Every source must decode, and every live DOM image must retain that source
+    // with the right dimensions; no decoding errors are ignored or retried.
+    const verifyImages = async selector => {
+      await page.waitForFunction(selector => {
+        const images = [...document.querySelectorAll(selector)];
+        return images.length > 0 && images.every(img => img.complete && img.currentSrc === img.src);
+      }, selector);
+      return page.evaluate(async selector => {
+        const images = document.querySelectorAll(selector);
+        if (!images.length) throw new Error('No artwork found: ' + selector);
+        for (const img of images){
+          const source = img.src;
+          const probe = new Image(); probe.src = source;
+          try { await probe.decode(); }
+          catch (error) { throw new Error('Collection image decode failed: ' + JSON.stringify({
+            key: img.closest('[data-sticker-key]').dataset.stickerKey,
+            error: error.name + ': ' + error.message, complete: img.complete,
+            width: img.naturalWidth, height: img.naturalHeight, connected: img.isConnected,
+            sourceLength: source.length, currentLength: img.currentSrc.length,
+            currentMatchesSource: img.currentSrc === source
+          })); }
+          if (!source.startsWith('data:image/webp;base64,') || !img.isConnected || !img.complete
+              || img.src !== source || img.currentSrc !== source
+              || img.naturalWidth !== 256 || img.naturalHeight !== 256
+              || probe.naturalWidth !== 256 || probe.naturalHeight !== 256){
+            throw new Error('Artwork changed or failed to load: ' + img.closest('[data-sticker-key]').dataset.stickerKey);
+          }
+          // Also require the DOM image to supply real pixels, not just metadata.
+          const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
+          const context = canvas.getContext('2d'); context.drawImage(img, 0, 0);
+          const pixels = context.getImageData(0, 0, 256, 256).data;
+          if (!pixels.some((value, index) => index % 4 === 3 && value > 0)){
+            throw new Error('Artwork has no rendered pixels: ' + img.closest('[data-sticker-key]').dataset.stickerKey);
+          }
+        }
+      }, selector);
+    };
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.evaluate(() => KazuApp.Store.hasSticker('count:0:g') && KazuApp.stickerFor('count:0:g') === 'ライチュウ'), true);
     for (const [label, size] of [['landscape', {width:1024,height:768}], ['portrait', {width:768,height:1024}], ['phone', {width:390,height:844}]]){
       await page.setViewportSize(size);
       await page.evaluate(() => { KazuApp.Sound.voiceOn=false; KazuApp.Sound.sfxOn=false; KazuApp.Book.open(); });
       await page.locator('#book .pokemon-image').first().waitFor();
-      await page.evaluate(() => Promise.all([...document.querySelectorAll('#book .pokemon-image')].map(i => i.decode())));
+      await verifyImages('#book .pokemon-image');
       const layout = await page.evaluate(() => {
         const cards = [...document.querySelectorAll('#book .pokemon-sticker')];
         return {overflow:document.documentElement.scrollWidth > innerWidth + 1, broken:cards.some(c => {
@@ -106,7 +146,7 @@ const server = http.createServer((req, res) => {
     if (process.env.POKEMON_SCREENSHOTS){
       await page.setViewportSize({width:1024,height:768});
       const capture = async name => {
-        await page.evaluate(() => Promise.all([...document.querySelectorAll('.screen.on .pokemon-image')].map(i => i.decode())));
+        await verifyImages('.screen:not([hidden]) .pokemon-image');
         await page.screenshot({path:path.join(process.env.POKEMON_SCREENSHOTS, 'pokemon-' + name + '.png')});
       };
       await page.evaluate(() => {

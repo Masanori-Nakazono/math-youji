@@ -72,4 +72,107 @@ assert.equal(b.islandJob('boat').completed, true);
 const badMilestone = JSON.parse(backup);
 badMilestone.data.milestones['bond:0:independent'].label = { false: 'record' };
 assert.equal(b.importText(JSON.stringify(badMilestone)).ok, false);
+
+// Recovery windows must travel with the fact record that actually produced them.
+const recovery = fresh(), recovered = recovery.store, factKey = 'ten:ten:4';
+for (let i = 0; i < 8; i++) recovered.noteFact(factKey, false, '4 と 6 で 10', 'ten:1');
+const older = recovered.exportText();
+for (let i = 0; i < 12; i++) recovered.noteFact(factKey, true, '4 と 6 で 10', 'ten:1');
+recovered.completeOrientation();
+recovered.markG1GameOpen('g1set');
+recovered.completePracticeToday();
+const recoveryBackup = recovered.exportText();
+assert.equal(recovered.weakFacts().length, 0);
+assert.equal(recovered.hasG1GameOpen('g1pair'), false);
+recovered.flush();
+const recoveryReloaded = fresh(recovery.values).store;
+assert.equal(recoveryReloaded.data.factRecent[factKey], '111111111111');
+assert.equal(recoveryReloaded.data.orientation, true);
+assert.equal(recoveryReloaded.hasG1GameOpen('g1set'), true);
+assert.equal(recoveryReloaded.hasG1GameOpen('g1pair'), false);
+assert.equal(recoveryReloaded.practiceDoneToday(), true);
+
+const restored = fresh().store;
+assert.equal(restored.importText(recoveryBackup, 'replace').ok, true);
+assert.equal(restored.data.factRecent[factKey], '111111111111');
+assert.equal(restored.weakFacts().length, 0);
+assert.equal(restored.data.orientation, true);
+assert.equal(restored.hasG1GameOpen('g1set'), true);
+assert.equal(restored.practiceDoneToday(), true);
+assert.equal(restored.importText(older).ok, true);
+assert.equal(restored.data.factRecent[factKey], '111111111111'); // fewer attempts cannot undo recovery
+assert.equal(restored.data.orientation, true);
+assert.equal(restored.practiceDoneToday(), true);
+
+const merged = fresh().store;
+assert.equal(merged.importText(older).ok, true);
+assert.equal(merged.weakFacts().length, 1);
+assert.equal(merged.importText(recoveryBackup).ok, true);
+assert.equal(merged.data.factRecent[factKey], '111111111111');
+const mergedOnce = merged.exportText();
+assert.equal(merged.importText(recoveryBackup).ok, true);
+assert.equal(JSON.stringify(merged.data), JSON.stringify(JSON.parse(mergedOnce).data));
+assert.equal(merged.hasG1GameOpen('g1pair'), false);
+merged.markG1GameOpen('g1pair');
+merged.data.practiceDays['2000-01-01'] = 1;
+merged.importText(recoveryBackup);
+assert.equal(merged.hasG1GameOpen('g1set'), true);
+assert.equal(merged.hasG1GameOpen('g1pair'), true);
+assert.equal(merged.hasG1GameOpen('g1teen'), false);
+assert.equal(merged.data.practiceDays['2000-01-01'], 1);
+assert.equal(merged.practiceDoneToday(), true);
+
+// No window is better than incorrectly attaching another device's old window.
+const legacy = JSON.parse(recoveryBackup);
+delete legacy.data.factRecent;
+delete legacy.data.orientation;
+delete legacy.data.g1GamesOpen;
+delete legacy.data.practiceDays;
+const legacyStore = fresh().store;
+assert.equal(legacyStore.importText(JSON.stringify(legacy), 'replace').ok, true);
+assert.equal(Object.keys(legacyStore.data.factRecent).length, 0);
+assert.equal(legacyStore.data.orientation, false);
+assert.equal(legacyStore.hasG1GameOpen('g1set'), false);
+assert.equal(legacyStore.practiceDoneToday(), false);
+assert.equal(legacyStore.importText(recoveryBackup).ok, true);
+assert.equal(legacyStore.data.factRecent[factKey], '111111111111'); // repair a window lost by the old importer
+const differentTie = fresh().store;
+differentTie.importText(recoveryBackup);
+delete differentTie.data.factRecent[factKey];
+differentTie.data.facts[factKey][1] = 0;
+differentTie.importText(recoveryBackup);
+assert.equal(differentTie.data.factRecent[factKey], undefined); // a different fact cannot borrow the window
+const oldWindow = fresh().store;
+oldWindow.importText(older);
+oldWindow.importText(JSON.stringify(legacy));
+assert.equal(oldWindow.fact(factKey)[0], 20);
+assert.equal(oldWindow.data.factRecent[factKey], undefined);
+
+// Completion flags are independent from a question count or a stored practice aggregate.
+const incomplete = fresh().store;
+incomplete.recordLevel('count', 0, 3, 8, 8);
+incomplete.countToday(2);
+incomplete.recordPractice(10, 10);
+assert.equal(incomplete.practiceDoneToday(), false);
+incomplete.completePracticeToday();
+assert.equal(incomplete.practiceDoneToday(), true);
+incomplete.reset();
+incomplete.data.practiceDays['2000-01-01'] = 1;
+assert.equal(incomplete.practiceDoneToday(), false);
+
+for (const [field, invalid] of [
+  ['factRecent', { [factKey]: '1111111111111' }],
+  ['factRecent', { [factKey]: '10x' }],
+  ['orientation', 1],
+  ['g1GamesOpen', { g1set: true }],
+  ['g1GamesOpen', { 'g1set:0': 1 }],
+  ['practiceDays', { 'yesterday': 1 }],
+  ['practiceDays', { [restored.todayKey()]: 2 }]
+]){
+  const invalidBackup = JSON.parse(recoveryBackup);
+  invalidBackup.data[field] = invalid;
+  const before = JSON.stringify(restored.data);
+  assert.equal(restored.importText(JSON.stringify(invalidBackup), 'replace').ok, false, field);
+  assert.equal(JSON.stringify(restored.data), before, field + ' rejected atomically');
+}
 console.log('Motivation storage checks passed');

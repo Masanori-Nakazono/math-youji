@@ -1688,7 +1688,9 @@ body::before{
   *, *::before, *::after{
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: .01ms !important;
+    /* A nonzero duration also activates the default transition-property:all
+       on plain layout boxes, delaying measurements during the fit search. */
+    transition-duration: 0s !important;
   }
   /* The big ◯ is not decoration, it is the answer being right — and cut to
      .01ms, an animation that ends at opacity 0 showed nothing at all. Still,
@@ -2739,6 +2741,24 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
   .review-sequence{gap:8px;}
   .review-sequence span{min-width:64px;padding:8px;font-size:32px;}
 }
+
+/* Native controls keep the same drawing as the touch games. */
+button.bin, button.tile, button.shapetile{ font-family:var(--fs-jp); color:var(--ink); }
+button.bin{ font-size:inherit; }
+button.bin:focus-visible, button.tile:focus-visible, button.shapetile:focus-visible{
+  outline:calc(var(--u)*.28) solid var(--ring); outline-offset:calc(var(--u)*.2);
+}
+.shape-picture{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:min(100%,calc(var(--u)*35.35)); aspect-ratio:5 / 4; }
+.shapeslot{ position:absolute; padding:0; border:0; background:transparent; cursor:pointer; }
+.shapeslot[disabled]{ pointer-events:none; }
+polygon.slot-focus{ stroke:var(--ring); stroke-width:2.8; stroke-dasharray:none; }
+.g1-preparation-list{ flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:calc(var(--u)*.8); padding:calc(var(--u)*.4); }
+.g1-preparation-note{ margin:0; font-size:calc(var(--u)*1.4); text-align:center; }
+.preparation-level{ min-height:var(--tap); text-align:left; justify-content:flex-start; }
+.preparation-level .copy{ display:flex; flex-direction:column; flex:1; }
+.preparation-level small{ font-weight:500; font-size:.8em; }
+.book-preparation{ grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:calc(var(--u)*.5); margin-block:calc(var(--u)*.6); }
+.book-preparation .btn{ min-height:var(--tap); font-size:calc(var(--u)*1.1); }
 </style>
 </head>
 <body>
@@ -3558,6 +3578,7 @@ const Store = (() => {
     treasures: [],    // world IDs whose chest was opened; separate from stickers
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
+    practiceDays: {}, // "YYYY-MM-DD" -> 1 only after the whole daily set is finished
     diagnostic: null, // { completedDay, outcomes, recommended }
     orientation: false,
     missions: {},     // "YYYY-MM-DD" -> { id, gameId, text, prompt, done, reviewed }
@@ -3583,6 +3604,7 @@ const Store = (() => {
        worked out from the shelf, and a release that adds a 入学前 level would
        otherwise shut it again on a child who had already gone through. */
     g1Reached: false,
+    g1GamesOpen: {}, // game ID -> 1 once that game's preparation route has opened it
     /* Day number of the last export. Six months of records live in one localStorage
        key on a device whose OS is documented to throw them away, and the only
        defence — 書き出す — sat behind an adult gate that nobody had a reason to open.
@@ -3724,6 +3746,8 @@ const Store = (() => {
      || !copyMap('last', isCount)
      || !copyMap('swift', v => v === 0 || v === 1)
      || !copyMap('intro', v => v === 1)
+     || !copyMap('g1GamesOpen', v => v === 1)
+     || !copyMap('practiceDays', v => v === 1)
      || !copyMap('reviewRecords', isRecord)
      || !copyMap('transferRecords', v => isRecord(v) && Number.isInteger(v.day) && v.day >= 0
           && Number.isInteger(v.independent) && v.independent >= 0 && v.independent <= 5
@@ -3734,6 +3758,7 @@ const Store = (() => {
           && typeof v.label === 'string' && v.label.length <= 80)
      || !copyMap('pending', v => Array.isArray(v) && v.length >= 3 && v.slice(0, 3).every(isCount))
      || !copyMap('recent', v => typeof v === 'string' && /^[01]{0,30}$/.test(v))
+     || !copyMap('factRecent', v => typeof v === 'string' && /^[01]{0,12}$/.test(v))
      || !copyMap('firstTry', v => Array.isArray(v) && v.length >= 2
           && isCount(v[0]) && isCount(v[1]) && v[0] <= v[1])
      || !copyMap('facts', v => Array.isArray(v) && v.length >= 3
@@ -3746,6 +3771,8 @@ const Store = (() => {
       if (!/^[a-z0-9]+:\d+:(viewed|together|supported|revised|independent)$/.test(k)) return null;
     if (Object.keys(out.transferRecords).some(k => !/^[0-5]$/.test(k))) return null;
     if (Object.entries(out.reviewRecords).some(([k, v]) => !reviewRecordValid(k, v))) return null;
+    if (Object.keys(out.g1GamesOpen).some(k => !/^[a-z0-9]+$/.test(k))) return null;
+    if (Object.keys(out.practiceDays).some(k => !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(k))) return null;
 
     if (data.stickers !== undefined){
       if (!Array.isArray(data.stickers) || data.stickers.some(v => typeof v !== 'string')) return null;
@@ -3829,7 +3856,7 @@ const Store = (() => {
       if (typeof data.name !== 'string') return null;
       out.name = data.name.slice(0, 12);
     }
-    for (const k of ['sfx', 'voice', 'g1Open', 'g1Reached', 'transferReached', 'secondRoundReached']){
+    for (const k of ['sfx', 'voice', 'orientation', 'g1Open', 'g1Reached', 'transferReached', 'secondRoundReached']){
       if (data[k] !== undefined){
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];
@@ -3875,7 +3902,7 @@ const Store = (() => {
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
   function mergeInto(base, add){
     const out = Object.assign(blank(), base);
-    ['stars', 'plays', 'seen', 'daily', 'swift', 'intro'].forEach(k => {
+    ['stars', 'plays', 'seen', 'daily', 'swift', 'intro', 'g1GamesOpen', 'practiceDays'].forEach(k => {
       const src = add[k] || {};
       out[k] = Object.assign({}, base[k] || {});
       // max, never sum: importing the same backup twice must not inflate anything
@@ -3894,12 +3921,24 @@ const Store = (() => {
     }
     // facts: keep the record that has been practised more; never sum
     out.facts = Object.assign({}, base.facts || {});
+    out.factRecent = Object.assign({}, base.factRecent || {});
     const af2 = add.facts || {};
     for (const k in af2){
       const cur = out.facts[k];
       const mine = (base.facts && base.facts[k] && base.facts[k][6]) || null;
       const theirs = af2[k][6] || null;
-      if (!cur || (af2[k][0] || 0) > (cur[0] || 0)) out.facts[k] = af2[k].slice();
+      const incomingWindow = add.factRecent && add.factRecent[k];
+      // The previous importer could lose just the window. A backup of the same
+      // observation can repair it without replacing a newer or different record.
+      const restoresWindow = cur && out.factRecent[k] === undefined && incomingWindow !== undefined
+        && af2[k][0] === cur[0] && af2[k][1] === cur[1] && af2[k][2] === cur[2];
+      if (!cur || (af2[k][0] || 0) > (cur[0] || 0) || restoresWindow){
+        out.facts[k] = af2[k].slice();
+        // The recent window belongs to this actual record, not the other device's.
+        // An older-format backup may have no window; do not attach a stale one.
+        delete out.factRecent[k];
+        if (incomingWindow !== undefined) out.factRecent[k] = incomingWindow;
+      }
       else if (cur){
         cur[2] = maxNum(cur[2], af2[k][2]);
         if (!cur[4] && af2[k][4]) cur[4] = af2[k][4];   // keep whichever side knows where to ask it
@@ -3930,6 +3969,7 @@ const Store = (() => {
     out.treasures = Array.from(new Set((base.treasures || []).concat(add.treasures || [])));
     const bp = base.practice || [0, 0], ap = add.practice || [0, 0];
     out.practice = (ap[1] || 0) > (bp[1] || 0) ? ap.slice() : bp.slice();
+    out.orientation = !!(base.orientation || add.orientation);
     const bd = base.diagnostic, ad = add.diagnostic;
     out.diagnostic = !bd ? ad : !ad ? bd
       : ((ad.completedDay || 0) > (bd.completedDay || 0) ? ad : bd);
@@ -4127,6 +4167,8 @@ const Store = (() => {
       p[0] += right; p[1] += total;
       save();
     },
+    practiceDoneToday(){ return mem.practiceDays[todayKey()] === 1; },
+    completePracticeToday(){ mem.practiceDays[todayKey()] = 1; save(); },
     /* 集中練習 counts towards today's total, but not towards the「きょうの れんしゅう」
        accuracy the parent page reports — that number names one specific set. */
     recordFocus(right, total){
@@ -4373,6 +4415,12 @@ const Store = (() => {
     introduced: (g, l) => !!(mem.intro && mem.intro[key(g, l)]),
     markIntroduced(g, l){ (mem.intro || (mem.intro = {}))[key(g, l)] = 1; save(); },
     completeOrientation(){ mem.orientation = true; save(); },
+    hasG1GameOpen: gameId => mem.g1GamesOpen[gameId] === 1,
+    markG1GameOpen(gameId){
+      if (typeof gameId !== 'string' || !safeKey(gameId) || !/^[a-z0-9]+$/.test(gameId)
+          || mem.g1GamesOpen[gameId]) return false;
+      mem.g1GamesOpen[gameId] = 1; save(); return true;
+    },
 
     /* ---- provisional clears ---- */
     dayNumber: () => dayNo(),
@@ -4855,12 +4903,13 @@ const UI = (() => {
   function makeDragDrop(opts){
     // opts: { items(), targets(), onDrop(item, target), tapSelect: bool }
     let selected = null, dragging = null, ghost = null, sx = 0, sy = 0, moved = false, overEl = null;
-    let activeId = null;
+    let activeId = null, skipPointerClick = false;
+    const unavailable = it => !it || it.disabled || it.classList.contains('gone') || it.classList.contains('used');
     // a five-year-old's "tap" slides a few millimetres; 8px turned taps into drags
     const THRESH = 18;
 
     function clearSel(){
-      if (selected) selected.classList.remove('sel');
+      if (selected){ selected.classList.remove('sel'); selected.setAttribute('aria-pressed', 'false'); }
       selected = null;
     }
     function setOver(t){
@@ -4881,15 +4930,16 @@ const UI = (() => {
       const it = dragging; dragging = null;
       if (it && moved){
         // where the finger let go, so a target can be generous about a near miss
-        if (t) opts.onDrop(it, t, { x, y });
-        return true;
+        if (t) drop(it, t, { x, y });
+        return !!t;
       }
       return false;
     }
 
     function onDown(e){
       const it = e.currentTarget;
-      if (e.button != null && e.button > 0) return;
+      skipPointerClick = false;
+      if (unavailable(it) || (e.button != null && e.button > 0)) return;
       if (dragging) return;                 // a second finger must not hijack the first
       activeId = e.pointerId;
       dragging = it; moved = false;
@@ -4930,31 +4980,52 @@ const UI = (() => {
       window.removeEventListener('pointercancel', onUp);
       activeId = null;
       const it = dragging;
-      const dropped = endDrag(moved ? e.clientX : null, moved ? e.clientY : null);
-      if (!it) return;
-      if (!dropped){
-        // a tap, or a drag that landed on nothing — either way, leave it selected
-        // so the child can just tap the bin instead of dragging again
-        if (!moved && selected === it) clearSel();
-        else { clearSel(); selected = it; it.classList.add('sel'); Sound.sfx.tap(); }
+      const wasDrag = moved;
+      const cancelled = e.type === 'pointercancel';
+      const dropped = endDrag(wasDrag && !cancelled ? e.clientX : null, wasDrag && !cancelled ? e.clientY : null);
+      // A native button supplies click for taps, Enter, Space and switch control.
+      // Only drags are settled here; their following pointer click must not act twice.
+      skipPointerClick = wasDrag && !cancelled;
+      if (it && wasDrag && !dropped && !cancelled && !unavailable(it)) select(it);
+    }
+    function skipClick(e){
+      if (!skipPointerClick || e.detail === 0) return false;
+      skipPointerClick = false; e.preventDefault(); e.stopPropagation();
+      return true;
+    }
+    function drop(it, target, pt){
+      if (unavailable(it) || target.disabled) return;
+      opts.onDrop(it, target, pt);
+      if (unavailable(it)){
+        it.disabled = true;
+        it.setAttribute('aria-pressed', 'false');
+        if (selected === it) clearSel();
       }
     }
-    function bindItem(it){ it.addEventListener('pointerdown', onDown); }
-    function bindTarget(t){
-      t.setAttribute('data-drop', '');
-      t.addEventListener('click', e => {
-        if (!selected) return;
-        // targets may nest (a puzzle hole inside the picture field): the inner one
-        // wins, or one tap would be counted twice
+    function bindItem(it){
+      it.setAttribute('aria-pressed', 'false');
+      it.addEventListener('pointerdown', onDown);
+      it.addEventListener('click', e => {
+        if (skipClick(e) || unavailable(it)) return;
         e.stopPropagation();
-        const s = selected;
-        opts.onDrop(s, t, { x: e.clientX, y: e.clientY });
-        // a piece that has been used up must not stay in the child's hand: the next
-        // tap on the board would otherwise be scored as putting it in the wrong place
-        if (s.classList.contains('gone') || s.classList.contains('used')) clearSel();
+        if (selected === it) clearSel(); else select(it);
+        Sound.sfx.tap();
       });
     }
-    function select(it){ clearSel(); selected = it; it.classList.add('sel'); }
+    function bindTarget(t){
+      t.setAttribute('data-drop', '');
+      t.addEventListener('pointerdown', () => { skipPointerClick = false; });
+      t.addEventListener('click', e => {
+        if (skipClick(e) || !selected || t.disabled) return;
+        // A hole inside the picture wins, so one activation is never counted twice.
+        e.stopPropagation();
+        drop(selected, t, { x: e.clientX, y: e.clientY });
+      });
+    }
+    function select(it){
+      if (unavailable(it)) return;
+      clearSel(); selected = it; it.classList.add('sel'); it.setAttribute('aria-pressed', 'true');
+    }
     return { bindItem, bindTarget, clearSel, select, get selected(){ return selected; } };
   }
 
@@ -4992,26 +5063,13 @@ const STICKER_POOL = Object.values(POKEMON_MANIFEST.pokemon).map(p => p.name);
 function stickerFor(key){ return PokemonStickers.reward(key).name; }
 
 /* ===========================================================
-   stages — what has to be finished before 小学1年生 opens
+   stages — relevant preparation for each 小学1年生 game
    ===========================================================
-   The 入学前 half of the app is 48 levels and 96 sticker slots: one sticker for
-   clearing a level, a gold one for clearing it with every answer right first time.
-   Clearing all 48 — the plain stickers — is the 小1 classroom's entrance
-   requirement, so the goal a child is already working towards is the same goal
-   that opens the next room: no separate test, no adult judgement.
-
-   The gold stickers are NOT part of the key. Each one needs a run with every
-   answer right first time, and needing forty-eight of those put the classroom
-   somewhere around the three-hundredth day of use for a child working at the
-   pace this app recommends (one level a day) — which is to say, after 1年生 had
-   already started, and after the material in the classroom had stopped being
-   preparation. They stay on the shelf as something to come back for; they are
-   not a door the child has to get through.
-
-   Two things this deliberately does NOT do. It never counts 小1's own stickers
-   (that would be circular), and it never *closes* again: a shelf cannot lose a
-   sticker, but a future release could add a 入学前 level, and a child who walked
-   through the door must not find it locked afterwards. */
+   Each classroom game opens after its own short preparation route: confirmed
+   clears or sustained unaided first answers. Collection progress is counted
+   separately. Once a game opens, its saved entrance stays open through errors,
+   backup restoration and future catalog changes. Legacy global entrances and
+   a parent's manual entrance continue to open the whole classroom. */
 const Progress = (() => {
   const stageOf = g => g.stage || 'pre';
 
@@ -5025,7 +5083,7 @@ const Progress = (() => {
     return out;
   }
 
-  /** the slots the door actually counts: one per level, earned by clearing it */
+  /** one plain sticker per level, used by collection progress and named gaps */
   function gateSlots(stage){
     const out = [];
     Games.list.forEach(g => {
@@ -5056,9 +5114,24 @@ const Progress = (() => {
     return Store.recentCount(id, i) >= 6 && Store.recentAccuracy(id, i) >= .75;
   }
   function g1GameOpen(g){
+    if (stageOf(g) !== 'g1') return false;
     if (Store.data.g1Open || Store.data.g1Reached) return true;
+    if (Store.hasG1GameOpen(g.id)) return true;
+    // Older records have no per-game latch. Actual lessons/checks already met
+    // are evidence that this game was open; preserve only that game's entrance.
+    const previouslyMet = g.levels.some((lv, i) => Store.hasSticker(g.id + ':' + i)
+      || Store.stars(g.id, i) > 0 || Store.plays(g.id, i) > 0
+      || Store.recentCount(g.id, i) > 0 || Store.introduced(g.id, i))
+      || Store.milestones().some(m => m.gameId === g.id);
     const path = G1_PATHS[g.id] || [];
-    return path.length > 0 && path.every(([id, i]) => levelReady(id, i));
+    if (!previouslyMet && (!path.length || !path.every(([id, i]) => levelReady(id, i)))) return false;
+    Store.markG1GameOpen(g.id);
+    return true;
+  }
+  function preparation(g){
+    return (G1_PATHS[g.id] || []).map(([id, levelIndex]) => ({
+      game: Games.byId[id], levelIndex, ready: levelReady(id, levelIndex)
+    })).filter(p => p.game);
   }
   function pathProgress(g){
     const path = G1_PATHS[g.id] || [];
@@ -5069,7 +5142,7 @@ const Progress = (() => {
     return p.total ? 'じゅんびの あそびを ' + p.got + '／' + p.total + ' できたら ひらくよ' : 'じゅんびが できたら ひらくよ';
   }
 
-  /** true once every 入学前 level is cleared — or once a parent opened the door by hand */
+  /** true when at least one classroom game is open, including legacy/manual entrances */
   function g1Open(){
     if (Store.data.g1Open || Store.data.g1Reached) return true;
     return Games.list.some(g => stageOf(g) === 'g1' && g1GameOpen(g));
@@ -5079,10 +5152,11 @@ const Progress = (() => {
     stageOf,
     slots,
     gateSlots,
-    /** { got, total } over the levels the door counts — cleared levels, not stickers */
+    /** { got, total } over confirmed 入学前 clears, separate from classroom readiness */
     preStickers: () => count('pre'),
     levelReady,
     g1GameOpen,
+    preparation,
     pathProgress,
     unlockHint,
     /** levels cleared provisionally, waiting for another day */
@@ -5150,9 +5224,10 @@ const Session = (() => {
        'show'     — the hand goes through the method and answers; input waits
        'together' — the tool is on the board from the start and the child answers
      Neither is recorded or graded: they are the lesson, not the child's work.
-     `helped` is the 👀 button — help asked for before a mistake, which is fine and
-     also means the answer was not the child's alone. */
+     `helped` records both requested and automatic hints, so the answer is recorded
+     as supported even when the child first tried it without help. */
   let introOn = true, demo = null, demoRunning = false, demoWalked = null, demoWaits = 0;
+  // Help belongs to the whole question; a new answer surface must not erase it.
   let touched = false, helped = false;
   /* ---------- checking a clear on another day ----------
      Three questions from a provisionally cleared level, asked on a later day, first
@@ -5943,6 +6018,7 @@ const Session = (() => {
   /** First rung: the game's tool, in words the child hears. */
   function hint(prefix){
     hintShown = true;
+    helped = true;
     const c = coach || {};
     if (c.tool){ try{ c.tool(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
     let text = null, say = null;
@@ -6176,7 +6252,7 @@ const Session = (() => {
       Store.markIntroduced(g.id, plan[idx].levelIndex);
     if (mode !== 'diagnostic'){
       const kind = scaffold === 'show' || taughtQ ? 'viewed' : scaffold === 'together' ? 'together'
-        : wrongThisQ ? 'revised' : helped ? 'supported' : 'independent';
+        : helped ? 'supported' : wrongThisQ ? 'revised' : 'independent';
       Store.recordMilestone(g.id, plan[idx].levelIndex, kind, curLabel);
       if (!visitMilestone || Store.milestoneRank(kind) >= Store.milestoneRank(visitMilestone.kind))
         visitMilestone = { gameId: g.id, levelIndex: plan[idx].levelIndex, kind, label: curLabel || '' };
@@ -6287,8 +6363,10 @@ const Session = (() => {
       const recommended = Diagnostic.recommendFrom(sessionOutcomes);
       Store.recordDiagnostic(sessionOutcomes, recommended);
     } else {
-      if (mode === 'daily') Store.recordPractice(firstTryRight, total);
-      else Store.recordFocus(firstTryRight, total);
+      if (mode === 'daily'){
+        Store.recordPractice(firstTryRight, total);
+        Store.completePracticeToday();
+      } else Store.recordFocus(firstTryRight, total);
       // one sticker per calendar day, per set
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
       if (Store.addSticker(key)) newStickers.push({ key, emoji: stickerFor(key), gold: stars === 3 });
@@ -8901,8 +8979,9 @@ function shapePuzzle(api){
   api.item('puz:' + pz.name, pz.name + ' を つくる');
   api.setPrompt(`かたちを はめて <b>${pz.name}</b> を つくろう`, `形をはめて、${pz.name}を作ろう。`);
   const box = el('div.shapefield');
+  const picture = el('div.shape-picture');
   const s = svg('svg', { viewBox: '0 0 100 80', preserveAspectRatio: 'xMidYMid meet' });
-  box.append(s);
+  picture.append(s); box.append(picture);
   const tray = el('div.shapes-tray');
   api.field.append(box, tray);
 
@@ -8910,16 +8989,40 @@ function shapePuzzle(api){
   const biggest = Math.max.apply(null, boxes.map(b => Math.max(b.w, b.h)));
   const edge = c => 'color-mix(in srgb, ' + c + ' 60%, var(--ink) 40%)';
 
+  const shapeName = p => {
+    const b = bbox(p.pts);
+    if (p.pts.length !== 3) return b.w > b.h * 1.3 ? 'よこながの しかく' : b.h > b.w * 1.3 ? 'たてながの しかく' : 'しかく';
+    const corner = [[b.x0,b.y0,'ひだりうえ'],[b.x1,b.y0,'みぎうえ'],[b.x0,b.y1,'ひだりした'],[b.x1,b.y1,'みぎした']]
+      .find(([x,y]) => p.pts.some(q => q[0] === x && q[1] === y)
+        && p.pts.some(q => q[0] === x && q[1] !== y) && p.pts.some(q => q[1] === y && q[0] !== x));
+    return corner ? corner[2] + 'が かどの さんかく' : 'うえむきの さんかく';
+  };
+  const targetLayers = [];
   const slots = pz.pieces.map((p, i) => {
+    const b = boxes[i];
     const poly = svg('polygon', {
       points: p.pts.map(q => q.join(',')).join(' '),
       fill: 'var(--trace-guide)', stroke: 'var(--ink-faint)', 'stroke-width': 1.6,
-      'stroke-dasharray': '3 2.4', 'data-drop': '', style: 'cursor:pointer'
+      'stroke-dasharray': '3 2.4', 'aria-hidden': 'true', style: 'cursor:pointer'
     });
     poly.dataset.sig = signature(p.pts);
+    const slot = el('button.shapeslot', { type: 'button',
+      'aria-label': pz.name + 'の ' + (i + 1) + 'ばんの あな、' + shapeName(p),
+      style: { left:b.x0 + '%', top:(b.y0 / 80 * 100) + '%', width:b.w + '%', height:(b.h / 80 * 100) + '%',
+        clipPath: 'polygon(' + p.pts.map(q => ((q[0]-b.x0)/b.w*100) + '% ' + ((q[1]-b.y0)/b.h*100) + '%').join(',') + ')' }
+    });
+    slot.dataset.sig = poly.dataset.sig;
+    slot._shape = poly; poly._button = slot;
+    slot.addEventListener('focus', () => poly.classList.add('slot-focus'));
+    slot.addEventListener('blur', () => poly.classList.remove('slot-focus'));
+    targetLayers.push(slot);
     s.append(poly);
-    return poly;
+    return slot;
   });
+  // Native HTML targets stay beside the SVG, sharing its 5:4 picture bounds.
+  // Their clip paths exactly match the holes,
+  // so overlapping triangle bounding boxes cannot catch a neighbouring hole's tap.
+  targetLayers.forEach(layer => picture.append(layer));
 
   /* One viewBox unit in screen pixels. The picture is letterboxed inside its box
      (preserveAspectRatio="meet"), so the scale is whichever axis runs out first. */
@@ -8976,40 +9079,43 @@ function shapePuzzle(api){
     },
     onDrop(item, target, pt){
       if (api.locked) return;
+      target = target._button || target;
       const slot = (target.dataset.sig && target.dataset.filled !== '1')
         ? target : nearestSlot(pt);
       if (!slot) return;
       if (item.dataset.sig === slot.dataset.sig){
-        slot.setAttribute('fill', item.dataset.color);
-        slot.setAttribute('stroke', edge(item.dataset.color));
-        slot.setAttribute('stroke-dasharray', '');
-        slot.setAttribute('stroke-width', '1.6');
-        slot.classList.remove('glow');
-        slot.dataset.filled = '1';
+        const poly = slot._shape;
+        poly.setAttribute('fill', item.dataset.color);
+        poly.setAttribute('stroke', edge(item.dataset.color));
+        poly.setAttribute('stroke-dasharray', '');
+        poly.setAttribute('stroke-width', '1.6');
+        poly.classList.remove('glow', 'slot-focus');
+        poly.dataset.filled = slot.dataset.filled = '1';
+        slot.disabled = true;
         item.classList.add('used');
         filled++;
         Sound.sfx.place();
         if (filled === slots.length) api.later(() => api.correct(), 260);
       } else {
-        slot.animate([{ opacity: 1 }, { opacity: .35 }, { opacity: 1 }], { duration: 300 });
+        slot._shape.animate([{ opacity: 1 }, { opacity: .35 }, { opacity: 1 }], { duration: 300 });
         api.wrong(item);
         dd.select(item);            // stay picked up so the next slot is one tap away
       }
     }
   });
-  slots.forEach(sl => dd.bindTarget(sl));
+  slots.forEach(sl => { dd.bindTarget(sl); dd.bindTarget(sl._shape); });
   dd.bindTarget(box);               // a near miss still reaches the hole it aimed at
 
   /* Every tray tile is drawn on one scale, so a piece that is half the size of
      another looks half the size here too — that is the only clue the child has for
      which hole a tile belongs in. The square root softens the ratio: at true scale
      the tree's trunk would be a 10px sliver in a tap-sized box. */
-  shuffle(pz.pieces.map((p, i) => ({ p, i }))).forEach(({ p, i }) => {
+  shuffle(pz.pieces.map((p, i) => ({ p, i }))).forEach(({ p, i }, trayIndex) => {
     const color = colors[i % colors.length];
     const b = boxes[i];
     const span = Math.max(b.w, b.h);
     const S = span / (Math.sqrt(span / biggest) * 0.82);
-    const t = el('div.shapetile');
+    const t = el('button.shapetile', { type: 'button', 'aria-label': (trayIndex + 1) + 'ばんの ピース、' + shapeName(p) });
     const mini = svg('svg', { viewBox: `${b.cx - S / 2} ${b.cy - S / 2} ${S} ${S}` },
       svg('polygon', { points: p.pts.map(q => q.join(',')).join(' '), fill: color,
         stroke: edge(color), 'stroke-width': S * 0.028, 'stroke-linejoin': 'round' }));
@@ -9032,23 +9138,23 @@ function shapePuzzle(api){
       if (!t) return;
       dd.select(t);
       const corners = pz.pieces[+t.dataset.idx].pts.length;
-      Coach.pulse(slots.filter((sl, i) => sl.dataset.filled !== '1' && pz.pieces[i].pts.length === corners));
+      Coach.pulse(slots.filter((sl, i) => sl.dataset.filled !== '1' && pz.pieces[i].pts.length === corners).map(sl => sl._shape));
     },
     walk(){
       const t = $('.shapetile.sel:not(.used)', tray) || $('.shapetile:not(.used)', tray);
       if (!t) return [];
       const slot = slots.find(sl => sl.dataset.filled !== '1' && sl.dataset.sig === t.dataset.sig);
       return [{ at: t, act(){ dd.select(t); }, say: 'この形は…', ms: 1300 },
-              { at: slot, act(){ if (slot) slot.classList.add('glow'); }, say: 'ここに、ぴったり。', ms: 1900 }];
+              { at: slot, act(){ if (slot) slot._shape.classList.add('glow'); }, say: 'ここに、ぴったり。', ms: 1900 }];
     }
   });
-  // every piece into its own hole (SVG polygons have no .click(), so the event is sent)
+  // Every piece into its own native target; this is the same path as keyboard input.
   api.onShow(() => {
     $$('.shapetile:not(.used)', tray).forEach(t => {
       const slot = slots.find(sl => sl.dataset.filled !== '1' && sl.dataset.sig === t.dataset.sig);
       if (!slot) return;
       dd.select(t);
-      slot.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      slot.click();
     });
   });
 }
@@ -9100,7 +9206,7 @@ function sortGame(api, catset, nBins, byColor){
   const binMap = {};
   keys.forEach(k => {
     const c = catset[k];
-    const b = el('div.bin', { style: { '--bc': c.c } },
+    const b = el('button.bin', { type: 'button', 'aria-label': c.lbl + 'の はこ', style: { '--bc': c.c } },
       el('div.lbl', null, mark(k), ' ' + c.lbl),
       el('div.hold'));
     b.dataset.cat = k;
@@ -9143,14 +9249,14 @@ function sortGame(api, catset, nBins, byColor){
       binMap[t.dataset.cat].click();
     });
   });
-  shuffle(picks).forEach(p => {
+  shuffle(picks).forEach((p, index) => {
     let t;
     if (byColor){
       const sv = shapeSVG(p.shape, catset[p.k].c, 0);
       sv.setAttribute('width', 'calc(var(--u)*3.4)'); sv.setAttribute('height', 'calc(var(--u)*3.4)');
-      t = el('div.tile.shapetile2', null, sv);
+      t = el('button.tile.shapetile2', { type: 'button', 'aria-label': (index + 1) + 'ばんの ' + catset[p.k].lbl + 'の ' + (SHAPES[p.shape] || {}).ja }, sv);
     } else {
-      t = el('div.tile', { text: p.e });
+      t = el('button.tile', { type: 'button', text: p.e, 'aria-label': (index + 1) + 'ばんの ピース、' + p.e });
     }
     t.dataset.cat = p.k;
     dd.bindItem(t);
@@ -12062,6 +12168,52 @@ const Orientation = (() => {
   return { build, open };
 })();
 
+/* ---------------------------------------------------------- CLASSROOM PREPARATION */
+const G1Preparation = (() => {
+  let node, heading, list, active = null;
+  function speech(){
+    if (!active) return '';
+    const needed = Progress.preparation(active).filter(p => !p.ready);
+    return active.name + 'の準備だよ。' + (needed.length
+      ? 'この遊びから始めよう。' + needed.map(p => p.game.name + '、レベル' + (p.levelIndex + 1) + '、' + p.game.levels[p.levelIndex].t).join('。')
+      : '準備ができたね。一年生の遊びに進めるよ。');
+  }
+  function build(){
+    if (node) return;
+    heading = el('h2'); list = el('div.g1-preparation-list');
+    node = el('div#g1-preparation', null,
+      el('div.topbar', null,
+        el('button.btn.btn-ghost.btn-round', { type:'button', 'aria-label':'ホームに もどる',
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home'); } }, '←'),
+        heading, speakBtn(speech)),
+      el('p.g1-preparation-note', { text:'この あそびの じゅんびを しよう。できている あそびには ✓ が つくよ' }), list);
+    UI.register('g1-preparation', node);
+  }
+  function open(game){
+    build(); active = game; heading.textContent = game.name + 'の じゅんび'; clear(list);
+    Progress.preparation(game).forEach(p => {
+      const lv = p.game.levels[p.levelIndex];
+      list.append(el('button.btn.preparation-level', { type:'button',
+        dataset:{ game:p.game.id, level:String(p.levelIndex) },
+        'aria-label':p.game.name + '、レベル' + (p.levelIndex + 1) + '、' + lv.t + (p.ready ? '、じゅんび できた' : '、あそびに いく'),
+        onclick(){
+          Sound.sfx.tap();
+          if (levelOpen(p.game, p.levelIndex)){
+            if (p.game.intro !== false && !Store.introduced(p.game.id, p.levelIndex)) FirstSteps.open(p.game, p.levelIndex);
+            else Session.startLevel(p.game, p.levelIndex);
+          } else { Levels.render(p.game); UI.show('levels'); Sound.say('まず、前のレベルから遊ぼう。' + Levels.speech(), { delay:120 }); }
+        }
+      }, el('span', {text:p.game.ico}), el('span.copy', null,
+        el('b', {text:p.game.name}), el('small', {text:'レベル ' + (p.levelIndex + 1) + '　' + lv.t})),
+        el('span', {text:p.ready ? '✓ じゅんび できた' : '▶'})));
+    });
+    if (stageOpen(game)) list.append(el('button.btn.btn-accent', { type:'button', text:'🎓 ' + game.name + 'で あそぶ',
+      onclick(){ Sound.sfx.tap(); Levels.render(game); UI.show('levels'); Sound.say(Levels.speech(), {delay:120}); } }));
+    UI.show('g1-preparation'); Sound.say(speech(), {delay:180});
+  }
+  return { open, speech };
+})();
+
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl;
@@ -12164,27 +12316,14 @@ const Home = (() => {
       }) : null);
   }
 
-  /* The classroom is on this screen from the first day, behind a padlock.
-
-     It was hidden until the shelf was half full, on the theory that a lock a child
-     cannot open yet is discouraging. That is true of a lock with nothing behind it
-     — and this one has four named games behind it. Seeing 「なかまづくり」 and
-     「20までの かず」 sitting there, greyed out, is the reason to fill the shelf;
-     an empty space where they would be is not. Tapping one says how to get in and
-     goes to the sticker book, which is where the count lives.
-
-     What opens it is clearing all 48 入学前 levels — the plain stickers. The gold
-     ones (a run with every answer right first time) stay a thing worth going back
-     for; they are not part of the key. */
+  /* Locked cards explain the preparation for this particular classroom game,
+     with named routes to the relevant lessons. */
   function lockedCard(g){
     return el('button.gamecard.locked', {
       type: 'button', title: g.name + '　' + Progress.unlockHint(g),
       onclick(){
         Sound.sfx.tap();
-        Book.render();
-        UI.show('book');
-        // after the switch: UI.show hushes anything queued before it
-        Sound.say(Progress.unlockHint(g), { delay: 120 });
+        G1Preparation.open(g);
       }
     },
       el('div.ico', { text: g.ico }),
@@ -12204,6 +12343,7 @@ const Home = (() => {
     parentBtn.setAttribute('title', due
       ? 'おうちのかたへ（記録の書き出しを おすすめします）' : 'おうちのかたへ');
     const n = Store.todayCount(), streak = Store.streak();
+    const practiceDone = Store.practiceDoneToday();
     const firstRun = Diagnostic.shouldRun();
     const rec = Diagnostic.current();
     const recGame = rec && Games.byId[rec.gameId];
@@ -12245,15 +12385,15 @@ const Home = (() => {
     const learnedCount = Games.list.reduce((n, g) => n + g.levels.filter((lv, i) => Store.introduced(g.id, i)).length, 0);
     dailyEl.hidden = learnedCount === 0;
     clear(dailyEl);
-    dailyEl.classList.toggle('done', n >= 10);
+    dailyEl.classList.toggle('done', practiceDone);
     dailyEl.append(
       el('div.ico', { text: BANNER_ICON.daily, 'aria-hidden': 'true' }),
       el('div.grow', null,
-        el('div.t', { text: n >= 10 ? 'きょうの れんしゅう おわり！' : 'きょうの れんしゅう' }),
-        el('div.s', { text: n >= 10
+        el('div.t', { text: practiceDone ? 'きょうの れんしゅう おわり！' : 'きょうの れんしゅう' }),
+        el('div.s', { text: practiceDone
           ? `きょうは ${n}もん がんばったね　･　${streak}にち れんぞく`
           : 'あそんだ もんだいから 10もん でるよ' })),
-      el('div.go', { text: n >= 10 ? '🎉' : '▶' }));
+      el('div.go', { text: practiceDone ? '🎉' : '▶' }));
 
     const weak = Store.weakFacts(4);
     focusEl.hidden = weak.length < 2;      // one wobbly fact is not a practice set
@@ -12301,23 +12441,11 @@ const Home = (() => {
        so those cards sit at y≈900 and a child has to scroll two thirds of the way
        down to meet them. Rather than move the map around, the count goes on the one
        strip that is on screen whatever happens — the shelf the child already taps. */
-    const gate = Progress.preStickers();
-    const toGo = Progress.g1Open() ? 0 : 1;
-    shelfEl.classList.toggle('nearly', toGo > 0 && toGo <= 6);
-    /* The same picture the result screen draws: a bar filling towards 🎓, and dots to
-       count once there are few enough. 「あと 34レベル」 is a number for the adult,
-       so it stays in the label for them. */
-    let sub;
-    if (toGo){
-      const say = '1ねんせいの きょうしつは、あそびごとに じゅんびが できると ひらくよ';
-      const middle = el('span.leftdots');
-      for (let i = 0; i < 3; i++) middle.append(el('span', { text: '●' }));
-      sub = el('small.togo', { role: 'img', 'aria-label': say, title: say },
-        middle, el('span', { text: '🎓', 'aria-hidden': 'true' }));
-    } else {
-      sub = el('small', { text: Progress.g1Open() ? '1ねんせいの きょうしつが ひらいて いるよ'
-                                                  : 'タップで シールブック' });
-    }
+    const classroom = Games.list.filter(g => Progress.stageOf(g) === 'g1');
+    const openCount = classroom.filter(stageOpen).length;
+    shelfEl.classList.toggle('nearly', openCount > 0 && openCount < classroom.length);
+    const sub = el('small', { text: '1ねんせいの あそび ' + openCount + '／' + classroom.length
+      + (openCount < classroom.length ? '　じゅんびを みよう' : '　ぜんぶ ひらいたよ') });
     shelfEl.append(
       el('span.bk', { text: '📖' }),
       el('div.lbl', null, 'シール ' + got.length + 'まい', sub),
@@ -12474,32 +12602,20 @@ const Result = (() => {
       el('div.result-msg', { text: msg }));
     if (r.mode === 'diagnostic') inner.append(el('div.result-sub', { text: 'ぴったりの はじまりを みつけたよ' }));
     else if (r.stars >= 2 && r.mode !== 'adventure') inner.append(el('div.result-sub', { text: `${r.total}もんの うち ${r.right}もん いっかいめで せいかい` }));
-    /* Every level cleared is a step towards a door the child can already see on
-       the home screen. Saying how many are left, at the moment one is earned, is
-       what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
-       ones no longer move this number, so counting stickers here would stall. */
     const stickers = r.stickers || [];
-    /* 「あと 47レベル」 is a number a five-year-old cannot hold. A bar filling up
-       towards 🎓 is something they can see move; and once few enough are left to
-       count on a hand or two, they become dots to count. The number stays for the
-       adult, in the label. It rides inside the sticker card: one piece of news. */
     const coloured = r.confirmed || [];
     let toDoor = null;
-    if ((stickers.length || coloured.length) && !r.unlockedG1 && !Progress.g1Open()){
-      const st = Progress.preStickers();
-      const left = 1;
-      if (left){
-        const say = '1ねんせいの きょうしつは、あそびごとに じゅんびが できると ひらくよ';
-        let middle;
-        if (left <= 10){
-          middle = el('div.leftdots');
-          for (let i = 0; i < left; i++) middle.append(el('span', { text: '●' }));
-        } else {
-          middle = el('div.gauge', null, el('div.fill', { style: { width: '35%' } }));
-        }
-        toDoor = el('div.stagenext' + (left <= 10 ? '.nearly' : ''),
-          { role: 'img', 'aria-label': say, title: say },
-          el('span.mk', { text: '🔒' }), middle, el('span.mk', { text: '🎓' }));
+    if ((stickers.length || coloured.length) && !r.unlockedG1){
+      const waitingGames = Games.list.filter(g => Progress.stageOf(g) === 'g1' && !stageOpen(g));
+      waitingGames.sort((a,b) => {
+        const pa = Progress.pathProgress(a), pb = Progress.pathProgress(b);
+        return pb.got / pb.total - pa.got / pa.total;
+      });
+      if (waitingGames.length){
+        const g = waitingGames[0], path = Progress.pathProgress(g);
+        toDoor = el('button.btn.stagenext', { type:'button',
+          onclick(){ Sound.sfx.tap(); G1Preparation.open(g); } },
+          el('span', {text:'🎓'}), el('span', {text:g.name + 'の じゅんび ' + path.got + '／' + path.total}));
       }
     }
     /* The last sticker. This is the one screen in the app that says the child has
@@ -12512,7 +12628,7 @@ const Result = (() => {
         el('div.e', { text: '🎓' }),
         el('div.l', { text: 'じゅんびが できた！' }),
         el('b', { text: 'しょうがっこう 1ねんせいの あたらしい もんだいが できるよ！' }),
-        el('div.l', { text: '「1ねんせいの きょうしつ」が ホームに ふえたよ' })));
+        el('div.l', { text: 'ホームの「1ねんせいの きょうしつ」から あそべるよ' })));
     }
     /* The thing ★★★ could never say. These levels are for an answer that arrives,
        and a child who counted their way to every right answer used to get exactly
@@ -12691,10 +12807,7 @@ const Book = (() => {
   }
   /** Said on the way in: the count under the heading is a sentence a child cannot read yet. */
   function speech(){
-    if (Progress.g1Open()) return 'シールブックだよ。集めたシールが並んでいるよ。';
-    const st = Progress.preStickers();
-    const left = Math.max(0, st.total - st.got);
-    return 'シールブックだよ。あと' + left + 'レベルで、1年生の教室が開くよ。';
+    return 'シールブックだよ。集めたシールが並んでいるよ。一年生の遊びは、それぞれの準備ができたら開くよ。準備を見るボタンから、必要な遊びを選べるよ。';
   }
   function open(){
     render();
@@ -12705,6 +12818,14 @@ const Book = (() => {
     build();
     headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
     clear(grid);
+    const preparation = el('div.book-preparation', { 'aria-label':'1ねんせいの あそびの じゅんび' });
+    Games.list.filter(g => Progress.stageOf(g) === 'g1').forEach(g => {
+      const path = Progress.pathProgress(g);
+      preparation.append(el('button.btn', { type:'button',
+        dataset:{ preparation:g.id }, onclick(){ Sound.sfx.tap(); G1Preparation.open(g); } },
+        g.name + '　' + (stageOpen(g) ? '✓ あそべるよ' : path.got + '／' + path.total + '　じゅんびを みる')));
+    });
+    grid.append(preparation);
     grid.append(PokemonStickers.legend());
     grid.append(Treasures.collection());
     const specialCollection = TransferAdventure.collection();
@@ -12719,10 +12840,7 @@ const Book = (() => {
         { title: stickerFor(key) + (has ? '　ゲット！' : '　' + (key.endsWith(':g') ? 'ぜんもん さいしょから せいかいで ゲット' : 'クリアで ゲット')) },
         PokemonStickers.artwork(key, { silhouette: !has })));
     });
-    /* The 入学前 shelf is the one that opens the 小1 classroom, so it is the one
-       this page counts towards a goal. The classroom's own stickers go in a second
-       group below, and only once it is open — an empty row of slots for a world a
-       child cannot reach would make the goal look further away than it is. */
+    /* Keep the collection count separate from each classroom game's readiness. */
     const pre = Progress.preStickers();
     drawSlots(Progress.slots('pre'));
     Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0 || k.indexOf('adventure:') === 0).forEach(k => {
@@ -12736,15 +12854,10 @@ const Book = (() => {
     } else {
       /* Shown, but plainly not part of the count above: a shelf a child can see
          waiting for them is the reason to fill the one they are on. */
-      grid.append(el('div.bookgroup.shut', { text: '🔒　1ねんせいの きょうしつ　レベルを ぜんぶ クリアすると ここが ひらくよ' }));
+      grid.append(el('div.bookgroup.shut', { text: '🔒　1ねんせいの きょうしつ　あそびごとに じゅんびが できると ひらくよ' }));
       Progress.slots('g1').forEach(() => grid.append(el('div.sticker.shut', { text: '🔒' })));
     }
-    /* Two numbers, and they count different things on purpose: the stickers are
-       the shelf (96 of them, gold included), the levels are the door (48). Saying
-       「あと ◯まい」for the door would stall the moment a gold sticker was earned
-       for a level that was already cleared. */
-    /* Name the levels the door is still waiting for, and make each one a way in.
-       The same list the「いまの おすすめ」walks, shown all at once. */
+    /* Missing stickers remain named entry points to the pre-school collection. */
     clear(missing);
     const todo = Progress.gateSlots('pre')
       .filter(k => !Store.hasConfirmed(k))
@@ -12777,7 +12890,7 @@ const Book = (() => {
           el('span.t', null, g.name, el('small', { text: lv.t + (waiting ? '・たしかめ' : '') }))));
       });
       missing.append(
-        el('div.l', { text: 'のこりの レベル' + (todo.length > 10 ? '（さいしょの 10こ）' : '') }),
+        el('div.l', { text: 'まだ シールがない レベル' + (todo.length > 10 ? '（さいしょの 10こ）' : '') }),
         row);
     }
 
@@ -12786,8 +12899,8 @@ const Book = (() => {
     count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
       + (waiting ? `<br>かりの シール ${waiting}まい（べつの ひに また できたら いろが つくよ）` : '')
       + (left
-        ? `<br><b>あと ${left}レベル</b> クリアすると しょうがっこう 1ねんせいの もんだいが ひらくよ（${pre.got}／${pre.total}）`
-        : '<br><b>レベルを ぜんぶ クリアしたね！</b> しょうがっこう 1ねんせいの もんだいが できるよ');
+        ? `<br>にゅうがくまえの シールは <b>${pre.got}／${pre.total}レベル</b>。1ねんせいは あそびごとに じゅんびが できると ひらくよ`
+        : '<br><b>にゅうがくまえの シールを ぜんぶ あつめたね！</b>');
   }
   return { build, render, open, speech };
 })();
@@ -13146,37 +13259,33 @@ const Parent = (() => {
       row('今日といた問題', Store.todayCount() + '問'),
       row('集めた ★', Store.totalStars() + ' / ' + levels * 3),
       row('集めたシール', Store.data.stickers.length + '枚'),
-      row('クリアした入学前のレベル（1年生が開く条件）', pre.got + ' / ' + pre.total),
+      row('クリアした入学前のレベル', pre.got + ' / ' + pre.total),
       row('かりのクリア（別の日の確かめ待ち）', Progress.pendingCount('pre') + 'レベル'),
       row('「きょうの れんしゅう」初回正答率', pct(Store.practiceAccuracy())));
     return s;
   }
 
-  /* ---- 小学1年生の問題 ----
-     The one thing on this page a parent has to be able to decide: the door opens
-     itself when every 入学前 level has been cleared, and it can be opened by hand
-     when the child is plainly ready and the shelf is not finished. */
+  /* ---- 小学1年生の問題: preparation is checked for each game ---- */
   function stageSection(){
     const s = el('section');
-    const pre = Progress.preStickers();
-    const open1 = Progress.g1Open();
+    const classroom = Games.list.filter(g => Progress.stageOf(g) === 'g1');
+    const allOpen = classroom.every(stageOpen);
     const byHand = !!Store.data.g1Open;
     s.append(el('div.eyebrow', { text: 'next stage' }),
       el('h3', { text: '小学1年生の問題について' }));
-    s.append(el('p', { html: '入学前の' + pre.total + 'レベルを<b>すべてクリアして、シールに色がつくと</b>、ホームに'
-      + '<b>「1ねんせいの きょうしつ」</b>が増えます。いまは <b>' + pre.got + ' / ' + pre.total
-      + '</b> レベルです。クリアは★1つ以上（8問中4問を1回目で正解）で、'
-      + '3回まじめに挑戦すれば次のレベルは開くので、どこかで止まったままにはなりません。' }));
-    s.append(el('p', { text: '★1〜★2でのクリアは「かりのシール」（輪郭だけ）になり、別の日に確かめると色がつきます。'
-      + '次の日の最初のレベルか「きょうの れんしゅう」に、そのレベルの問題が3問混ざり、2問を1回目で正解すれば確定です'
-      + '（別の日にもう一度クリアしても、★★★でも確定します）。8問中4問の正解は、3択を当てずっぽうで押しても4回に1回ほど届くため、'
-      + '1年生の扉は色のついたシールだけを数えます（上の「' + pre.got + ' / ' + pre.total + '」も色のついた数です）。'
-      + '「いまの おすすめ」はかりのシールでも次へ進み、確かめで届かなかったレベルはもう一度出します。' }));
-    s.append(el('p', { text: '金色のシール（全問1回目で正解）は条件に入れていません。'
-      + '48レベルすべてで一発全問正解を出すには、このアプリの推奨ペース（1日1レベル）で'
-      + '半年をはるかに超えます。1年生の1学期の内容が1学期に間に合わないのでは意味がないので、'
-      + '扉の鍵は「色のついたクリアのシール48枚」だけにしてあります。金色のシールはシールブックに残り、'
-      + 'あとから取りに戻れる目標のままです。' }));
+    s.append(el('p', { text:'「1ねんせいの きょうしつ」は、4つの遊びそれぞれに関連する2〜3レベルの準備ができると開きます。'
+      + '入学前の全48レベルや金色のシールをそろえる必要はありません。ホームの鍵付きカードを押すと、必要な遊びとレベルが分かり、その教材へ進めます。' }));
+    s.append(el('p', { text:'各準備レベルは、色のついたクリアのシールがあるか、直近の回答が6問以上あり、ヒントなしの初回正答率が75%以上になると準備完了です。'
+      + '★1〜★2のシールは仮獲得で、別の日の確かめ（3問中2問を自力で初回正解）や再クリアで確定します。★★★ならその場で確定します。'
+      + '「いまの おすすめ」は仮のシールでも次へ進み、確かめで届かなかったレベルはもう一度出します。' }));
+    const preparation = el('div.aimlist');
+    classroom.forEach(g => {
+      const path = Progress.preparation(g);
+      preparation.append(el('div.aimrow', null, el('span.ico', {text:g.ico}),
+        el('div', null, el('b', {text:g.name + (stageOpen(g) ? '：遊べます' : '：準備 ' + path.filter(p => p.ready).length + ' / ' + path.length)}),
+          path.map(p => el('div', {text:(p.ready ? '✓ ' : '○ ') + p.game.name + ' L' + (p.levelIndex + 1) + '「' + p.game.levels[p.levelIndex].t + '」'})))));
+    });
+    s.append(preparation);
     s.append(el('p', { text: '中身は「先取りの計算」ではありません。1年生の1学期は、'
       + '入学前にやったことをもう一度、ちがう聞き方でたどり直します。'
       + '「同じものの集まり」（自分でまとまりを決めてから数える）と'
@@ -13187,16 +13296,16 @@ const Parent = (() => {
       el('div.ico', { text: g.ico }),
       el('div', null, el('b', { text: g.name }), el('div', { html: g.aim })))));
     s.append(list);
-    if (open1){
+    if (allOpen){
       s.append(el('p', { style: { color: 'var(--good-ink)', fontWeight: 800 },
-        text: byHand && pre.got < pre.total
-          ? '※ この端末では、おうちの方の操作で先に開いています。'
-          : '✓ 開いています。ホームの「1ねんせいの きょうしつ」から遊べます。' }));
+        text: byHand
+          ? '※ この端末では、おうちの方の操作で4つの遊びを開いています。'
+          : '✓ 4つの遊びが開いています。ホームの「1ねんせいの きょうしつ」から遊べます。' }));
       return s;
     }
-    s.append(el('p', { text: '入学前のレベルを全部クリアする前でも、ここから開けられます。'
+    s.append(el('p', { text: 'まだ準備中の遊びも、ここからまとめて開けられます。'
       + '「かぞえよう」や「いくつと いくつ」が安定していて、本人が先に進みたがっているなら、'
-      + '残りのレベルのクリアを待つ必要はありません。開けたあとも入学前の遊びはそのまま残りますし、'
+      + '各遊びの準備がそろうのを待つ必要はありません。開けたあとも入学前の遊びはそのまま残りますし、'
       + '一度開けると閉じられません。' }));
     let armed = false;
     const openBtn = el('button.btn', { text: '1ねんせいの もんだいを いま開く' });
@@ -13241,7 +13350,7 @@ const Parent = (() => {
     ['1〜2か月め', 'かずの しま を中心に', 'かぞえよう / すうじ どれかな / かずの じゅんばん。まず10までを確実に。数字のなぞり書きも並行して少しずつ。'],
     ['3〜4か月め', 'けいさんの やま に入る', 'いくつと いくつ → 10の おともだち の順で。ここが半年計画の山場です。毎日「きょうの れんしゅう」を1回。'],
     ['5〜6か月め', 'たしざん・ひきざん と 生活の数', '式の形に慣れ、とけい・おおきさくらべ・なんばんめ で入学後の単元に先に触れておきます。'],
-    ['そのあと', '1ねんせいの きょうしつ', '入学前のレベルをすべてクリア（★1つ以上）すると開きます。金色のシールは条件に入りません。なかまづくり（同じものの集まり）と 1たい1で くらべる（一対一対応）から、20までの数・式へ。1年生の1学期の順番そのままです。']
+    ['準備ができたら', '1ねんせいの きょうしつ', '各遊びに関連する2〜3レベルの準備ができると、その遊びから開きます。金色のシールは条件に入りません。なかまづくり（同じものの集まり）と 1たい1で くらべる（一対一対応）から、20までの数・式へ。1年生の1学期の順番そのままです。']
   ];
 
   function textSection(eyebrow, title, pairs){
@@ -13276,7 +13385,7 @@ const Parent = (() => {
                                        : el('b', { text: '入学しています' }),
         el('small', { text: fmt(school) + ' 入学の予定' })),
       el('div.big', null, el('b', { text: pre.got + ' / ' + pre.total + ' レベル' }),
-        el('small', { text: left ? 'のこり ' + left + 'レベルで 1ねんせいの きょうしつが開きます' : 'すべてクリア済み' })));
+        el('small', { text: left ? '入学前のシールは のこり ' + left + 'レベル' : 'すべてクリア済み' })));
     s.append(head);
 
     /* Pace, stated plainly enough that a parent can check it: levels cleared,
@@ -13738,7 +13847,7 @@ const Parent = (() => {
         el('p', { text: '小学校1年生の算数は「数える」「数を分ける・合わせる」「比べる」「形をとらえる」の4つの土台の上に立っています。逆に言えば、入学前にやるべきことは計算の先取りではなく、この土台を手と目と声で確かめておくことです。このアプリは入学前の'
           + Games.list.filter(g => Progress.stageOf(g) === 'pre').length
           + 'の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。'
-          + 'それを全部終えると、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
+          + '関連する2〜3レベルの準備ができた遊びから、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
         el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると、答えではなく「解き直すための道具」が画面に出て、声でも伝えます（タップして数える、空いたマスを埋める、端をそろえる、など）。ここでは選択肢を減らしません。4回で指のアニメがやり方を最後まで見せて「こたえを みる」ボタンが出て、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、1回目の正解には数えません）。' }),
         el('p', { text: 'はじめて開くレベルは、テストから始めません。最初の1問は指のアニメがやり方を見せ（「みてて」）、次の1問は道具を出したまま一緒に解き（「いっしょに」）、そのあとに本番の問題が続きます。この2問は★にも記録にも数えません。問題の横の 👀 を押すと、まちがえる前でも道具が出ます（押した問題は自力の正解には数えません）。' }));
     sheetInner.append(

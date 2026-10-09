@@ -57,8 +57,9 @@
     // drag-and-drop questions: pick a piece, then try each destination
     const piece = q('#play .tile:not(.gone)') || q('#play .shapetile:not(.used)');
     if (piece){
-      piece.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 0, clientY: 0, pointerId: 1, isPrimary: true }));
-      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 0, clientY: 0, pointerId: 1, isPrimary: true }));
+      // Native buttons activate on click (including Enter/Space), not on a
+      // synthetic pointerup, which does not generate the browser's click event.
+      piece.click();
       const targets = qa('#play [data-drop]');
       for (const t of targets){
         const was = S.locked;
@@ -1688,8 +1689,7 @@
         const wrongBin = tile && qa('#play .bin').find(b => b.dataset.cat !== tile.dataset.cat);
         if (!wrongBin) continue;
         // picked up once (a second tap on a held tile puts it down), then the wrong box twice
-        tile.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 0, clientY: 0, pointerId: 1, isPrimary: true }));
-        window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 0, clientY: 0, pointerId: 1, isPrimary: true }));
+        tile.click();
         for (let i = 0; i < 2; i++) wrongBin.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         sorted = S.wrongThisQ >= 2;
         if (sorted && q('#play .bin.glow')) bad.push('なかまわけ lights the right box');
@@ -2209,7 +2209,7 @@
     try{ q('#home .gamecard.locked').click(); }
     finally { K.Sound.say = say; K.Sound.hush = hush; }
     const lastHush = log.lastIndexOf('hush');
-    const spoken = log.slice(lastHush + 1).some(x => /^say:.*じゅんび/.test(x));
+    const spoken = log.slice(lastHush + 1).some(x => /^say:.*(?:じゅんび|準備)/.test(x));
     check('tapping a padlocked 小1 card is heard, not cancelled by the screen change',
       spoken, log.join(' | '));
     K.UI.show('home');
@@ -2358,7 +2358,7 @@
     }
     check('Home, the level list and the sticker book say what they are, out loud',
       card.indexOf(name) >= 0 && levels.indexOf(name) >= 0
-        && /(きょうの れんしゅう|はじめの ぼうけん)/.test(home) && /レベル/.test(book) && /シールブック/.test(book),
+        && /(きょうの れんしゅう|はじめの ぼうけん)/.test(home) && /準備/.test(book) && /シールブック/.test(book),
       'card=' + card + ' | levels=' + levels + ' | home=' + home + ' | book=' + book);
     K.UI.show('home');
     K.Store.reset();

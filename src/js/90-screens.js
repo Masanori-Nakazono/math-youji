@@ -97,6 +97,52 @@ const Orientation = (() => {
   return { build, open };
 })();
 
+/* ---------------------------------------------------------- CLASSROOM PREPARATION */
+const G1Preparation = (() => {
+  let node, heading, list, active = null;
+  function speech(){
+    if (!active) return '';
+    const needed = Progress.preparation(active).filter(p => !p.ready);
+    return active.name + 'の準備だよ。' + (needed.length
+      ? 'この遊びから始めよう。' + needed.map(p => p.game.name + '、レベル' + (p.levelIndex + 1) + '、' + p.game.levels[p.levelIndex].t).join('。')
+      : '準備ができたね。一年生の遊びに進めるよ。');
+  }
+  function build(){
+    if (node) return;
+    heading = el('h2'); list = el('div.g1-preparation-list');
+    node = el('div#g1-preparation', null,
+      el('div.topbar', null,
+        el('button.btn.btn-ghost.btn-round', { type:'button', 'aria-label':'ホームに もどる',
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home'); } }, '←'),
+        heading, speakBtn(speech)),
+      el('p.g1-preparation-note', { text:'この あそびの じゅんびを しよう。できている あそびには ✓ が つくよ' }), list);
+    UI.register('g1-preparation', node);
+  }
+  function open(game){
+    build(); active = game; heading.textContent = game.name + 'の じゅんび'; clear(list);
+    Progress.preparation(game).forEach(p => {
+      const lv = p.game.levels[p.levelIndex];
+      list.append(el('button.btn.preparation-level', { type:'button',
+        dataset:{ game:p.game.id, level:String(p.levelIndex) },
+        'aria-label':p.game.name + '、レベル' + (p.levelIndex + 1) + '、' + lv.t + (p.ready ? '、じゅんび できた' : '、あそびに いく'),
+        onclick(){
+          Sound.sfx.tap();
+          if (levelOpen(p.game, p.levelIndex)){
+            if (p.game.intro !== false && !Store.introduced(p.game.id, p.levelIndex)) FirstSteps.open(p.game, p.levelIndex);
+            else Session.startLevel(p.game, p.levelIndex);
+          } else { Levels.render(p.game); UI.show('levels'); Sound.say('まず、前のレベルから遊ぼう。' + Levels.speech(), { delay:120 }); }
+        }
+      }, el('span', {text:p.game.ico}), el('span.copy', null,
+        el('b', {text:p.game.name}), el('small', {text:'レベル ' + (p.levelIndex + 1) + '　' + lv.t})),
+        el('span', {text:p.ready ? '✓ じゅんび できた' : '▶'})));
+    });
+    if (stageOpen(game)) list.append(el('button.btn.btn-accent', { type:'button', text:'🎓 ' + game.name + 'で あそぶ',
+      onclick(){ Sound.sfx.tap(); Levels.render(game); UI.show('levels'); Sound.say(Levels.speech(), {delay:120}); } }));
+    UI.show('g1-preparation'); Sound.say(speech(), {delay:180});
+  }
+  return { open, speech };
+})();
+
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl;
@@ -199,27 +245,14 @@ const Home = (() => {
       }) : null);
   }
 
-  /* The classroom is on this screen from the first day, behind a padlock.
-
-     It was hidden until the shelf was half full, on the theory that a lock a child
-     cannot open yet is discouraging. That is true of a lock with nothing behind it
-     — and this one has four named games behind it. Seeing 「なかまづくり」 and
-     「20までの かず」 sitting there, greyed out, is the reason to fill the shelf;
-     an empty space where they would be is not. Tapping one says how to get in and
-     goes to the sticker book, which is where the count lives.
-
-     What opens it is clearing all 48 入学前 levels — the plain stickers. The gold
-     ones (a run with every answer right first time) stay a thing worth going back
-     for; they are not part of the key. */
+  /* Locked cards explain the preparation for this particular classroom game,
+     with named routes to the relevant lessons. */
   function lockedCard(g){
     return el('button.gamecard.locked', {
       type: 'button', title: g.name + '　' + Progress.unlockHint(g),
       onclick(){
         Sound.sfx.tap();
-        Book.render();
-        UI.show('book');
-        // after the switch: UI.show hushes anything queued before it
-        Sound.say(Progress.unlockHint(g), { delay: 120 });
+        G1Preparation.open(g);
       }
     },
       el('div.ico', { text: g.ico }),
@@ -239,6 +272,7 @@ const Home = (() => {
     parentBtn.setAttribute('title', due
       ? 'おうちのかたへ（記録の書き出しを おすすめします）' : 'おうちのかたへ');
     const n = Store.todayCount(), streak = Store.streak();
+    const practiceDone = Store.practiceDoneToday();
     const firstRun = Diagnostic.shouldRun();
     const rec = Diagnostic.current();
     const recGame = rec && Games.byId[rec.gameId];
@@ -280,15 +314,15 @@ const Home = (() => {
     const learnedCount = Games.list.reduce((n, g) => n + g.levels.filter((lv, i) => Store.introduced(g.id, i)).length, 0);
     dailyEl.hidden = learnedCount === 0;
     clear(dailyEl);
-    dailyEl.classList.toggle('done', n >= 10);
+    dailyEl.classList.toggle('done', practiceDone);
     dailyEl.append(
       el('div.ico', { text: BANNER_ICON.daily, 'aria-hidden': 'true' }),
       el('div.grow', null,
-        el('div.t', { text: n >= 10 ? 'きょうの れんしゅう おわり！' : 'きょうの れんしゅう' }),
-        el('div.s', { text: n >= 10
+        el('div.t', { text: practiceDone ? 'きょうの れんしゅう おわり！' : 'きょうの れんしゅう' }),
+        el('div.s', { text: practiceDone
           ? `きょうは ${n}もん がんばったね　･　${streak}にち れんぞく`
           : 'あそんだ もんだいから 10もん でるよ' })),
-      el('div.go', { text: n >= 10 ? '🎉' : '▶' }));
+      el('div.go', { text: practiceDone ? '🎉' : '▶' }));
 
     const weak = Store.weakFacts(4);
     focusEl.hidden = weak.length < 2;      // one wobbly fact is not a practice set
@@ -336,23 +370,11 @@ const Home = (() => {
        so those cards sit at y≈900 and a child has to scroll two thirds of the way
        down to meet them. Rather than move the map around, the count goes on the one
        strip that is on screen whatever happens — the shelf the child already taps. */
-    const gate = Progress.preStickers();
-    const toGo = Progress.g1Open() ? 0 : 1;
-    shelfEl.classList.toggle('nearly', toGo > 0 && toGo <= 6);
-    /* The same picture the result screen draws: a bar filling towards 🎓, and dots to
-       count once there are few enough. 「あと 34レベル」 is a number for the adult,
-       so it stays in the label for them. */
-    let sub;
-    if (toGo){
-      const say = '1ねんせいの きょうしつは、あそびごとに じゅんびが できると ひらくよ';
-      const middle = el('span.leftdots');
-      for (let i = 0; i < 3; i++) middle.append(el('span', { text: '●' }));
-      sub = el('small.togo', { role: 'img', 'aria-label': say, title: say },
-        middle, el('span', { text: '🎓', 'aria-hidden': 'true' }));
-    } else {
-      sub = el('small', { text: Progress.g1Open() ? '1ねんせいの きょうしつが ひらいて いるよ'
-                                                  : 'タップで シールブック' });
-    }
+    const classroom = Games.list.filter(g => Progress.stageOf(g) === 'g1');
+    const openCount = classroom.filter(stageOpen).length;
+    shelfEl.classList.toggle('nearly', openCount > 0 && openCount < classroom.length);
+    const sub = el('small', { text: '1ねんせいの あそび ' + openCount + '／' + classroom.length
+      + (openCount < classroom.length ? '　じゅんびを みよう' : '　ぜんぶ ひらいたよ') });
     shelfEl.append(
       el('span.bk', { text: '📖' }),
       el('div.lbl', null, 'シール ' + got.length + 'まい', sub),
@@ -509,32 +531,20 @@ const Result = (() => {
       el('div.result-msg', { text: msg }));
     if (r.mode === 'diagnostic') inner.append(el('div.result-sub', { text: 'ぴったりの はじまりを みつけたよ' }));
     else if (r.stars >= 2 && r.mode !== 'adventure') inner.append(el('div.result-sub', { text: `${r.total}もんの うち ${r.right}もん いっかいめで せいかい` }));
-    /* Every level cleared is a step towards a door the child can already see on
-       the home screen. Saying how many are left, at the moment one is earned, is
-       what turns「クリアした」into「あと 3レベル」. Levels, not stickers: the gold
-       ones no longer move this number, so counting stickers here would stall. */
     const stickers = r.stickers || [];
-    /* 「あと 47レベル」 is a number a five-year-old cannot hold. A bar filling up
-       towards 🎓 is something they can see move; and once few enough are left to
-       count on a hand or two, they become dots to count. The number stays for the
-       adult, in the label. It rides inside the sticker card: one piece of news. */
     const coloured = r.confirmed || [];
     let toDoor = null;
-    if ((stickers.length || coloured.length) && !r.unlockedG1 && !Progress.g1Open()){
-      const st = Progress.preStickers();
-      const left = 1;
-      if (left){
-        const say = '1ねんせいの きょうしつは、あそびごとに じゅんびが できると ひらくよ';
-        let middle;
-        if (left <= 10){
-          middle = el('div.leftdots');
-          for (let i = 0; i < left; i++) middle.append(el('span', { text: '●' }));
-        } else {
-          middle = el('div.gauge', null, el('div.fill', { style: { width: '35%' } }));
-        }
-        toDoor = el('div.stagenext' + (left <= 10 ? '.nearly' : ''),
-          { role: 'img', 'aria-label': say, title: say },
-          el('span.mk', { text: '🔒' }), middle, el('span.mk', { text: '🎓' }));
+    if ((stickers.length || coloured.length) && !r.unlockedG1){
+      const waitingGames = Games.list.filter(g => Progress.stageOf(g) === 'g1' && !stageOpen(g));
+      waitingGames.sort((a,b) => {
+        const pa = Progress.pathProgress(a), pb = Progress.pathProgress(b);
+        return pb.got / pb.total - pa.got / pa.total;
+      });
+      if (waitingGames.length){
+        const g = waitingGames[0], path = Progress.pathProgress(g);
+        toDoor = el('button.btn.stagenext', { type:'button',
+          onclick(){ Sound.sfx.tap(); G1Preparation.open(g); } },
+          el('span', {text:'🎓'}), el('span', {text:g.name + 'の じゅんび ' + path.got + '／' + path.total}));
       }
     }
     /* The last sticker. This is the one screen in the app that says the child has
@@ -547,7 +557,7 @@ const Result = (() => {
         el('div.e', { text: '🎓' }),
         el('div.l', { text: 'じゅんびが できた！' }),
         el('b', { text: 'しょうがっこう 1ねんせいの あたらしい もんだいが できるよ！' }),
-        el('div.l', { text: '「1ねんせいの きょうしつ」が ホームに ふえたよ' })));
+        el('div.l', { text: 'ホームの「1ねんせいの きょうしつ」から あそべるよ' })));
     }
     /* The thing ★★★ could never say. These levels are for an answer that arrives,
        and a child who counted their way to every right answer used to get exactly
@@ -726,10 +736,7 @@ const Book = (() => {
   }
   /** Said on the way in: the count under the heading is a sentence a child cannot read yet. */
   function speech(){
-    if (Progress.g1Open()) return 'シールブックだよ。集めたシールが並んでいるよ。';
-    const st = Progress.preStickers();
-    const left = Math.max(0, st.total - st.got);
-    return 'シールブックだよ。あと' + left + 'レベルで、1年生の教室が開くよ。';
+    return 'シールブックだよ。集めたシールが並んでいるよ。一年生の遊びは、それぞれの準備ができたら開くよ。準備を見るボタンから、必要な遊びを選べるよ。';
   }
   function open(){
     render();
@@ -740,6 +747,14 @@ const Book = (() => {
     build();
     headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
     clear(grid);
+    const preparation = el('div.book-preparation', { 'aria-label':'1ねんせいの あそびの じゅんび' });
+    Games.list.filter(g => Progress.stageOf(g) === 'g1').forEach(g => {
+      const path = Progress.pathProgress(g);
+      preparation.append(el('button.btn', { type:'button',
+        dataset:{ preparation:g.id }, onclick(){ Sound.sfx.tap(); G1Preparation.open(g); } },
+        g.name + '　' + (stageOpen(g) ? '✓ あそべるよ' : path.got + '／' + path.total + '　じゅんびを みる')));
+    });
+    grid.append(preparation);
     grid.append(PokemonStickers.legend());
     grid.append(Treasures.collection());
     const specialCollection = TransferAdventure.collection();
@@ -754,10 +769,7 @@ const Book = (() => {
         { title: stickerFor(key) + (has ? '　ゲット！' : '　' + (key.endsWith(':g') ? 'ぜんもん さいしょから せいかいで ゲット' : 'クリアで ゲット')) },
         PokemonStickers.artwork(key, { silhouette: !has })));
     });
-    /* The 入学前 shelf is the one that opens the 小1 classroom, so it is the one
-       this page counts towards a goal. The classroom's own stickers go in a second
-       group below, and only once it is open — an empty row of slots for a world a
-       child cannot reach would make the goal look further away than it is. */
+    /* Keep the collection count separate from each classroom game's readiness. */
     const pre = Progress.preStickers();
     drawSlots(Progress.slots('pre'));
     Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0 || k.indexOf('adventure:') === 0).forEach(k => {
@@ -771,15 +783,10 @@ const Book = (() => {
     } else {
       /* Shown, but plainly not part of the count above: a shelf a child can see
          waiting for them is the reason to fill the one they are on. */
-      grid.append(el('div.bookgroup.shut', { text: '🔒　1ねんせいの きょうしつ　レベルを ぜんぶ クリアすると ここが ひらくよ' }));
+      grid.append(el('div.bookgroup.shut', { text: '🔒　1ねんせいの きょうしつ　あそびごとに じゅんびが できると ひらくよ' }));
       Progress.slots('g1').forEach(() => grid.append(el('div.sticker.shut', { text: '🔒' })));
     }
-    /* Two numbers, and they count different things on purpose: the stickers are
-       the shelf (96 of them, gold included), the levels are the door (48). Saying
-       「あと ◯まい」for the door would stall the moment a gold sticker was earned
-       for a level that was already cleared. */
-    /* Name the levels the door is still waiting for, and make each one a way in.
-       The same list the「いまの おすすめ」walks, shown all at once. */
+    /* Missing stickers remain named entry points to the pre-school collection. */
     clear(missing);
     const todo = Progress.gateSlots('pre')
       .filter(k => !Store.hasConfirmed(k))
@@ -812,7 +819,7 @@ const Book = (() => {
           el('span.t', null, g.name, el('small', { text: lv.t + (waiting ? '・たしかめ' : '') }))));
       });
       missing.append(
-        el('div.l', { text: 'のこりの レベル' + (todo.length > 10 ? '（さいしょの 10こ）' : '') }),
+        el('div.l', { text: 'まだ シールがない レベル' + (todo.length > 10 ? '（さいしょの 10こ）' : '') }),
         row);
     }
 
@@ -821,8 +828,8 @@ const Book = (() => {
     count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
       + (waiting ? `<br>かりの シール ${waiting}まい（べつの ひに また できたら いろが つくよ）` : '')
       + (left
-        ? `<br><b>あと ${left}レベル</b> クリアすると しょうがっこう 1ねんせいの もんだいが ひらくよ（${pre.got}／${pre.total}）`
-        : '<br><b>レベルを ぜんぶ クリアしたね！</b> しょうがっこう 1ねんせいの もんだいが できるよ');
+        ? `<br>にゅうがくまえの シールは <b>${pre.got}／${pre.total}レベル</b>。1ねんせいは あそびごとに じゅんびが できると ひらくよ`
+        : '<br><b>にゅうがくまえの シールを ぜんぶ あつめたね！</b>');
   }
   return { build, render, open, speech };
 })();

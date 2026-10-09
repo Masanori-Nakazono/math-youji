@@ -351,37 +351,33 @@ const Parent = (() => {
       row('今日といた問題', Store.todayCount() + '問'),
       row('集めた ★', Store.totalStars() + ' / ' + levels * 3),
       row('集めたシール', Store.data.stickers.length + '枚'),
-      row('クリアした入学前のレベル（1年生が開く条件）', pre.got + ' / ' + pre.total),
+      row('クリアした入学前のレベル', pre.got + ' / ' + pre.total),
       row('かりのクリア（別の日の確かめ待ち）', Progress.pendingCount('pre') + 'レベル'),
       row('「きょうの れんしゅう」初回正答率', pct(Store.practiceAccuracy())));
     return s;
   }
 
-  /* ---- 小学1年生の問題 ----
-     The one thing on this page a parent has to be able to decide: the door opens
-     itself when every 入学前 level has been cleared, and it can be opened by hand
-     when the child is plainly ready and the shelf is not finished. */
+  /* ---- 小学1年生の問題: preparation is checked for each game ---- */
   function stageSection(){
     const s = el('section');
-    const pre = Progress.preStickers();
-    const open1 = Progress.g1Open();
+    const classroom = Games.list.filter(g => Progress.stageOf(g) === 'g1');
+    const allOpen = classroom.every(stageOpen);
     const byHand = !!Store.data.g1Open;
     s.append(el('div.eyebrow', { text: 'next stage' }),
       el('h3', { text: '小学1年生の問題について' }));
-    s.append(el('p', { html: '入学前の' + pre.total + 'レベルを<b>すべてクリアして、シールに色がつくと</b>、ホームに'
-      + '<b>「1ねんせいの きょうしつ」</b>が増えます。いまは <b>' + pre.got + ' / ' + pre.total
-      + '</b> レベルです。クリアは★1つ以上（8問中4問を1回目で正解）で、'
-      + '3回まじめに挑戦すれば次のレベルは開くので、どこかで止まったままにはなりません。' }));
-    s.append(el('p', { text: '★1〜★2でのクリアは「かりのシール」（輪郭だけ）になり、別の日に確かめると色がつきます。'
-      + '次の日の最初のレベルか「きょうの れんしゅう」に、そのレベルの問題が3問混ざり、2問を1回目で正解すれば確定です'
-      + '（別の日にもう一度クリアしても、★★★でも確定します）。8問中4問の正解は、3択を当てずっぽうで押しても4回に1回ほど届くため、'
-      + '1年生の扉は色のついたシールだけを数えます（上の「' + pre.got + ' / ' + pre.total + '」も色のついた数です）。'
-      + '「いまの おすすめ」はかりのシールでも次へ進み、確かめで届かなかったレベルはもう一度出します。' }));
-    s.append(el('p', { text: '金色のシール（全問1回目で正解）は条件に入れていません。'
-      + '48レベルすべてで一発全問正解を出すには、このアプリの推奨ペース（1日1レベル）で'
-      + '半年をはるかに超えます。1年生の1学期の内容が1学期に間に合わないのでは意味がないので、'
-      + '扉の鍵は「色のついたクリアのシール48枚」だけにしてあります。金色のシールはシールブックに残り、'
-      + 'あとから取りに戻れる目標のままです。' }));
+    s.append(el('p', { text:'「1ねんせいの きょうしつ」は、4つの遊びそれぞれに関連する2〜3レベルの準備ができると開きます。'
+      + '入学前の全48レベルや金色のシールをそろえる必要はありません。ホームの鍵付きカードを押すと、必要な遊びとレベルが分かり、その教材へ進めます。' }));
+    s.append(el('p', { text:'各準備レベルは、色のついたクリアのシールがあるか、直近の回答が6問以上あり、ヒントなしの初回正答率が75%以上になると準備完了です。'
+      + '★1〜★2のシールは仮獲得で、別の日の確かめ（3問中2問を自力で初回正解）や再クリアで確定します。★★★ならその場で確定します。'
+      + '「いまの おすすめ」は仮のシールでも次へ進み、確かめで届かなかったレベルはもう一度出します。' }));
+    const preparation = el('div.aimlist');
+    classroom.forEach(g => {
+      const path = Progress.preparation(g);
+      preparation.append(el('div.aimrow', null, el('span.ico', {text:g.ico}),
+        el('div', null, el('b', {text:g.name + (stageOpen(g) ? '：遊べます' : '：準備 ' + path.filter(p => p.ready).length + ' / ' + path.length)}),
+          path.map(p => el('div', {text:(p.ready ? '✓ ' : '○ ') + p.game.name + ' L' + (p.levelIndex + 1) + '「' + p.game.levels[p.levelIndex].t + '」'})))));
+    });
+    s.append(preparation);
     s.append(el('p', { text: '中身は「先取りの計算」ではありません。1年生の1学期は、'
       + '入学前にやったことをもう一度、ちがう聞き方でたどり直します。'
       + '「同じものの集まり」（自分でまとまりを決めてから数える）と'
@@ -392,16 +388,16 @@ const Parent = (() => {
       el('div.ico', { text: g.ico }),
       el('div', null, el('b', { text: g.name }), el('div', { html: g.aim })))));
     s.append(list);
-    if (open1){
+    if (allOpen){
       s.append(el('p', { style: { color: 'var(--good-ink)', fontWeight: 800 },
-        text: byHand && pre.got < pre.total
-          ? '※ この端末では、おうちの方の操作で先に開いています。'
-          : '✓ 開いています。ホームの「1ねんせいの きょうしつ」から遊べます。' }));
+        text: byHand
+          ? '※ この端末では、おうちの方の操作で4つの遊びを開いています。'
+          : '✓ 4つの遊びが開いています。ホームの「1ねんせいの きょうしつ」から遊べます。' }));
       return s;
     }
-    s.append(el('p', { text: '入学前のレベルを全部クリアする前でも、ここから開けられます。'
+    s.append(el('p', { text: 'まだ準備中の遊びも、ここからまとめて開けられます。'
       + '「かぞえよう」や「いくつと いくつ」が安定していて、本人が先に進みたがっているなら、'
-      + '残りのレベルのクリアを待つ必要はありません。開けたあとも入学前の遊びはそのまま残りますし、'
+      + '各遊びの準備がそろうのを待つ必要はありません。開けたあとも入学前の遊びはそのまま残りますし、'
       + '一度開けると閉じられません。' }));
     let armed = false;
     const openBtn = el('button.btn', { text: '1ねんせいの もんだいを いま開く' });
@@ -446,7 +442,7 @@ const Parent = (() => {
     ['1〜2か月め', 'かずの しま を中心に', 'かぞえよう / すうじ どれかな / かずの じゅんばん。まず10までを確実に。数字のなぞり書きも並行して少しずつ。'],
     ['3〜4か月め', 'けいさんの やま に入る', 'いくつと いくつ → 10の おともだち の順で。ここが半年計画の山場です。毎日「きょうの れんしゅう」を1回。'],
     ['5〜6か月め', 'たしざん・ひきざん と 生活の数', '式の形に慣れ、とけい・おおきさくらべ・なんばんめ で入学後の単元に先に触れておきます。'],
-    ['そのあと', '1ねんせいの きょうしつ', '入学前のレベルをすべてクリア（★1つ以上）すると開きます。金色のシールは条件に入りません。なかまづくり（同じものの集まり）と 1たい1で くらべる（一対一対応）から、20までの数・式へ。1年生の1学期の順番そのままです。']
+    ['準備ができたら', '1ねんせいの きょうしつ', '各遊びに関連する2〜3レベルの準備ができると、その遊びから開きます。金色のシールは条件に入りません。なかまづくり（同じものの集まり）と 1たい1で くらべる（一対一対応）から、20までの数・式へ。1年生の1学期の順番そのままです。']
   ];
 
   function textSection(eyebrow, title, pairs){
@@ -481,7 +477,7 @@ const Parent = (() => {
                                        : el('b', { text: '入学しています' }),
         el('small', { text: fmt(school) + ' 入学の予定' })),
       el('div.big', null, el('b', { text: pre.got + ' / ' + pre.total + ' レベル' }),
-        el('small', { text: left ? 'のこり ' + left + 'レベルで 1ねんせいの きょうしつが開きます' : 'すべてクリア済み' })));
+        el('small', { text: left ? '入学前のシールは のこり ' + left + 'レベル' : 'すべてクリア済み' })));
     s.append(head);
 
     /* Pace, stated plainly enough that a parent can check it: levels cleared,
@@ -943,7 +939,7 @@ const Parent = (() => {
         el('p', { text: '小学校1年生の算数は「数える」「数を分ける・合わせる」「比べる」「形をとらえる」の4つの土台の上に立っています。逆に言えば、入学前にやるべきことは計算の先取りではなく、この土台を手と目と声で確かめておくことです。このアプリは入学前の'
           + Games.list.filter(g => Progress.stageOf(g) === 'pre').length
           + 'の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。'
-          + 'それを全部終えると、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
+          + '関連する2〜3レベルの準備ができた遊びから、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
         el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると、答えではなく「解き直すための道具」が画面に出て、声でも伝えます（タップして数える、空いたマスを埋める、端をそろえる、など）。ここでは選択肢を減らしません。4回で指のアニメがやり方を最後まで見せて「こたえを みる」ボタンが出て、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、1回目の正解には数えません）。' }),
         el('p', { text: 'はじめて開くレベルは、テストから始めません。最初の1問は指のアニメがやり方を見せ（「みてて」）、次の1問は道具を出したまま一緒に解き（「いっしょに」）、そのあとに本番の問題が続きます。この2問は★にも記録にも数えません。問題の横の 👀 を押すと、まちがえる前でも道具が出ます（押した問題は自力の正解には数えません）。' }));
     sheetInner.append(

@@ -53,6 +53,7 @@ const Store = (() => {
     treasures: [],    // world IDs whose chest was opened; separate from stickers
     daily: {},        // "YYYY-MM-DD" -> questions done
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
+    practiceDays: {}, // "YYYY-MM-DD" -> 1 only after the whole daily set is finished
     diagnostic: null, // { completedDay, outcomes, recommended }
     orientation: false,
     missions: {},     // "YYYY-MM-DD" -> { id, gameId, text, prompt, done, reviewed }
@@ -78,6 +79,7 @@ const Store = (() => {
        worked out from the shelf, and a release that adds a 入学前 level would
        otherwise shut it again on a child who had already gone through. */
     g1Reached: false,
+    g1GamesOpen: {}, // game ID -> 1 once that game's preparation route has opened it
     /* Day number of the last export. Six months of records live in one localStorage
        key on a device whose OS is documented to throw them away, and the only
        defence — 書き出す — sat behind an adult gate that nobody had a reason to open.
@@ -219,6 +221,8 @@ const Store = (() => {
      || !copyMap('last', isCount)
      || !copyMap('swift', v => v === 0 || v === 1)
      || !copyMap('intro', v => v === 1)
+     || !copyMap('g1GamesOpen', v => v === 1)
+     || !copyMap('practiceDays', v => v === 1)
      || !copyMap('reviewRecords', isRecord)
      || !copyMap('transferRecords', v => isRecord(v) && Number.isInteger(v.day) && v.day >= 0
           && Number.isInteger(v.independent) && v.independent >= 0 && v.independent <= 5
@@ -229,6 +233,7 @@ const Store = (() => {
           && typeof v.label === 'string' && v.label.length <= 80)
      || !copyMap('pending', v => Array.isArray(v) && v.length >= 3 && v.slice(0, 3).every(isCount))
      || !copyMap('recent', v => typeof v === 'string' && /^[01]{0,30}$/.test(v))
+     || !copyMap('factRecent', v => typeof v === 'string' && /^[01]{0,12}$/.test(v))
      || !copyMap('firstTry', v => Array.isArray(v) && v.length >= 2
           && isCount(v[0]) && isCount(v[1]) && v[0] <= v[1])
      || !copyMap('facts', v => Array.isArray(v) && v.length >= 3
@@ -241,6 +246,8 @@ const Store = (() => {
       if (!/^[a-z0-9]+:\d+:(viewed|together|supported|revised|independent)$/.test(k)) return null;
     if (Object.keys(out.transferRecords).some(k => !/^[0-5]$/.test(k))) return null;
     if (Object.entries(out.reviewRecords).some(([k, v]) => !reviewRecordValid(k, v))) return null;
+    if (Object.keys(out.g1GamesOpen).some(k => !/^[a-z0-9]+$/.test(k))) return null;
+    if (Object.keys(out.practiceDays).some(k => !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(k))) return null;
 
     if (data.stickers !== undefined){
       if (!Array.isArray(data.stickers) || data.stickers.some(v => typeof v !== 'string')) return null;
@@ -324,7 +331,7 @@ const Store = (() => {
       if (typeof data.name !== 'string') return null;
       out.name = data.name.slice(0, 12);
     }
-    for (const k of ['sfx', 'voice', 'g1Open', 'g1Reached', 'transferReached', 'secondRoundReached']){
+    for (const k of ['sfx', 'voice', 'orientation', 'g1Open', 'g1Reached', 'transferReached', 'secondRoundReached']){
       if (data[k] !== undefined){
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];
@@ -370,7 +377,7 @@ const Store = (() => {
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
   function mergeInto(base, add){
     const out = Object.assign(blank(), base);
-    ['stars', 'plays', 'seen', 'daily', 'swift', 'intro'].forEach(k => {
+    ['stars', 'plays', 'seen', 'daily', 'swift', 'intro', 'g1GamesOpen', 'practiceDays'].forEach(k => {
       const src = add[k] || {};
       out[k] = Object.assign({}, base[k] || {});
       // max, never sum: importing the same backup twice must not inflate anything
@@ -389,12 +396,24 @@ const Store = (() => {
     }
     // facts: keep the record that has been practised more; never sum
     out.facts = Object.assign({}, base.facts || {});
+    out.factRecent = Object.assign({}, base.factRecent || {});
     const af2 = add.facts || {};
     for (const k in af2){
       const cur = out.facts[k];
       const mine = (base.facts && base.facts[k] && base.facts[k][6]) || null;
       const theirs = af2[k][6] || null;
-      if (!cur || (af2[k][0] || 0) > (cur[0] || 0)) out.facts[k] = af2[k].slice();
+      const incomingWindow = add.factRecent && add.factRecent[k];
+      // The previous importer could lose just the window. A backup of the same
+      // observation can repair it without replacing a newer or different record.
+      const restoresWindow = cur && out.factRecent[k] === undefined && incomingWindow !== undefined
+        && af2[k][0] === cur[0] && af2[k][1] === cur[1] && af2[k][2] === cur[2];
+      if (!cur || (af2[k][0] || 0) > (cur[0] || 0) || restoresWindow){
+        out.facts[k] = af2[k].slice();
+        // The recent window belongs to this actual record, not the other device's.
+        // An older-format backup may have no window; do not attach a stale one.
+        delete out.factRecent[k];
+        if (incomingWindow !== undefined) out.factRecent[k] = incomingWindow;
+      }
       else if (cur){
         cur[2] = maxNum(cur[2], af2[k][2]);
         if (!cur[4] && af2[k][4]) cur[4] = af2[k][4];   // keep whichever side knows where to ask it
@@ -425,6 +444,7 @@ const Store = (() => {
     out.treasures = Array.from(new Set((base.treasures || []).concat(add.treasures || [])));
     const bp = base.practice || [0, 0], ap = add.practice || [0, 0];
     out.practice = (ap[1] || 0) > (bp[1] || 0) ? ap.slice() : bp.slice();
+    out.orientation = !!(base.orientation || add.orientation);
     const bd = base.diagnostic, ad = add.diagnostic;
     out.diagnostic = !bd ? ad : !ad ? bd
       : ((ad.completedDay || 0) > (bd.completedDay || 0) ? ad : bd);
@@ -622,6 +642,8 @@ const Store = (() => {
       p[0] += right; p[1] += total;
       save();
     },
+    practiceDoneToday(){ return mem.practiceDays[todayKey()] === 1; },
+    completePracticeToday(){ mem.practiceDays[todayKey()] = 1; save(); },
     /* 集中練習 counts towards today's total, but not towards the「きょうの れんしゅう」
        accuracy the parent page reports — that number names one specific set. */
     recordFocus(right, total){
@@ -868,6 +890,12 @@ const Store = (() => {
     introduced: (g, l) => !!(mem.intro && mem.intro[key(g, l)]),
     markIntroduced(g, l){ (mem.intro || (mem.intro = {}))[key(g, l)] = 1; save(); },
     completeOrientation(){ mem.orientation = true; save(); },
+    hasG1GameOpen: gameId => mem.g1GamesOpen[gameId] === 1,
+    markG1GameOpen(gameId){
+      if (typeof gameId !== 'string' || !safeKey(gameId) || !/^[a-z0-9]+$/.test(gameId)
+          || mem.g1GamesOpen[gameId]) return false;
+      mem.g1GamesOpen[gameId] = 1; save(); return true;
+    },
 
     /* ---- provisional clears ---- */
     dayNumber: () => dayNo(),
