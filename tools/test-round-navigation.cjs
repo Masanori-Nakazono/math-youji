@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
-// Isolated browser coverage for lap selection, storage, and the new rewards.
-// Fixtures live only in this test profile; no child's local records are read.
+// A lap includes the whole existing map, adventures and textbook review.
+// Fresh browser contexts keep every fixture separate from the child's records.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,15 +25,14 @@ const server = http.createServer((req, res) => {
   try {
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
-    const errors = [];
-    const url = `http://127.0.0.1:${server.address().port}/dist/kazu-no-bouken.html`;
+    const errors = [], url = `http://127.0.0.1:${server.address().port}/dist/kazu-no-bouken.html`;
     const newPage = async () => {
       const page = await browser.newPage({ viewport: { width: 1024, height: 768 }, serviceWorkers: 'block', reducedMotion: 'reduce' });
       page.on('pageerror', e => errors.push(e.message));
       await page.route('https://**', route => route.abort());
       return page;
     };
-    const quiet = async page => page.evaluate(() => {
+    const quiet = page => page.evaluate(() => {
       const K = KazuApp;
       K.Sound.hush(); K.Sound.voiceOn = false; K.Sound.sfxOn = false;
       K.Sound.say = () => {}; K.Sound.probeVoice = () => Promise.resolve(true);
@@ -41,317 +40,278 @@ const server = http.createServer((req, res) => {
     });
     const passed = name => console.log('PASS ' + name);
     const solveAdultGate = async page => {
-      for (let n = 0; n < 2; n++){
-        await page.evaluate(() => {
-          const [a, b] = document.querySelector('#gate .q').textContent.match(/\d+/g).map(Number);
-          [...document.querySelectorAll('#gate .choice')].find(node => Number(node.textContent) === a * b).click();
-        });
-      }
+      for (let n = 0; n < 2; n++) await page.evaluate(() => {
+        const [a, b] = document.querySelector('#gate .q').textContent.match(/\d+/g).map(Number);
+        [...document.querySelectorAll('#gate .choice')].find(node => Number(node.textContent) === a * b).click();
+      });
     };
-    const checkNarrowSwitcher = async page => {
-      const originalViewport = page.viewportSize();
-      try {
-        for (const width of [390, 320]){
-          await page.setViewportSize({ width, height: 844 });
-          const cards = await page.locator('.screen:not([hidden]) .round-switcher .round-choice').evaluateAll(nodes => nodes.map(card => {
-            const strong = card.querySelector('strong'), range = document.createRange();
-            range.selectNodeContents(strong);
-            const lines = [...range.getClientRects()].filter(rect => rect.width && rect.height);
-            const cardRect = card.getBoundingClientRect(), labelRect = strong.getBoundingClientRect();
-            return {
-              text: strong.textContent, lines: lines.length,
-              fits: labelRect.left >= cardRect.left && labelRect.right <= cardRect.right,
-              overflow: card.scrollWidth > card.clientWidth + 1
-            };
-          }));
-          assert.equal(cards.length, 2, 'both lap choices remain visible at ' + width + 'px');
-          assert.ok(cards.every(card => card.lines === 1 && card.fits && !card.overflow), 'lap names stay on one line inside their cards at ' + width + 'px: ' + JSON.stringify(cards));
-        }
-      } finally { await page.setViewportSize(originalViewport); }
-    };
-    const screenshotDir = process.env.ROUND_SHOTS && path.resolve(process.env.ROUND_SHOTS);
-    if (screenshotDir) fs.mkdirSync(screenshotDir, { recursive: true });
-    const capture = async (page, name) => {
-      if (!screenshotDir) return;
-      const originalViewport = page.viewportSize();
-      try {
-        for (const [device, viewport] of [['tablet', { width: 1024, height: 768 }], ['phone', { width: 390, height: 844 }]]){
-          await page.setViewportSize(viewport);
-          for (const colorScheme of ['light', 'dark']){
-            await page.emulateMedia({ colorScheme });
-            await page.evaluate(async () => {
-              await document.fonts.ready;
-              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-            });
-            const file = path.join(screenshotDir, `${name}-${device}-${colorScheme}.png`);
-            await page.screenshot({ path: file, animations: 'disabled' });
-          }
-        }
-      } finally {
-        await page.emulateMedia({ colorScheme: 'light' });
-        await page.setViewportSize(originalViewport);
-      }
-    };
-    const roundState = page => page.evaluate(() => {
-      const K = KazuApp, name = K.UI.currentName(), node = K.UI.screens[name];
-      const status = node && node.querySelector('.round-status');
-      const style = status && getComputedStyle(status);
-      return {
-        name, current: K.Rounds.current(), selected: K.Store.data.selectedRound,
-        round: node && node.dataset.round, label: status && status.textContent,
-        count: node && node.querySelectorAll('.round-status').length,
-        theme: style && [style.backgroundColor, style.borderColor, style.color].join('|')
-      };
-    });
     const expectRound = async (page, name, round) => {
-      const state = await roundState(page);
+      const state = await page.evaluate(() => {
+        const K = KazuApp, name = K.UI.currentName(), node = K.UI.screens[name], label = node.querySelector('.round-status');
+        return { name, current: K.Rounds.current(), selected: K.Store.data.selectedRound,
+          round: node.dataset.round, label: label && label.textContent, count: node.querySelectorAll('.round-status').length,
+          theme: label && [getComputedStyle(label).backgroundColor, getComputedStyle(label).borderColor].join('|') };
+      });
       assert.equal(state.name, name, JSON.stringify(state));
       assert.equal(state.current, round, JSON.stringify(state));
       assert.equal(state.selected, round, JSON.stringify(state));
       assert.equal(state.round, String(round), JSON.stringify(state));
-      assert.equal(state.count, 1, 'one persistent lap label per visible screen');
+      assert.equal(state.count, 1, 'one lap status on ' + name);
       assert.match(state.label, round === 1 ? /１しゅうめ/ : /２しゅうめ/);
-      assert.equal(await page.locator('#' + name + ' .round-status').isVisible(), true, name + ' lap label is visible');
+      assert.equal(await page.locator('#' + name + ' .round-status').isVisible(), true);
       return state;
     };
-
+    const shots = process.env.ROUND_SHOTS && path.resolve(process.env.ROUND_SHOTS);
+    if (shots) fs.mkdirSync(shots, { recursive: true });
+    const capture = async (page, name) => {
+      if (!shots) return;
+      for (const [device, viewport] of [['tablet', { width: 1024, height: 768 }], ['phone', { width: 390, height: 844 }]]){
+        await page.setViewportSize(viewport);
+        for (const colorScheme of ['light', 'dark']){
+          await page.emulateMedia({ colorScheme });
+          await page.evaluate(async () => { await document.fonts.ready; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); });
+          await page.screenshot({ path: path.join(shots, `${name}-${device}-${colorScheme}.png`), animations: 'disabled' });
+        }
+      }
+      await page.emulateMedia({ colorScheme: 'light' });
+      await page.setViewportSize({ width: 1024, height: 768 });
+    };
     const page = await newPage();
     await page.goto(url, { waitUntil: 'domcontentloaded' });
     await quiet(page);
-    const blank = await page.evaluate(() => {
-      const K = KazuApp; K.Store.reset();
-      if (!K.Rounds) throw new Error('KazuApp.Rounds is missing');
-      K.Rounds.go(1);
-      return JSON.parse(K.Store.exportText()).data;
+    const blank = await page.evaluate(() => { KazuApp.Store.reset(); return JSON.parse(KazuApp.Store.exportText()).data; });
+
+    // Startup must migrate the old, incorrectly named "second round" to lap 1.
+    const legacy = JSON.parse(JSON.stringify(blank));
+    for (const key of ['roundSchema', 'roundTwoReached', 'roundTwo']) delete legacy[key];
+    legacy.selectedRound = 2; legacy.secondRoundReached = true;
+    legacy.stars = { 'count:0': 3 }; legacy.intro = { 'count:0': 1 };
+    legacy.stickers = ['count:0', 'r2:0', 'r2chapter:0'];
+    legacy.reviewRecords = { 'r2:0': { day: 1, at: 100, runs: 2, kind: 'lesson', independent: 8, revised: 0, supported: 0 } };
+    legacy.stickerWorld.items = { 'r2:0': { x: 25, y: 35 } };
+    const migratedPage = await newPage();
+    await migratedPage.addInitScript(data => localStorage.setItem('kazu-no-bouken.v1', JSON.stringify(data)), legacy);
+    await migratedPage.goto(url, { waitUntil: 'domcontentloaded' }); await quiet(migratedPage);
+    const migrated = await migratedPage.evaluate(() => {
+      const K = KazuApp, S = K.Store; K.Rounds.go(1); K.TextbookReview.open();
+      return { round: S.round(), root: JSON.parse(S.exportText()).data,
+        badge: !!document.querySelector('#review [data-sticker-key="r2:0"] .pokemon-round-badge'), unlocked: K.Rounds.unlocked() };
     });
+    assert.equal(migrated.round, 1); assert.equal(migrated.unlocked, false);
+    for (const key of ['stars', 'intro', 'stickers', 'reviewRecords']) assert.deepEqual(migrated.root[key], legacy[key]);
+    assert.deepEqual(migrated.root.stickerWorld.items, legacy.stickerWorld.items);
+    assert.equal(migrated.root.secondRoundReached, true); assert.equal(migrated.root.roundTwo, null);
+    assert.equal(migrated.badge, false);
+    await expectRound(migratedPage, 'review', 1); await capture(migratedPage, 'textbook1'); await migratedPage.close();
+    passed('legacy selectedRound 2 becomes lap 1 while retaining textbook records, stickers and island placement');
+
+    await page.evaluate(() => KazuApp.Rounds.go(1));
     const firstTheme = (await expectRound(page, 'home', 1)).theme;
-    await checkNarrowSwitcher(page);
     await capture(page, 'home1');
-    assert.deepEqual(await page.locator('#home .round-switcher [data-round-target]').evaluateAll(nodes => nodes.map(n => n.dataset.roundTarget).sort()), ['1', '2']);
-    const lockedButton = page.locator('#home .round-switcher [data-round-target="2"]');
-    assert.equal(await lockedButton.isEnabled(), true, 'locked second lap explains its gate when tapped');
-    await lockedButton.click();
+    await page.locator('#home [data-round-target="2"]').click();
     await expectRound(page, 'book', 1);
-    assert.equal(await page.locator('#book .review-gate').isVisible(), true);
-    assert.match(await page.locator('#book .review-gate').innerText(), /131/);
-    await page.locator('#book .topbar button').first().click();
-    await expectRound(page, 'home', 1);
-    await page.evaluate(() => KazuApp.SecondRound.open(0));
-    await expectRound(page, 'book', 1);
-    assert.equal(await page.evaluate(() => KazuApp.SecondRound.inspect()), null);
-    passed('fresh records start on lap 1; the visible locked lap 2 button explains the original 131-sticker gate');
-
-    const validation = await page.evaluate(() => {
-      const S = KazuApp.Store, backup = JSON.parse(S.exportText());
-      const before = JSON.stringify(backup.data), invalid = [];
-      for (const value of [0, 3, -1, 1.5, '2', true, null, {}, []]){
-        const incoming = JSON.parse(JSON.stringify(backup)); incoming.data.selectedRound = value;
-        const result = S.importText(JSON.stringify(incoming), 'replace');
-        invalid.push(!result.ok && JSON.stringify(JSON.parse(S.exportText()).data) === before);
-      }
-      delete backup.data.selectedRound;
-      const legacy = S.importText(JSON.stringify(backup), 'replace');
-      return { invalid, legacy: legacy.ok, selected: S.data.selectedRound };
+    assert.match(await page.locator('#book .round-collection').innerText(), /156/);
+    const gate = await page.evaluate(() => {
+      const K = KazuApp, S = K.Store, R = K.TextbookReview;
+      R.progress().groups.flatMap(g => g.keys).filter(k => !k.startsWith('treasure:')).forEach(k => S.addSticker(k));
+      K.WORLDS.forEach(w => S.claimTreasure(w.id)); K.Rounds.go(1); R.open();
+      return { count: R.progress().got, unlocked: R.unlocked(), repeat: K.Rounds.unlocked(),
+        lessons: document.querySelectorAll('#review .review-lesson').length, summaries: document.querySelectorAll('#review .review-summary').length };
     });
-    assert.ok(validation.invalid.every(Boolean), 'invalid preference backups are rejected without changing any records');
-    assert.ok(validation.legacy); assert.equal(validation.selected, 1);
-    // Raw device storage is less strict than an explicit import: recover the app
-    // with a safe preference even when a previous version saved malformed data.
-    for (const value of [0, 3, '2', null]){
-      const rawPage = await newPage();
-      await rawPage.addInitScript(data => localStorage.setItem('kazu-no-bouken.v1', JSON.stringify(data)), { ...blank, selectedRound: value });
-      await rawPage.goto(url, { waitUntil: 'domcontentloaded' });
-      await quiet(rawPage);
-      await rawPage.evaluate(() => { KazuApp.Home.render(); KazuApp.UI.show('home'); });
-      await expectRound(rawPage, 'home', 1);
-      await rawPage.close();
+    assert.deepEqual(gate, { count: 131, unlocked: true, repeat: false, lessons: 20, summaries: 5 });
+    await expectRound(page, 'review', 1);
+    const complete = await page.evaluate(() => {
+      const K = KazuApp, S = K.Store, keys = K.TextbookReview.rewardKeys();
+      keys.slice(0, -1).forEach(k => S.addSticker(k)); S.addPending(keys.at(-1));
+      const pending = { progress: K.Rounds.progress(1).got, open: K.Rounds.unlocked() };
+      S.confirmSticker(keys.at(-1)); S.recordLevel('count', 0, 3, 8, 8); S.markIntroduced('count', 0);
+      S.recordReview('r2:0', Array(8).fill('independent'), 'lesson'); S.completeOrientation();
+      S.setPref('createdAt', Date.now() - 120 * 86400000); K.Rounds.go(1);
+      return { pending, progress: K.Rounds.progress(1).got, open: K.Rounds.unlocked(), keys: K.Rounds.rewardKeys(),
+        first: K.Rounds.rewardKeys().map(k => K.PokemonStickers.reward(k, 1).id), second: K.Rounds.rewardKeys().map(k => K.PokemonStickers.reward(k, 2).id) };
+    });
+    assert.deepEqual(complete.pending, { progress: 155, open: false });
+    assert.equal(complete.progress, 156); assert.equal(complete.open, true); assert.equal(complete.keys.length, 156);
+    assert.equal(new Set(complete.first.concat(complete.second)).size, 312, 'all 312 fixed species are different');
+    passed('131 original rewards unlock textbook review within lap 1; all 156 confirmed rewards unlock the true second lap');
+
+    await page.locator('#home [data-round-target="2"]').click();
+    assert.notEqual((await expectRound(page, 'home', 2)).theme, firstTheme);
+    assert.equal(await page.locator('#home .gamecard').count(), 20, 'lap 2 opens the complete map');
+    const fresh = await page.evaluate(() => {
+      const K = KazuApp, S = K.Store, data = S.roundData(2);
+      return { levels: K.Games.list.reduce((n, g) => n + g.levels.length, 0), stars: S.totalStars(), stickers: data.stickers.length,
+        review: data.reviewRecords, recommended: K.Diagnostic.current(), introduced: S.introduced('count', 0), nextLevel: S.levelUnlocked('count', 1),
+        classroom: K.Progress.g1Open(), transfer: K.TransferAdventure.unlocked(), textbook: K.TextbookReview.unlocked(),
+        treasure: K.Treasures.status('shima'), first: JSON.stringify(Object.fromEntries(Object.keys(data).map(k => [k, S.roundData(1)[k]]))) };
+    });
+    assert.equal(fresh.levels, 60); assert.equal(fresh.stars, 0); assert.equal(fresh.stickers, 0); assert.deepEqual(fresh.review, {});
+    assert.deepEqual(fresh.recommended, { gameId: 'count', levelIndex: 0 });
+    for (const key of ['introduced', 'nextLevel', 'classroom', 'transfer', 'textbook']) assert.equal(fresh[key], false, key + ' starts fresh');
+    assert.equal(fresh.treasure.ready, false); assert.equal(fresh.treasure.opened, false); await capture(page, 'home2');
+    for (const width of [390, 320]){
+      await page.setViewportSize({ width, height: 844 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'map fits ' + width + 'px');
+      assert.equal(await page.locator('#home .round-choice').count(), 2);
     }
-    passed('legacy preferences default to lap 1; malformed imports are atomic and malformed raw storage recovers safely');
-
-    const original = await page.evaluate(() => {
-      const K = KazuApp, S = K.Store, R = K.SecondRound;
-      S.reset(); S.completeOrientation(); S.recordDiagnostic([], { gameId: 'count', levelIndex: 0 });
-      S.setPref('stars', { 'count:0': 3 });
-      S.noteFact('count:count:3', true, '３こ', 'count:0');
-      for (const k of R.progress().groups.flatMap(g => g.keys)) if (!k.startsWith('treasure:')) S.addSticker(k);
-      K.WORLDS.forEach(w => S.claimTreasure(w.id));
-      if (R.progress().got !== 131 || !R.unlocked()) throw new Error('original collection fixture did not open lap 2');
-      const keys = R.progress().groups.flatMap(g => g.keys);
-      K.Rounds.go(1);
-      return {
-        keys, art: keys.map(k => K.PokemonStickers.reward(k).id),
-        mastery: JSON.stringify([S.data.stars, S.data.facts, S.data.recent, S.data.firstTry, S.data.intro, S.data.pending])
-      };
-    });
-    await expectRound(page, 'home', 1);
-    await page.locator('#home .round-switcher [data-round-target="2"]').click();
-    const secondTheme = (await expectRound(page, 'review', 2)).theme;
-    assert.notEqual(secondTheme, firstTheme, 'lap labels have distinct rendered themes as well as text');
-    assert.equal(await page.locator('#review .review-lesson').count(), 20);
-    assert.equal(await page.locator('#review .review-summary').count(), 5);
-    assert.deepEqual(await page.locator('#review .round-switcher [data-round-target]').evaluateAll(nodes => nodes.map(n => n.dataset.roundTarget).sort()), ['1', '2']);
-    await page.locator('#review .round-switcher [data-round-target="1"]').click();
-    await expectRound(page, 'home', 1);
-    await page.locator('#home .round-switcher [data-round-target="2"]').click();
-    await page.evaluate(() => { KazuApp.Home.render(); KazuApp.UI.show('home'); });
-    await expectRound(page, 'review', 2);
-    await checkNarrowSwitcher(page);
-    await capture(page, 'menu2');
-    passed('both lap menus expose the switcher; lap 2 has a distinct theme and retains 20 lessons plus five summaries');
-
-    // The same status strip must remain visible while the second-round module
-    // replaces its body for questions and results.
-    await page.locator('#review [data-lesson="0"]').click();
-    await expectRound(page, 'review', 2);
-    await capture(page, 'question2');
-    const completion = await page.evaluate(() => {
-      const K = KazuApp, R = K.SecondRound;
-      const click = selector => {
-        const node = document.querySelector('#review ' + selector);
-        if (!node) throw new Error('Missing review control: ' + selector);
-        node.click();
-      };
-      for (let n = 0; n < 8; n++){
-        const { q } = R.inspect();
-        if (q.type === 'group') q.answer.forEach(i => click('[data-focus="object' + i + '"]'));
-        else if (q.type === 'match') for (let i = 0; i < q.a; i++){
-          click('[data-focus="target' + i + '"]'); click('[data-focus="pair' + i + '"]');
-        }
-        else throw new Error('Unexpected first lesson question: ' + q.type);
-        click('.review-check'); click('.review-next');
-      }
-      return {
-        earned: K.Store.hasConfirmed('r2:0'), record: K.Store.data.reviewRecords['r2:0'],
-        mastery: JSON.stringify([K.Store.data.stars, K.Store.data.facts, K.Store.data.recent, K.Store.data.firstTry, K.Store.data.intro, K.Store.data.pending]),
-        rewardKeys: R.rewardKeys(), rewardIds: R.rewardKeys().map(k => K.PokemonStickers.reward(k).id)
-      };
-    });
-    await expectRound(page, 'review', 2);
-    assert.equal(await page.locator('#review .review-result').isVisible(), true);
-    assert.ok(completion.earned); assert.equal(completion.record.independent, 8);
-    assert.equal(completion.mastery, original.mastery, 'lap 2 preserves first-lap mastery');
-    assert.equal(completion.rewardKeys.length, 25); assert.equal(new Set(completion.rewardIds).size, 25);
-    assert.ok(completion.rewardIds.every(id => !original.art.includes(id)), 'new stickers use species absent from every original slot');
-    const resultSticker = page.locator('#review .review-result .pokemon-second-round');
-    assert.equal(await resultSticker.isVisible(), true);
-    assert.match(await resultSticker.getAttribute('aria-label'), /２しゅうめ/);
-    assert.equal(await resultSticker.locator('.pokemon-round-badge').isVisible(), true);
-    await capture(page, 'result2');
-    passed('lap 2 questions and results keep their lap label; clean play earns a visibly distinct new sticker without changing lap 1 mastery');
-
-    // Shared destinations preserve which adventure the child was playing and
-    // return to its menu using their actual back buttons.
-    for (const round of [2, 1]){
-      await page.evaluate(round => KazuApp.Rounds.go(round), round);
-      if (round === 2) await page.locator('#review .review-tools button').filter({ hasText: 'シールブック' }).click();
-      else await page.evaluate(() => KazuApp.Book.open());
-      await expectRound(page, 'book', round);
-      assert.equal(await page.locator('#book .review-collectible .pokemon-second-round').count(), 25);
-      assert.equal(await page.locator('#book .pokemon-second-round-chapter').count(), 5);
-      assert.equal(await page.locator('#book .pokemon-sticker[data-sticker-key="count:0"]').evaluate(node => node.classList.contains('pokemon-second-round') || !!node.querySelector('.pokemon-round-badge')), false);
-      await page.locator('#book .topbar button').first().click();
-      await expectRound(page, round === 2 ? 'review' : 'home', round);
-      if (round === 2){
-        await page.locator('#review .review-tools button').filter({ hasText: 'じぶんの しま' }).click();
-        await page.locator('#sticker-world .world-palette-sticker').filter({ has: page.locator('[data-sticker-key="r2:0"]') }).click();
-      } else await page.evaluate(() => KazuApp.StickerWorld.open('r2:0'));
-      await expectRound(page, 'sticker-world', round);
-      assert.equal(await page.locator('#sticker-world .world-palette-sticker.selected .pokemon-second-round .pokemon-round-badge').isVisible(), true);
-      await page.locator('#sticker-world .topbar button').first().click();
-      await expectRound(page, round === 2 ? 'review' : 'home', round);
-      if (round === 2) await page.locator('#review .review-tools button').filter({ hasText: 'おうちのかたへ' }).click();
-      else await page.evaluate(() => KazuApp.Parent.open());
-      await expectRound(page, 'gate', round);
-      // Solve the adult gate as presented, so this covers its real transition.
-      await solveAdultGate(page);
-      await expectRound(page, 'parent', round);
-      await page.locator('#parent .topbar button').first().click();
-      await expectRound(page, round === 2 ? 'review' : 'home', round);
-    }
-    passed('the shared sticker book, island, adult gate and parent page preserve the lap and return to its correct menu');
-
-    for (const name of ['levels', 'first-steps', 'first-finish', 'play']){
-      await page.evaluate(name => {
-        const K = KazuApp, game = K.Games.byId.count; K.Rounds.go(2);
-        if (name === 'levels'){ K.Levels.render(game); K.UI.show('levels'); }
-        if (name === 'first-steps') K.FirstSteps.open(game, 0);
-        if (name === 'first-finish') K.FirstSteps.finish(game, 0, 'show');
-        if (name === 'play') K.Session.startLevel(game, 0);
-      }, name);
-      await expectRound(page, name, 1);
-    }
-    await page.evaluate(() => {
-      const K = KazuApp;
-      for (let guard = 0; K.UI.currentName() === 'play' && guard < 30; guard++){
-        K.Session._test.forceCorrect(); K.Session._test.flushTimers();
-      }
-    });
-    await expectRound(page, 'result', 1);
-    await page.locator('#result .result-actions button').filter({ hasText: /あそびを えらぶ|きょうは おしまい/ }).click();
-    await expectRound(page, 'home', 1);
-    passed('opening first-lap levels, introductions or play explicitly selects lap 1 through the real result and return flow');
-
-    const persistence = await page.evaluate(() => {
-      const K = KazuApp, S = K.Store;
-      K.Rounds.go(2); const second = S.exportText();
-      K.Rounds.go(1); const first = S.exportText();
-      S.importText(second); const localFirst = S.data.selectedRound;
-      K.Rounds.go(2); S.importText(first); const localSecond = S.data.selectedRound;
-      S.importText(first, 'replace'); const replacedFirst = S.data.selectedRound;
-      S.importText(second, 'replace'); const replacedSecond = S.data.selectedRound;
-      const legacy = JSON.parse(second); delete legacy.data.selectedRound;
-      S.importText(JSON.stringify(legacy), 'replace'); const legacyFirst = S.data.selectedRound;
-      S.importText(second, 'replace'); K.UI.show('home'); S.flush();
-      return { localFirst, localSecond, replacedFirst, replacedSecond, legacyFirst, second };
-    });
-    assert.deepEqual([persistence.localFirst, persistence.localSecond, persistence.replacedFirst, persistence.replacedSecond, persistence.legacyFirst], [1, 2, 1, 2, 1]);
-    await expectRound(page, 'review', 2);
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await quiet(page);
-    assert.equal(await page.evaluate(() => KazuApp.Store.data.selectedRound), 2);
-    assert.equal(await page.evaluate(() => KazuApp.Store.hasConfirmed('r2:0')), true);
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.evaluate(() => KazuApp.Parent.open()); await expectRound(page, 'gate', 2);
+    await solveAdultGate(page); await expectRound(page, 'parent', 2);
+    assert.match(await page.locator('#parent').innerText(), /1周目の入学前48レベルはすべてクリア済み/);
+    assert.equal(await page.locator('#parent .schedule').innerText().then(text => text.includes('48 / 48 レベル')), true);
+    await page.locator('#parent .topbar button').first().click(); await expectRound(page, 'home', 2);
+    await page.evaluate(() => { KazuApp.Levels.render(KazuApp.Games.byId.count); KazuApp.UI.show('levels'); });
+    await expectRound(page, 'levels', 2);
+    await page.evaluate(() => KazuApp.FirstSteps.open(KazuApp.Games.byId.count, 0)); await expectRound(page, 'first-steps', 2);
+    await page.evaluate(() => { KazuApp.Rounds.go(2); KazuApp.Store.flush(); });
+    await page.reload({ waitUntil: 'domcontentloaded' }); await quiet(page);
+    assert.equal(await page.evaluate(() => KazuApp.Store.round()), 2);
     await page.locator('#title button').filter({ hasText: 'はじめる' }).click();
-    await page.waitForFunction(() => KazuApp.UI.currentName() === 'review');
-    await expectRound(page, 'review', 2);
-    assert.equal(await page.evaluate(({ keys, art }) => keys.every((k, i) => KazuApp.PokemonStickers.reward(k).id === art[i]), original), true);
-    passed('reload and the title Start button resume lap 2; replace restores selection, merge keeps local selection, and original sticker identities stay fixed');
+    await page.waitForFunction(() => KazuApp.UI.currentName() === 'home'); await expectRound(page, 'home', 2);
+    passed('all 60 levels restart with fresh introductions and gates; reload and Start resume the second-lap home map');
 
-    // Parent import/reset redraw the existing screen in place rather than
-    // calling UI.show again: its lap strip must update in that same redraw.
-    await page.locator('#review .review-tools button').filter({ hasText: 'おうちのかたへ' }).click();
+    // Drive the actual count controls, engine result, earned art and return button.
+    await page.evaluate(() => KazuApp.Session.startLevel(KazuApp.Games.byId.count, 0)); await expectRound(page, 'play', 2);
+    const played = await page.evaluate(() => {
+      const K = KazuApp, S = K.Session._test;
+      for (let guard = 0; K.UI.currentName() === 'play' && guard < 40; guard++){
+        const answer = Number(S.item.split(':').pop());
+        document.querySelectorAll('#play .obj:not(.counted)').forEach(n => n.click()); S.flushTimers(6);
+        const choice = [...document.querySelectorAll('#play .choices .choice')].find(n => Number(n.textContent) === answer);
+        if (choice) choice.click(); S.flushTimers(6);
+      }
+      return { screen: K.UI.currentName(), stars: K.Store.stars('count', 0), normal: K.Store.hasConfirmed('count:0'), gold: K.Store.hasConfirmed('count:0:g'),
+        first: JSON.stringify(Object.fromEntries(Object.keys(K.Store.roundData(2)).map(k => [k, K.Store.roundData(1)[k]]))) };
+    });
+    assert.equal(played.screen, 'result'); assert.equal(played.stars, 3); assert.equal(played.normal, true); assert.equal(played.gold, true);
+    assert.equal(played.first, fresh.first); await expectRound(page, 'result', 2);
+    assert.ok(await page.locator('#result .pokemon-second-round .pokemon-round-badge').count() > 0); await capture(page, 'sticker2');
+    await page.locator('#result .result-actions button').filter({ hasText: /あそびを えらぶ|きょうは おしまい/ }).click();
+    await expectRound(page, 'home', 2);
+    passed('a replayed level earns distinct lap 2 normal and gold stickers without changing any first-lap learning field');
+
+    // Controlled progress fixtures open the later modules only within lap 2.
+    await page.evaluate(() => {
+      const K = KazuApp, S = K.Store;
+      K.Games.list.forEach(g => g.levels.forEach((lv, i) => { S.addSticker(g.id + ':' + i); S.addSticker(g.id + ':' + i + ':g'); }));
+      K.Treasures.open('shima');
+    });
+    await expectRound(page, 'treasure', 2); await page.locator('#treasure .treasure-open').click();
+    assert.equal(await page.locator('#treasure .treasure-art.pokemon-second-round').count(), 1);
+    await page.locator('#treasure .topbar button').first().click(); await expectRound(page, 'home', 2);
+    await page.evaluate(() => KazuApp.TransferAdventure.open()); await expectRound(page, 'transfer', 2);
+    assert.equal(await page.locator('#transfer .transfer-card').count(), 6);
+    await page.evaluate(() => {
+      const oldRandom = Math.random; Math.random = () => .5;
+      try {
+        document.querySelector('#transfer [data-mission="0"]').click();
+        for (let step = 0; step < 5; step++){
+          for (let i = 0; i < 4; i++) document.querySelector('#transfer [aria-label="１つ うごかす"]').click();
+          document.querySelector('#transfer .transfer-check').click(); document.querySelector('#transfer .transfer-next').click();
+        }
+      } finally { Math.random = oldRandom; }
+    });
+    assert.equal(await page.evaluate(() => KazuApp.Store.hasConfirmed('transfer:0') && KazuApp.Store.data.transferRecords[0].independent === 5), true);
+    assert.equal(await page.locator('#transfer .transfer-result .pokemon-second-round').count(), 1);
+    await page.locator('#transfer button').filter({ hasText: 'きょうは ここまで' }).click(); await expectRound(page, 'home', 2);
+    await page.evaluate(() => {
+      const K = KazuApp, S = K.Store;
+      K.TextbookReview.progress().groups.flatMap(g => g.keys).filter(k => !k.startsWith('treasure:')).forEach(k => S.addSticker(k));
+      K.WORLDS.forEach(w => S.claimTreasure(w.id)); K.TextbookReview.open();
+    });
+    await expectRound(page, 'review', 2);
+    assert.equal(await page.locator('#review .review-lesson').count(), 20); assert.equal(await page.locator('#review .review-summary').count(), 5);
+    assert.equal(await page.locator('#review .review-lesson:not([disabled])').count(), 1, 'textbook progression restarts too');
+    const review = await page.evaluate(() => {
+      const K = KazuApp, R = K.TextbookReview, S = K.Store;
+      const click = sel => { const n = document.querySelector('#review ' + sel); if (!n) throw new Error('Missing review control ' + sel); n.click(); };
+      // Only the first chapter is needed here; test-review covers every format.
+      const finish = () => {
+        const total = R.inspect().run.total;
+        for (let step = 0; step < total; step++){
+          const { q } = R.inspect();
+          if (q.type === 'group') q.answer.forEach(i => click('[data-focus="object' + i + '"]'));
+          else if (q.type === 'match') for (let i = 0; i < q.a; i++){ click('[data-focus="target' + i + '"]'); click('[data-focus="pair' + i + '"]'); }
+          else click('[data-number="' + q.answer + '"]');
+          click('.review-check'); click('.review-next');
+        }
+      };
+      R.open(0); finish(); for (let i = 1; i < 4; i++) S.addSticker('r2:' + i);
+      R.open(null, 0); finish();
+      return { lesson: S.hasConfirmed('r2:0'), summary: S.hasConfirmed('r2chapter:0'), runs: S.data.reviewRecords['r2:0'].runs,
+        chapter: S.data.reviewRecords['r2chapter:0'].kind, first: JSON.stringify(Object.fromEntries(Object.keys(S.roundData(2)).map(k => [k, S.roundData(1)[k]]))) };
+    });
+    assert.equal(review.lesson, true); assert.equal(review.summary, true); assert.equal(review.runs, 1); assert.equal(review.chapter, 'chapter');
+    assert.equal(review.first, fresh.first); assert.equal(await page.locator('#review .review-result .pokemon-second-round-chapter').count(), 1);
+    await page.locator('#review .topbar button').first().click(); await page.locator('#review .topbar button').first().click();
+    await expectRound(page, 'home', 2);
+    passed('lap 2 independently replays chests, six adventures, 20 textbook lessons and five summaries with new rewards');
+
+    const island = await page.evaluate(() => {
+      const K = KazuApp, S = K.Store;
+      S.putWorldSticker('count:0', 20, 30); S.putWorldSticker('lap2:count:0', 70, 60); K.StickerWorld.open('count:0');
+      return { selected: document.querySelector('#sticker-world .world-palette-sticker.selected [data-sticker-key]').dataset.stickerKey,
+        keys: S.ownedStickerKeys(), items: S.stickerWorld().items,
+        first: document.querySelector('#sticker-world .world-sticker [data-sticker-key="count:0"]').dataset.pokemon,
+        second: document.querySelector('#sticker-world .world-sticker [data-sticker-key="lap2:count:0"]').dataset.pokemon };
+    });
+    await expectRound(page, 'sticker-world', 2);
+    assert.equal(island.selected, 'lap2:count:0'); assert.ok(island.keys.includes('count:0') && island.keys.includes('lap2:count:0'));
+    assert.deepEqual(island.items['count:0'], { x: 20, y: 30 }); assert.deepEqual(island.items['lap2:count:0'], { x: 70, y: 60 });
+    assert.notEqual(island.first, island.second);
+    await page.locator('#sticker-world .topbar button').first().click(); await expectRound(page, 'home', 2);
+    await page.evaluate(() => KazuApp.Book.open()); await expectRound(page, 'book', 2);
+    await page.locator('#book .topbar button').first().click(); await expectRound(page, 'home', 2);
+    await page.evaluate(() => KazuApp.Parent.open()); await expectRound(page, 'gate', 2);
     await solveAdultGate(page);
     await expectRound(page, 'parent', 2);
-    for (const round of [1, 2]){
-      const backup = JSON.parse(persistence.second); backup.data.selectedRound = round;
-      await page.locator('#parent .backupbox').fill(JSON.stringify(backup));
-      await page.getByRole('button', { name: '読み込み方：合体する', exact: true }).click();
-      await page.getByRole('button', { name: '貼り付けから読み込む', exact: true }).click();
-      await expectRound(page, 'parent', round);
-    }
-    await page.getByRole('button', { name: '記録をすべて消す', exact: true }).click();
-    await page.getByRole('button', { name: '本当に消しますか？（もう一度タップ）', exact: true }).click();
-    await expectRound(page, 'parent', 1);
-    assert.equal(await page.getByRole('button', { name: '消しました', exact: true }).isVisible(), true);
-    assert.equal(await page.evaluate(() => KazuApp.Store.hasSticker('r2:0')), false);
-    passed('parent backup replacement and confirmed reset immediately redraw the current lap; phone and narrow-phone switcher names stay on one line');
+    await page.locator('#parent .topbar button').first().click(); await expectRound(page, 'home', 2);
+    passed('shared book, island and parent pages retain the lap; both generations of stickers coexist on the island');
 
-    // A valid preference in an edited/old backup cannot bypass the gate.
-    await page.evaluate(blank => {
-      const K = KazuApp;
-      const backup = { app: 'kazu-no-bouken', v: 1, data: { ...blank, selectedRound: 2 } };
-      if (!K.Store.importText(JSON.stringify(backup), 'replace').ok) throw new Error('valid lap preference import failed');
-      K.Home.render(); K.UI.show('home');
-    }, blank);
-    const clamped = await roundState(page);
-    assert.equal(clamped.name, 'home'); assert.equal(clamped.current, 1); assert.equal(clamped.round, '1');
-    assert.equal(await page.locator('#home .round-status').isVisible(), true);
-    await page.evaluate(() => KazuApp.Rounds.go(2));
-    assert.notEqual(await page.evaluate(() => KazuApp.UI.currentName()), 'review');
-    assert.equal(await page.evaluate(() => KazuApp.Rounds.current()), 1);
-    await page.evaluate(() => { KazuApp.Store.reset(); KazuApp.Rounds.go(1); });
-    await expectRound(page, 'home', 1);
+    const backup = await page.evaluate(legacy => {
+      const K = KazuApp, S = K.Store, second = S.exportText(), original = JSON.parse(second);
+      const fingerprint = () => JSON.stringify(JSON.parse(S.exportText()).data);
+      const replace = S.importText(second, 'replace').ok && S.round() === 2;
+      S.importText(second); S.importText(second); const idempotent = fingerprint() === JSON.stringify(original.data);
+      K.Rounds.go(1); const firstSelected = S.exportText(); S.importText(second); const mergeFirst = S.round();
+      K.Rounds.go(2); S.importText(firstSelected); const mergeSecond = S.round();
+      S.importText(firstSelected, 'replace'); const replaceFirst = S.round(); S.importText(second, 'replace');
+      const before = fingerprint(), invalid = [];
+      for (const mutate of [
+        data => { data.roundTwo.stars['count:0'] = 99; },
+        data => { data.roundTwo.reviewRecords['r2:0'].supported = 9; },
+        data => { data.roundTwo = []; }, data => { data.selectedRound = '2'; }
+      ]){
+        const bad = JSON.parse(second); mutate(bad.data);
+        invalid.push(!S.importText(JSON.stringify(bad), 'replace').ok && fingerprint() === before);
+      }
+      const laneBefore = JSON.stringify(S.roundData(2));
+      const legacyMerge = S.importText(JSON.stringify({ app: 'kazu-no-bouken', v: 1, data: legacy })).ok;
+      const legacySafe = laneBefore === JSON.stringify(S.roundData(2)) && S.round() === 2;
+      S.importText(second, 'replace'); S.flush();
+      return { replace, idempotent, mergeFirst, mergeSecond, replaceFirst, invalid, legacyMerge, legacySafe,
+        firstRuns: original.data.reviewRecords['r2:0'].runs, secondRuns: original.data.roundTwo.reviewRecords['r2:0'].runs };
+    }, legacy);
+    assert.equal(backup.replace, true); assert.equal(backup.idempotent, true);
+    assert.deepEqual([backup.mergeFirst, backup.mergeSecond, backup.replaceFirst], [1, 2, 1]);
+    assert.ok(backup.invalid.every(Boolean), 'invalid nested data rejects the whole backup atomically');
+    assert.equal(backup.legacyMerge, true); assert.equal(backup.legacySafe, true); assert.equal(backup.firstRuns, 1); assert.equal(backup.secondRuns, 1);
+    await page.reload({ waitUntil: 'domcontentloaded' }); await quiet(page);
+    const restored = await page.evaluate(({ keys, first }) => {
+      const K = KazuApp, S = K.Store; K.Rounds.go(2); K.StickerWorld.open();
+      return { round: S.round(), plays: [S.roundData(1).plays['count:0'], S.roundData(2).plays['count:0']], items: S.stickerWorld().items,
+        stable: keys.every((k, i) => K.PokemonStickers.reward(k, 1).id === first[i]),
+        firstBadge: !!document.querySelector('#sticker-world [data-sticker-key="count:0"] .pokemon-round-badge'),
+        secondBadge: !!document.querySelector('#sticker-world [data-sticker-key="lap2:count:0"] .pokemon-round-badge') };
+    }, complete);
+    assert.equal(restored.round, 2); assert.deepEqual(restored.plays, [1, 1]); assert.equal(restored.stable, true);
+    assert.deepEqual(restored.items, island.items); assert.equal(restored.firstBadge, false); assert.equal(restored.secondBadge, true);
+    await page.evaluate(() => KazuApp.Rounds.go(1)); await expectRound(page, 'home', 1);
+    assert.equal(await page.evaluate(() => KazuApp.Store.hasConfirmed('r2chapter:4')), true);
+    await page.evaluate(() => KazuApp.Rounds.go(2)); await expectRound(page, 'home', 2);
+    assert.equal(await page.evaluate(() => KazuApp.Store.hasSticker('r2chapter:4')), false);
     assert.deepEqual(errors, []);
-    passed('a saved lap 2 preference cannot bypass a locked collection; reset returns to lap 1 and no browser errors occurred');
+    passed('backup replace, idempotent merge and reload preserve both laps; legacy imports cannot change lap 2; invalid nested data is atomic');
   } finally {
     if (browser) await browser.close();
     server.close();

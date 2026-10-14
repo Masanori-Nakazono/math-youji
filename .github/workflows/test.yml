@@ -55,8 +55,11 @@ jobs:
       - name: Verify post-clear adventures and special stickers
         run: node tools/test-transfer.cjs
 
-      - name: Verify second-round unlock, review lessons and persistence
+      - name: Verify textbook review lessons and persistence in the first lap
         run: node tools/test-review.cjs
+
+      - name: Verify separate learning records, legacy migration and backup merging
+        run: node tools/test-round-store.cjs
 
       - name: Verify round navigation, visible identity and saved selection
         run: node tools/test-round-navigation.cjs

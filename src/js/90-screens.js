@@ -35,6 +35,8 @@ const Title = (() => {
           if (Sound.voiceOn && !hasVoice){
             Home.render();
             UI.show('home', { replace: true });
+          } else if (Store.round() === 2){
+            Home.render(); UI.show('home', {replace:true});
           } else if (!Store.data.orientation) Orientation.open();
           else if (Diagnostic.shouldRun()) Session.startDiagnostic();
           else {
@@ -209,7 +211,7 @@ const Home = (() => {
   function homeSpeech(){
     const names = [recommendEl, dailyEl, reviewEl, focusEl]
       .filter(b => b && !b.hidden).map(b => ($('.t', b) || {}).textContent).filter(Boolean);
-    return 'いまは１周目、地図の冒険だよ。２周目は本で復習して、新しいシールを集めるよ。上のボタンから選んでね。' + names.join('、') + '。下の地図から、好きな遊びも選べるよ。';
+    return 'いまは'+Store.round()+'周目だよ。地図も本も、この周の記録で遊べるよ。上のボタンから選んでね。' + names.join('、') + '。下の地図から、好きな遊びも選べるよ。';
   }
 
   function gameCard(g){
@@ -264,7 +266,7 @@ const Home = (() => {
 
   function render(){
     build();
-    clear(roundsEl); roundsEl.append(Rounds.switcher(1));
+    clear(roundsEl); roundsEl.append(Rounds.switcher());
     starEl.textContent = String(Store.totalStars());
     /* A quiet mark for the adult, on the button only they press. The child sees a
        dot; the parent sees that the records have not been written out in a month.
@@ -275,7 +277,7 @@ const Home = (() => {
       ? 'おうちのかたへ（記録の書き出しを おすすめします）' : 'おうちのかたへ');
     const n = Store.todayCount(), streak = Store.streak();
     const practiceDone = Store.practiceDoneToday();
-    const firstRun = Diagnostic.shouldRun();
+    const firstRun = Store.round() === 1 && Diagnostic.shouldRun();
     const rec = Diagnostic.current();
     const recGame = rec && Games.byId[rec.gameId];
     clear(recommendEl);
@@ -346,6 +348,8 @@ const Home = (() => {
        child's choice of what to do next.  The short adventure sits alongside it
        because it answers a different moment — "I want to try, but this is hard." */
     clear(questsEl);
+    const textbook = TextbookReview.homeCard();
+    if (textbook) questsEl.append(textbook);
     const transfer = TransferAdventure.homeCard();
     if (transfer) questsEl.append(transfer);
     const stickerQuest = StickerMissions.homeCard();
@@ -701,7 +705,8 @@ const Result = (() => {
       nextLine = '今日は、ここまでで十分だよ。オレンジのボタンで、おしまいにしよう。';
     }
     inner.append(actions);
-    if (SecondRound.unlocked()) actions.append(act('', '📘', '２しゅうめへ', () => SecondRound.open()));
+    if (TextbookReview.unlocked()) actions.append(act('', '📖', 'ほんを うらがえす', () => TextbookReview.open()));
+    if (Store.round() === 1 && Rounds.unlocked()) actions.append(act('', '🚀', '２しゅうめへ', () => Rounds.go(2)));
     UI.show('result', { replace: true });
     const news = (coloured.length ? 'シールに、色がついたね！' : '')
       + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '')
@@ -759,8 +764,9 @@ const Book = (() => {
     grid.append(Treasures.collection());
     const specialCollection = TransferAdventure.collection();
     if (specialCollection) grid.append(specialCollection);
-    grid.append(SecondRound.collection());
-    let got = Store.data.treasures.length + Store.data.stickers.filter(k => TransferAdventure.missionFor(k) || SecondRound.rewardKeys().includes(k)).length;
+    grid.append(TextbookReview.collection());
+    grid.append(Rounds.collection());
+    let got = Store.data.treasures.length + Store.data.stickers.filter(k => TransferAdventure.missionFor(k) || TextbookReview.rewardKeys().includes(k)).length;
     const drawSlots = keys => keys.forEach(key => {
       const has = Store.hasSticker(key);
       if (has) got++;

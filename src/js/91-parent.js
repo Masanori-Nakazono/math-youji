@@ -466,7 +466,8 @@ const Parent = (() => {
     const school = Store.schoolDate();
     const toSchool = Store.daysToSchool();
     const elapsed = Store.daysSinceStart();
-    const pre = Progress.preStickers();
+    const first = Store.roundData(1), keys = Progress.gateSlots('pre');
+    const pre = {total:keys.length, got:keys.filter(key => first.stickers.includes(key) && !first.pending[key]).length};
     const left = Math.max(0, pre.total - pre.got);
     s.append(el('div.eyebrow', { text: 'calendar' }), el('h3', { text: '入学まで' }));
 
@@ -484,8 +485,9 @@ const Parent = (() => {
        divided by the days since this app was first opened. It is a blunt average
        and it says so — but it is the difference between a roadmap and a plan. */
     if (!left){
-      s.append(el('p', { text: '入学前の48レベルはすべてクリア済みです。あとは「きょうの れんしゅう」と'
-        + '「とっくん」で保つのと、「1ねんせいの きょうしつ」を進めるので十分です。' }));
+      s.append(el('p', { text: Store.round() === 2
+        ? '1周目の入学前48レベルはすべてクリア済みです。現在は2周目で復習しています。入学準備の達成状況は1周目の記録で表示します。'
+        : '入学前の48レベルはすべてクリア済みです。あとは「きょうの れんしゅう」と「とっくん」で保つのと、「1ねんせいの きょうしつ」を進めるので十分です。' }));
     } else if (elapsed < 7 || pre.got === 0){
       s.append(el('p', { text: 'ペースを見積もれるだけの日数がまだありません（1週間ほど使うと出ます）。'
         + '目安は1日1レベル・10分です。48レベルなら、休む日を入れても2〜3か月で終わる分量です。' }));
@@ -787,7 +789,8 @@ const Parent = (() => {
        step every instruction recommends — can open the icon to an empty app. Say so
        while it can still be avoided: in the tab, before the icon exists. */
     if (inSafariTab()){
-      const has = Object.keys(Store.data.stars).length > 0 || Store.data.stickers.length > 0;
+      const has = [Store.roundData(1), Store.roundData(2)].some(data => data
+        && (Object.keys(data.stars).length > 0 || data.stickers.length > 0));
       s.append(el('div.backup-due.tabnotice', null,
         el('b', { text: 'いまは Safari のタブで開いています' }),
         el('div', { text: has
@@ -945,9 +948,10 @@ const Parent = (() => {
         el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると、答えではなく「解き直すための道具」が画面に出て、声でも伝えます（タップして数える、空いたマスを埋める、端をそろえる、など）。ここでは選択肢を減らしません。4回で指のアニメがやり方を最後まで見せて「こたえを みる」ボタンが出て、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、1回目の正解には数えません）。' }),
         el('p', { text: 'はじめて開くレベルは、テストから始めません。最初の1問は指のアニメがやり方を見せ（「みてて」）、次の1問は道具を出したまま一緒に解き（「いっしょに」）、そのあとに本番の問題が続きます。この2問は★にも記録にも数えません。問題の横の 👀 を押すと、まちがえる前でも道具が出ます（押した問題は自力の正解には数えません）。' }));
     sheetInner.append(
+      Rounds.parentSummary(),
       nextUpSection(),
       ...[TransferAdventure.parentSummary()].filter(Boolean),
-      ...[SecondRound.parentSummary()].filter(Boolean),
+      ...[TextbookReview.parentSummary()].filter(Boolean),
       scheduleSection(),
       statsSection(),
       stageSection(),

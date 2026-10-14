@@ -66,9 +66,12 @@ const Store = (() => {
     transferReached: false,
     transferRecords: {}, // mission index -> last actual run, separate from mastery/stars
     transferStickerRule: 2, // version 1 awarded a sticker for finishing even with no right answers
-    secondRoundReached: false, // original 131 rewards; once opened, future editions cannot close it
+    secondRoundReached: false, // legacy name: this lap's textbook course opened after the original 131 rewards
     selectedRound: 1, // the last chosen adventure; shared collections retain this context
-    reviewRecords: {}, // separate second-round observations, never first-round stars/facts
+    roundSchema: 1, // genuine repeat laps; older "second round" records are textbook work in lap 1
+    roundTwoReached: false,
+    roundTwo: null,
+    reviewRecords: {}, // textbook observations, separate from this lap's map stars/facts
     name: '',
     sfx: true, voice: true, voiceId: null,
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
@@ -94,6 +97,19 @@ const Store = (() => {
     createdAt: Date.now()
   });
 
+  /* The original top-level fields remain lap 1 on disk. Only these learning
+     fields are routed to the independent second record while playing lap 2.
+     Settings and the decorated island belong to the child, across both laps. */
+  const LOCAL_FIELDS = new Set([
+    'stars', 'plays', 'seen', 'firstTry', 'facts', 'factRecent', 'recent', 'last',
+    'swift', 'intro', 'milestones', 'pending', 'stickers', 'treasures', 'daily',
+    'practice', 'practiceDays', 'diagnostic', 'missions', 'islandJobs',
+    'transferReached', 'transferRecords', 'transferStickerRule', 'secondRoundReached',
+    'reviewRecords', 'g1Open', 'g1Reached', 'g1GamesOpen'
+  ]);
+  const localFields = data => Object.fromEntries(Array.from(LOCAL_FIELDS, k => [k, data[k]]));
+  const blankProgress = () => localFields(blank());
+
   /* Three different failures, kept apart because each needs a different sentence
      on the parent page:
        avail      — can this page use localStorage at all (blocked site data,
@@ -104,8 +120,23 @@ const Store = (() => {
                     saving off for ever on that device, and「消す」and「読み込む」
                     reported success while writing nothing. Now the bytes are set
                     aside under their own key and a fresh record starts. */
-  let mem = blank(), avail = true, ok = true, unreadable = false;
+  let record = blank(), avail = true, ok = true, unreadable = false;
+  const round = () => record.selectedRound === 2 && record.roundTwoReached && record.roundTwo ? 2 : 1;
+  const active = () => round() === 2 ? record.roundTwo : record;
+  /* A stable facade also survives import/reset replacing the persisted root.
+     Never serialize this facade: doing so while lap 2 is selected would put its
+     stars in lap 1's top-level slots. Persistence always uses `record` itself. */
+  const mem = new Proxy({}, {
+    get(target, k){ return LOCAL_FIELDS.has(k) ? active()[k] : record[k]; },
+    set(target, k, value){ (LOCAL_FIELDS.has(k) ? active() : record)[k] = value; return true; },
+    ownKeys(){ return Reflect.ownKeys(record); },
+    getOwnPropertyDescriptor(target, k){
+      return Object.hasOwn(record, k) ? { enumerable: true, configurable: true,
+        writable: true, value: LOCAL_FIELDS.has(k) ? active()[k] : record[k] } : undefined;
+    }
+  });
   const ASIDE = KEY + '.unreadable';
+  let startupRaw = null;
 
   try{
     const raw = localStorage.getItem(KEY);
@@ -113,8 +144,9 @@ const Store = (() => {
       let parsed = null;
       try{ parsed = JSON.parse(raw); }catch(e){}
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)){
-        mem = Object.assign(blank(), parsed);
-        if (parsed.transferStickerRule === undefined) mem.transferStickerRule = 0;
+        record = Object.assign(blank(), parsed);
+        startupRaw = raw;
+        if (parsed.transferStickerRule === undefined) record.transferStickerRule = 0;
         /* It parsed, but a field can still have the wrong shape — `stickers` that is
            not a list stopped Home from drawing at all, so the app never opened and
            the record could not even be written out. A field like that goes back to
@@ -124,15 +156,27 @@ const Store = (() => {
         const shape = v => Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v;
         let bent = false;
         for (const k of Object.keys(fresh)){
-          const want = shape(fresh[k]), got = shape(mem[k]);
+          const want = shape(fresh[k]), got = shape(record[k]);
           if (want === got) continue;
-          if ((k === 'diagnostic' && got === 'object') || (k === 'voiceId' && got === 'string')) continue;
-          mem[k] = fresh[k];
+          if ((k === 'diagnostic' && got === 'object') || (k === 'voiceId' && got === 'string')
+              || (k === 'roundTwo' && got === 'object')) continue;
+          record[k] = fresh[k];
           bent = true;
         }
-        if (![1, 2].includes(mem.selectedRound)){ mem.selectedRound = 1; bent = true; }
-        for (const [k, v] of Object.entries(mem.reviewRecords)){
-          if (!reviewRecordValid(k, v)){ delete mem.reviewRecords[k]; bent = true; }
+        if (parsed.roundSchema !== 1){
+          // A legacy selectedRound=2 meant the textbook, not a fresh repeat lap.
+          record.roundSchema = 1; record.selectedRound = 1;
+          record.roundTwoReached = false; record.roundTwo = null;
+          if (parsed.roundSchema !== undefined) bent = true;
+        }
+        if (![1, 2].includes(record.selectedRound)){
+          record.selectedRound = 1; bent = true;
+        }
+        if (parsed.roundTwo != null && (typeof parsed.roundTwo !== 'object' || Array.isArray(parsed.roundTwo)))
+          record.selectedRound = 1;
+        if (!record.roundTwoReached) record.selectedRound = 1;
+        for (const [k, v] of Object.entries(record.reviewRecords)){
+          if (!reviewRecordValid(k, v)){ delete record.reviewRecords[k]; bent = true; }
         }
         if (bent){ try{ localStorage.setItem(ASIDE, raw); }catch(e){} }
       } else {
@@ -147,7 +191,7 @@ const Store = (() => {
   function writeNow(){
     if (!avail) return;
     clearTimeout(pending); pending = null;
-    try{ localStorage.setItem(KEY, JSON.stringify(mem)); ok = true; }
+    try{ localStorage.setItem(KEY, JSON.stringify(record)); ok = true; }
     catch(e){ ok = false; }          // quota or private mode: the next save tries again
   }
   function save(){
@@ -188,21 +232,22 @@ const Store = (() => {
   const FILE_TAG = 'kazu-no-bouken';
 
   function exportText(){
-    return JSON.stringify({ app: FILE_TAG, v: 1, savedAt: new Date().toISOString(), data: mem }, null, 2);
+    return JSON.stringify({ app: FILE_TAG, v: 1, savedAt: new Date().toISOString(), data: record }, null, 2);
   }
 
   const isRecord = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const isCount = v => Number.isFinite(v) && v >= 0;
   const safeKey = k => k !== '__proto__' && k !== 'prototype' && k !== 'constructor';
   /** {missKind: count} — a small tally, and every key has to be one we know */
-  const isMissMap = v => isRecord(v) && Object.keys(v).every(
-    k => safeKey(k) && MISS_KINDS[k] && isCount(v[k]));
+  const isMissMap = (v, startup) => isRecord(v) && Object.keys(v).every(
+    k => safeKey(k) && (startup || MISS_KINDS[k]) && isCount(v[k]));
 
   /** Validate into a fresh object before touching the live record. Older backups
       may omit newer fields, but a field that is present must have the shape the
       rest of Store expects. */
-  function normalizeData(data){
+  function normalizeData(data, localOnly = false, startup = false){
     if (!isRecord(data)) return null;
+    if (localOnly && Object.keys(data).some(k => !LOCAL_FIELDS.has(k))) return null;
     const out = blank();
     const copyMap = (name, valid) => {
       if (data[name] == null) return data[name] === undefined;
@@ -243,7 +288,7 @@ const Store = (() => {
           && (v[3] == null || typeof v[3] === 'string')
           && (v[4] == null || typeof v[4] === 'string')
           && (v[5] == null || isCount(v[5]))
-          && (v[6] == null || isMissMap(v[6])))) return null;
+          && (v[6] == null || isMissMap(v[6], startup)))) return null;
     for (const k of Object.keys(out.milestones))
       if (!/^[a-z0-9]+:\d+:(viewed|together|supported|revised|independent)$/.test(k)) return null;
     if (Object.keys(out.transferRecords).some(k => !/^[0-5]$/.test(k))) return null;
@@ -343,6 +388,25 @@ const Store = (() => {
       if (![1, 2].includes(data.selectedRound)) return null;
       out.selectedRound = data.selectedRound;
     }
+    if (!localOnly){
+      if (data.roundSchema !== undefined && data.roundSchema !== 1) return null;
+      if (data.roundTwoReached !== undefined && typeof data.roundTwoReached !== 'boolean') return null;
+      let second = null;
+      if (data.roundTwo !== undefined && data.roundTwo !== null){
+        second = normalizeData(data.roundTwo, true, startup);
+        if (!second) return null;
+      }
+      if (data.roundSchema === 1){
+        out.roundTwoReached = data.roundTwoReached === true;
+        out.roundTwo = second;
+        if (out.selectedRound === 2){
+          if (!out.roundTwoReached) out.selectedRound = 1;
+          else if (!out.roundTwo) out.roundTwo = blankProgress();
+        }
+      } else {
+        out.selectedRound = 1;
+      }
+    }
     if (data.voiceId !== undefined){
       if (data.voiceId !== null && typeof data.voiceId !== 'string') return null;
       out.voiceId = data.voiceId;
@@ -356,7 +420,7 @@ const Store = (() => {
     if (data.transferStickerRule !== undefined && ![0, 2].includes(data.transferStickerRule)) return null;
     if (data.transferStickerRule === undefined) out.transferStickerRule = 0;
     upgradeTransferStickers(out);
-    return out;
+    return localOnly ? localFields(out) : out;
   }
 
   /** A legacy medal only has evidence of three questions. Keep it when all three
@@ -378,10 +442,24 @@ const Store = (() => {
     data.transferStickerRule = 2;
     return true;
   }
-  if (upgradeTransferStickers(mem)) save();
+  /* Startup must tolerate a damaged second-lap record without discarding the
+     original top-level history. MISS_KINDS loads later, so only its key lookup
+     is deferred here; miss tallies still require safe keys and numeric counts. */
+  if (record.roundTwo){
+    const normalized = normalizeData(record.roundTwo, true, true);
+    if (normalized) record.roundTwo = normalized;
+    else {
+      record.roundTwo = null; record.selectedRound = 1;
+      if (startupRaw){ try{ localStorage.setItem(ASIDE, startupRaw); }catch(e){} }
+      save();
+    }
+  }
+  if (record.selectedRound === 2 && record.roundTwoReached && !record.roundTwo)
+    record.roundTwo = blankProgress();
+  if (upgradeTransferStickers(record)) save();
 
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
-  function mergeInto(base, add){
+  function mergeState(base, add){
     const out = Object.assign(blank(), base);
     ['stars', 'plays', 'seen', 'daily', 'swift', 'intro', 'g1GamesOpen', 'practiceDays'].forEach(k => {
       const src = add[k] || {};
@@ -520,6 +598,20 @@ const Store = (() => {
     return out;
   }
 
+  function mergeInto(base, add){
+    const out = mergeState(base, add);
+    out.roundSchema = 1;
+    out.roundTwoReached = !!(base.roundTwoReached || add.roundTwoReached);
+    // Never merge first-lap mastery into the repeat. A legacy backup has no
+    // second record and can only contribute to the original top-level history.
+    if (base.roundTwo && add.roundTwo)
+      out.roundTwo = localFields(mergeState(base.roundTwo, add.roundTwo));
+    else out.roundTwo = base.roundTwo || add.roundTwo || null;
+    out.selectedRound = base.selectedRound === 2 && out.roundTwoReached ? 2 : 1;
+    if (out.selectedRound === 2 && !out.roundTwo) out.roundTwo = blankProgress();
+    return out;
+  }
+
   /** mode: 'merge' (default, never loses or inflates) or 'replace' */
   function importText(text, mode){
     if (typeof text !== 'string' || text.length > 2 * 1024 * 1024){
@@ -533,12 +625,15 @@ const Store = (() => {
                : null;
     const normalized = normalizeData(data);
     if (!normalized) return { ok: false, msg: '記録の形式がこわれているため、読み込みませんでした。' };
-    const before = Object.keys(mem.stars || {}).length;
-    const next = mode === 'replace' ? normalized : mergeInto(mem, normalized);
-    mem = next;
+    const levelsIn = data => Object.keys(data.stars || {}).length
+      + Object.keys(data.roundTwo && data.roundTwo.stars || {}).length;
+    const before = levelsIn(record);
+    const next = mode === 'replace' ? normalized : mergeInto(record, normalized);
+    record = next;
     writeNow();
-    const after = Object.keys(mem.stars || {}).length;
-    const summary = `（★のついたレベル ${before} → ${after}、シール ${mem.stickers.length} 枚）`;
+    const after = levelsIn(record);
+    const stickerCount = record.stickers.length + (record.roundTwo ? record.roundTwo.stickers.length : 0);
+    const summary = `（★のついたレベル ${before} → ${after}、シール ${stickerCount} 枚）`;
     // the record is in use either way; say plainly when it will not outlive the app
     if (!(avail && ok)){
       return { ok: true, saved: false, savedAt: parsed.savedAt || null,
@@ -584,8 +679,52 @@ const Store = (() => {
     return limit ? out.slice(0, limit) : out;
   }
 
+  function selectRound(next){
+    if (![1, 2].includes(next) || (next === 2 && !record.roundTwoReached)) return false;
+    if (next === 2 && !record.roundTwo) record.roundTwo = blankProgress();
+    record.selectedRound = next;
+    save();
+    return true;
+  }
+  const dailyTotal = day => (record.daily[day] || 0)
+    + (record.roundTwo && record.roundTwo.daily[day] || 0);
+  const worldSource = fullKey => {
+    if (typeof fullKey !== 'string' || !fullKey) return null;
+    const second = fullKey.startsWith('lap2:');
+    const base = second ? fullKey.slice(5) : fullKey;
+    if (!base || base.startsWith('lap2:')) return null;
+    const source = second ? record.roundTwo : record;
+    return source ? { source, base } : null;
+  };
+  function hasOwnedSticker(fullKey){
+    const item = worldSource(fullKey);
+    if (!item) return false;
+    return item.base.startsWith('treasure:')
+      ? item.source.treasures.includes(item.base.slice(9))
+      : item.source.stickers.includes(item.base);
+  }
+  function ownedStickerKeys(){
+    const keys = data => data.stickers.filter(k => typeof k === 'string' && !k.startsWith('lap2:'))
+      .concat(data.treasures.map(id => 'treasure:' + id));
+    return Array.from(new Set(keys(record).concat(record.roundTwo
+      ? keys(record.roundTwo).map(k => 'lap2:' + k) : [])));
+  }
+
   return {
     get data(){ return mem; },
+    round, selectRound,
+    roundData: n => n === 1 ? record : n === 2 ? record.roundTwo : null,
+    unlockRoundTwo(){
+      if (record.roundTwoReached) return false;
+      record.roundTwoReached = true; save(); return true;
+    },
+    worldKey: base => typeof base === 'string' && !base.startsWith('lap2:') && round() === 2
+      ? 'lap2:' + base : base,
+    ownedStickerKeys, hasOwnedSticker,
+    ownedStickerPending(fullKey){
+      const item = worldSource(fullKey);
+      return !!(item && item.source.pending[item.base]);
+    },
     /** false when this device/origin cannot persist — the parent page says so. */
     get persists(){ return avail && ok; },
     /** why not: 'ok' | 'unavailable' (no storage for this page) | 'failed' (a write did not land) */
@@ -708,10 +847,7 @@ const Store = (() => {
       save();
     },
     putWorldSticker(stickerKey, x, y){
-      if (typeof stickerKey !== 'string') return false;
-      const owned = stickerKey.startsWith('treasure:')
-        ? this.hasTreasure(stickerKey.slice(9)) : this.hasSticker(stickerKey);
-      if (!owned) return false;
+      if (!hasOwnedSticker(stickerKey)) return false;
       const w = mem.stickerWorld || (mem.stickerWorld = { background: 'meadow', items: {} });
       w.items[stickerKey] = { x: clamp(Number(x) || 0, 0, 100), y: clamp(Number(y) || 0, 0, 100) };
       save();
@@ -750,7 +886,7 @@ const Store = (() => {
       const p = mem.practice;
       return (p && p[1]) ? p[0] / p[1] : null;
     },
-    todayCount(){ return mem.daily[todayKey()] || 0; },
+    todayCount(){ return dailyTotal(todayKey()); },
     /** Questions answered today that no grade counts — the lesson and check questions.
         They took the child's time, so「きょうは ここまで」has to count them too. */
     countToday(n){
@@ -760,7 +896,8 @@ const Store = (() => {
       save();
     },
     /** calendar days this app has actually been used on — how much there is to lose */
-    usedDays(){ return Object.keys(mem.daily || {}).length; },
+    usedDays(){ return new Set(Object.keys(record.daily).concat(
+      Object.keys(record.roundTwo && record.roundTwo.daily || {}))).size; },
     /** calendar days since the app was first opened on this device */
     daysSinceStart(){
       return Math.max(0, dayNo() - dayOf(mem.createdAt || Date.now()));
@@ -792,7 +929,7 @@ const Store = (() => {
       let n = 0; const d = new Date();
       for (;;){
         const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-        if ((mem.daily[k] || 0) > 0) n++; else break;
+        if (dailyTotal(k) > 0) n++; else break;
         d.setDate(d.getDate() - 1);
         if (n > 400) break;
       }
@@ -913,7 +1050,9 @@ const Store = (() => {
       save();
       return true;
     },
-    isPending: k => !!(mem.pending && mem.pending[k]),
+    isPending: k => typeof k === 'string' && k.startsWith('lap2:')
+      ? !!(record.roundTwo && record.roundTwo.pending[k.slice(5)])
+      : !!(mem.pending && mem.pending[k]),
     hasConfirmed: k => mem.stickers.indexOf(k) >= 0 && !(mem.pending && mem.pending[k]),
     pendingFrom: k => (mem.pending && mem.pending[k]) ? mem.pending[k][0] : null,
     checkFailed: k => !!(mem.pending && mem.pending[k] && mem.pending[k][2] > 0),
@@ -973,6 +1112,6 @@ const Store = (() => {
     /** What to call this child. Kept short: it is spoken and it goes in a heading. */
     get name(){ return mem.name || ''; },
     setName(v){ mem.name = String(v || '').trim().slice(0, 12); save(); },
-    reset(){ mem = blank(); save(); }
+    reset(){ record = blank(); save(); }
   };
 })();

@@ -1880,9 +1880,12 @@
       const today = K.Store.dayNumber();
       K.Session.startLevel(K.Games.byId.bond, 0);
       for (let i = 0; i < 3; i++){
-        const m = /^bond:dec:(\d+)-(\d+)$/.exec(S.item || '');
-        const w = m && qa('#play .choices .choice').find(b => Number(b.textContent) !== m[1] - m[2]);
-        if (w) w.click();
+        const dec = /^bond:dec:(\d+)-(\d+)$/.exec(S.item || '');
+        const com = /^bond:com:(\d+)\+(\d+)$/.exec(S.item || '');
+        const answer = dec ? Number(dec[1]) - Number(dec[2]) : com ? Number(com[1]) + Number(com[2]) : null;
+        const wrong = answer !== null && qa('#play .choices .choice').find(b => Number(b.textContent) !== answer);
+        if (!wrong) throw new Error('No wrong answer for provisional fixture: ' + S.item);
+        wrong.click();
         S.forceCorrect(); S.flushTimers();
       }
       finishLevel();

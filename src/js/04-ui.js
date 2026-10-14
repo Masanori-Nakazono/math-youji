@@ -19,9 +19,6 @@ const UI = (() => {
     return node;
   }
   function show(name, opts){
-    // Collections and their back buttons return to the chosen adventure, also
-    // after a reload. A deliberate first-round choice calls Rounds.go(1).
-    if (name === 'home' && Rounds.current() === 2){ SecondRound.open(); return screens.review; }
     const o = opts || {};
     Sound.hush();
     // the coaching hand belongs to the question it was pointing at, never to the next screen

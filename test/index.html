@@ -44,7 +44,7 @@ async function run(){
   let out;
   // the suite is synchronous apart from the offline check, so it may hand back a promise
   try{ out = await w.eval(src); }
-  catch(e){ summary.textContent = 'テストが例外で停止: ' + e.message; summary.className = 'ng'; return; }
+  catch(e){ summary.textContent = 'テストが例外で停止: ' + (e.stack || e.message); summary.className = 'ng'; return; }
   out.results.forEach(r => {
     const li = document.createElement('li');
     li.className = r.ok ? 'ok' : 'ng';

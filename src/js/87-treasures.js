@@ -5,7 +5,7 @@
 
 const Treasures = (() => {
   const REWARDS = Object.fromEntries(WORLDS.map(w => [w.id, {
-    name: stickerFor('treasure:' + w.id)
+    get name(){ return stickerFor('treasure:' + w.id); }
   }]));
   let node, heading, sheet, worldId = 'shima';
 
@@ -92,7 +92,8 @@ const Treasures = (() => {
       el('p', { role: 'status', text: s.opened ? 'とくべつな たからものを ゲット！ じぶんの しまに かざれるよ'
         : s.ready ? 'どんな たからものが でるかな？' : 'きんの シール ' + s.got + '／' + s.total + '　あと ' + (s.total - s.got) + 'まい' }));
     if (s.opened){
-      if (SecondRound.unlocked()) sheet.append(el('button.btn.btn-accent', { type:'button', text:'２しゅうめへ', onclick(){ SecondRound.open(); } }));
+      if (TextbookReview.unlocked()) sheet.append(el('button.btn.btn-accent', { type:'button', text:'ほんを うらがえす', onclick(){ TextbookReview.open(); } }));
+      if (Store.round() === 1 && Rounds.unlocked()) sheet.append(el('button.btn.btn-accent', { type:'button', text:'２しゅうめへ', onclick(){ Rounds.go(2); } }));
       sheet.append(el('button.btn.btn-accent', { type: 'button', text: 'じぶんの しまに かざる',
         onclick(){ Sound.sfx.tap(); StickerWorld.open('treasure:' + worldId); } }));
     } else if (s.ready){

@@ -7,17 +7,17 @@ const TransferAdventure = (() => {
   const QUESTIONS = 5, REQUIRED = 4;
   const missions = [
     { title: 'ピクニックの じゅんび', kind: 'fill', icon: '🧺', thing: '🍎', unit: 'こ',
-      place: 'おやつ', reward: stickerFor('transfer:0'), goal: 'たりない ぶんを もってこよう' },
+      place: 'おやつ', get reward(){ return stickerFor('transfer:0'); }, goal: 'たりない ぶんを もってこよう' },
     { title: 'どうぶつバス', kind: 'fill', icon: '🚌', thing: '🐰', unit: 'ひき',
-      place: 'バス', reward: stickerFor('transfer:1'), goal: 'あと なんびき のれるかな' },
+      place: 'バス', get reward(){ return stickerFor('transfer:1'); }, goal: 'あと なんびき のれるかな' },
     { title: 'おやつを わけよう', kind: 'split', icon: '🍓', thing: '🍓', unit: 'こ',
-      reward: stickerFor('transfer:2'), goal: 'ふたつの わけかたを つくろう' },
+      get reward(){ return stickerFor('transfer:2'); }, goal: 'ふたつの わけかたを つくろう' },
     { title: 'おはなの おくりもの', kind: 'split', icon: '💐', thing: '🌷', unit: 'ほん',
-      reward: stickerFor('transfer:3'), goal: 'ちがう わけかたを みつけよう' },
+      get reward(){ return stickerFor('transfer:3'); }, goal: 'ちがう わけかたを みつけよう' },
     { title: 'あつまる おはなし', kind: 'add', icon: '🦆', thing: '🦆', unit: 'わ',
-      reward: stickerFor('transfer:4'), goal: 'たしざんの おはなしを つくろう' },
+      get reward(){ return stickerFor('transfer:4'); }, goal: 'たしざんの おはなしを つくろう' },
     { title: 'とんでいく おはなし', kind: 'sub', icon: '🦋', thing: '🦋', unit: 'ひき',
-      reward: stickerFor('transfer:5'), goal: 'ひきざんの おはなしを つくろう' }
+      get reward(){ return stickerFor('transfer:5'); }, goal: 'ひきざんの おはなしを つくろう' }
   ];
   let node, body, heading, back, speech = '', run = null, question = null, exitArmed = false;
   const key = id => 'transfer:' + id;
@@ -289,7 +289,8 @@ const TransferAdventure = (() => {
           : button('もういちど あそぶ', () => start(id), 'btn-accent'),
         button('きょうは ここまで', () => { Home.render(); UI.show('home'); }),
         button('ぼうけんを えらぶ', menu),
-        SecondRound.unlocked() ? button('２しゅうめへ', () => SecondRound.open(), 'btn-accent') : null)));
+        TextbookReview.unlocked() ? button('ほんを うらがえす', () => TextbookReview.open(), 'btn-accent') : null,
+        Store.round() === 1 && Rounds.unlocked() ? button('２しゅうめへ', () => Rounds.go(2), 'btn-accent') : null)));
     if (fresh) UI.confetti(45);
     say(fresh ? m.reward + 'の、特別なシールをもらったよ！自分の島に飾れるよ。'
       : passed ? '５問中' + record.independent + '問、じぶんでできたね！'

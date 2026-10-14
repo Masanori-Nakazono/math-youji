@@ -8,6 +8,36 @@ const path = require('node:path');
 const http = require('node:http');
 const { chromium } = require('playwright');
 const root = path.resolve(__dirname, '..');
+// Pin every existing identity independently of the live manifest, including the
+// textbook keys whose historical "r2" prefix does not mean the second lap.
+const ORIGINAL_POKEMON_IDS = {
+  'count:0':25, 'count:0:g':26, 'count:1':133, 'count:1:g':134, 'count:2':2, 'count:2:g':3,
+  'flash:0':172, 'flash:0:g':40, 'flash:1':39, 'flash:1:g':36, 'flash:2':5, 'flash:2:g':6,
+  'numeral:0':7, 'numeral:0:g':9, 'numeral:1':54, 'numeral:1:g':55, 'numeral:2':8, 'numeral:2:g':131,
+  'seq:0':152, 'seq:0:g':154, 'seq:1':155, 'seq:1:g':156, 'seq:2':153, 'seq:2:g':157,
+  'trace:0':158, 'trace:0:g':160, 'trace:1':175, 'trace:1:g':176, 'trace:2':159, 'trace:2:g':468,
+  'compare:0':179, 'compare:0:g':181, 'compare:1':194, 'compare:1:g':195, 'compare:2':180, 'compare:2:g':184,
+  'ordinal:0':183, 'ordinal:0:g':62, 'ordinal:1':298, 'ordinal:1:g':186, 'ordinal:2':61, 'ordinal:2:g':230,
+  'measure:0':60, 'measure:0:g':121, 'measure:1':116, 'measure:1:g':130, 'measure:2':117, 'measure:2:g':350,
+  'bond:0':255, 'bond:0:g':257, 'bond:1':37, 'bond:1:g':38, 'bond:2':256, 'bond:2:g':59,
+  'ten:0':258, 'ten:0:g':260, 'ten:1':77, 'ten:1:g':78, 'ten:2':259, 'ten:2:g':324,
+  'add:0':252, 'add:0:g':254, 'add:1':58, 'add:1:g':136, 'add:2':253, 'add:2:g':448,
+  'sub:0':215, 'sub:0:g':461, 'sub:1':228, 'sub:1:g':197, 'sub:2':229, 'sub:2:g':359,
+  'shape:0':74, 'shape:0:g':76, 'shape:1':95, 'shape:1:g':208, 'shape:2':75, 'shape:2:g':142,
+  'sort:0':81, 'sort:0:g':82, 'sort:1':304, 'sort:1:g':462, 'sort:2':305, 'sort:2:g':306,
+  'pattern:0':10, 'pattern:0:g':12, 'pattern:1':16, 'pattern:1:g':18, 'pattern:2':17, 'pattern:2:g':169,
+  'clock:0':163, 'clock:0:g':164, 'clock:1':43, 'clock:1:g':45, 'clock:2':44, 'clock:2:g':182,
+  'g1set:0':63, 'g1set:0:g':65, 'g1set:1':280, 'g1set:1:g':282, 'g1set:2':281, 'g1set:2:g':475,
+  'g1pair:0':66, 'g1pair:0:g':68, 'g1pair:1':92, 'g1pair:1:g':94, 'g1pair:2':93, 'g1pair:2:g':196,
+  'g1teen:0':147, 'g1teen:0:g':149, 'g1teen:1':246, 'g1teen:1:g':248, 'g1teen:2':148, 'g1teen:2:g':445,
+  'g1shiki:0':220, 'g1shiki:0:g':473, 'g1shiki:1':371, 'g1shiki:1:g':373, 'g1shiki:2':372, 'g1shiki:2:g':376,
+  'treasure:shima':243, 'treasure:umi':244, 'treasure:yama':245, 'treasure:mori':249, 'treasure:kyoshitsu':250,
+  'transfer:0':150, 'transfer:1':384, 'transfer:2':483, 'transfer:3':484, 'transfer:4':151, 'transfer:5':493,
+  'r2:0':387, 'r2:1':388, 'r2:2':389, 'r2:3':390, 'r2:4':391, 'r2:5':392, 'r2:6':393,
+  'r2:7':394, 'r2:8':395, 'r2:9':495, 'r2:10':496, 'r2:11':497, 'r2:12':498, 'r2:13':499,
+  'r2:14':500, 'r2:15':501, 'r2:16':502, 'r2:17':503, 'r2:18':427, 'r2:19':428,
+  'r2chapter:0':385, 'r2chapter:1':251, 'r2chapter:2':480, 'r2chapter:3':481, 'r2chapter:4':482
+};
 const server = http.createServer((req, res) => {
   const file = path.join(root, new URL(req.url, 'http://local').pathname);
   if (!file.startsWith(root + path.sep)){ res.writeHead(403); res.end(); return; }
@@ -29,18 +59,65 @@ const server = http.createServer((req, res) => {
       remoteRequests.push(route.request().url()); return route.abort();
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/dist/kazu-no-bouken.html`, { waitUntil: 'domcontentloaded' });
-    const names = await page.evaluate(async () => {
+    const names = await page.evaluate(async originalIds => {
       const K = KazuApp, P = K.PokemonStickers, S = K.Store, names = [];
       const check = (name, ok) => { if (!ok) throw new Error(name); names.push(name); };
       K.Sound.voiceOn = false; K.Sound.sfxOn = false; K.Sound.say = () => {};
       S.reset();
       const levelKeys = K.Games.list.flatMap(g => g.levels.map((lv, i) => g.id + ':' + i));
       const fixed = Object.keys(P.manifest.slots);
-      check('156 fixed rewards include 131 originals and 25 distinct second-round Pokémon', fixed.length === 156
-        && K.SecondRound.progress().groups.flatMap(g=>g.keys).length === 131
-        && K.SecondRound.rewardKeys().length === 25
+      check('156 fixed rewards include 131 map/adventure rewards and 25 distinct textbook Pokémon', fixed.length === 156
+        && K.TextbookReview.progress().groups.flatMap(g=>g.keys).length === 131
+        && K.TextbookReview.rewardKeys().length === 25
         && new Set(fixed.map(k => P.reward(k).id)).size === 156
         && fixed.every(k => /^[ァ-ヶー]+$/.test(K.stickerFor(k))));
+      const firstIds = new Set(fixed.map(k => P.reward(k, 1).id));
+      const secondKeys = Object.keys(P.manifest.roundTwoSlots);
+      check('all 156 original Pokémon identities remain exactly fixed', Object.keys(originalIds).length === 156
+        && fixed.every(k => P.reward(k, 1).id === originalIds[k]));
+      check('both full collections contain 312 different Pokémon with matching 156 slots', secondKeys.length === 156
+        && secondKeys.every(k => Object.hasOwn(P.manifest.slots, k))
+        && new Set(secondKeys.map(k => P.reward(k, 2).id)).size === 156
+        && secondKeys.every(k => !firstIds.has(P.reward(k, 2).id))
+        && Object.keys(P.manifest.pokemon).length === 312);
+      check('every second-lap reward retains its rarity and legendary or mythical category', fixed.every(k => {
+        const first = P.reward(k, 1), second = P.reward(k, 2);
+        return first.rarity === second.rarity && first.legendary === second.legendary && first.mythical === second.mythical;
+      }));
+      check('first-lap textbook keys never acquire the second-lap mark', K.TextbookReview.rewardKeys().every(k =>
+        !P.isSecondRound(k) && !P.artwork(k).classList.contains('pokemon-second-round')
+        && !P.artwork(k).querySelector('.pokemon-round-badge')));
+      const forced = P.artwork('lap2:count:0', {round:1, name:false, rarity:false});
+      check('qualified island keys force the new blue second-lap artwork even on lap 1', S.round() === 1
+        && P.isSecondRound('lap2:count:0', 1) && forced.classList.contains('pokemon-second-round')
+        && forced.dataset.pokemon === String(P.reward('count:0', 2).id)
+        && forced.querySelector('.pokemon-round-badge').textContent === '２しゅうめ'
+        && forced.getAttribute('aria-label').includes('２しゅうめ') && forced.title.includes('２しゅうめ')
+        && !forced.querySelector('.pokemon-name') && !forced.querySelector('.pokemon-rarity'));
+      const missions = Array.from({length:6}, (_, i) => K.TransferAdventure.missionFor('transfer:' + i));
+      const firstMissionNames = missions.map(m => m.reward), firstChestNames = K.WORLDS.map(w => K.Treasures.name(w.id));
+      S.unlockRoundTwo();
+      check('selecting lap 2 changes every default reward while explicit round 1 stays original', S.selectRound(2) && S.round() === 2
+        && fixed.every(k => P.reward(k).id === P.reward(k, 2).id && P.reward(k, 1).id === originalIds[k])
+        && P.isSecondRound('count:0') && !P.isSecondRound('count:0', 1));
+      check('all second-lap cards are marked and explicit first-lap cards remain unmarked', fixed.every(k =>
+        P.artwork(k).classList.contains('pokemon-second-round') && !P.artwork(k, {round:1}).classList.contains('pokemon-second-round'))
+        && P.artwork('r2chapter:0', {silhouette:true}).classList.contains('pokemon-second-round-chapter')
+        && P.artwork('r2chapter:0', {silhouette:true}).classList.contains('unearned'));
+      check('chest and adventure names follow the selected lap, including previously read missions', K.WORLDS.every((w, i) =>
+        K.Treasures.name(w.id) === P.reward('treasure:' + w.id, 2).name && K.Treasures.name(w.id) !== firstChestNames[i])
+        && missions.every((m, i) => m.reward === P.reward('transfer:' + i, 2).name && m.reward !== firstMissionNames[i]));
+      check('second-lap participation rewards use their own ordinary Pokémon pool', P.manifest.roundTwoDailyPool.length === 32
+        && P.manifest.roundTwoDailyPool.every(id => !firstIds.has(id) && !P.manifest.pokemon[id].legendary && !P.manifest.pokemon[id].mythical)
+        && ['daily:2026-10-15', 'focus:2026-10-15', 'adventure:2026-10-15'].every(k => {
+          const r = P.reward(k);
+          return r.round === 2 && r.rarity === 1 && !r.legendary && !r.mythical && !firstIds.has(r.id);
+        }));
+      check('returning to lap 1 restores original default identities and live reward names', S.selectRound(1) && S.round() === 1
+        && fixed.every(k => P.reward(k).id === originalIds[k])
+        && missions.every((m, i) => m.reward === firstMissionNames[i])
+        && K.WORLDS.every((w, i) => K.Treasures.name(w.id) === firstChestNames[i]));
+      S.reset();
       check('all 60 levels have a stable normal and rarer gold reward', levelKeys.length === 60
         && levelKeys.every(k => Object.hasOwn(P.manifest.slots, k) && Object.hasOwn(P.manifest.slots, k + ':g')
           && P.reward(k + ':g').rarity > P.reward(k).rarity && !P.reward(k).legendary && !P.reward(k + ':g').mythical));
@@ -83,7 +160,7 @@ const server = http.createServer((req, res) => {
       for (let i=0;i<6;i++) S.addSticker('transfer:' + i);
       K.Book.open(); S.flush();
       return names;
-    });
+    }, ORIGINAL_POKEMON_IDS);
     names.forEach(n => console.log('PASS ' + n));
     // Book.open() creates fresh nodes. Verify their loads separately from their
     // sources: Chromium can reject decode() on a loaded offscreen DOM image even

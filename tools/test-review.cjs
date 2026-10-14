@@ -18,7 +18,7 @@ const server=http.createServer((req,res)=>{
     page.on('pageerror',e=>{errors.push(e.message);console.error('BROWSER '+e.message);});await page.route('https://**',r=>r.abort());
     await page.goto(`http://127.0.0.1:${server.address().port}/dist/kazu-no-bouken.html`,{waitUntil:'domcontentloaded'});
     const checks=await page.evaluate(()=>{
-      const K=KazuApp,S=K.Store,R=K.SecondRound,names=[];
+      const K=KazuApp,S=K.Store,R=K.TextbookReview,names=[];
       K.Sound.voiceOn=false;K.Sound.sfxOn=false;K.Sound.say=()=>{};
       const check=(name,ok)=>{if(!ok)throw new Error(name);names.push(name);};
       const click=sel=>{const b=document.querySelector('#review '+sel);if(!b)throw new Error('Missing '+sel);b.click();};
@@ -76,8 +76,8 @@ const server=http.createServer((req,res)=>{
         if(id===3){R.open(null,0);finish(2);check('3/5 clean chapter answers earn no summary medal',!S.hasSticker('r2chapter:0'));}
       }
       for(let i=0;i<5;i++){check('summary waits for four confirmed lessons '+i,R.chapterReady(i));R.open(null,i);const seen=[];for(let n=0;n<5;n++){seen.push(R.inspect().q.lessonId);if(n===0){text('👀 ヒント');text('いっしょに やってみる');click('.review-check');}else answer();click('.review-next');}check('4/5 clean answers earn chapter '+i,S.hasSticker('r2chapter:'+i));check('summary revisits an earlier chapter '+i,i===0||seen[4]===i*4-1);}
-      check('second round never rewrites first-round mastery',front===JSON.stringify([S.data.stars,S.data.facts,S.data.recent,S.data.firstTry]));
-      check('25 new species are unique and absent from all original slots',R.rewardKeys().length===25&&new Set(R.rewardKeys().map(k=>K.PokemonStickers.reward(k).id)).size===25&&R.rewardKeys().every(k=>!gate.some(o=>K.PokemonStickers.reward(k).id===K.PokemonStickers.reward(o).id)));
+      check('textbook review does not rewrite map mastery',front===JSON.stringify([S.data.stars,S.data.facts,S.data.recent,S.data.firstTry]));
+      check('25 textbook species are unique and absent from the original map slots',R.rewardKeys().length===25&&new Set(R.rewardKeys().map(k=>K.PokemonStickers.reward(k).id)).size===25&&R.rewardKeys().every(k=>!gate.some(o=>K.PokemonStickers.reward(k).id===K.PokemonStickers.reward(o).id)));
       check('every solved question contributes once to today',S.todayCount()===8*24+3+5*6); // 24 lesson runs, one check, six summaries
       R.open(10);const width=document.querySelector('.review-hidden').getBoundingClientRect().width;const q1=R.inspect().q;check('hidden answer is absent from hidden DOM before solving',document.querySelector('.review-hidden').textContent==='？');answer();check('hidden cover has fixed capacity before and after reveal',width===document.querySelector('.review-hidden').getBoundingClientRect().width);click('.review-next');check('the next hidden problem uses the same capacity',width===document.querySelector('.review-hidden').getBoundingClientRect().width);
       const backup=S.exportText();S.reset();check('backup restores review rewards, progress and unlock latch',S.importText(backup,'replace').ok&&R.unlocked()&&S.hasConfirmed('r2:19')&&S.data.reviewRecords['r2chapter:4'].independent===4);
@@ -110,7 +110,7 @@ const server=http.createServer((req,res)=>{
     for(const size of [{width:1024,height:768},{width:901,height:900},{width:900,height:900},{width:768,height:1024},{width:390,height:844},{width:320,height:740}]){
       await page.setViewportSize(size);
       for(const id of [null,0,3,4,5,6,7,8,10,12,14,18,19]){
-        await page.evaluate(id=>{KazuApp.Sound.voiceOn=false;KazuApp.Sound.sfxOn=false;KazuApp.SecondRound.open(id);},id);
+        await page.evaluate(id=>{KazuApp.Sound.voiceOn=false;KazuApp.Sound.sfxOn=false;KazuApp.TextbookReview.open(id);},id);
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1&&document.querySelector('.review-body').scrollWidth<=document.querySelector('.review-body').clientWidth+1),true,'no body overflow '+size.width+' lesson '+id);
         if(id!==null){await page.locator('.review-check').scrollIntoViewIfNeeded();assert.equal(await page.locator('.review-check').isVisible(),true);}
         if(dir)await page.screenshot({path:path.join(dir,`${size.width}-${id===null?'menu':id}.png`)});
@@ -122,7 +122,7 @@ const server=http.createServer((req,res)=>{
       }
     }
     const lightInk=await page.evaluate(()=>getComputedStyle(document.querySelector('.review-body')).color);
-    await page.emulateMedia({colorScheme:'dark'});await page.evaluate(()=>KazuApp.SecondRound.open(12));
+    await page.emulateMedia({colorScheme:'dark'});await page.evaluate(()=>KazuApp.TextbookReview.open(12));
     // Wait for the new color scheme to reach existing elements, independently
     // of whether optional screenshots give the browser time to repaint.
     await page.waitForFunction(()=>matchMedia('(prefers-color-scheme: dark)').matches&&getComputedStyle(document.querySelector('.review-body')).color===getComputedStyle(document.querySelector('.review-field')).color,null,{timeout:3000});

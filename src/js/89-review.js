@@ -1,8 +1,8 @@
-/* Second round: textbook representations with original illustrations.
+/* Textbook review, included within each full lap, with original illustrations.
    This gate is the original collection, frozen independently of the live catalog. */
 'use strict';
-const SECOND_ROUND_GATE = Object.freeze(["count:0", "count:0:g", "count:1", "count:1:g", "count:2", "count:2:g", "flash:0", "flash:0:g", "flash:1", "flash:1:g", "flash:2", "flash:2:g", "numeral:0", "numeral:0:g", "numeral:1", "numeral:1:g", "numeral:2", "numeral:2:g", "seq:0", "seq:0:g", "seq:1", "seq:1:g", "seq:2", "seq:2:g", "trace:0", "trace:0:g", "trace:1", "trace:1:g", "trace:2", "trace:2:g", "compare:0", "compare:0:g", "compare:1", "compare:1:g", "compare:2", "compare:2:g", "ordinal:0", "ordinal:0:g", "ordinal:1", "ordinal:1:g", "ordinal:2", "ordinal:2:g", "measure:0", "measure:0:g", "measure:1", "measure:1:g", "measure:2", "measure:2:g", "bond:0", "bond:0:g", "bond:1", "bond:1:g", "bond:2", "bond:2:g", "ten:0", "ten:0:g", "ten:1", "ten:1:g", "ten:2", "ten:2:g", "add:0", "add:0:g", "add:1", "add:1:g", "add:2", "add:2:g", "sub:0", "sub:0:g", "sub:1", "sub:1:g", "sub:2", "sub:2:g", "shape:0", "shape:0:g", "shape:1", "shape:1:g", "shape:2", "shape:2:g", "sort:0", "sort:0:g", "sort:1", "sort:1:g", "sort:2", "sort:2:g", "pattern:0", "pattern:0:g", "pattern:1", "pattern:1:g", "pattern:2", "pattern:2:g", "clock:0", "clock:0:g", "clock:1", "clock:1:g", "clock:2", "clock:2:g", "g1set:0", "g1set:0:g", "g1set:1", "g1set:1:g", "g1set:2", "g1set:2:g", "g1pair:0", "g1pair:0:g", "g1pair:1", "g1pair:1:g", "g1pair:2", "g1pair:2:g", "g1teen:0", "g1teen:0:g", "g1teen:1", "g1teen:1:g", "g1teen:2", "g1teen:2:g", "g1shiki:0", "g1shiki:0:g", "g1shiki:1", "g1shiki:1:g", "g1shiki:2", "g1shiki:2:g", "treasure:shima", "treasure:umi", "treasure:yama", "treasure:mori", "treasure:kyoshitsu", "transfer:0", "transfer:1", "transfer:2", "transfer:3", "transfer:4", "transfer:5"]);
-const SecondRound = (() => {
+const TEXTBOOK_GATE = Object.freeze(["count:0", "count:0:g", "count:1", "count:1:g", "count:2", "count:2:g", "flash:0", "flash:0:g", "flash:1", "flash:1:g", "flash:2", "flash:2:g", "numeral:0", "numeral:0:g", "numeral:1", "numeral:1:g", "numeral:2", "numeral:2:g", "seq:0", "seq:0:g", "seq:1", "seq:1:g", "seq:2", "seq:2:g", "trace:0", "trace:0:g", "trace:1", "trace:1:g", "trace:2", "trace:2:g", "compare:0", "compare:0:g", "compare:1", "compare:1:g", "compare:2", "compare:2:g", "ordinal:0", "ordinal:0:g", "ordinal:1", "ordinal:1:g", "ordinal:2", "ordinal:2:g", "measure:0", "measure:0:g", "measure:1", "measure:1:g", "measure:2", "measure:2:g", "bond:0", "bond:0:g", "bond:1", "bond:1:g", "bond:2", "bond:2:g", "ten:0", "ten:0:g", "ten:1", "ten:1:g", "ten:2", "ten:2:g", "add:0", "add:0:g", "add:1", "add:1:g", "add:2", "add:2:g", "sub:0", "sub:0:g", "sub:1", "sub:1:g", "sub:2", "sub:2:g", "shape:0", "shape:0:g", "shape:1", "shape:1:g", "shape:2", "shape:2:g", "sort:0", "sort:0:g", "sort:1", "sort:1:g", "sort:2", "sort:2:g", "pattern:0", "pattern:0:g", "pattern:1", "pattern:1:g", "pattern:2", "pattern:2:g", "clock:0", "clock:0:g", "clock:1", "clock:1:g", "clock:2", "clock:2:g", "g1set:0", "g1set:0:g", "g1set:1", "g1set:1:g", "g1set:2", "g1set:2:g", "g1pair:0", "g1pair:0:g", "g1pair:1", "g1pair:1:g", "g1pair:2", "g1pair:2:g", "g1teen:0", "g1teen:0:g", "g1teen:1", "g1teen:1:g", "g1teen:2", "g1teen:2:g", "g1shiki:0", "g1shiki:0:g", "g1shiki:1", "g1shiki:1:g", "g1shiki:2", "g1shiki:2:g", "treasure:shima", "treasure:umi", "treasure:yama", "treasure:mori", "treasure:kyoshitsu", "transfer:0", "transfer:1", "transfer:2", "transfer:3", "transfer:4", "transfer:5"]);
+const TextbookReview = (() => {
   const chapters = [
     { title:'なかまづくりと かず', subtitle:'むすぶ・かぞえる・０から10', color:'var(--c-blue)' },
     { title:'なんばんめ', subtitle:'むきと じゅんばん', color:'var(--c-green)' },
@@ -21,14 +21,14 @@ const SecondRound = (() => {
   let node, body, heading, exitBtn, speech='', run=null, q=null, exitArmed=false;
   function progress(){
     const groups = [
-      {label:'ふつう', keys:SECOND_ROUND_GATE.filter(k => !k.endsWith(':g') && !/^(transfer|treasure):/.test(k))},
-      {label:'きん', keys:SECOND_ROUND_GATE.filter(k => k.endsWith(':g'))},
-      {label:'たからばこ', keys:SECOND_ROUND_GATE.filter(k => k.startsWith('treasure:'))},
-      {label:'とくべつ', keys:SECOND_ROUND_GATE.filter(k => k.startsWith('transfer:'))}
+      {label:'ふつう', keys:TEXTBOOK_GATE.filter(k => !k.endsWith(':g') && !/^(transfer|treasure):/.test(k))},
+      {label:'きん', keys:TEXTBOOK_GATE.filter(k => k.endsWith(':g'))},
+      {label:'たからばこ', keys:TEXTBOOK_GATE.filter(k => k.startsWith('treasure:'))},
+      {label:'とくべつ', keys:TEXTBOOK_GATE.filter(k => k.startsWith('transfer:'))}
     ];
     const owns = k => k.startsWith('treasure:') ? Store.hasTreasure(k.split(':')[1]) : Store.hasConfirmed(k);
     groups.forEach(g => { g.got=g.keys.filter(owns).length; g.total=g.keys.length; });
-    return {got:groups.reduce((n,g)=>n+g.got,0), total:131, groups, missing:SECOND_ROUND_GATE.filter(k=>!owns(k))};
+    return {got:groups.reduce((n,g)=>n+g.got,0), total:131, groups, missing:TEXTBOOK_GATE.filter(k=>!owns(k))};
   }
   function unlocked(){
     if (Store.data.secondRoundReached) return true;
@@ -51,9 +51,9 @@ const SecondRound = (() => {
   function say(text){speech=text;Sound.say(text,{delay:80});}
   function gateCard(){
     const p=progress();
-    return el('section.review-gate',{'aria-label':'２しゅうめの ひらきかた'},
-      el('h3',{text:'🔒 ２しゅうめ　あと '+(p.total-p.got)+'まい'}),
-      el('p',{text:'１しゅうめの シールが ぜんぶ そろうと ひらくよ。ほんで ふくしゅうして、あたらしい シール25まいを あつめよう！'}),
+    return el('section.review-gate',{'aria-label':'うらの さんすうの ひらきかた'},
+      el('h3',{text:'📖 うらの さんすう　あと '+(p.total-p.got)+'まい'}),
+      el('p',{text:'ちず・たからばこ・ぼうけんの シールが ぜんぶ そろうと、ほんの うらが ひらくよ。'}),
       el('div.review-ledger',null,p.groups.map(g=>el('span',{text:g.label+' '+g.got+'／'+g.total}))),
       el('div.review-missing',null,p.groups.map(g=>{
         const k=g.keys.find(k=>p.missing.includes(k));
@@ -73,17 +73,17 @@ const SecondRound = (() => {
       if(!TransferAdventure.unlocked()) return null;
       return el('button.home-quest.review-home',{type:'button',onclick:()=>Book.open()},
         el('span.review-cover',{text:'📖','aria-hidden':'true'}),el('span',null,
-          el('strong',{text:'２しゅうめが まっているよ'}),el('small',{text:'１しゅうめ '+progress().got+'／131　シールブックで たしかめる'})),el('span',{text:'→'}));
+          el('strong',{text:'うらの さんすうが まっているよ'}),el('small',{text:'シール '+progress().got+'／131　シールブックで たしかめる'})),el('span',{text:'→'}));
     }
     return el('button.home-quest.review-home',{type:'button',onclick:open},
       PokemonStickers.artwork('r2:0',{rarity:false}),el('span',null,
-        el('strong',{text:'２しゅうめ　ふくしゅうの ぼうけん'}),el('small',{text:'ほんで ふくしゅう　あたらしい シール '+earned()+'／25'})),el('span',{text:'↪','aria-hidden':'true'}));
+        el('strong',{text:'ほんを うらがえす　うらの さんすう'}),el('small',{text:'ほんで ふくしゅう　あたらしい シール '+earned()+'／25'})),el('span',{text:'↪','aria-hidden':'true'}));
   }
   function collection(){
     if(!unlocked()) return gateCard();
-    return el('section.review-collection',{'aria-label':'２しゅうめの シール'},
-      el('h3',{text:'📘 ２しゅうめだけの シール　'+earned()+'／25'}),
-      button('２しゅうめで あそぶ',open,'btn-accent'),
+    return el('section.review-collection',{'aria-label':'うらの さんすうシール'},
+      el('h3',{text:'📖 うらの さんすう　'+earned()+'／25'}),
+      button('ほんを うらがえして あそぶ',open,'btn-accent'),
       el('p',{text:'レッスンの シール20まいと、たんげんの まとめ５まい。'}),
       chapters.map((c,i)=>el('div.review-collection-chapter',null,el('h4',{text:(i+1)+'　'+c.title}),
         el('div.review-collection-grid',null,lessons.slice(i*4,i*4+4).map(l=>collectible(l.key,l.title,()=>open(l.id))),
@@ -97,7 +97,7 @@ const SecondRound = (() => {
   function parentSummary(){
     const rows=Object.entries(Store.data.reviewRecords||{});
     if(!unlocked() && !rows.length) return null;
-    return el('section.section.review-parent',null,el('h3',{text:'2周目：教科書の見せ方で復習'}),
+    return el('section.section.review-parent',null,el('h3',{text:'教科書の見せ方で復習'}),
       el('p',{text:'東京書籍「あたらしいさんすう1 上」（平成20年発行）の添付範囲を、独自の絵と1問ずつの操作に対応させています。通常は8問中4問の自力初回正解で仮獲得、8問すべてなら即確定。別の日の3問中2問で確定します。まとめは各単元4枚の確定後、5問中4問の自力初回正解で獲得します。'}),
       rows.map(([k,r])=>el('p',{text:(k.startsWith('r2chapter:')?chapters[Number(k.split(':')[1])].title+'のまとめ':lessons[Number(k.split(':')[1])].title)
         +'：自力で初回正解 '+r.independent+'問／答え直して正解 '+r.revised+'問／ヒント・見本を使用 '+r.supported+'問（直近の'+({lesson:'レッスン',check:'別の日の確認',chapter:'まとめ'})[r.kind]+'）'})));
@@ -105,32 +105,32 @@ const SecondRound = (() => {
   function build(){
     if(node) return;
     body=el('div.review-body');heading=el('h2');
-    exitBtn=el('button.btn.btn-ghost.btn-round',{type:'button','aria-label':'１しゅうめに もどる',text:'←',onclick(){
+    exitBtn=el('button.btn.btn-ghost.btn-round',{type:'button','aria-label':'ちずに もどる',text:'←',onclick(){
       Sound.sfx.tap();
       if(run&&!exitArmed){
         exitArmed=true;
         if(!$('.review-exit',body)) body.prepend(el('p.review-exit',{role:'status',text:'ここで おわる？ ← を もういちど おすと もどるよ（つぎは１もんめから）'}));
         say('ここでおわる？ もどるをもう一度押すと、つぎは１問目からだよ。');return;
       }
-      if(run || $('.review-result',body)){run=null;menu();}else{Rounds.go(1);}
+      if(run || $('.review-result',body)){run=null;menu();}else{Home.render();UI.show('home',{replace:true});}
     }});
     node=el('div#review',null,el('div.topbar',null,exitBtn,heading,speakBtn(()=>speech)),body);
     UI.register('review',node);
   }
   function open(id,chapter){
     if(!unlocked()){Book.open();return;}
-    Rounds.select(2);build();run=null;menu();UI.show('review');
+    build();run=null;menu();UI.show('review');
     if(Number.isInteger(id)&&lessonOpen(id)) start(id);
     else if(Number.isInteger(chapter)&&chapterReady(chapter)) start(null,chapter);
-    else say('いまは２周目、復習の冒険だよ。１周目は地図、２周目は本で、もういちどやってみよう。新しいシールが25枚あるよ。');
+    else say('本の裏が開いたよ。教科書の順番で、もういちどやってみよう。');
   }
   function menu(){
-    run=null;q=null;exitArmed=false;clear(body);heading.textContent='２しゅうめの ぼうけん';
-    exitBtn.setAttribute('aria-label','１しゅうめに もどる');
-    body.append(Rounds.switcher(2), el('div.review-menu-intro',null,
+    run=null;q=null;exitArmed=false;clear(body);heading.textContent='うらの さんすう';
+    exitBtn.setAttribute('aria-label','ちずに もどる');
+    body.append(el('div.review-menu-intro',null,
       el('span.review-bookmark',{text:'📘 ほんで ふくしゅう'}),el('h3',{text:'もういちど、できるかな？'}),
       el('p',{text:'あたらしい なかま '+earned()+'／25　・　１レッスン ８もん'}),
-      el('p',{text:'１しゅうめは ちず、２しゅうめは ほん。なかま・かず・じゅんばん・たしざん・ひきざんを ふくしゅうしよう。'}),
+      el('p',{text:'なかま・かず・じゅんばん・たしざん・ひきざんを、ほんで ふくしゅうしよう。'}),
       el('div.review-tools',null,
         button('📖 シールブック',()=>Book.open()), button('🏡 じぶんの しま',()=>StickerWorld.open()),
         button('👤 おうちのかたへ',()=>Parent.open()))),
@@ -231,7 +231,7 @@ const SecondRound = (() => {
     clear(body);const c=chapters[lessons[q.lessonId].chapter];
     heading.textContent=run.kind==='chapter'?chapters[run.chapter].title+'の まとめ':lessons[run.id].title;
     const scene=el('div.review-scene');
-    body.append(el('div.review-question-head',null,el('span.review-bookmark',{text:'２しゅうめ　'+(run.kind==='check'?'べつのひの たしかめ':run.kind==='chapter'?'まとめ':(lessons[q.lessonId].chapter+1)+'　'+c.title)}),
+    body.append(el('div.review-question-head',null,el('span.review-bookmark',{text:'ほんの ふくしゅう　'+(run.kind==='check'?'べつのひの たしかめ':run.kind==='chapter'?'まとめ':(lessons[q.lessonId].chapter+1)+'　'+c.title)}),
       el('span.review-progress',{text:(run.step+1)+'／'+run.total+'もん'})),el('h3.review-prompt',{text:q.prompt}),scene);
     if(q.type==='group'){
       scene.append(el('div.review-select-grid',null,q.things.map((kind,i)=>el('button.review-object-choice',{type:'button','aria-label':({animal:'くま',flower:'おはな',umbrella:'かさ'})[kind]+' '+(i+1),'aria-pressed':String(q.selected.includes(i)),dataset:{focus:'object'+i},onclick:()=>action(()=>toggle(i))},illustration(kind,i)))));

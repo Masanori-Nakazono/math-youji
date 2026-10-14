@@ -362,15 +362,20 @@ const StickerWorld = (() => {
   let node, board, palette, hint, selected = null;
 
   function owned(){
-    return Store.data.stickers.filter(k => /^[a-z0-9]+:\d+(?::g)?$/.test(k)
-      || /^(daily|focus|adventure):/.test(k))
-      .concat(Store.data.treasures.map(id => 'treasure:' + id));
+    return Store.ownedStickerKeys().filter(k => {
+      const base = k.replace(/^lap2:/,'');
+      return /^[a-z0-9]+:\d+(?::g)?$/.test(base) || /^(daily|focus|adventure|treasure):/.test(base);
+    });
   }
-  const isTreasure = k => k.startsWith('treasure:');
-  const itemName = k => isTreasure(k) ? Treasures.name(k.slice(9))
-    : stickerFor(k);
-  const itemArt = k => isTreasure(k) ? Treasures.artwork(k.slice(9))
-    : TransferAdventure.artwork(k) || PokemonStickers.artwork(k, { rarity: false });
+  const isTreasure = k => k.replace(/^lap2:/,'').startsWith('treasure:');
+  const itemRound = k => k.startsWith('lap2:') ? 2 : 1;
+  const itemName = k => PokemonStickers.reward(k, itemRound(k)).name;
+  const itemArt = k => {
+    const art = PokemonStickers.artwork(k, {round:itemRound(k), rarity:false});
+    if (isTreasure(k)) art.classList.add('treasure-art');
+    if (k.replace(/^lap2:/,'').startsWith('transfer:')) art.classList.add('transfer-sticker');
+    return art;
+  };
   function build(){
     if (node) return node;
     board = el('div.sticker-world-board', { role: 'application', 'aria-label': 'じぶんの しま' });
@@ -436,6 +441,7 @@ const StickerWorld = (() => {
       : 'さいしょの シールを もらったら、ここに おけるよ';
   }
   function open(item){
+    if (item) item = Store.worldKey(item);
     if (item && owned().includes(item)) selected = item;
     render(); UI.show('sticker-world');
     Sound.say(item && selected === item ? itemName(item) + 'を、島の好きな場所に置いてね。'
