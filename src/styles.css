@@ -2548,6 +2548,47 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
   .transfer-collectible .pokemon-sticker{ --medal-size:clamp(75px,20vw,110px); }
 }
 
+/* Round identity stays outside scrolling content, including questions/results. */
+.round-status{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  min-height:28px;padding:4px 12px;box-sizing:border-box;border-inline-start:5px solid var(--c-orange);
+  border-radius:8px;background:var(--paper-2);color:var(--ink);font-size:14px;line-height:1.5;
+}
+.round-status b{font-weight:900;}
+.round-status>span{color:var(--ink-soft);font-size:12px;}
+.screen[data-round="2"]>.round-status{border-color:var(--c-blue);background:var(--card);}
+.round-switcher{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;flex:0 0 auto;}
+.round-switcher .round-choice{
+  display:flex;align-items:center;gap:12px;min-width:0;min-height:72px;padding:8px 14px;
+  border:2px solid var(--card-edge);border-radius:16px;background:var(--card);color:var(--ink);
+  font:inherit;text-align:left;cursor:pointer;box-sizing:border-box;
+}
+.round-choice[data-round-target="1"]{--round-color:var(--c-orange);}
+.round-choice[data-round-target="2"]{--round-color:var(--c-blue);}
+.round-choice.active{border:3px solid var(--round-color);box-shadow:inset 0 -4px var(--round-color);}
+.round-choice-icon{font-size:30px;line-height:1;flex:0 0 auto;}
+.round-choice-copy{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;}
+.round-switcher .round-choice-copy strong{font-size:20px;line-height:1.4;white-space:nowrap;}
+.round-switcher .round-choice-copy small{font-size:13px;line-height:1.5;color:var(--ink-soft);margin:0;}
+.round-choice-progress{font-size:13px;font-weight:900;white-space:nowrap;}
+.round-choice.active .round-choice-progress{border-radius:20px;background:var(--round-color);color:var(--on-crayon);padding:5px 10px;}
+.round-choice:focus-visible{outline:3px solid var(--ring);outline-offset:3px;}
+.home-rounds{flex:0 0 auto;}
+.review-tools{display:flex;gap:10px;flex-wrap:wrap;}
+.review-tools .btn{font-size:17px;min-height:64px;}
+.review-result.pending .pokemon-image{filter:grayscale(1);}
+@media(max-width:600px){
+  .round-switcher{gap:6px;}
+  .round-switcher .round-choice{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 6px;padding:8px;}
+  .round-choice-icon{font-size:24px;}
+  .round-switcher .round-choice-copy strong{font-size:16px;}
+  .round-switcher .round-choice-copy small{font-size:11px;}
+  .round-choice-progress{grid-column:1 / -1;justify-self:end;margin:0;font-size:11px;}
+  .round-choice.active .round-choice-progress{padding:3px 8px;}
+  .round-status{font-size:12px;padding:4px 8px;}
+  .round-status>span{font-size:11px;}
+}
+
 /* Second-round textbook page: one problem, large manipulatives, fixed keypad. */
 .review-body{flex:1;min-height:0;overflow:auto;padding:18px 24px 32px;scrollbar-gutter:stable;color:var(--ink);}
 .review-body>*{max-width:1020px;margin-left:auto;margin-right:auto;box-sizing:border-box;}
@@ -2740,3 +2781,32 @@ polygon.slot-focus{ stroke:var(--ring); stroke-width:2.8; stroke-dasharray:none;
 .preparation-level small{ font-weight:500; font-size:.8em; }
 .book-preparation{ grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:calc(var(--u)*.5); margin-block:calc(var(--u)*.6); }
 .book-preparation .btn{ min-height:var(--tap); font-size:calc(var(--u)*1.1); }
+
+/* Second-round rewards keep their own mark, even without names or rarity text. */
+.pokemon-sticker.pokemon-second-round{
+  border-color:#377cb5;
+  background:radial-gradient(circle at 12% 18%,#fff 0 2px,transparent 3px),
+    radial-gradient(circle at 88% 80%,#fff 0 3px,transparent 4px),linear-gradient(145deg,#f7fcff,#dcefff);
+  color:#243b57;
+  box-shadow:0 3px 0 #92b9dc;
+}
+.pokemon-round-badge{
+  display:block; flex:0 0 auto; box-sizing:border-box; width:100%; max-width:100%;
+  padding:2px 0; border-radius:999px; background:#245f96; color:#fff;
+  font-size:clamp(7px,calc(var(--pokemon-size)*.09),14px); font-weight:900; line-height:1.35;
+  white-space:nowrap; letter-spacing:0;
+}
+.pokemon-sticker.pokemon-second-round-chapter{
+  border-color:#a17d27;
+  background:linear-gradient(145deg,#fff6d2,#f4e8ff 60%,#fff1b7);
+  box-shadow:0 3px 0 #b59a55;
+}
+.pokemon-second-round-chapter .pokemon-round-badge{
+  background:#69458e; box-shadow:inset 0 0 0 1px #e7c869;
+}
+.pokemon-sticker.pokemon-second-round.unearned{
+  border-style:dashed; background:var(--paper-2); color:var(--ink); box-shadow:none;
+}
+.pokemon-second-round.unearned .pokemon-round-badge{background:#53697d;}
+.shelf .strip .pokemon-sticker.pokemon-second-round{min-width:52px;}
+.shelf .strip .pokemon-round-badge{font-size:9px;padding:1px 0;}

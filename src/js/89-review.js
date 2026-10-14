@@ -18,7 +18,7 @@ const SecondRound = (() => {
     ['とると のこりは？','take'], ['ひきざんの しき','subEquation'], ['ちがいは いくつ？','difference'], ['しきに あう おはなし','subStory']
   ].map(([title, type], id) => ({ id, title, type, chapter:Math.floor(id/4), key:'r2:'+id }));
   const chapterKey = i => 'r2chapter:'+i;
-  let node, body, heading, speech='', run=null, q=null, exitArmed=false;
+  let node, body, heading, exitBtn, speech='', run=null, q=null, exitArmed=false;
   function progress(){
     const groups = [
       {label:'ふつう', keys:SECOND_ROUND_GATE.filter(k => !k.endsWith(':g') && !/^(transfer|treasure):/.test(k))},
@@ -51,9 +51,9 @@ const SecondRound = (() => {
   function say(text){speech=text;Sound.say(text,{delay:80});}
   function gateCard(){
     const p=progress();
-    return el('section.review-gate',{'aria-label':'うらの さんすうの ひらきかた'},
-      el('h3',{text:'📖 うらの さんすう　'+p.got+'／131'}),
-      el('p',{text:'１しゅうめの シールが ぜんぶ そろうと、ほんの うらが ひらくよ。'}),
+    return el('section.review-gate',{'aria-label':'２しゅうめの ひらきかた'},
+      el('h3',{text:'🔒 ２しゅうめ　あと '+(p.total-p.got)+'まい'}),
+      el('p',{text:'１しゅうめの シールが ぜんぶ そろうと ひらくよ。ほんで ふくしゅうして、あたらしい シール25まいを あつめよう！'}),
       el('div.review-ledger',null,p.groups.map(g=>el('span',{text:g.label+' '+g.got+'／'+g.total}))),
       el('div.review-missing',null,p.groups.map(g=>{
         const k=g.keys.find(k=>p.missing.includes(k));
@@ -73,17 +73,17 @@ const SecondRound = (() => {
       if(!TransferAdventure.unlocked()) return null;
       return el('button.home-quest.review-home',{type:'button',onclick:()=>Book.open()},
         el('span.review-cover',{text:'📖','aria-hidden':'true'}),el('span',null,
-          el('strong',{text:'うらの さんすうが まっているよ'}),el('small',{text:'１しゅうめ '+progress().got+'／131　シールブックで たしかめる'})),el('span',{text:'→'}));
+          el('strong',{text:'２しゅうめが まっているよ'}),el('small',{text:'１しゅうめ '+progress().got+'／131　シールブックで たしかめる'})),el('span',{text:'→'}));
     }
     return el('button.home-quest.review-home',{type:'button',onclick:open},
       PokemonStickers.artwork('r2:0',{rarity:false}),el('span',null,
-        el('strong',{text:'ほんを うらがえす　うらの さんすう'}),el('small',{text:'もういちど できるかな？　あたらしい シール '+earned()+'／25'})),el('span',{text:'↪','aria-hidden':'true'}));
+        el('strong',{text:'２しゅうめ　ふくしゅうの ぼうけん'}),el('small',{text:'ほんで ふくしゅう　あたらしい シール '+earned()+'／25'})),el('span',{text:'↪','aria-hidden':'true'}));
   }
   function collection(){
     if(!unlocked()) return gateCard();
-    return el('section.review-collection',{'aria-label':'うらの さんすうシール'},
-      el('h3',{text:'📖 うらの さんすう　'+earned()+'／25'}),
-      button('ほんを うらがえして あそぶ',open,'btn-accent'),
+    return el('section.review-collection',{'aria-label':'２しゅうめの シール'},
+      el('h3',{text:'📘 ２しゅうめだけの シール　'+earned()+'／25'}),
+      button('２しゅうめで あそぶ',open,'btn-accent'),
       el('p',{text:'レッスンの シール20まいと、たんげんの まとめ５まい。'}),
       chapters.map((c,i)=>el('div.review-collection-chapter',null,el('h4',{text:(i+1)+'　'+c.title}),
         el('div.review-collection-grid',null,lessons.slice(i*4,i*4+4).map(l=>collectible(l.key,l.title,()=>open(l.id))),
@@ -105,31 +105,35 @@ const SecondRound = (() => {
   function build(){
     if(node) return;
     body=el('div.review-body');heading=el('h2');
-    const exit=el('button.btn.btn-ghost.btn-round',{type:'button','aria-label':'おもてに もどる',text:'←',onclick(){
+    exitBtn=el('button.btn.btn-ghost.btn-round',{type:'button','aria-label':'１しゅうめに もどる',text:'←',onclick(){
       Sound.sfx.tap();
       if(run&&!exitArmed){
         exitArmed=true;
         if(!$('.review-exit',body)) body.prepend(el('p.review-exit',{role:'status',text:'ここで おわる？ ← を もういちど おすと もどるよ（つぎは１もんめから）'}));
         say('ここでおわる？ もどるをもう一度押すと、つぎは１問目からだよ。');return;
       }
-      if(run){run=null;menu();}else{Home.render();UI.show('home',{replace:true});}
+      if(run || $('.review-result',body)){run=null;menu();}else{Rounds.go(1);}
     }});
-    node=el('div#review',null,el('div.topbar',null,exit,heading,speakBtn(()=>speech)),body);
+    node=el('div#review',null,el('div.topbar',null,exitBtn,heading,speakBtn(()=>speech)),body);
     UI.register('review',node);
   }
   function open(id,chapter){
     if(!unlocked()){Book.open();return;}
-    build();run=null;menu();UI.show('review');
+    Rounds.select(2);build();run=null;menu();UI.show('review');
     if(Number.isInteger(id)&&lessonOpen(id)) start(id);
     else if(Number.isInteger(chapter)&&chapterReady(chapter)) start(null,chapter);
-    else say('ほんのうらがひらいたよ。教科書のじゅんばんで、もういちどやってみよう。');
+    else say('いまは２周目、復習の冒険だよ。１周目は地図、２周目は本で、もういちどやってみよう。新しいシールが25枚あるよ。');
   }
   function menu(){
-    run=null;q=null;exitArmed=false;clear(body);heading.textContent='うらの さんすう';
-    body.append(el('div.review-menu-intro',null,
-      el('span.review-bookmark',{text:'２しゅうめ'}),el('h3',{text:'もういちど、できるかな？'}),
+    run=null;q=null;exitArmed=false;clear(body);heading.textContent='２しゅうめの ぼうけん';
+    exitBtn.setAttribute('aria-label','１しゅうめに もどる');
+    body.append(Rounds.switcher(2), el('div.review-menu-intro',null,
+      el('span.review-bookmark',{text:'📘 ほんで ふくしゅう'}),el('h3',{text:'もういちど、できるかな？'}),
       el('p',{text:'あたらしい なかま '+earned()+'／25　・　１レッスン ８もん'}),
-      button('おもての ぼうけんへ',()=>{Home.render();UI.show('home');})),
+      el('p',{text:'１しゅうめは ちず、２しゅうめは ほん。なかま・かず・じゅんばん・たしざん・ひきざんを ふくしゅうしよう。'}),
+      el('div.review-tools',null,
+        button('📖 シールブック',()=>Book.open()), button('🏡 じぶんの しま',()=>StickerWorld.open()),
+        button('👤 おうちのかたへ',()=>Parent.open()))),
       ...chapters.map((c,i)=>el('section.review-chapter',{style:{'--chapter-color':c.color}},
         el('div.review-chapter-heading',null,el('span.review-chapter-number',{text:i+1}),el('div',null,el('h3',{text:c.title}),el('p',{text:c.subtitle}))),
         el('div.review-lesson-grid',null,lessons.slice(i*4,i*4+4).map(l=>{
@@ -222,6 +226,7 @@ const SecondRound = (() => {
     el('div.review-objects',{role:'img','aria-label':({animal:'くま',flower:'おはな',umbrella:'かさ'})[kind]+' '+n+'こ'},items(n,kind)));}
   function action(fn){if(q.done) return;exitArmed=false;Sound.sfx.tap();fn();renderQuestion(true);}
   function renderQuestion(restore=false){
+    exitBtn.setAttribute('aria-label','もくじに もどる');
     const focus=restore&&document.activeElement&&document.activeElement.getAttribute('data-focus');
     clear(body);const c=chapters[lessons[q.lessonId].chapter];
     heading.textContent=run.kind==='chapter'?chapters[run.chapter].title+'の まとめ':lessons[run.id].title;
@@ -355,12 +360,13 @@ const SecondRound = (() => {
       }
     }
     run=null;q=null;exitArmed=false;clear(body);heading.textContent='やりとげたね！';
+    exitBtn.setAttribute('aria-label','もくじに もどる');
     const has=Store.hasSticker(done.key), pending=Store.isPending(done.key), record=Store.data.reviewRecords[done.key];
     let note=confirmed?'シールに いろが ついたよ！':fresh?(pending?'かりの シールを ゲット！ べつのひに ３もん たしかめよう。':'あたらしい なかまを ゲット！'):
       passed?(pending?'べつのひに ３もん たしかめると いろが つくよ。':'もういちど できたね！'):
       'じぶんで さいしょから '+(done.kind==='chapter'?'４／５':done.kind==='check'?'２／３':'４／８')+'もん できたら '+(done.kind==='check'?'いろが つくよ。':'シールを もらえるよ。');
     const nextId=done.kind==='chapter'?(done.chapter+1)*4:done.id+1;
-    body.append(el('div.review-result',null,has?PokemonStickers.artwork(done.key):illustration('animal'),
+    body.append(el('div.review-result'+(pending?'.pending':''),null,has?PokemonStickers.artwork(done.key):illustration('animal'),
       el('h3',{text:note}),el('p',{text:'じぶんで '+record.independent+'もん・もういちど '+record.revised+'もん・ヒント '+record.supported+'もん'}),
       el('div.review-actions',null,
         lessonOpen(nextId)?button('つぎの レッスン',()=>start(nextId),'btn-accent'):null,
@@ -369,7 +375,7 @@ const SecondRound = (() => {
         button('きょうは ここまで',()=>{Home.render();UI.show('home');}))));
     if(fresh||confirmed)UI.confetti(40);focusHeading();say((fresh?stickerFor(done.key)+'の シール。':'')+note);
   }
-  return {open,unlocked,progress,homeCard,collection,parentSummary,lessons,chapters,generate,lessonOpen,chapterReady,rewardKeys,
+  return {open,unlocked,progress,earned,homeCard,collection,parentSummary,lessons,chapters,generate,lessonOpen,chapterReady,rewardKeys,
     // Same debug surface as the first-round engine; answers are not attached to child-facing DOM.
     inspect:()=>run?{run,q}:null};
 })();

@@ -928,6 +928,8 @@ const Parent = (() => {
 
   function render(){
     buildSheet();
+    // Import/replace and reset redraw this sheet without another UI.show().
+    Rounds.decorate('parent', sheetNode);
     clear(sheetInner);
     /* What to do this week comes first. It used to sit under an essay, with twelve
        sections after it; the reading — what the app is for, what each game builds,

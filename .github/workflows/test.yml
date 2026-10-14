@@ -58,5 +58,8 @@ jobs:
       - name: Verify second-round unlock, review lessons and persistence
         run: node tools/test-review.cjs
 
+      - name: Verify round navigation, visible identity and saved selection
+        run: node tools/test-round-navigation.cjs
+
       - name: Verify offline Pokémon artwork and rarity rewards
         run: node tools/test-pokemon.cjs

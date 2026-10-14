@@ -67,6 +67,7 @@ const Store = (() => {
     transferRecords: {}, // mission index -> last actual run, separate from mastery/stars
     transferStickerRule: 2, // version 1 awarded a sticker for finishing even with no right answers
     secondRoundReached: false, // original 131 rewards; once opened, future editions cannot close it
+    selectedRound: 1, // the last chosen adventure; shared collections retain this context
     reviewRecords: {}, // separate second-round observations, never first-round stars/facts
     name: '',
     sfx: true, voice: true, voiceId: null,
@@ -129,6 +130,7 @@ const Store = (() => {
           mem[k] = fresh[k];
           bent = true;
         }
+        if (![1, 2].includes(mem.selectedRound)){ mem.selectedRound = 1; bent = true; }
         for (const [k, v] of Object.entries(mem.reviewRecords)){
           if (!reviewRecordValid(k, v)){ delete mem.reviewRecords[k]; bent = true; }
         }
@@ -336,6 +338,10 @@ const Store = (() => {
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];
       }
+    }
+    if (data.selectedRound !== undefined){
+      if (![1, 2].includes(data.selectedRound)) return null;
+      out.selectedRound = data.selectedRound;
     }
     if (data.voiceId !== undefined){
       if (data.voiceId !== null && typeof data.voiceId !== 'string') return null;

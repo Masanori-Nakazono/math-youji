@@ -145,7 +145,7 @@ const G1Preparation = (() => {
 
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
-  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl;
+  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl, roundsEl;
   let parentBtn;
 
   function updateVoiceWarning(){
@@ -197,7 +197,8 @@ const Home = (() => {
        map itself off the bottom of an iPad */
     dailiesEl = el('div.dailies', null, recommendEl, dailyEl, reviewEl, focusEl);
     questsEl = el('div.home-quests');
-    node.append(voiceWarnEl, questsEl, dailiesEl, worldsEl, shelfEl);
+    roundsEl = el('div.home-rounds');
+    node.append(roundsEl, voiceWarnEl, questsEl, dailiesEl, worldsEl, shelfEl);
     return UI.register('home', node);
   }
 
@@ -208,7 +209,7 @@ const Home = (() => {
   function homeSpeech(){
     const names = [recommendEl, dailyEl, reviewEl, focusEl]
       .filter(b => b && !b.hidden).map(b => ($('.t', b) || {}).textContent).filter(Boolean);
-    return '上のボタンから選んでね。' + names.join('、') + '。下の地図から、好きな遊びも選べるよ。';
+    return 'いまは１周目、地図の冒険だよ。２周目は本で復習して、新しいシールを集めるよ。上のボタンから選んでね。' + names.join('、') + '。下の地図から、好きな遊びも選べるよ。';
   }
 
   function gameCard(g){
@@ -263,6 +264,7 @@ const Home = (() => {
 
   function render(){
     build();
+    clear(roundsEl); roundsEl.append(Rounds.switcher(1));
     starEl.textContent = String(Store.totalStars());
     /* A quiet mark for the adult, on the button only they press. The child sees a
        dot; the parent sees that the records have not been written out in a month.
@@ -344,8 +346,6 @@ const Home = (() => {
        child's choice of what to do next.  The short adventure sits alongside it
        because it answers a different moment — "I want to try, but this is hard." */
     clear(questsEl);
-    const secondRound = SecondRound.homeCard();
-    if (secondRound) questsEl.append(secondRound);
     const transfer = TransferAdventure.homeCard();
     if (transfer) questsEl.append(transfer);
     const stickerQuest = StickerMissions.homeCard();
@@ -701,7 +701,7 @@ const Result = (() => {
       nextLine = '今日は、ここまでで十分だよ。オレンジのボタンで、おしまいにしよう。';
     }
     inner.append(actions);
-    if (SecondRound.unlocked()) actions.append(act('', '📖', 'ほんを うらがえす', () => SecondRound.open()));
+    if (SecondRound.unlocked()) actions.append(act('', '📘', '２しゅうめへ', () => SecondRound.open()));
     UI.show('result', { replace: true });
     const news = (coloured.length ? 'シールに、色がついたね！' : '')
       + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '')

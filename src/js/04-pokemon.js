@@ -5,6 +5,9 @@ const POKEMON_MANIFEST = /*__POKEMON_MANIFEST__*/ { pokemon: {}, slots: {}, dail
 
 const PokemonStickers = (() => {
   const LABELS = { 1: 'なかま', 2: 'レア', 3: 'スーパーレア', 4: 'でんせつ', 5: 'とくべつ' };
+  function isSecondRound(key){
+    return typeof key === 'string' && /^(?:r2:(?:[0-9]|1[0-9])|r2chapter:[0-4])$/.test(key);
+  }
   function reward(key){
     const fixed = Object.hasOwn(POKEMON_MANIFEST.slots, key) ? POKEMON_MANIFEST.slots[key] : null;
     if (fixed) return Object.assign({}, POKEMON_MANIFEST.pokemon[fixed.id], { key, rarity: fixed.rarity });
@@ -20,11 +23,16 @@ const PokemonStickers = (() => {
   }
   function artwork(key, options){
     const opts = options || {}, r = reward(key);
-    const card = el('span.pokemon-sticker.rarity-' + r.rarity + (opts.silhouette ? '.unearned' : ''), {
-      role: 'img', 'aria-label': (opts.silhouette ? 'まだ もっていない ' : '') + r.name + '　' + label(r),
+    const secondRound = isSecondRound(key), chapter = secondRound && key.startsWith('r2chapter:');
+    const roundLabel = secondRound ? (chapter ? '　２しゅうめの まとめシール' : '　２しゅうめの シール') : '';
+    const card = el('span.pokemon-sticker.rarity-' + r.rarity + (opts.silhouette ? '.unearned' : '')
+      + (secondRound ? '.pokemon-second-round' : '') + (chapter ? '.pokemon-second-round-chapter' : ''), {
+      role: 'img', 'aria-label': (opts.silhouette ? 'まだ もっていない ' : '') + r.name + '　' + label(r) + roundLabel,
       dataset: { pokemon: r.id, rarity: r.rarity, stickerKey: key },
-      title: r.name + '　' + label(r)
-    }, el('img.pokemon-image', { src: r.image, alt: '', width: 256, height: 256, decoding: 'async', draggable: 'false' }));
+      title: r.name + '　' + label(r) + roundLabel
+    });
+    if (secondRound) card.append(el('span.pokemon-round-badge', { text: '２しゅうめ', 'aria-hidden': 'true' }));
+    card.append(el('img.pokemon-image', { src: r.image, alt: '', width: 256, height: 256, decoding: 'async', draggable: 'false' }));
     if (opts.name !== false) card.append(el('span.pokemon-name', { text: r.name }));
     if (opts.rarity !== false) card.append(el('span.pokemon-rarity', { text: label(r) }));
     return card;
@@ -36,7 +44,8 @@ const PokemonStickers = (() => {
     return el('div.pokemon-legend', { 'aria-label': 'ポケモンシールの あつめかた' },
       el('b', { text: 'ポケモンの なかまを あつめよう' }),
       el('span', { text: 'クリア → なかま・レア　／　きんの シール → スーパーレア' }),
-      el('span', { text: 'きんを ぜんぶ あつめる → でんせつ　／　ぜんぶ クリアして ぼうけん → とくべつな でんせつ・まぼろし' }));
+      el('span', { text: 'きんを ぜんぶ あつめる → でんせつ　／　ぜんぶ クリアして ぼうけん → とくべつな でんせつ・まぼろし' }),
+      el('span', { text: '２しゅうめ → あおい めじるしの あたらしい なかま25まい　／　まとめ → きんの ふちの シール' }));
   }
-  return { reward, label, artwork, keyForName, legend, manifest: POKEMON_MANIFEST };
+  return { reward, label, artwork, keyForName, isSecondRound, legend, manifest: POKEMON_MANIFEST };
 })();
