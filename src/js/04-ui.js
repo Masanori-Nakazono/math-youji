@@ -33,7 +33,7 @@ const UI = (() => {
     n.classList.add('enter');
     current = name;
     n.scrollTop = 0;
-    const sc = $('.worlds, .sheet, .levels, .book', n);
+    const sc = $('.home-content, .worlds, .sheet, .levels, .book', n);
     if (sc) sc.scrollTop = o.keepScroll ? sc.scrollTop : 0;
     /* A visual transition is otherwise silent to screen readers and leaves
        keyboard/switch focus on a control that just became hidden. */

@@ -195,12 +195,14 @@ const Home = (() => {
        It said what the locked cards on the map already say, and between it and the
        sticker shelf the map itself was the smallest thing on its own screen. The
        padlocked cards in the 1ねんせい world carry the message now. */
-    /* one row, never a stack: four banners each on their own line pushed the
-       map itself off the bottom of an iPad */
+    /* Daily banners share one row on iPad and two columns on narrow screens. */
     dailiesEl = el('div.dailies', null, recommendEl, dailyEl, reviewEl, focusEl);
     questsEl = el('div.home-quests');
     roundsEl = el('div.home-rounds');
-    node.append(roundsEl, voiceWarnEl, questsEl, dailiesEl, worldsEl, shelfEl);
+    /* Only the heading and lap controls stay fixed. Extra entry cards scroll
+       with the map so unlocking more activities cannot squeeze it to nothing. */
+    node.append(roundsEl,
+      el('div.home-content', null, voiceWarnEl, questsEl, dailiesEl, worldsEl, shelfEl));
     return UI.register('home', node);
   }
 
@@ -369,11 +371,8 @@ const Home = (() => {
     } else {
       strip.append(el('span.empty', { text: 'レベルを クリアすると シールが たまるよ' }));
     }
-    /* The padlocked 1ねんせい cards are meant to be the reason to fill the shelf, but
-       on a 1024×768 iPad the world list scrolls: 509px of window over 1079px of map,
-       so those cards sit at y≈900 and a child has to scroll two thirds of the way
-       down to meet them. Rather than move the map around, the count goes on the one
-       strip that is on screen whatever happens — the shelf the child already taps. */
+    /* The shelf also shows how many classroom games have opened, giving the
+       child a reason to keep collecting alongside the locked cards on the map. */
     const classroom = Games.list.filter(g => Progress.stageOf(g) === 'g1');
     const openCount = classroom.filter(stageOpen).length;
     shelfEl.classList.toggle('nearly', openCount > 0 && openCount < classroom.length);

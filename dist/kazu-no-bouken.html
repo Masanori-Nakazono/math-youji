@@ -474,7 +474,27 @@ body::before{
 /* ===========================================================
    HOME — たんけんマップ
    =========================================================== */
-#home{ gap: calc(var(--u)*.7); }
+#home{
+  display:grid;
+  grid-template-columns:minmax(170px,.6fr) minmax(0,2fr);
+  grid-template-rows:auto auto minmax(0,1fr);
+  gap:calc(var(--u)*.6);
+}
+#home > .home-head{ grid-column:1 / -1; }
+#home > .round-status{
+  grid-column:1; grid-row:2;
+  flex-direction:column; align-items:flex-start; justify-content:center; gap:2px;
+}
+#home > .home-rounds{ grid-column:2; grid-row:2; min-width:0; }
+.home-content{
+  grid-column:1 / -1; grid-row:3;
+  min-height:0; min-width:0; overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  display:flex; flex-direction:column; gap:calc(var(--u)*.7);
+  padding:4px 4px 10px;
+  scrollbar-gutter:stable;
+}
+.home-content > *{ flex-shrink:0; }
 
 .home-head{
   flex: 0 0 auto;
@@ -580,14 +600,15 @@ body::before{
    banners would make both labels and tap targets too small on an iPad. */
 .home-quests{
   flex:0 0 auto;
-  display:flex; align-items:stretch; flex-wrap:wrap; gap:calc(var(--u)*.7);
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:stretch; gap:calc(var(--u)*.7);
 }
 .home-quest{
   min-width:0; border:calc(var(--u)*.2) solid var(--card-edge);
   border-radius:var(--wob-b); background:var(--card); color:var(--ink);
   box-shadow:var(--shadow-sm); font:inherit;
 }
-.sticker-mission{ flex:1 1 auto; padding:calc(var(--u)*.45) calc(var(--u)*.75); }
+.sticker-mission{ grid-column:1 / -1; padding:calc(var(--u)*.45) calc(var(--u)*.75); }
 .quest-title{ display:flex; align-items:center; gap:calc(var(--u)*.35); font-size:calc(var(--u)*1.35); font-weight:800; }
 .sticker-mission-picks{ display:flex; gap:calc(var(--u)*.45); margin-top:calc(var(--u)*.35); }
 .sticker-mission-pick{
@@ -601,7 +622,7 @@ body::before{
 .sticker-mission-pick .name{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:calc(var(--u)*1.1); font-weight:800; }
 .sticker-mission-pick .go{ font-size:calc(var(--u)*1.2); }
 .adventure-card{
-  flex:0 1 calc(var(--u)*23); display:flex; align-items:center; gap:calc(var(--u)*.45);
+  min-height:var(--tap); display:flex; align-items:center; gap:calc(var(--u)*.45);
   padding:calc(var(--u)*.45) calc(var(--u)*.7); text-align:left; cursor:pointer;
   background:color-mix(in srgb, var(--c-blue) 11%, var(--card)); border-color:var(--c-blue);
 }
@@ -614,14 +635,12 @@ body::before{
 
 /* worlds */
 .worlds{
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  flex: 0 0 auto;
+  min-width:0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(calc(var(--u)*38), 1fr));
   grid-auto-rows: auto;
-  align-content: safe center;   /* centred when there is room, never clipped when there isn't */
+  align-content:start;
   gap: calc(var(--u)*.9);
   padding-bottom: calc(var(--u)*.2);
 }
@@ -2430,13 +2449,13 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .transfer-sticker-star{ position:absolute; top:-5%; right:1%; color:#6e428a; font-size:calc(var(--medal-size)*.22); }
 .transfer-sticker-ribbon{ color:#50345d; font-size:calc(var(--medal-size)*.115); font-weight:900; letter-spacing:.07em; }
 .transfer-sticker.unearned{ filter:grayscale(.8); opacity:.65; }
-.transfer-home{ display:flex; align-items:center; gap:16px; text-align:left; padding:12px 20px;
-  flex:1 1 100%; border-color:#b59bd4; background:linear-gradient(110deg,var(--card),var(--paper-2)); cursor:pointer; }
+.transfer-home{ display:flex; align-items:center; gap:10px; text-align:left; padding:8px 12px;
+  border-color:#b59bd4; background:linear-gradient(110deg,var(--card),var(--paper-2)); cursor:pointer; }
 .transfer-home .transfer-sticker{ --medal-size:64px; }
-.transfer-home>span:nth-child(2){ flex:1; }
+.transfer-home>span:nth-child(2){ flex:1; min-width:0; }
 .transfer-home strong,.transfer-home small{ display:block; }
-.transfer-home strong{ font-size:clamp(16px,2vw,23px); }
-.transfer-home small{ color:var(--ink-soft); margin-top:4px; font-size:14px; }
+.transfer-home strong{ font-size:clamp(15px,1.6vw,20px); line-height:1.4; }
+.transfer-home small{ color:var(--ink-soft); margin-top:4px; font-size:12px; line-height:1.4; }
 .shelf .strip .transfer-sticker{ --medal-size:40px; padding:3px; }
 .transfer-body{ overflow-y:auto; min-height:0; padding:12px 22px 28px; flex:1; }
 #transfer{ color:var(--ink); }
@@ -2552,7 +2571,8 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .pokemon-sticker.transfer-sticker{ --pokemon-size:var(--medal-size); height:auto; border-radius:18px; transform:none; padding:5px; isolation:auto; color:var(--ink); }
 .pokemon-sticker.transfer-sticker.unearned{ filter:none; opacity:1; }
 .transfer-collectible .pokemon-sticker{ --medal-size:110px; }
-.transfer-home .pokemon-sticker{ --medal-size:90px; }
+.transfer-home .pokemon-sticker{ --medal-size:64px; }
+.home-quests .pokemon-rarity{display:none;}
 .world-sticker .pokemon-sticker.transfer-sticker{ --medal-size:calc(var(--u)*8); }
 .world-palette-sticker .pokemon-sticker.transfer-sticker{ --medal-size:calc(var(--u)*7.2); }
 .shelf .strip .pokemon-sticker.transfer-sticker{ --medal-size:calc(var(--u)*4.5); }
@@ -2593,6 +2613,11 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .round-choice.active .round-choice-progress{border-radius:20px;background:var(--round-color);color:var(--on-crayon);padding:5px 10px;}
 .round-choice:focus-visible{outline:3px solid var(--ring);outline-offset:3px;}
 .home-rounds{flex:0 0 auto;}
+.home-rounds .round-choice{min-height:64px;padding:6px 10px;gap:8px;}
+.home-rounds .round-choice-copy strong{font-size:18px;}
+.home-rounds .round-choice-copy small{font-size:12px;}
+.home-rounds .round-choice-icon{font-size:24px;}
+.home-rounds .round-choice-progress{font-size:12px;}
 .round-collection{grid-column:1/-1;border:2px solid var(--c-blue);border-radius:20px;padding:18px;background:var(--card);color:var(--ink);}
 .round-collection h3{font-size:22px;margin:0 0 10px;}
 .round-collection p{font-size:15px;line-height:1.8;}
@@ -2635,12 +2660,12 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .review-chapter-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;flex-wrap:wrap;}
 .review-chapter-footer span{font-size:14px;color:var(--ink-soft);}
 .review-chapter-footer .btn{font-size:17px;}
-.review-home{display:flex;align-items:center;gap:16px;text-align:left;padding:14px 20px;flex:1 1 100%;border-color:var(--c-blue);background:var(--card);}
+.review-home{display:flex;align-items:center;gap:10px;text-align:left;padding:8px 12px;border-color:var(--c-blue);background:var(--card);}
 .review-home>span:nth-child(2){flex:1;min-width:0;}
-.review-home .pokemon-sticker{--pokemon-size:70px;flex-shrink:0;}
+.review-home .pokemon-sticker{--pokemon-size:56px;flex-shrink:0;}
 .review-home strong,.review-home small{display:block;}
-.review-home strong{font-size:clamp(16px,2vw,23px);}
-.review-home small{color:var(--ink-soft);font-size:14px;margin-top:5px;}
+.review-home strong{font-size:clamp(15px,1.6vw,20px);line-height:1.4;}
+.review-home small{color:var(--ink-soft);font-size:12px;line-height:1.4;margin-top:4px;}
 .review-cover{font-size:48px;}
 .review-collection,.review-gate{grid-column:1/-1;border:2px solid var(--c-blue);border-radius:20px;padding:20px;background:var(--card);margin:8px 0 24px;color:var(--ink);}
 .review-gate h3,.review-collection h3{font-size:23px;margin:0 0 12px;}
@@ -2832,6 +2857,45 @@ polygon.slot-focus{ stroke:var(--ring); stroke-width:2.8; stroke-dasharray:none;
 .pokemon-second-round.unearned .pokemon-round-badge{background:#53697d;}
 .shelf .strip .pokemon-sticker.pokemon-second-round{min-width:52px;}
 .shelf .strip .pokemon-round-badge{font-size:9px;padding:1px 0;}
+
+/* Home cards share rows; only the compact toolbar and lap controls stay fixed. */
+.home-quests > button,.dailies > .daily{min-height:var(--tap);}
+@media(max-width:700px){
+  #home{
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto auto auto minmax(0,1fr);
+  }
+  #home > .round-status{
+    grid-column:1; grid-row:2;
+    flex-direction:row; align-items:center; justify-content:space-between;
+  }
+  #home > .home-rounds{grid-column:1;grid-row:3;}
+  .home-content{grid-row:4;}
+}
+@media(max-width:600px){
+  .home-head{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;}
+  .home-head .logo{grid-column:1 / 5;font-size:clamp(22px,6vw,30px);white-space:nowrap;}
+  .home-head .spacer{display:none;}
+  .home-head .starcount{justify-self:end;font-size:18px;}
+  .home-head .btn-round{justify-self:center;width:100%;max-width:64px;}
+  .home-rounds .round-choice-copy small{display:none;}
+  .home-rounds .round-choice-progress{font-size:11px;}
+  .home-quests > .review-home,.home-quests > .transfer-home{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:8px;
+  }
+  .home-quests > .review-home > :first-child,
+  .home-quests > .transfer-home > :first-child{grid-column:1 / -1;justify-self:center;}
+  .home-quests strong{font-size:14px;word-break:keep-all;overflow-wrap:anywhere;}
+  .home-quests .adventure-card{gap:4px;padding:6px;}
+  .home-quests .adventure-card b{font-size:12px;white-space:normal;word-break:keep-all;}
+  .home-quests .adventure-card small{font-size:10px;}
+  .dailies{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .dailies.n1{grid-template-columns:minmax(0,1fr);}
+  .dailies > .daily .t{font-size:14px;white-space:normal;word-break:keep-all;}
+  .dailies > .daily .s{display:none;}
+  .dailies > .daily .ico{font-size:24px;}
+  .dailies > .daily .go{font-size:16px;}
+}
 </style>
 </head>
 <body>
@@ -4977,7 +5041,7 @@ const UI = (() => {
     n.classList.add('enter');
     current = name;
     n.scrollTop = 0;
-    const sc = $('.worlds, .sheet, .levels, .book', n);
+    const sc = $('.home-content, .worlds, .sheet, .levels, .book', n);
     if (sc) sc.scrollTop = o.keepScroll ? sc.scrollTop : 0;
     /* A visual transition is otherwise silent to screen readers and leaves
        keyboard/switch focus on a control that just became hidden. */
@@ -12594,12 +12658,14 @@ const Home = (() => {
        It said what the locked cards on the map already say, and between it and the
        sticker shelf the map itself was the smallest thing on its own screen. The
        padlocked cards in the 1ねんせい world carry the message now. */
-    /* one row, never a stack: four banners each on their own line pushed the
-       map itself off the bottom of an iPad */
+    /* Daily banners share one row on iPad and two columns on narrow screens. */
     dailiesEl = el('div.dailies', null, recommendEl, dailyEl, reviewEl, focusEl);
     questsEl = el('div.home-quests');
     roundsEl = el('div.home-rounds');
-    node.append(roundsEl, voiceWarnEl, questsEl, dailiesEl, worldsEl, shelfEl);
+    /* Only the heading and lap controls stay fixed. Extra entry cards scroll
+       with the map so unlocking more activities cannot squeeze it to nothing. */
+    node.append(roundsEl,
+      el('div.home-content', null, voiceWarnEl, questsEl, dailiesEl, worldsEl, shelfEl));
     return UI.register('home', node);
   }
 
@@ -12768,11 +12834,8 @@ const Home = (() => {
     } else {
       strip.append(el('span.empty', { text: 'レベルを クリアすると シールが たまるよ' }));
     }
-    /* The padlocked 1ねんせい cards are meant to be the reason to fill the shelf, but
-       on a 1024×768 iPad the world list scrolls: 509px of window over 1079px of map,
-       so those cards sit at y≈900 and a child has to scroll two thirds of the way
-       down to meet them. Rather than move the map around, the count goes on the one
-       strip that is on screen whatever happens — the shelf the child already taps. */
+    /* The shelf also shows how many classroom games have opened, giving the
+       child a reason to keep collecting alongside the locked cards on the map. */
     const classroom = Games.list.filter(g => Progress.stageOf(g) === 'g1');
     const openCount = classroom.filter(stageOpen).length;
     shelfEl.classList.toggle('nearly', openCount > 0 && openCount < classroom.length);
