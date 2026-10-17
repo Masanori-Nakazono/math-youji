@@ -30,7 +30,7 @@ const server = http.createServer((req, res) => {
       const K = KazuApp;
       K.Sound.hush(); K.Sound.voiceOn = false; K.Sound.sfxOn = false;
       K.Sound.say = (text, opts) => { if (opts && opts.onend) opts.onend(); };
-      K.Store.reset(); K.Session._test.intro(false);
+      K.Store.reset(); K.Session._test.intro(false); K.Session._test.overview(false); K.Session._test.breaks(false);
       document.querySelectorAll('.bigmark').forEach(node => node.remove());
     });
     const passed = name => console.log('PASS ' + name);
@@ -95,6 +95,7 @@ const server = http.createServer((req, res) => {
 
     await setup();
     await page.evaluate(() => { KazuApp.Home.render(); KazuApp.UI.show('home'); });
+    await page.locator('#home .home-more > summary').click();
     await page.getByRole('button', { name: /^🎒 なかまづくり/ }).click();
     assert.equal(await page.locator('#g1-preparation').isVisible(), true);
     const preparation = await page.locator('#g1-preparation .preparation-level').evaluateAll(nodes => nodes.map(n => ({ game: n.dataset.game, level: n.dataset.level, text: n.textContent })));

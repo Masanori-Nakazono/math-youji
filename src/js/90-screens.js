@@ -38,7 +38,6 @@ const Title = (() => {
           } else if (Store.round() === 2){
             Home.render(); UI.show('home', {replace:true});
           } else if (!Store.data.orientation) Orientation.open();
-          else if (Diagnostic.shouldRun()) Session.startDiagnostic();
           else {
             Home.render();
             UI.show('home', { replace: true });
@@ -71,7 +70,7 @@ const Orientation = (() => {
   const pages = [
     { icon: '👆', text: 'えや すうじを タップして えらぶよ', say: '絵や数字を、タップして選ぶよ。' },
     { icon: '🔊', text: 'わからない ときは スピーカーを おして きいてね', say: '分からない時は、スピーカーを押して聞いてね。' },
-    { icon: '🧩', text: 'さいしょは みて、つぎは いっしょに やってみよう', say: '最初は見て、次はいっしょにやってみよう。' }
+    { icon: '🧩', text: 'まずは いっしょに ひとつ やってみよう', say: 'まずは、一緒に一つやってみよう。' }
   ];
   function build(){
     if (node) return node;
@@ -80,7 +79,7 @@ const Orientation = (() => {
     next = el('button.btn.btn-accent', { type: 'button', onclick(){
       Sound.sfx.tap();
       if (step < pages.length - 1){ step++; render(); }
-      else { Store.completeOrientation(); Session.startDiagnostic(); }
+      else { Store.completeOrientation(); Home.render(); UI.show('home', { replace: true }); }
     } });
     node = el('div#orientation', null, mascotSVG('happy', 'talk'),
       el('h1.welcome', { text: 'あそびかた' }), card, dots, next);
@@ -148,6 +147,7 @@ const G1Preparation = (() => {
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl, roundsEl;
+  let primaryEl, choicesEl, moreEl, diagnosticEl;
   let parentBtn;
 
   function updateVoiceWarning(){
@@ -163,9 +163,7 @@ const Home = (() => {
     starEl   = el('span', { text: '0' });
     worldsEl = el('div.worlds');
     dailyEl  = el('button.daily', { type: 'button', onclick(){ Sound.sfx.tap(); Session.startDaily(10); } });
-    recommendEl = el('button.daily.recommended', {
-      type: 'button', onclick(){ Sound.sfx.tap(); Diagnostic.startRecommended(); }
-    });
+    recommendEl = el('button.daily.recommended', { type:'button' });
     reviewEl = el('button.daily.reviewmission', { type: 'button', hidden: true });
     voiceWarnEl = el('div.voice-warning', {
       hidden: true, role: 'status', 'aria-live': 'polite'
@@ -195,25 +193,38 @@ const Home = (() => {
        It said what the locked cards on the map already say, and between it and the
        sticker shelf the map itself was the smallest thing on its own screen. The
        padlocked cards in the 1ねんせい world carry the message now. */
-    /* Daily banners share one row on iPad and two columns on narrow screens. */
+    primaryEl = el('button.daily.home-primary', { type: 'button' });
+    choicesEl = el('div.home-choices');
     dailiesEl = el('div.dailies', null, recommendEl, dailyEl, reviewEl, focusEl);
     questsEl = el('div.home-quests');
     roundsEl = el('div.home-rounds');
-    /* Only the heading and lap controls stay fixed. Extra entry cards scroll
-       with the map so unlocking more activities cannot squeeze it to nothing. */
-    node.append(roundsEl,
-      el('div.home-content', null, voiceWarnEl, questsEl, dailiesEl, worldsEl, shelfEl));
+    diagnosticEl = el('button.daily.diagnostic', { type: 'button',
+      onclick(){ Sound.sfx.tap(); Session.startDiagnostic(); } },
+      el('span.ico', { text: '🧭', 'aria-hidden': 'true' }),
+      el('span.grow', null, el('span.t', { text: 'はじまりを さがす' }),
+        el('span.s', { text: '10もんで ぴったりの あそびを みつけよう' })),
+      el('span.go', { text: '▶', 'aria-hidden': 'true' }));
+    moreEl = el('details.home-more', null,
+      el('summary', null, el('span', { text: '🗺️', 'aria-hidden': 'true' }), 'ほかの あそび・ちず'),
+      el('div.home-more-content', null, dailiesEl, diagnosticEl, questsEl, worldsEl, shelfEl,
+        el('section.home-round-section', null, el('h2', { text: 'もういちどの ぼうけん' }), roundsEl)));
+    node.append(el('div.home-content', null, voiceWarnEl,
+      el('section.home-today', { 'aria-label': 'きょうの ぼうけん' },
+        el('h2', { text: 'きょうは ここから' }), primaryEl), choicesEl, moreEl));
     return UI.register('home', node);
   }
 
-  /* The banners are the day's way in, and they were told apart only by their
-     words: every one carried the same rabbit, and on a busy day even that went.
-     Each has a picture of its own now, and 🔊 reads out which ones are up. */
-  const BANNER_ICON = { recommend: '🗺️', first: '🧭', daily: '📅', review: '💬', focus: '🎯' };
+  const BANNER_ICON = { recommend: '🗺️', first: '🤝', daily: '📅', review: '💬', focus: '🎯' };
   function homeSpeech(){
-    const names = [recommendEl, dailyEl, reviewEl, focusEl]
-      .filter(b => b && !b.hidden).map(b => ($('.t', b) || {}).textContent).filter(Boolean);
-    return 'いまは'+Store.round()+'周目だよ。地図も本も、この周の記録で遊べるよ。上のボタンから選んでね。' + names.join('、') + '。下の地図から、好きな遊びも選べるよ。';
+    const title = primaryEl && $('.t', primaryEl), detail = primaryEl && $('.s', primaryEl);
+    return (title ? title.textContent + '。' : '') + (detail ? detail.textContent + '。' : '')
+      + 'ほしいシールから選んでもいいよ。ほかの遊びと地図を開くと、好きな遊びも選べるよ。';
+  }
+  function banner(button, icon, title, detail, action){
+    clear(button).append(el('span.ico', { text:icon, 'aria-hidden':'true' }),
+      el('span.grow', null, el('span.t', { text:title }), el('span.s', { text:detail })),
+      el('span.go', { text:'▶', 'aria-hidden':'true' }));
+    button.onclick = () => { Sound.sfx.tap(); action(); };
   }
 
   function gameCard(g){
@@ -279,26 +290,36 @@ const Home = (() => {
       ? 'おうちのかたへ（記録の書き出しを おすすめします）' : 'おうちのかたへ');
     const n = Store.todayCount(), streak = Store.streak();
     const practiceDone = Store.practiceDoneToday();
-    const firstRun = Store.round() === 1 && Diagnostic.shouldRun();
+    const firstRun = Store.round() === 1 && Store.totalStars() === 0
+      && !Store.milestones().some(m => Store.milestoneRank(m.kind) >= Store.milestoneRank('together'));
+    const pending = Session.pendingSummary();
+    const first = firstRun && FirstSteps.target();
     const rec = Diagnostic.current();
     const recGame = rec && Games.byId[rec.gameId];
     clear(recommendEl);
     recommendEl.hidden = !recGame;
     if (recGame){
       const lv = recGame.levels[rec.levelIndex] || recGame.levels[0];
-      recommendEl.append(
-        el('div.ico', { text: firstRun ? BANNER_ICON.first : BANNER_ICON.recommend, 'aria-hidden': 'true' }),
-        el('div.grow', null,
-          el('div.t', { text: firstRun ? 'はじめの ぼうけん' : 'いまの おすすめ' }),
-          el('div.s', { text: firstRun
-            ? '10もんで ぴったりの はじまりを みつけよう'
-            : recGame.name + '　《' + lv.t + '》' })),
-        el('div.go', { text: '▶' }));
-      recommendEl.onclick = () => {
-        Sound.sfx.tap();
-        if (firstRun) Session.startDiagnostic(); else Diagnostic.startRecommended();
-      };
+      banner(recommendEl, BANNER_ICON.recommend, 'いまの おすすめ',
+        recGame.name + '　《' + lv.t + '》', () => Diagnostic.startRecommended());
     }
+    primaryEl.dataset.action = pending ? 'resume' : first ? 'first' : recGame ? 'recommend' : 'daily';
+    if (pending){
+      banner(primaryEl, '▶️', pending.remaining ? 'つづきから　あと ' + pending.remaining + 'もん' : 'できた！ けっかを みよう',
+        pending.title + (pending.done ? '　' + pending.done + 'もん できたね' : ''), () => Session.resume());
+    } else if (first){
+      banner(primaryEl, BANNER_ICON.first, 'いっしょに ひとつ',
+        first.game.name + '　1もんだけ。ヒントを つかって いいよ',
+        () => FirstSteps.startOne(first.game, first.levelIndex));
+    } else if (recGame){
+      const lv = recGame.levels[rec.levelIndex] || recGame.levels[0];
+      banner(primaryEl, BANNER_ICON.recommend, 'きょうの おすすめ',
+        recGame.name + '　《' + lv.t + '》', () => Diagnostic.startRecommended());
+    } else {
+      banner(primaryEl, BANNER_ICON.daily, 'きょうの れんしゅう',
+        'あそんだ もんだいから 10もん', () => Session.startDaily(10));
+    }
+    diagnosticEl.hidden = Store.round() !== 1 || !Diagnostic.shouldRun();
     updateVoiceWarning();
     if (!voiceWarnEl.hidden){
       Sound.probeVoice(3000).then(ok => {
@@ -330,7 +351,7 @@ const Home = (() => {
           : 'あそんだ もんだいから 10もん でるよ' })),
       el('div.go', { text: practiceDone ? '🎉' : '▶' }));
 
-    const weak = Store.weakFacts(4);
+    const weak = Diagnostic.weakFacts(4);
     focusEl.hidden = weak.length < 2;      // one wobbly fact is not a practice set
     if (!focusEl.hidden){
       clear(focusEl);
@@ -345,20 +366,20 @@ const Home = (() => {
       focusEl.onclick = () => { Sound.sfx.tap(); Session.startFocus(weak.map(w => w.key), { n: 10 }); };
     }
 
-    /* The prize choice is a separate, picture-led entry point.  It must not be
-       squeezed into the four daily banners: those are routines, while this is a
-       child's choice of what to do next.  The short adventure sits alongside it
-       because it answers a different moment — "I want to try, but this is hard." */
+    /* A small step and a picture-led choice stay beside the one main action.
+       Everything else remains available behind an explicit map door. */
+    clear(choicesEl);
+    const shortStep = FirstSteps.homeCard({ one: !first });
+    if (shortStep) choicesEl.append(shortStep);
+    const stickerQuest = StickerMissions.homeCard();
+    if (stickerQuest) choicesEl.append(stickerQuest);
+    choicesEl.hidden = !choicesEl.childElementCount;
     clear(questsEl);
     const textbook = TextbookReview.homeCard();
     if (textbook) questsEl.append(textbook);
     const transfer = TransferAdventure.homeCard();
     if (transfer) questsEl.append(transfer);
-    const stickerQuest = StickerMissions.homeCard();
     const adventure = Adventures.homeCard();
-    const firstStep = FirstSteps.homeCard();
-    if (stickerQuest) questsEl.append(stickerQuest);
-    if (firstStep) questsEl.append(firstStep);
     if (adventure) questsEl.append(adventure);
     questsEl.hidden = !questsEl.childElementCount;
 
@@ -383,8 +404,7 @@ const Home = (() => {
       el('div.lbl', null, 'シール ' + got.length + 'まい', sub),
       strip);
 
-    /* how many banners share the row decides how much of each one fits: with three
-       or four up, the mascot's width is worth more to the name than the mascot is */
+    /* Each optional activity keeps its explanation at every viewport width. */
     const shown = [...dailiesEl.children].filter(c => !c.hidden).length;
     dailiesEl.className = 'dailies n' + shown;
 

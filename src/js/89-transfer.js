@@ -22,6 +22,24 @@ const TransferAdventure = (() => {
   let node, body, heading, back, speech = '', run = null, question = null, exitArmed = false;
   const key = id => 'transfer:' + id;
   const missionFor = k => /^transfer:[0-5]$/.test(k) ? missions[Number(k.split(':')[1])] : null;
+  function saveVisit(){
+    if (!run || !question) return;
+    const next=question.done ? run.step+1 : run.step;
+    Store.setPref('transferSession',JSON.parse(JSON.stringify({at:Date.now(),run:{id:run.id,step:next,results:run.results},q:question.done?null:question})));
+  }
+  function pendingSummary(){
+    const s=Store.data.transferSession;
+    return s ? {kind:'transfer',at:s.at,title:missions[s.run.id].title,done:s.run.step,remaining:QUESTIONS-s.run.step} : null;
+  }
+  function resume(){
+    const s=Store.data.transferSession;
+    if (!s || !unlocked()) return false;
+    const saved=JSON.parse(JSON.stringify(s)); build(); UI.show('transfer'); run=saved.run; question=saved.q;
+    if(run.step===QUESTIONS) finish();
+    else if(question){exitArmed=false;renderQuestion();say(prompt());}
+    else nextQuestion();
+    return true;
+  }
 
   function progress(){
     const slots = Progress.gateSlots('pre').concat(Progress.gateSlots('g1'));
@@ -87,8 +105,9 @@ const TransferAdventure = (() => {
         exitArmed = true;
         let note = $('.transfer-exit', body);
         if (!note){ note = el('p.transfer-exit', { role: 'status' }); body.prepend(note); }
-        note.textContent = 'ここで おわる？ ← を もういちど おすと もどるよ（つぎは１もんめから）';
-        say('ここでおわる？ もどるをもう一度押すと、つぎは１問目からだよ。');
+        saveVisit();
+        note.textContent = 'ここで やすむ？ ← を もういちど おすと もどるよ。つづきは のこるよ。';
+        say('ここで休む？続きは残るよ。戻るをもう一度押してね。');
       } else if (run){ run = null; menu(); }
       else { Home.render(); UI.show('home', { replace: true }); }
     });
@@ -102,6 +121,8 @@ const TransferAdventure = (() => {
       el('h3', { text: 'できることを、つかってみよう。' }),
       el('p', { text: 'ひとつの ぼうけんは ５もん。４もんを じぶんで できたら、とくべつな シール！ ヒントも つかえるよ。' })));
     const cards = el('div.transfer-map');
+    const pending=pendingSummary();
+    if(pending) body.append(button('つづきから　あと '+pending.remaining+'もん',resume,'btn-accent'));
     missions.forEach((m, i) => cards.append(el('button.transfer-card', { type: 'button',
       dataset: { mission: i }, onclick(){ start(i); }
     }, artwork(key(i)), el('span.transfer-card-title', { text: m.title }),
@@ -114,9 +135,18 @@ const TransferAdventure = (() => {
     if (!unlocked()) return;
     build(); UI.show('transfer'); menu();
   }
-  function start(id){
+  function start(id,confirmed=false){
     if (!unlocked() || !missions[id]) return;
     build(); UI.show('transfer');
+    const previous=Store.data.transferSession;
+    if(previous && previous.run.step===QUESTIONS){resume();return;}
+    const q=previous && previous.q;
+    if(!confirmed && previous && (previous.run.step>0 || q && (q.value || q.phase || q.previous!==null || q.supported || q.mistakes || (missions[previous.run.id].kind==='split' && q.left!==q.total)))){
+      run=null;clear(body);heading.textContent='つづきが のこっているよ';
+      body.append(el('p',{text:missions[previous.run.id].title+'の つづきから あそべるよ。あたらしく はじめると、まえの とちゅうの ばめんは おわるよ。'}),
+        button('まえの つづきから',resume,'btn-accent'),button('あたらしく はじめる',()=>start(id,true)),button('ぼうけんを えらぶ',menu));
+      return;
+    }
     run = { id, step: 0, results: [] };
     nextQuestion();
   }
@@ -192,6 +222,7 @@ const TransferAdventure = (() => {
       const replacement = $$('button', body).find(b => b.getAttribute('aria-label') === focusLabel && !b.disabled);
       if (replacement) replacement.focus({ preventScroll: true });
     }
+    saveVisit();
   }
   function controls(max){
     return el('div.transfer-controls', null,
@@ -202,6 +233,7 @@ const TransferAdventure = (() => {
   }
   function hint(){
     question.supported = true;
+    saveVisit();
     const m = missions[run.id], q = question;
     let text;
     if (m.kind === 'fill') text = 'はじめの ' + q.a + ' から、' + q.total + ' まで、１つずつ ふやしてみよう。';
@@ -252,12 +284,14 @@ const TransferAdventure = (() => {
     }
     if (!correct){
       q.mistakes++; feedback(message);
+      saveVisit();
       if (q.mistakes >= 2) hint();
       return;
     }
     q.done = true;
     run.results.push(q.supported ? 'supported' : q.mistakes ? 'revised' : 'independent');
     Store.countToday(1);
+    saveVisit();
     $$('.transfer-scene button', body).forEach(b => { b.disabled = true; });
     feedback(message);
     const actions = clear($('.transfer-actions', body));
@@ -273,6 +307,7 @@ const TransferAdventure = (() => {
     const passed = record.independent >= REQUIRED;
     const fresh = passed && Store.addSticker(key(id));
     const owned = Store.hasSticker(key(id));
+    Store.setPref('transferSession',null);
     Store.flush(); run = null; clear(body);
     const done = missions.filter((m, i) => Store.hasSticker(key(i))).length;
     heading.textContent = '５もん やりとげたね！';
@@ -296,5 +331,5 @@ const TransferAdventure = (() => {
       : passed ? '５問中' + record.independent + '問、じぶんでできたね！'
         : '５問やりとげたね。自分でできたのは' + record.independent + '問だよ。４問できたらシールがもらえるよ。');
   }
-  return { open, homeCard, collection, artwork, missionFor, parentSummary, unlocked, progress };
+  return { open, homeCard, collection, artwork, missionFor, parentSummary, unlocked, progress, pendingSummary, resume };
 })();

@@ -9,6 +9,19 @@
    the point is to tell retrieval from counting, not to run a race. */
 const FLUENT_FAST_MS = 3000, FLUENT_SLOW_MS = 9000;
 const TREASURE_WORLDS = ['shima', 'umi', 'yama', 'mori', 'kyoshitsu'];
+function transferSessionValid(s){
+  const integer=(n,max=10000)=>Number.isSafeInteger(n)&&n>=0&&n<=max;
+  if (!s || typeof s!=='object' || Array.isArray(s) || !integer(s.at,Number.MAX_SAFE_INTEGER)
+    || !s.run || !integer(s.run.id,5) || !integer(s.run.step,5) || !Array.isArray(s.run.results)
+    || s.run.results.length!==s.run.step || s.run.results.some(r=>!['independent','revised','supported'].includes(r))) return false;
+  if (s.q===null) return true;
+  if (s.run.step===5) return false;
+  const q=s.q;
+  return !!q && typeof q==='object' && !Array.isArray(q) && integer(q.total,10) && q.total>=6
+    && ['a','b','value','phase','left','mistakes'].every(k=>integer(q[k],k==='mistakes'?10000:10))
+    && (q.previous===null || integer(q.previous,10)) && typeof q.supported==='boolean'
+    && q.done===false && typeof q.subject==='string' && q.subject.length<=8;
+}
 const reviewRecordValid = (k, v) => !!v && typeof v === 'object' && !Array.isArray(v)
   && (/^r2:(?:[0-9]|1[0-9])$/.test(k) || /^r2chapter:[0-4]$/.test(k))
   && Number.isInteger(v.day) && v.day >= 0 && Number.isSafeInteger(v.at) && v.at >= 0
@@ -55,6 +68,7 @@ const Store = (() => {
     practice: [0, 0],   // [firstTryRight, total] across きょうの れんしゅう
     practiceDays: {}, // "YYYY-MM-DD" -> 1 only after the whole daily set is finished
     diagnostic: null, // { completedDay, outcomes, recommended }
+    savedSession: null, // this lap's unfinished visit; completed answers are already recorded
     orientation: false,
     missions: {},     // "YYYY-MM-DD" -> { id, gameId, text, prompt, done, reviewed }
     /* A child can put the stickers they earned somewhere of their own.  This is
@@ -65,6 +79,7 @@ const Store = (() => {
     islandJobs: {}, // boat/snack -> current hands-on work and a lasting completed scene
     transferReached: false,
     transferRecords: {}, // mission index -> last actual run, separate from mastery/stars
+    transferSession: null,
     transferStickerRule: 2, // version 1 awarded a sticker for finishing even with no right answers
     secondRoundReached: false, // legacy name: this lap's textbook course opened after the original 131 rewards
     selectedRound: 1, // the last chosen adventure; shared collections retain this context
@@ -72,6 +87,8 @@ const Store = (() => {
     roundTwoReached: false,
     roundTwo: null,
     reviewRecords: {}, // textbook observations, separate from this lap's map stars/facts
+    reviewChaptersOpen: {}, // chapter number -> 1; related preparation opens each entrance once
+    reviewSession: null, // unfinished textbook run and the exact current question
     name: '',
     sfx: true, voice: true, voiceId: null,
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
@@ -103,12 +120,143 @@ const Store = (() => {
   const LOCAL_FIELDS = new Set([
     'stars', 'plays', 'seen', 'firstTry', 'facts', 'factRecent', 'recent', 'last',
     'swift', 'intro', 'milestones', 'pending', 'stickers', 'treasures', 'daily',
-    'practice', 'practiceDays', 'diagnostic', 'missions', 'islandJobs',
-    'transferReached', 'transferRecords', 'transferStickerRule', 'secondRoundReached',
-    'reviewRecords', 'g1Open', 'g1Reached', 'g1GamesOpen'
+    'practice', 'practiceDays', 'diagnostic', 'savedSession', 'missions', 'islandJobs',
+    'transferReached', 'transferRecords', 'transferSession', 'transferStickerRule', 'secondRoundReached',
+    'reviewRecords', 'reviewChaptersOpen', 'reviewSession', 'g1Open', 'g1Reached', 'g1GamesOpen'
   ]);
   const localFields = data => Object.fromEntries(Array.from(LOCAL_FIELDS, k => [k, data[k]]));
   const blankProgress = () => localFields(blank());
+
+  function normalizeReviewSession(s){
+    const object=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
+    const count=(v,max=10)=>Number.isSafeInteger(v)&&v>=0&&v<=max;
+    const text=v=>typeof v==='string'&&v.length<=300;
+    const kinds=['group','count','five','zero','horizontal','vertical','train','cardinal','splitSmall','splitLarge','hidden','makeTen','combine','increase','zeroAdd','sumCards','take','subEquation','difference','subStory'];
+    const art=v=>['animal','flower','umbrella'].includes(v);
+    if(!object(s)||!count(s.at,Number.MAX_SAFE_INTEGER)||!object(s.run)||!object(s.q))return null;
+    const r=s.run,q=s.q,total=({lesson:8,check:3,chapter:5})[r.kind];
+    if(!total||r.total!==total||!count(r.step,total-1)||!Array.isArray(r.outcomes)
+      ||r.outcomes.some(v=>!['independent','revised','supported'].includes(v)))return null;
+    const chapter=r.kind==='chapter';
+    if(chapter?(!count(r.chapter,4)||r.id!=null||r.key!=='r2chapter:'+r.chapter)
+      :(!count(r.id,19)||r.chapter!=null||r.key!=='r2:'+r.id))return null;
+    const lessonId=chapter?(r.step<4?r.chapter*4+r.step:r.chapter?r.chapter*4-1:3):r.id;
+    const expectedType=lessonId===0?(r.step%2?'match':'group'):lessonId===3?(r.step%2?'sequence':'zeroCount'):kinds[lessonId];
+    if(q.lessonId!==lessonId||q.type!==expectedType||!art(q.thing)||![q.a,q.b].every(v=>count(v))
+      ||!text(q.prompt)||!['missed','supported','done'].every(k=>typeof q[k]==='boolean')
+      ||r.outcomes.length!==r.step+Number(q.done)||!count(q.active,2)||!count(q.left,q.a)
+      ||![null,'＋','−'].includes(q.op)||!Array.isArray(q.values)||q.values.length!==3
+      ||q.values.some(v=>v!==null&&!count(v))||!Array.isArray(q.selected)||q.selected.length>10
+      ||q.selected.some(v=>!count(v,9))||new Set(q.selected).size!==q.selected.length
+      ||!Array.isArray(q.pairs)||q.pairs.length>q.a||q.pairs.some(p=>!Array.isArray(p)||p.length!==2||!count(p[0],q.a-1)||!count(p[1],q.b-1))
+      ||new Set(q.pairs.map(p=>p[0])).size!==q.pairs.length||new Set(q.pairs.map(p=>p[1])).size!==q.pairs.length)return null;
+    if(q.done&&r.outcomes.at(-1)!==(q.supported?'supported':q.missed?'revised':'independent'))return null;
+    for(const k of ['message','hintText','result'])if(q[k]!==undefined&&!text(q[k]))return null;
+    for(const k of ['reverse','cardinality','showHint'])if(q[k]!==undefined&&typeof q[k]!=='boolean')return null;
+    if(q.expectedOp!==undefined&&!['＋','−'].includes(q.expectedOp))return null;
+    if(q.n!==undefined&&!count(q.n))return null;
+    if(q.done&&!text(q.result)||q.showHint&&!text(q.hintText))return null;
+    if(q.value!==undefined&&!count(q.value)||q.target!==undefined&&!count(q.target,q.a-1))return null;
+    if(q.type==='group'){
+      if(!Array.isArray(q.things)||!q.things.length||q.things.length>10||!q.things.every(art)
+        ||!Array.isArray(q.answer)||q.answer.some(v=>!count(v,9))||JSON.stringify(q.answer)!==JSON.stringify(q.things.map((v,i)=>v===q.thing?i:-1).filter(i=>i>=0)))return null;
+    }else if(q.type==='sumCards'){
+      if(!Array.isArray(q.cards)||q.cards.length!==4||q.cards.some(c=>!object(c)||!count(c.a)||!count(c.b))
+        ||!Array.isArray(q.answer)||q.answer.length!==2||q.answer.some(v=>!count(v,3))||JSON.stringify(q.answer)!==JSON.stringify(q.cards.map((c,i)=>c.a+c.b===q.a?i:-1).filter(i=>i>=0)))return null;
+    }else if(!count(q.answer))return null;
+    if(['horizontal','vertical','train','cardinal'].includes(q.type)
+      &&(!count(q.n,q.a)||q.n<1||typeof q.reverse!=='boolean'||typeof q.cardinality!=='boolean'))return null;
+    if(q.type==='subStory'&&(!Array.isArray(q.stories)||q.stories.length!==4||q.stories.some(v=>!object(v)||!text(v.text)||typeof v.correct!=='boolean')
+      ||q.stories.filter(v=>v.correct).length!==1||!q.stories[q.answer]||!q.stories[q.answer].correct))return null;
+    if(['combine','increase','zeroAdd','subEquation'].includes(q.type)&&!['＋','−'].includes(q.expectedOp))return null;
+    const savedQ={};
+    for(const k of ['type','thing','a','b','answer','prompt','lessonId','missed','supported','done','selected','pairs','active','values','op','left','n','reverse','cardinality','expectedOp','value','target','message','hintText','showHint','result']){
+      if(q[k]!==undefined)savedQ[k]=q[k];
+    }
+    if(q.type==='group')savedQ.things=q.things;
+    if(q.type==='sumCards')savedQ.cards=q.cards.map(c=>({a:c.a,b:c.b}));
+    if(q.type==='subStory')savedQ.stories=q.stories.map(v=>({text:v.text,correct:v.correct}));
+    return JSON.parse(JSON.stringify({at:s.at,run:{id:r.id??null,chapter:r.chapter??null,kind:r.kind,step:r.step,total:r.total,outcomes:r.outcomes,key:r.key},q:savedQ}));
+  }
+
+  /* A resumable visit contains only data, never game functions, timers or DOM.
+     Games register after Store starts, so the runner checks that these IDs still
+     exist before restoring a visit. Keep this shape check independent of them. */
+  function normalizeSavedSession(s){
+    const object = v => !!v && typeof v === 'object' && !Array.isArray(v);
+    const count = (v, max = 100000) => Number.isSafeInteger(v) && v >= 0 && v <= max;
+    const text = (v, max = 240) => typeof v === 'string' && v.length <= max;
+    const gameId = v => typeof v === 'string' && /^[a-z0-9]{1,40}$/.test(v);
+    const levelIndex = v => count(v, 1000);
+    const target = v => object(v) && gameId(v.gameId) && levelIndex(v.levelIndex);
+    const strings = (v, max = 512) => Array.isArray(v) && v.length <= max && v.every(x => text(x));
+    const safe = k => !['__proto__', 'prototype', 'constructor'].includes(k);
+    if (!object(s) || s.v !== 1 || !text(s.id, 100) || !s.id || !count(s.at, Number.MAX_SAFE_INTEGER)
+        || !['level', 'daily', 'focus', 'adventure', 'first', 'diagnostic'].includes(s.mode)
+        || !text(s.title) || !(s.gameId === null || gameId(s.gameId)) || !levelIndex(s.levelIndex)
+        || !Array.isArray(s.plan) || !s.plan.length || s.plan.length > 128
+        || !count(s.index, s.plan.length)) return null;
+    for (const p of s.plan){
+      if (!target(p) || (p.intro !== undefined && !['show', 'together'].includes(p.intro))
+          || (p.check !== undefined && (!text(p.check) || !safe(p.check)))
+          || (p.want !== undefined && p.want !== null && !text(p.want))
+          || (p.seed !== undefined && !count(p.seed, 0xffffffff))) return null;
+    }
+    if (![s.firstTryRight, s.swiftCount].every(n => count(n, s.index))
+        || s.swiftCount > s.firstTryRight || !count(s.mistakes)
+        || !Array.isArray(s.results) || s.results.length !== s.index
+        || s.results.some(x => !['introdone', 'done', 'miss'].includes(x))
+        || !Array.isArray(s.sessionOutcomes) || s.sessionOutcomes.length > s.index
+        || s.sessionOutcomes.some(x => !target(x) || typeof x.clean !== 'boolean')
+        || !Array.isArray(s.shaky) || s.shaky.length > 128
+        || s.shaky.some(x => !object(x) || !text(x.key) || !text(x.label))
+        || !strings(s.focusKeys, 32) || !strings(s.usedItems) || !strings(s.announced, 128)
+        || !object(s.checkTally) || Object.keys(s.checkTally).length > 128) return null;
+    for (const [k, v] of Object.entries(s.checkTally)){
+      if (!safe(k) || !text(k) || !object(v) || !count(v.n, s.plan.length) || !count(v.right, v.n)) return null;
+    }
+    if (!(s.rewardKey === null || text(s.rewardKey))
+        || !(s.adventureTarget === null || (target(s.adventureTarget)
+          && (s.adventureTarget.want === null || text(s.adventureTarget.want))))
+        || !(s.firstTarget === null || target(s.firstTarget))
+        || ![null, 'show', 'together'].includes(s.firstPhase)
+        || !(s.visitMilestone === null || (target(s.visitMilestone)
+          && ['viewed', 'together', 'supported', 'revised', 'independent'].includes(s.visitMilestone.kind)
+          && text(s.visitMilestone.label)))) return null;
+    if (s.question !== null){
+      const q = s.question;
+      if (!object(q) || !count(q.wrongThisQ) || typeof q.helped !== 'boolean'
+          || typeof q.taughtQ !== 'boolean' || !(q.missType === null || text(q.missType, 40))) return null;
+    }
+    /* Select known fields so neither prototypes nor accidental runtime state can
+       enter the portable record. JSON cloning also severs every caller reference. */
+    const out = {};
+    for (const k of ['v', 'id', 'at', 'mode', 'title', 'gameId', 'levelIndex', 'index', 'firstTryRight',
+      'mistakes', 'swiftCount', 'results', 'sessionOutcomes', 'shaky', 'focusKeys', 'usedItems',
+      'announced', 'checkTally', 'rewardKey', 'adventureTarget', 'firstTarget', 'firstPhase',
+      'visitMilestone', 'question']) out[k] = s[k];
+    out.plan = s.plan.map(p => {
+      const step = { gameId: p.gameId, levelIndex: p.levelIndex };
+      for (const k of ['intro', 'check', 'want', 'seed']) if (p[k] !== undefined) step[k] = p[k];
+      return step;
+    });
+    out.sessionOutcomes = s.sessionOutcomes.map(x => ({gameId:x.gameId, levelIndex:x.levelIndex, clean:x.clean}));
+    out.shaky = s.shaky.map(x => ({key:x.key, label:x.label}));
+    out.checkTally = Object.fromEntries(Object.entries(s.checkTally).map(([k, x]) => [k, {n:x.n, right:x.right}]));
+    out.adventureTarget = s.adventureTarget === null ? null : {
+      gameId:s.adventureTarget.gameId, levelIndex:s.adventureTarget.levelIndex, want:s.adventureTarget.want
+    };
+    out.firstTarget = s.firstTarget === null ? null : {gameId:s.firstTarget.gameId, levelIndex:s.firstTarget.levelIndex};
+    out.visitMilestone = s.visitMilestone === null ? null : {
+      gameId:s.visitMilestone.gameId, levelIndex:s.visitMilestone.levelIndex,
+      kind:s.visitMilestone.kind, label:s.visitMilestone.label
+    };
+    out.question = s.question === null ? null : {
+      wrongThisQ:s.question.wrongThisQ, helped:s.question.helped,
+      taughtQ:s.question.taughtQ, missType:s.question.missType
+    };
+    try{ return JSON.parse(JSON.stringify(out)); }catch(e){ return null; }
+  }
 
   /* Three different failures, kept apart because each needs a different sentence
      on the parent page:
@@ -158,7 +306,7 @@ const Store = (() => {
         for (const k of Object.keys(fresh)){
           const want = shape(fresh[k]), got = shape(record[k]);
           if (want === got) continue;
-          if ((k === 'diagnostic' && got === 'object') || (k === 'voiceId' && got === 'string')
+          if ((['diagnostic', 'savedSession', 'reviewSession', 'transferSession'].includes(k) && got === 'object') || (k === 'voiceId' && got === 'string')
               || (k === 'roundTwo' && got === 'object')) continue;
           record[k] = fresh[k];
           bent = true;
@@ -177,6 +325,22 @@ const Store = (() => {
         if (!record.roundTwoReached) record.selectedRound = 1;
         for (const [k, v] of Object.entries(record.reviewRecords)){
           if (!reviewRecordValid(k, v)){ delete record.reviewRecords[k]; bent = true; }
+        }
+        if (record.transferSession !== null && !transferSessionValid(record.transferSession)){
+          record.transferSession=null; bent=true;
+        }
+        if (record.savedSession !== null){
+          const visit = normalizeSavedSession(record.savedSession);
+          if (!visit) bent = true;
+          record.savedSession = visit;
+        }
+        for(const [k,v] of Object.entries(record.reviewChaptersOpen)){
+          if(!/^[0-4]$/.test(k)||v!==1){delete record.reviewChaptersOpen[k];bent=true;}
+        }
+        if(record.reviewSession!==null){
+          const visit=normalizeReviewSession(record.reviewSession);
+          if(!visit)bent=true;
+          record.reviewSession=visit;
         }
         if (bent){ try{ localStorage.setItem(ASIDE, raw); }catch(e){} }
       } else {
@@ -271,6 +435,7 @@ const Store = (() => {
      || !copyMap('g1GamesOpen', v => v === 1)
      || !copyMap('practiceDays', v => v === 1)
      || !copyMap('reviewRecords', isRecord)
+     || !copyMap('reviewChaptersOpen', v => v === 1)
      || !copyMap('transferRecords', v => isRecord(v) && Number.isInteger(v.day) && v.day >= 0
           && Number.isInteger(v.independent) && v.independent >= 0 && v.independent <= 5
           && Number.isInteger(v.supported) && v.supported >= 0 && v.supported <= 5
@@ -293,6 +458,7 @@ const Store = (() => {
       if (!/^[a-z0-9]+:\d+:(viewed|together|supported|revised|independent)$/.test(k)) return null;
     if (Object.keys(out.transferRecords).some(k => !/^[0-5]$/.test(k))) return null;
     if (Object.entries(out.reviewRecords).some(([k, v]) => !reviewRecordValid(k, v))) return null;
+    if (Object.keys(out.reviewChaptersOpen).some(k => !/^[0-4]$/.test(k))) return null;
     if (Object.keys(out.g1GamesOpen).some(k => !/^[a-z0-9]+$/.test(k))) return null;
     if (Object.keys(out.practiceDays).some(k => !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(k))) return null;
 
@@ -328,6 +494,21 @@ const Store = (() => {
           gameId: d.recommended.gameId, levelIndex: d.recommended.levelIndex
         }
       };
+    }
+    if (data.transferSession !== undefined && data.transferSession !== null){
+      if (!transferSessionValid(data.transferSession)){if (!startup) return null;}
+      else out.transferSession=JSON.parse(JSON.stringify(data.transferSession));
+    }
+    if (data.savedSession !== undefined && data.savedSession !== null){
+      const visit = normalizeSavedSession(data.savedSession);
+      // A damaged interrupted visit must never discard a lap's lasting history.
+      if (!visit && !startup) return null;
+      out.savedSession = visit;
+    }
+    if(data.reviewSession!==undefined&&data.reviewSession!==null){
+      const visit=normalizeReviewSession(data.reviewSession);
+      if(!visit&&!startup)return null;
+      out.reviewSession=visit;
     }
     if (data.missions !== undefined){
       if (!isRecord(data.missions)) return null;
@@ -461,7 +642,12 @@ const Store = (() => {
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
   function mergeState(base, add){
     const out = Object.assign(blank(), base);
-    ['stars', 'plays', 'seen', 'daily', 'swift', 'intro', 'g1GamesOpen', 'practiceDays'].forEach(k => {
+    /* Merging a historical backup must not resurrect a visit finished since it
+       was exported. Only replacement restores the backup's interrupted visit. */
+    out.savedSession = normalizeSavedSession(base.savedSession);
+    out.transferSession = transferSessionValid(base.transferSession) ? JSON.parse(JSON.stringify(base.transferSession)) : null;
+    out.reviewSession = normalizeReviewSession(base.reviewSession);
+    ['stars', 'plays', 'seen', 'daily', 'swift', 'intro', 'g1GamesOpen', 'reviewChaptersOpen', 'practiceDays'].forEach(k => {
       const src = add[k] || {};
       out[k] = Object.assign({}, base[k] || {});
       // max, never sum: importing the same backup twice must not inflate anything
@@ -606,7 +792,8 @@ const Store = (() => {
     // second record and can only contribute to the original top-level history.
     if (base.roundTwo && add.roundTwo)
       out.roundTwo = localFields(mergeState(base.roundTwo, add.roundTwo));
-    else out.roundTwo = base.roundTwo || add.roundTwo || null;
+    else out.roundTwo = base.roundTwo || (add.roundTwo
+      ? Object.assign({}, add.roundTwo, {savedSession:null,reviewSession:null,transferSession:null}) : null);
     out.selectedRound = base.selectedRound === 2 && out.roundTwoReached ? 2 : 1;
     if (out.selectedRound === 2 && !out.roundTwo) out.roundTwo = blankProgress();
     return out;
@@ -733,6 +920,30 @@ const Store = (() => {
     get unreadable(){ return unreadable; },
     get origin(){ return location.origin === 'null' ? 'file://' : location.origin; },
     exportText, importText,
+    savedSession(){ return normalizeSavedSession(mem.savedSession); },
+    saveSession(session){
+      const visit = normalizeSavedSession(session);
+      if (!visit) return false;
+      mem.savedSession = visit;
+      save();
+      return true;
+    },
+    clearSavedSession(){
+      if (mem.savedSession === null) return false;
+      mem.savedSession = null;
+      save();
+      return true;
+    },
+    reviewSession(){return normalizeReviewSession(mem.reviewSession);},
+    saveReviewSession(session){
+      const visit=normalizeReviewSession(session);
+      if(!visit)return false;
+      mem.reviewSession=visit;save();return true;
+    },
+    clearReviewSession(){
+      if(mem.reviewSession===null)return false;
+      mem.reviewSession=null;save();return true;
+    },
     todayKey,
     flush: writeNow,
     stars: (g, l) => mem.stars[key(g, l)] || 0,
@@ -760,7 +971,7 @@ const Store = (() => {
       save();
     },
 
-    recordLevel(g, l, stars, right, total){
+    recordLevel(g, l, stars, right, total, alreadyCounted = false){
       const k = key(g, l);
       mem.stars[k] = Math.max(mem.stars[k] || 0, stars);
       mem.plays[k] = (mem.plays[k] || 0) + 1;
@@ -768,8 +979,10 @@ const Store = (() => {
       mem.seen[g]  = (mem.seen[g] || 0) + total;
       const ft = mem.firstTry[g] || [0, 0];
       mem.firstTry[g] = [ft[0] + right, ft[1] + total];
-      const t = todayKey();
-      mem.daily[t] = (mem.daily[t] || 0) + total;
+      if (!alreadyCounted){
+        const t = todayKey();
+        mem.daily[t] = (mem.daily[t] || 0) + total;
+      }
       save();
     },
     recordReview(k, outcomes, kind){
@@ -780,9 +993,11 @@ const Store = (() => {
         supported: outcomes.filter(x => x === 'supported').length };
       save();
     },
-    recordPractice(right, total){
-      const t = todayKey();
-      mem.daily[t] = (mem.daily[t] || 0) + total;
+    recordPractice(right, total, alreadyCounted = false){
+      if (!alreadyCounted){
+        const t = todayKey();
+        mem.daily[t] = (mem.daily[t] || 0) + total;
+      }
       const p = mem.practice || (mem.practice = [0, 0]);
       p[0] += right; p[1] += total;
       save();
@@ -791,9 +1006,11 @@ const Store = (() => {
     completePracticeToday(){ mem.practiceDays[todayKey()] = 1; save(); },
     /* 集中練習 counts towards today's total, but not towards the「きょうの れんしゅう」
        accuracy the parent page reports — that number names one specific set. */
-    recordFocus(right, total){
-      const t = todayKey();
-      mem.daily[t] = (mem.daily[t] || 0) + total;
+    recordFocus(right, total, alreadyCounted = false){
+      if (!alreadyCounted){
+        const t = todayKey();
+        mem.daily[t] = (mem.daily[t] || 0) + total;
+      }
       save();
     },
     recordDiagnostic(outcomes, recommended){

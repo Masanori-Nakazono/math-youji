@@ -17,7 +17,7 @@ const StickerMissions = (() => {
     const all = [];
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
       const key = g.id + ':' + i;
-      if (!levelOpen(g, i) || Store.hasSticker(key)) return;
+      if (!levelOpen(g, i) || Diagnostic.resting(g.id, i) || Store.hasSticker(key)) return;
       all.push({ game: g, levelIndex: i, level: lv, key,
         recommended: rec.gameId === g.id && rec.levelIndex === i,
         known: Store.introduced(g.id, i), plays: Store.plays(g.id, i) });
@@ -50,9 +50,9 @@ const StickerMissions = (() => {
       el('span.prize', null, PokemonStickers.artwork(choice.key, { rarity: false })),
       el('span.name', { text: choice.game.name }),
       el('span.go', { text: '▶', 'aria-hidden': 'true' }))));
-    return el('section.home-quest.sticker-mission', { 'aria-label': 'ほしいシールをえらぶ' },
-      el('div.quest-title', null, el('span', { text: '✨', 'aria-hidden': 'true' }),
-        el('span', { text: 'ほしい シールを えらぼう' })), row);
+    return el('details.home-quest.sticker-mission', { 'aria-label': 'ほしいシールをえらぶ' },
+      el('summary.quest-title', null, el('span', { text: '✨', 'aria-hidden': 'true' }),
+        el('span', { text: 'ほしい シールから えらぶ' })), row);
   }
 
   function build(){
@@ -102,16 +102,17 @@ const Adventures = (() => {
   }
 
   function target(){
-    const weak = Store.weakFacts(1)[0];
+    const weak = Diagnostic.weakFacts(1)[0];
     const aimed = weak && fromOrigin(weak.at, weak.key);
     if (aimed) return aimed;
     const rec = Diagnostic.current();
     const game = rec && Games.byId[rec.gameId];
-    if (game && game.levels[rec.levelIndex] && levelOpen(game, rec.levelIndex)){
+    if (game && game.levels[rec.levelIndex] && levelOpen(game, rec.levelIndex)
+        && !Diagnostic.resting(game.id, rec.levelIndex)){
       return { game, levelIndex: rec.levelIndex, level: game.levels[rec.levelIndex], want: null };
     }
     for (const g of Games.list){
-      for (let i = 0; i < g.levels.length; i++) if (levelOpen(g, i)) return { game: g, levelIndex: i, level: g.levels[i], want: null };
+      for (let i = 0; i < g.levels.length; i++) if (levelOpen(g, i) && !Diagnostic.resting(g.id, i)) return { game: g, levelIndex: i, level: g.levels[i], want: null };
     }
     return null;
   }
@@ -161,23 +162,37 @@ const FirstSteps = (() => {
     const rec = Diagnostic.current();
     const g = rec && Games.byId[rec.gameId];
     if (g && g.intro !== false && g.levels[rec.levelIndex]
-        && levelOpen(g, rec.levelIndex) && !Store.introduced(g.id, rec.levelIndex))
+        && levelOpen(g, rec.levelIndex) && !Diagnostic.resting(g.id, rec.levelIndex)
+        && !Store.introduced(g.id, rec.levelIndex))
       return { game: g, levelIndex: rec.levelIndex };
     for (const game of Games.list){
       if (game.intro === false) continue;
       for (let i = 0; i < game.levels.length; i++)
-        if (levelOpen(game, i) && !Store.introduced(game.id, i)) return { game, levelIndex: i };
+        if (levelOpen(game, i) && !Diagnostic.resting(game.id, i) && !Store.introduced(game.id, i)) return { game, levelIndex: i };
     }
     return null;
   }
-  function homeCard(){
-    const t = target();
+  function oneTarget(){
+    const first = target();
+    if (first) return first;
+    const rec = Diagnostic.current(), g = rec && Games.byId[rec.gameId];
+    if (g && g.intro !== false && levelOpen(g, rec.levelIndex) && !Diagnostic.resting(g.id, rec.levelIndex))
+      return { game:g, levelIndex:rec.levelIndex };
+    for (const game of Games.list){
+      if (game.intro === false) continue;
+      for (let i = 0; i < game.levels.length; i++)
+        if (levelOpen(game, i) && !Diagnostic.resting(game.id, i)) return { game, levelIndex:i };
+    }
+    return null;
+  }
+  function homeCard(opts){
+    const one = opts && opts.one, t = one ? oneTarget() : target();
     if (!t) return null;
     return el('button.home-quest.adventure-card.first-card', { type: 'button',
-      onclick(){ Sound.sfx.tap(); open(t.game, t.levelIndex); } },
-      el('span.icon', { text: '👀', 'aria-hidden': 'true' }),
-      el('span.copy', null, el('b', { text: 'まず みてみる' }),
-        el('small', { text: t.game.name + '　ひとつから' })),
+      onclick(){ Sound.sfx.tap(); if (one) startOne(t.game, t.levelIndex); else open(t.game, t.levelIndex); } },
+      el('span.icon', { text: one ? '👆' : '👀', 'aria-hidden': 'true' }),
+      el('span.copy', null, el('b', { text: one ? 'ひとつだけ やってみる' : 'まず みてみる' }),
+        el('small', { text: t.game.name + (one ? '　ヒントつきの 1もん' : '　みるだけでも いいよ') })),
       el('span.arrow', { text: '▶', 'aria-hidden': 'true' }));
   }
   const button = (icon, label, fn, accent) => el('button.btn' + (accent ? '.btn-accent' : ''),
@@ -200,6 +215,11 @@ const FirstSteps = (() => {
         el('div.first-detail'), el('div.first-actions')));
     UI.register('first-finish', result);
     return node;
+  }
+  function startOne(game, levelIndex){
+    if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
+    build(); active = { game, levelIndex, opts:null };
+    Session.startFirst(game, levelIndex, 'afterShow');
   }
   function open(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
@@ -233,7 +253,7 @@ const FirstSteps = (() => {
       : '一緒に一つできたね。今日はここまででもいいよ。';
     Sound.say(finishSpeech, { delay: 200 });
   }
-  return { target, homeCard, build, open, finish, get active(){ return active; } };
+  return { target, oneTarget, homeCard, build, open, startOne, finish, get active(){ return active; } };
 })();
 
 const ProgressAlbum = (() => {

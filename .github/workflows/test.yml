@@ -49,6 +49,11 @@ jobs:
           node tools/test-motivation.cjs
           node tools/test-review-fixes.cjs
 
+      - name: Verify per-question counts and saved learning sessions
+        run: |
+          node tools/test-session-store.cjs
+          node tools/test-session-browser.cjs
+
       - name: Verify island treasure chests and saved keepsakes
         run: node tools/test-treasures.cjs
 

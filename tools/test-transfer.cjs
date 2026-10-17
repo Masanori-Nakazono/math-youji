@@ -180,6 +180,62 @@ const server = http.createServer((req, res) => {
       return names;
     });
     checks.forEach(n => console.log('PASS ' + n));
+    // A separate page/context owns only synthetic records for interruption tests.
+    const resumePage=await browser.newPage({serviceWorkers:'block'});
+    await resumePage.route('https://**',r=>r.abort());
+    await resumePage.goto(`http://127.0.0.1:${server.address().port}/dist/kazu-no-bouken.html`,{waitUntil:'domcontentloaded'});
+    const visit=await resumePage.evaluate(()=>{
+      const K=KazuApp;K.Sound.voiceOn=false;K.Sound.sfxOn=false;K.Store.reset();K.Store.setPref('transferReached',true);
+      K.TransferAdventure.open();document.querySelector('[data-mission="0"]').click();
+      document.querySelector('#transfer [aria-label="１つ うごかす"]').click();
+      [...document.querySelectorAll('#transfer button')].find(b=>b.textContent==='👀 ヒント').click();
+      K.Store.flush();return JSON.parse(JSON.stringify(K.Store.data.transferSession));
+    });
+    await resumePage.reload({waitUntil:'domcontentloaded'});
+    assert.deepEqual(await resumePage.evaluate(()=>{
+      const K=KazuApp;K.Sound.voiceOn=false;K.Sound.sfxOn=false;
+      if(!K.Session.resume())throw new Error('missing transfer continuation');
+      return JSON.parse(JSON.stringify(K.Store.data.transferSession.q));
+    }),visit.q,'unfinished arrangement and hint use survive reload');
+    await resumePage.evaluate(()=>{
+      const q=KazuApp.Store.data.transferSession.q;
+      for(let n=q.value;n<q.total-q.a;n++)document.querySelector('#transfer [aria-label="１つ うごかす"]').click();
+      document.querySelector('#transfer .transfer-check').click();KazuApp.Store.flush();
+    });
+    assert.equal(await resumePage.evaluate(()=>KazuApp.Store.todayCount()),1);
+    await resumePage.reload({waitUntil:'domcontentloaded'});
+    await resumePage.evaluate(()=>{
+      const K=KazuApp;K.Sound.voiceOn=false;K.Sound.sfxOn=false;K.Session.resume();
+      if(K.Store.data.transferSession.run.step!==1)throw new Error('replayed completed transfer question');
+      while(!document.querySelector('#transfer .transfer-result')){
+        [...document.querySelectorAll('#transfer button')].find(b=>b.textContent==='👀 ヒント').click();
+        [...document.querySelectorAll('#transfer button')].find(b=>b.textContent==='いっしょに つくる').click();
+        document.querySelector('#transfer .transfer-check').click();document.querySelector('#transfer .transfer-next').click();
+      }
+    });
+    assert.deepEqual(await resumePage.evaluate(()=>({count:KazuApp.Store.todayCount(),saved:KazuApp.Store.data.transferSession,
+      supported:KazuApp.Store.data.transferRecords[0].supported,medal:KazuApp.Store.hasSticker('transfer:0')})),
+      {count:5,saved:null,supported:5,medal:false});
+    const switching=await resumePage.evaluate(()=>{
+      const K=KazuApp,T=K.TransferAdventure;
+      T.open();document.querySelector('[data-mission="0"]').click();
+      document.querySelector('#transfer [aria-label="１つ うごかす"]').click();
+      const before=JSON.stringify(K.Store.data.transferSession);
+      T.open();document.querySelector('[data-mission="1"]').click();
+      const kept=JSON.stringify(K.Store.data.transferSession)===before;
+      [...document.querySelectorAll('#transfer button')].find(b=>b.textContent==='まえの つづきから').click();
+      const resumed=K.Store.data.transferSession.run.id===0&&K.Store.data.transferSession.q.value===1;
+      T.open();document.querySelector('[data-mission="1"]').click();
+      [...document.querySelectorAll('#transfer button')].find(b=>b.textContent==='あたらしく はじめる').click();
+      const replaced=K.Store.data.transferSession.run.id===1;
+      K.Store.setPref('transferSession',{at:Date.now(),run:{id:0,step:5,results:Array(5).fill('independent')},q:null});
+      T.open();document.querySelector('[data-mission="1"]').click();
+      return {kept,resumed,replaced,awarded:K.Store.hasSticker('transfer:0'),saved:K.Store.data.transferSession,count:K.Store.todayCount()};
+    });
+    assert.deepEqual(switching,{kept:true,resumed:true,replaced:true,awarded:true,saved:null,count:5});
+    await resumePage.close();
+    console.log('PASS interrupted adventure restores arrangement and help; completed answers are never counted twice');
+    console.log('PASS changing adventures preserves the prior visit until chosen; completed visits settle before a new start');
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.evaluate(() => KazuApp.Store.hasSticker('transfer:0')
       && KazuApp.Store.data.transferRecords[0].supported === 5

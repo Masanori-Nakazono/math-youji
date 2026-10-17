@@ -61,6 +61,16 @@ const Diagnostic = (() => {
   const REST_DAYS = 3;
   const resting = (id, i) => !cleared(id, i) && Store.plays(id, i) >= 3 && Store.daysSince(id, i) < REST_DAYS;
 
+  /* All automatically chosen entrances honour the same breathing space.
+     A child may still choose any open lesson from the map. */
+  function weakFacts(limit){
+    const facts = Store.weakFacts().filter(f => {
+      const cut = f.at.lastIndexOf(':');
+      return !resting(f.at.slice(0, cut), Number(f.at.slice(cut + 1)));
+    });
+    return limit ? facts.slice(0, limit) : facts;
+  }
+
   function nextUncleared(){
     for (const skipResting of [true, false]){
       for (const id of roadmap()){
@@ -138,7 +148,7 @@ const Diagnostic = (() => {
     else Session.startDaily(10);
   }
 
-  return { shouldRun, recommendFrom, current, startRecommended, nextUncleared };
+  return { shouldRun, recommendFrom, current, startRecommended, nextUncleared, resting, weakFacts };
 })();
 
 const Missions = (() => {

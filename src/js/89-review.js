@@ -1,5 +1,5 @@
 /* Textbook review, included within each full lap, with original illustrations.
-   This gate is the original collection, frozen independently of the live catalog. */
+   The frozen collection belongs to full-lap rewards, not to curriculum readiness. */
 'use strict';
 const TEXTBOOK_GATE = Object.freeze(["count:0", "count:0:g", "count:1", "count:1:g", "count:2", "count:2:g", "flash:0", "flash:0:g", "flash:1", "flash:1:g", "flash:2", "flash:2:g", "numeral:0", "numeral:0:g", "numeral:1", "numeral:1:g", "numeral:2", "numeral:2:g", "seq:0", "seq:0:g", "seq:1", "seq:1:g", "seq:2", "seq:2:g", "trace:0", "trace:0:g", "trace:1", "trace:1:g", "trace:2", "trace:2:g", "compare:0", "compare:0:g", "compare:1", "compare:1:g", "compare:2", "compare:2:g", "ordinal:0", "ordinal:0:g", "ordinal:1", "ordinal:1:g", "ordinal:2", "ordinal:2:g", "measure:0", "measure:0:g", "measure:1", "measure:1:g", "measure:2", "measure:2:g", "bond:0", "bond:0:g", "bond:1", "bond:1:g", "bond:2", "bond:2:g", "ten:0", "ten:0:g", "ten:1", "ten:1:g", "ten:2", "ten:2:g", "add:0", "add:0:g", "add:1", "add:1:g", "add:2", "add:2:g", "sub:0", "sub:0:g", "sub:1", "sub:1:g", "sub:2", "sub:2:g", "shape:0", "shape:0:g", "shape:1", "shape:1:g", "shape:2", "shape:2:g", "sort:0", "sort:0:g", "sort:1", "sort:1:g", "sort:2", "sort:2:g", "pattern:0", "pattern:0:g", "pattern:1", "pattern:1:g", "pattern:2", "pattern:2:g", "clock:0", "clock:0:g", "clock:1", "clock:1:g", "clock:2", "clock:2:g", "g1set:0", "g1set:0:g", "g1set:1", "g1set:1:g", "g1set:2", "g1set:2:g", "g1pair:0", "g1pair:0:g", "g1pair:1", "g1pair:1:g", "g1pair:2", "g1pair:2:g", "g1teen:0", "g1teen:0:g", "g1teen:1", "g1teen:1:g", "g1teen:2", "g1teen:2:g", "g1shiki:0", "g1shiki:0:g", "g1shiki:1", "g1shiki:1:g", "g1shiki:2", "g1shiki:2:g", "treasure:shima", "treasure:umi", "treasure:yama", "treasure:mori", "treasure:kyoshitsu", "transfer:0", "transfer:1", "transfer:2", "transfer:3", "transfer:4", "transfer:5"]);
 const TextbookReview = (() => {
@@ -18,7 +18,32 @@ const TextbookReview = (() => {
     ['とると のこりは？','take'], ['ひきざんの しき','subEquation'], ['ちがいは いくつ？','difference'], ['しきに あう おはなし','subStory']
   ].map(([title, type], id) => ({ id, title, type, chapter:Math.floor(id/4), key:'r2:'+id }));
   const chapterKey = i => 'r2chapter:'+i;
+  const preparationPaths = [
+    [['count',1],['numeral',1],['seq',0]],
+    [['ordinal',1],['ordinal',2]],
+    [['bond',1],['bond',2],['ten',1]],
+    [['add',0],['add',1]],
+    [['sub',1],['sub',2]]
+  ];
   let node, body, heading, exitBtn, speech='', run=null, q=null, exitArmed=false;
+  function checkpoint(){if(run&&q)Store.saveReviewSession({at:Date.now(),run,q});}
+  function pendingSummary(){
+    const saved=Store.reviewSession();if(!saved)return null;
+    const r=saved.run,title=r.kind==='chapter'?chapters[r.chapter].title+'の まとめ':lessons[r.id].title;
+    return {title,remaining:r.total-r.outcomes.length,done:r.outcomes.length,at:saved.at,kind:'review'};
+  }
+  function resume(){
+    const saved=Store.reviewSession();if(!saved)return false;
+    const r=saved.run;
+    if(r.kind==='chapter'?!chapterReady(r.chapter):!lessonOpen(r.id)){Store.clearReviewSession();return false;}
+    build();run=r;q=saved.q;exitArmed=false;renderQuestion();UI.show('review');focusHeading();
+    say('つづきから。'+(q.done?q.result:q.prompt));return true;
+  }
+  function pause(){
+    if(!run)return;checkpoint();const remaining=run.total-run.outcomes.length;
+    run=null;q=null;Home.render();UI.show('home',{replace:true});
+    say('ここまで、よく取り組んだね。'+(remaining?'つぎは、あと'+remaining+'問から。':'つぎは、できた！を押してシールを確かめよう。'));
+  }
   function progress(){
     const groups = [
       {label:'ふつう', keys:TEXTBOOK_GATE.filter(k => !k.endsWith(':g') && !/^(transfer|treasure):/.test(k))},
@@ -30,35 +55,48 @@ const TextbookReview = (() => {
     groups.forEach(g => { g.got=g.keys.filter(owns).length; g.total=g.keys.length; });
     return {got:groups.reduce((n,g)=>n+g.got,0), total:131, groups, missing:TEXTBOOK_GATE.filter(k=>!owns(k))};
   }
+  function preparation(i){
+    return (preparationPaths[i]||[]).map(([id,levelIndex])=>({game:Games.byId[id],levelIndex,ready:Progress.levelReady(id,levelIndex)}));
+  }
+  function chapterOpen(i){
+    if(!Number.isInteger(i)||!chapters[i]) return false;
+    if(Store.data.reviewChaptersOpen[i]) return true;
+    // The old whole-book latch and actual textbook work preserve older entrances.
+    const met=Store.data.secondRoundReached || Store.hasSticker(chapterKey(i)) || Store.data.reviewRecords[chapterKey(i)]
+      || lessons.slice(i*4,i*4+4).some(l=>Store.hasSticker(l.key)||Store.data.reviewRecords[l.key]);
+    if(!met&&!preparation(i).every(p=>p.ready)) return false;
+    Store.setPref('reviewChaptersOpen',Object.assign({},Store.data.reviewChaptersOpen,{[i]:1}));
+    return true;
+  }
   function unlocked(){
-    if (Store.data.secondRoundReached) return true;
-    if (progress().got !== 131) return false;
-    Store.setPref('secondRoundReached',true); return true;
+    // Visit every chapter so readiness latches survive future retrieval mistakes.
+    return chapters.map((c,i)=>chapterOpen(i)).some(Boolean);
   }
   const rewardKeys = () => lessons.map(l=>l.key).concat(chapters.map((c,i)=>chapterKey(i)));
   const earned = () => rewardKeys().filter(k=>Store.hasSticker(k)).length;
   function lessonOpen(id){
-    if (!unlocked() || !lessons[id]) return false;
-    if (id===0 || Store.hasSticker(lessons[id].key)) return true;
+    if (!lessons[id] || !chapterOpen(lessons[id].chapter)) return false;
+    if (id%4===0 || Store.hasSticker(lessons[id].key) || Store.data.reviewRecords[lessons[id].key]) return true;
     const previous=lessons[id-1].key, r=Store.data.reviewRecords[previous];
     return Store.hasSticker(previous) || !!(r && r.runs>=3);
   }
-  const chapterReady = i => unlocked() && lessons.slice(i*4,i*4+4).every(l=>Store.hasConfirmed(l.key));
+  const chapterReady = i => chapterOpen(i) && lessons.slice(i*4,i*4+4).every(l=>Store.hasConfirmed(l.key));
   const due = k => Store.isPending(k) && Store.pendingDue().includes(k);
   function button(text, fn, cls='btn-ghost'){
     return el('button.btn.'+cls,{type:'button',text,onclick(){exitArmed=false;Sound.sfx.tap();fn();}});
   }
   function say(text){speech=text;Sound.say(text,{delay:80});}
   function gateCard(){
-    const p=progress();
     return el('section.review-gate',{'aria-label':'うらの さんすうの ひらきかた'},
-      el('h3',{text:'📖 うらの さんすう　あと '+(p.total-p.got)+'まい'}),
-      el('p',{text:'ちず・たからばこ・ぼうけんの シールが ぜんぶ そろうと、ほんの うらが ひらくよ。'}),
-      el('div.review-ledger',null,p.groups.map(g=>el('span',{text:g.label+' '+g.got+'／'+g.total}))),
-      el('div.review-missing',null,p.groups.map(g=>{
-        const k=g.keys.find(k=>p.missing.includes(k));
-        return k ? button(g.label+'を あつめにいく',()=>openOriginal(k)) : null;
-      })));
+      el('h3',{text:'📖 ほんの ふくしゅうの じゅんび'}),
+      el('p',{text:'それぞれの じゅんびが できたら、その たんげんが ひらくよ。'}),
+      chapters.map((c,i)=>preparationCard(i)));
+  }
+  function preparationCard(i){
+    const available=chapterOpen(i), route=preparation(i), ready=route.filter(p=>p.ready).length;
+    return el('div.review-preparation',null,
+      el('strong',{text:chapters[i].title+'　'+(available?'あそべるよ':'じゅんび '+ready+'／'+route.length)}),
+      !available?el('div.review-missing',null,route.map(p=>button((p.ready?'✓ ':'')+p.game.name+'・'+p.game.levels[p.levelIndex].t,()=>openOriginal(p.game.id+':'+p.levelIndex)))):null);
   }
   function openOriginal(k){
     if(k.startsWith('treasure:')){Treasures.open(k.split(':')[1]);return;}
@@ -70,22 +108,19 @@ const TextbookReview = (() => {
   }
   function homeCard(){
     if(!unlocked()){
-      if(!TransferAdventure.unlocked()) return null;
-      return el('button.home-quest.review-home',{type:'button',onclick:()=>Book.open()},
-        el('span.review-cover',{text:'📖','aria-hidden':'true'}),el('span',null,
-          el('strong',{text:'うらの さんすうが まっているよ'}),el('small',{text:'シール '+progress().got+'／131　シールブックで たしかめる'})),el('span',{text:'→'}));
+      return null;
     }
     return el('button.home-quest.review-home',{type:'button',onclick:open},
       PokemonStickers.artwork('r2:0',{rarity:false}),el('span',null,
-        el('strong',{text:'ほんを うらがえす　うらの さんすう'}),el('small',{text:'ほんで ふくしゅう　あたらしい シール '+earned()+'／25'})),el('span',{text:'↪','aria-hidden':'true'}));
+        el('strong',{text:'ほんを うらがえす　うらの さんすう'}),el('small',{text:'あそべる たんげん '+chapters.filter((c,i)=>chapterOpen(i)).length+'／5　シール '+earned()+'／25'})),el('span',{text:'↪','aria-hidden':'true'}));
   }
   function collection(){
     if(!unlocked()) return gateCard();
     return el('section.review-collection',{'aria-label':'うらの さんすうシール'},
       el('h3',{text:'📖 うらの さんすう　'+earned()+'／25'}),
       button('ほんを うらがえして あそぶ',open,'btn-accent'),
-      el('p',{text:'レッスンの シール20まいと、たんげんの まとめ５まい。'}),
-      chapters.map((c,i)=>el('div.review-collection-chapter',null,el('h4',{text:(i+1)+'　'+c.title}),
+      el('p',{text:'レッスンの シール20まいと、たんげんの まとめ５まい。じゅんびが できた たんげんから あそべるよ。'}),
+      chapters.map((c,i)=>el('div.review-collection-chapter',null,el('h4',{text:(i+1)+'　'+c.title}),preparationCard(i),
         el('div.review-collection-grid',null,lessons.slice(i*4,i*4+4).map(l=>collectible(l.key,l.title,()=>open(l.id))),
           collectible(chapterKey(i),'まとめ',()=>open(null,i))))));
   }
@@ -98,6 +133,7 @@ const TextbookReview = (() => {
     const rows=Object.entries(Store.data.reviewRecords||{});
     if(!unlocked() && !rows.length) return null;
     return el('section.section.review-parent',null,el('h3',{text:'教科書の見せ方で復習'}),
+      el('p',{text:'各単元に関係する地図の教材が確定済み、または直近6問以上で自力初回正答率75％以上なら、その単元から復習できます。金シールの完全収集は不要です。一度開いた単元は閉じません。'}),
       el('p',{text:'東京書籍「あたらしいさんすう1 上」（平成20年発行）の添付範囲を、独自の絵と1問ずつの操作に対応させています。通常は8問中4問の自力初回正解で仮獲得、8問すべてなら即確定。別の日の3問中2問で確定します。まとめは各単元4枚の確定後、5問中4問の自力初回正解で獲得します。'}),
       rows.map(([k,r])=>el('p',{text:(k.startsWith('r2chapter:')?chapters[Number(k.split(':')[1])].title+'のまとめ':lessons[Number(k.split(':')[1])].title)
         +'：自力で初回正解 '+r.independent+'問／答え直して正解 '+r.revised+'問／ヒント・見本を使用 '+r.supported+'問（直近の'+({lesson:'レッスン',check:'別の日の確認',chapter:'まとめ'})[r.kind]+'）'})));
@@ -107,12 +143,8 @@ const TextbookReview = (() => {
     body=el('div.review-body');heading=el('h2');
     exitBtn=el('button.btn.btn-ghost.btn-round',{type:'button','aria-label':'ちずに もどる',text:'←',onclick(){
       Sound.sfx.tap();
-      if(run&&!exitArmed){
-        exitArmed=true;
-        if(!$('.review-exit',body)) body.prepend(el('p.review-exit',{role:'status',text:'ここで おわる？ ← を もういちど おすと もどるよ（つぎは１もんめから）'}));
-        say('ここでおわる？ もどるをもう一度押すと、つぎは１問目からだよ。');return;
-      }
-      if(run || $('.review-result',body)){run=null;menu();}else{Home.render();UI.show('home',{replace:true});}
+      if(run){pause();return;}
+      if($('.review-result',body)){menu();}else{Home.render();UI.show('home',{replace:true});}
     }});
     node=el('div#review',null,el('div.topbar',null,exitBtn,heading,speakBtn(()=>speech)),body);
     UI.register('review',node);
@@ -122,26 +154,29 @@ const TextbookReview = (() => {
     build();run=null;menu();UI.show('review');
     if(Number.isInteger(id)&&lessonOpen(id)) start(id);
     else if(Number.isInteger(chapter)&&chapterReady(chapter)) start(null,chapter);
-    else say('本の裏が開いたよ。教科書の順番で、もういちどやってみよう。');
+    else say('準備ができた単元から、本で復習しよう。単元の中では、順番に進めるよ。');
   }
   function menu(){
     run=null;q=null;exitArmed=false;clear(body);heading.textContent='うらの さんすう';
+    const pending=pendingSummary();
     exitBtn.setAttribute('aria-label','ちずに もどる');
     body.append(el('div.review-menu-intro',null,
       el('span.review-bookmark',{text:'📘 ほんで ふくしゅう'}),el('h3',{text:'もういちど、できるかな？'}),
       el('p',{text:'あたらしい なかま '+earned()+'／25　・　１レッスン ８もん'}),
-      el('p',{text:'なかま・かず・じゅんばん・たしざん・ひきざんを、ほんで ふくしゅうしよう。'}),
+      el('p',{text:'じゅんびが できた たんげんから、ほんで ふくしゅうしよう。'}),
       el('div.review-tools',null,
+        pending?button(pending.remaining?'つづきから　あと '+pending.remaining+'もん':'できた！を たしかめる',resume,'btn-accent.review-resume'):null,
         button('📖 シールブック',()=>Book.open()), button('🏡 じぶんの しま',()=>StickerWorld.open()),
         button('👤 おうちのかたへ',()=>Parent.open()))),
       ...chapters.map((c,i)=>el('section.review-chapter',{style:{'--chapter-color':c.color}},
         el('div.review-chapter-heading',null,el('span.review-chapter-number',{text:i+1}),el('div',null,el('h3',{text:c.title}),el('p',{text:c.subtitle}))),
+        !chapterOpen(i)?preparationCard(i):null,
         el('div.review-lesson-grid',null,lessons.slice(i*4,i*4+4).map(l=>{
           const available=lessonOpen(l.id), has=Store.hasSticker(l.key), pending=Store.isPending(l.key);
           return el('div.review-lesson-slot'+(pending?'.pending':''),null,
             el('button.review-lesson',{type:'button',disabled:!available,dataset:{lesson:l.id}},
               PokemonStickers.artwork(l.key,{silhouette:!has,rarity:false}),
-              el('strong',{text:l.title}),el('small',{text:!available?'まえの レッスンから':pending?'かりの シール':has?'また あそぶ':'８もん あそぶ'})),
+              el('strong',{text:l.title}),el('small',{text:!available?(chapterOpen(i)?'まえの レッスンから':'じゅんびの あそびから'):pending?'かりの シール':has?'また あそぶ':'８もん あそぶ'})),
             due(l.key)?button('３もん たしかめる',()=>start(l.id,null,true),'btn-accent.review-due'):null);
         })),
         el('div.review-chapter-footer',null,el('span',{text:'まとめ：４つの シールに いろが ついたら'}),
@@ -151,9 +186,26 @@ const TextbookReview = (() => {
     focusHeading();
   }
   function focusHeading(){heading.tabIndex=-1;heading.focus({preventScroll:true});body.scrollTop=0;}
-  function start(id,chapter,check=false){
+  function start(id,chapter,check=false,replace=false){
     if(Number.isInteger(chapter)?!chapterReady(chapter):!lessonOpen(id)) return;
     if(check&&!due(lessons[id].key)) return;
+    const saved=Store.reviewSession();
+    if(saved&&!replace){
+      if(saved.run.outcomes.length===saved.run.total){
+        run=saved.run;q=saved.q;finish();return;
+      }
+      run=null;q=null;clear(body);heading.textContent='つづきが のこっているよ';
+      const pending=pendingSummary(),nextTitle=Number.isInteger(chapter)?chapters[chapter].title+'の まとめ':lessons[id].title;
+      body.append(el('div.review-start-choice',null,
+        el('h3',{text:pending.title+'　あと '+pending.remaining+'もん'}),
+        el('p',{text:'つづきから あそぶ？ '+nextTitle+'を あたらしく はじめる？'}),
+        el('div.review-actions',null,
+          button('前の つづきから',resume,'btn-accent.review-start-resume'),
+          button('あたらしく はじめる',()=>start(id,chapter,check,true),'btn-ghost.review-start-new'),
+          button('もくじに もどる',menu,'btn-ghost.review-start-cancel'))));
+      exitBtn.setAttribute('aria-label','ちずに もどる');focusHeading();
+      say('つづきが残っているよ。前の続きから遊ぶか、新しく始めるか、選ぼう。');return;
+    }
     const kind=Number.isInteger(chapter)?'chapter':check?'check':'lesson';
     run={id,chapter,kind,step:0,total:kind==='chapter'?5:check?3:8,outcomes:[],key:kind==='chapter'?chapterKey(chapter):lessons[id].key};
     nextQuestion();
@@ -226,6 +278,7 @@ const TextbookReview = (() => {
     el('div.review-objects',{role:'img','aria-label':({animal:'くま',flower:'おはな',umbrella:'かさ'})[kind]+' '+n+'こ'},items(n,kind)));}
   function action(fn){if(q.done) return;exitArmed=false;Sound.sfx.tap();fn();renderQuestion(true);}
   function renderQuestion(restore=false){
+    checkpoint();
     exitBtn.setAttribute('aria-label','もくじに もどる');
     const focus=restore&&document.activeElement&&document.activeElement.getAttribute('data-focus');
     clear(body);const c=chapters[lessons[q.lessonId].chapter];
@@ -233,6 +286,7 @@ const TextbookReview = (() => {
     const scene=el('div.review-scene');
     body.append(el('div.review-question-head',null,el('span.review-bookmark',{text:'ほんの ふくしゅう　'+(run.kind==='check'?'べつのひの たしかめ':run.kind==='chapter'?'まとめ':(lessons[q.lessonId].chapter+1)+'　'+c.title)}),
       el('span.review-progress',{text:(run.step+1)+'／'+run.total+'もん'})),el('h3.review-prompt',{text:q.prompt}),scene);
+    if(run.kind==='lesson'&&run.step===4&&!q.done)body.insertBefore(el('p.review-rest-suggestion',{role:'status',text:'４もん できたね。ここで 休んでも、つづきから あそべるよ。'}),scene);
     if(q.type==='group'){
       scene.append(el('div.review-select-grid',null,q.things.map((kind,i)=>el('button.review-object-choice',{type:'button','aria-label':({animal:'くま',flower:'おはな',umbrella:'かさ'})[kind]+' '+(i+1),'aria-pressed':String(q.selected.includes(i)),dataset:{focus:'object'+i},onclick:()=>action(()=>toggle(i))},illustration(kind,i)))));
     }else if(q.type==='match'){
@@ -284,7 +338,8 @@ const TextbookReview = (() => {
     }
     const feedback=el('p.review-feedback',{role:'status','aria-live':'polite',text:q.done?q.result:q.message||''});
     body.append(feedback,el('div.review-actions',null,q.done?button(run.step+1===run.total?'できた！':'つぎの もんだい',advance,'btn-accent.review-next'):
-      [button('👀 ヒント',hint),button('たしかめる',check,'btn-accent.review-check')]));
+      [button('👀 ヒント',hint),button('たしかめる',check,'btn-accent.review-check')],
+      button('ここで 休む',pause,'btn-ghost.review-pause')));
     if(q.showHint&&!q.done)body.append(el('div.review-hint',{role:'status'},el('p',{text:q.hintText}),button('いっしょに やってみる',model)));
     if(q.done) $$('button',scene).forEach(b=>b.disabled=true);
     if(focus){const b=$('[data-focus="'+focus+'"]',body);if(b&&!b.disabled)b.focus({preventScroll:true});}
@@ -345,6 +400,7 @@ const TextbookReview = (() => {
   function advance(){if(!run||!q.done)return;run.step++;if(run.step<run.total)nextQuestion();else finish();}
   function finish(){
     const done=run, clean=done.outcomes.filter(v=>v==='independent').length;
+    Store.clearReviewSession();
     Store.recordReview(done.key,done.outcomes,done.kind);
     let fresh=false, confirmed=false, passed=false;
     if(done.kind==='chapter'){
@@ -375,7 +431,7 @@ const TextbookReview = (() => {
         button('きょうは ここまで',()=>{Home.render();UI.show('home');}))));
     if(fresh||confirmed)UI.confetti(40);focusHeading();say((fresh?stickerFor(done.key)+'の シール。':'')+note);
   }
-  return {open,unlocked,progress,earned,homeCard,collection,parentSummary,lessons,chapters,generate,lessonOpen,chapterReady,rewardKeys,
+  return {open,unlocked,progress,earned,homeCard,collection,parentSummary,lessons,chapters,generate,lessonOpen,chapterOpen,preparation,chapterReady,rewardKeys,pendingSummary,resume,
     // Same debug surface as the first-round engine; answers are not attached to child-facing DOM.
     inspect:()=>run?{run,q}:null};
 })();

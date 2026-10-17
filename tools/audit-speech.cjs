@@ -79,7 +79,7 @@ const html = '<!doctype html><html lang="ja"><head><meta charset="utf-8">'
       const method = args.targeted === 'timing' ? 'narratedTransitions' : 'picturedAnswerSpeech';
       const start = regression.indexOf('  function ' + method + '(){');
       const end = regression.indexOf('  function ' + (method === 'narratedTransitions' ? 'picturedAnswerSpeech' : 'finish') + '(){', start);
-      regression = '(function(){const K=window.KazuApp,S=K.Session._test,results=[];S.intro(false);'
+      regression = '(function(){const K=window.KazuApp,S=K.Session._test,results=[];S.intro(false);S.overview(false);S.breaks(false);'
         + 'const q=s=>document.querySelector(s),qa=s=>Array.from(document.querySelectorAll(s));'
         + 'const check=(name,ok,detail)=>results.push({name,ok,detail});'
         + 'function finishSpeech(t,o){if(o&&o.onend)o.onend();}'

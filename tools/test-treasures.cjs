@@ -111,7 +111,7 @@ const server = http.createServer((req, res) => {
       const K = window.KazuApp, store = K.Store;
       store.reset(); K.Sound.voiceOn = false; K.Sound.sfxOn = false;
       K.Sound.say = (text, opts) => { if (opts?.onend) opts.onend(); };
-      K.Session._test.intro(false);
+      K.Session._test.intro(false); K.Session._test.overview(false); K.Session._test.breaks(false);
       K.Games.list.filter(g => g.world === 'shima').forEach(g => g.levels.forEach((lv, i) => {
         if (g.id !== 'count' || i !== 0) store.addSticker(g.id + ':' + i + ':g');
       }));

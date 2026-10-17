@@ -146,6 +146,8 @@ const Session = (() => {
      is a separate short practice path.  Neither is written as a learning result. */
   let rewardTarget = null, adventureTarget = null;
   let firstTarget = null, firstPhase = null, visitMilestone = null;
+  let runId = '', runRound = 1, results = [], resumeQuestion = null;
+  let overviewNode, overviewBody, countEl, overviewOn = true, breaksOn = true;
   let hintBtns = [], hintExtras = [], hintShown = false, lastSpeech = '';
   /* Most questions keep their hint back until a second mistake, so the child
      gets a real second try first. A question whose picture is already hidden
@@ -326,7 +328,7 @@ const Session = (() => {
         titleEl, pipsEl),
       el('div.prompt', null, moodEl,
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn, showBtn),
-      fieldEl, choicesEl);
+      countEl = el('div.session-count',{'aria-live':'polite'}), fieldEl, choicesEl);
     UI.register('play', node);
     // has a finger been on this question yet — the together-tool must not wipe the child's own work
     const touch = () => { touched = true; };
@@ -356,6 +358,101 @@ const Session = (() => {
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
   }
   function clearFeedback(){ feedbackEl.hidden = true; clear(feedbackEl); }
+
+  function checkpoint(nextIndex = idx, question){
+    if (!runId || Store.round() !== runRound || !plan.length) return;
+    const target = t => t ? { gameId:t.game.id, levelIndex:t.levelIndex, want:t.want || null } : null;
+    Store.saveSession({ v:1, id:runId, at:Date.now(), mode, title:titleEl.textContent,
+      gameId:curGame ? curGame.id : null, levelIndex:curLevelIdx, index:nextIndex,
+      plan:plan.map(p => ({gameId:p.game.id, levelIndex:p.levelIndex,
+        ...(p.intro ? {intro:p.intro} : {}), ...(p.check ? {check:p.check} : {}),
+        ...(p.want ? {want:p.want} : {}), ...(p.seed !== undefined ? {seed:p.seed} : {})})),
+      firstTryRight, mistakes, swiftCount, results:results.slice(), sessionOutcomes:sessionOutcomes.slice(),
+      shaky:shaky.slice(), focusKeys:focusKeys.slice(), usedItems:Array.from(usedItems),
+      checkTally, announced:Array.from(announced), rewardKey:rewardTarget ? rewardTarget.key : null,
+      adventureTarget:target(adventureTarget), firstTarget:target(firstTarget), firstPhase,
+      visitMilestone, question:question === undefined
+        ? {wrongThisQ, helped, taughtQ, missType} : question });
+  }
+
+  function enginePendingSummary(){
+    const saved = Store.savedSession();
+    if (!saved) return null;
+    const exists = p => p && Games.byId[p.gameId] && Games.byId[p.gameId].levels[p.levelIndex];
+    if (saved.plan.some(p => !exists(p)) || (saved.gameId && !exists({gameId:saved.gameId,levelIndex:saved.levelIndex}))
+      || (['level','first'].includes(saved.mode) && !saved.gameId)
+      || (saved.firstTarget && !exists(saved.firstTarget)) || (saved.adventureTarget && !exists(saved.adventureTarget))
+      || (saved.mode==='first' && (!saved.firstTarget || !saved.firstPhase))
+      || (saved.mode==='adventure' && !saved.adventureTarget)){
+      Store.clearSavedSession(); return null;
+    }
+    return { kind:'session',at:saved.at,title:saved.title, remaining:saved.plan.length-saved.index, done:saved.index,
+      mode:saved.mode, gameId:saved.gameId, levelIndex:saved.levelIndex };
+  }
+
+  function pendingSummary(){
+    return [enginePendingSummary(),
+      typeof TextbookReview!=='undefined' && TextbookReview.pendingSummary ? TextbookReview.pendingSummary() : null,
+      typeof TransferAdventure!=='undefined' && TransferAdventure.pendingSummary ? TransferAdventure.pendingSummary() : null]
+      .filter(Boolean).sort((a,b)=>b.at-a.at)[0] || null;
+  }
+
+  function showOverview(resting, previous){
+    killTimers(); Sound.hush();
+    if (!overviewNode){
+      overviewBody = el('div.session-overview-body');
+      overviewNode = el('div#session-overview', null,
+        el('div.topbar',null,el('h2',{text:'ぼうけんの じゅんび'})),overviewBody);
+      UI.register('session-overview',overviewNode);
+    }
+    clear(overviewBody);
+    const remaining = plan.length-idx, intros = plan.filter(p=>p.intro).length, checks = plan.filter(p=>p.check).length;
+    overviewBody.append(mascotSVG('happy','talk'),el('h3',{text:resting ? 'ここまで '+idx+'もん できたね' : titleEl.textContent}),
+      el('p',{text:resting ? 'つづきは あと '+remaining+'もん。ここで やすんでも だいじょうぶ。'
+        : 'ぜんぶで '+plan.length+'もん'+(intros || checks ? '（'+(intros ? 'みほん・いっしょに '+intros+'もん　' : '')+(checks ? 'たしかめ '+checks+'もん　' : '')+'ほんばん '+(plan.length-intros-checks)+'もん）' : '')}));
+    if (previous) overviewBody.append(el('p',{text:'まえの ぼうけんの つづきも のこっているよ。'}),
+      el('button.btn',{text:'まえの つづきから',onclick(){resume();}}));
+    overviewBody.append(el('button.btn.btn-accent.session-continue',{text:resting ? 'つづける' : previous ? 'あたらしく はじめる' : 'はじめる',onclick(){
+      checkpoint(idx,null); UI.show('play'); nextQuestion();
+    }}),el('button.btn.btn-ghost',{text:resting ? 'ここで やすむ' : 'ホームに もどる',onclick(){
+      if (resting || !previous) checkpoint(idx,null);
+      Home.render(); UI.show('home',{replace:true});
+    }}),el('p.session-save-note',{text:Store.storage === 'ok' ? 'つづきは この たんまつに のこるよ' : 'この たんまつに ほぞんできません。おうちのひとに つたえてね'}));
+    UI.show('session-overview');
+    Sound.say(resting ? 'ここまで、'+idx+'問できたね。続ける？ここで休んでも大丈夫。'
+      : '全部で、'+plan.length+'問だよ。途中で休んでも、続きから遊べるよ。',{delay:100});
+  }
+
+  function resume(engineOnly){
+    const latest=engineOnly===true ? null : pendingSummary();
+    if(latest && latest.kind==='review') return TextbookReview.resume();
+    if(latest && latest.kind==='transfer') return TransferAdventure.resume();
+    const saved = Store.savedSession();
+    if (!saved || !enginePendingSummary()) return false;
+    build(); killTimers();
+    runId=saved.id; runRound=Store.round(); mode=saved.mode; curGame=saved.gameId ? Games.byId[saved.gameId] : null;
+    curLevelIdx=saved.levelIndex; idx=saved.index; mistakes=saved.mistakes; firstTryRight=saved.firstTryRight; swiftCount=saved.swiftCount;
+    plan=saved.plan.map(p=>Object.assign({},p,{game:Games.byId[p.gameId],level:Games.byId[p.gameId].levels[p.levelIndex]}));
+    results=saved.results.slice(); sessionOutcomes=saved.sessionOutcomes.slice(); shaky=saved.shaky.slice(); focusKeys=saved.focusKeys.slice();
+    usedItems=new Set(saved.usedItems); checkTally=saved.checkTally; announced=new Set(saved.announced); visitMilestone=saved.visitMilestone;
+    const target=t=>t ? {game:Games.byId[t.gameId],levelIndex:t.levelIndex,want:t.want||null} : null;
+    adventureTarget=target(saved.adventureTarget); firstTarget=target(saved.firstTarget); firstPhase=saved.firstPhase;
+    rewardTarget=saved.rewardKey ? {key:saved.rewardKey} : null;
+    titleEl.textContent=saved.title; resumeQuestion=saved.question;
+    renderPips();
+    if (idx>=plan.length){finish();return true;}
+    UI.show('play'); nextQuestion(); return true;
+  }
+
+  function settleCompleted(){
+    const saved=Store.savedSession();
+    return !!(saved && saved.index===saved.plan.length && resume(true));
+  }
+
+  function renderPips(){
+    clear(pipsEl);
+    plan.forEach((p,i)=>pipsEl.append(el('div.pip'+(p.intro?'.intro':p.check?'.check':'')+(results[i]?'.'+results[i]:''))));
+  }
 
   /** Is there anything on the board the child could count right now? The recall
       levels keep the ten-frame back until the hint, and ぱっと みて hides its dots
@@ -389,8 +486,8 @@ const Session = (() => {
       quitArmed = true;
       backBtn.textContent = '🏠';
       backBtn.setAttribute('aria-label', 'もういちど おすと おわる');
-      showFeedback('hint', 'おわりに する？ もういちど おしてね');
-      Sound.say('終わりにする？もう一度押してね。', { delay: 60 });
+      showFeedback('hint', 'ここで やすむ？ もういちど おしてね');
+      Sound.say('ここで休む？続きは残るよ。もう一度押してね。', { delay: 60 });
       clearTimeout(quitTimer);
       quitTimer = setTimeout(() => {
         disarmQuit();
@@ -399,6 +496,8 @@ const Session = (() => {
       return;
     }
     disarmQuit();
+    // onCorrect has already checkpointed the following question before its animation.
+    if (!locked) checkpoint();
     killTimers();
     Sound.hush();
     Sound.sfx.tap();
@@ -414,6 +513,7 @@ const Session = (() => {
 
   /* ---------- public entry points ---------- */
   function startLevel(game, levelIndex, opts){
+    if(settleCompleted()) return;
     build();
     killTimers();
     mode = 'level'; curGame = game; curLevelIdx = levelIndex;
@@ -434,6 +534,7 @@ const Session = (() => {
   }
 
   function startDaily(count){
+    if(settleCompleted()) return;
     build();
     killTimers();
     mode = 'daily'; curGame = null; rewardTarget = null; adventureTarget = null;
@@ -461,6 +562,7 @@ const Session = (() => {
   /** A short first-run sampler. It chooses a starting point; it never locks content
       or labels a child. Every game remains available from Home. */
   function startDiagnostic(){
+    if(settleCompleted()) return;
     build();
     killTimers();
     mode = 'diagnostic'; curGame = null; rewardTarget = null; adventureTarget = null;
@@ -499,6 +601,7 @@ const Session = (() => {
       itself also stops it concentrating. This is the other half of the pair: the
       bag is drawn from the weak set instead of from the level. */
   function startFocus(keys, opts){
+    if(settleCompleted()) return;
     build();
     killTimers();
     const o = opts || {};
@@ -529,6 +632,7 @@ const Session = (() => {
       evidence threshold; an adventure only says that the child completed this
       four-question attempt, so it never unlocks a level by itself. */
   function startAdventure(target){
+    if(settleCompleted()) return;
     const t = target;
     if (!t || !t.game || !t.level || !levelOpen(t.game, t.levelIndex)) return;
     build();
@@ -553,6 +657,7 @@ const Session = (() => {
   /** A child may see the method and stop, or choose one supported turn. Neither
       visit is a level attempt or evidence for a sticker or unlock. */
   function startFirst(game, levelIndex, phase){
+    if(settleCompleted()) return;
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
     build(); killTimers();
     mode = 'first'; curGame = game; curLevelIdx = levelIndex;
@@ -615,13 +720,21 @@ const Session = (() => {
   }
 
   function begin(){
+    const previous = Store.savedSession();
     disarmQuit();
     idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0;
+    runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10); runRound=Store.round();
+    results=[]; resumeQuestion=null;
     if (mode !== 'focus') focusKeys = [];
     usedItems = new Set(); shaky = []; sessionOutcomes = []; visitMilestone = null;
-    clear(pipsEl);
     checkTally = {}; announced = new Set();
-    plan.forEach(p => pipsEl.append(el('div.pip' + (p.intro ? '.intro' : p.check ? '.check' : ''))));
+    renderPips();
+    const unfinished = previous && (previous.index > 0 || previous.question && (previous.question.wrongThisQ || previous.question.helped));
+    if (overviewOn && (mode !== 'first' || unfinished)){
+      if (!unfinished) checkpoint(0,null);
+      showOverview(false,unfinished ? previous : null); return;
+    }
+    checkpoint(0,null);
     UI.show('play');
     nextQuestion();
   }
@@ -863,18 +976,20 @@ const Session = (() => {
       this child owes practice to. The generator is random, so we cannot go back to
       an earlier draw — we accept the one that is on screen when we stop. */
   function drawQuestion(step){
-    const tries = step.want ? FOCUS_TRIES : TRIES;
+    const replay = step.seed !== undefined;
+    const tries = replay ? 1 : step.want ? FOCUS_TRIES : TRIES;
     for (let t = 0; t < tries; t++){
       killTimers();
       resetSurface();
       try{
-        step.level.make(api());
+        if (!replay) step.seed = Math.floor(Math.random()*4294967296);
+        withRandomSeed(step.seed,()=>step.level.make(api()));
       }catch(err){
         console.error('question build failed', err);
         promptTxt.textContent = 'よみこみに しっぱいしました';
         return;
       }
-      if (!curItem) return;                      // this game does not name its items
+      if (replay || !curItem) return;
       if (step.want){
         // the shuffle bag is deliberately out of the way here: repeating the fact
         // inside one sitting is the entire point of a 集中練習 session
@@ -913,6 +1028,14 @@ const Session = (() => {
     demo = step.intro || null;
     touched = false;
     drawQuestion(step);
+    if (resumeQuestion){
+      wrongThisQ=resumeQuestion.wrongThisQ; helped=resumeQuestion.helped;
+      taughtQ=resumeQuestion.taughtQ; missType=resumeQuestion.missType;
+      if (helped || wrongThisQ >= hintAfter) hint();
+      resumeQuestion=null;
+    }
+    countEl.textContent = (idx+1)+'／'+plan.length+'もん'+(step.intro ? '　みほん・いっしょに' : step.check ? '　たしかめ' : '');
+    checkpoint();
     // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
     // call buildChoices, so start their clock here
     if (!askedAt) askedAt = performance.now();
@@ -983,6 +1106,7 @@ const Session = (() => {
   function hint(prefix){
     hintShown = true;
     helped = true;
+    checkpoint();
     const c = coach || {};
     if (c.tool){ try{ c.tool(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
     let text = null, say = null;
@@ -1110,6 +1234,7 @@ const Session = (() => {
     if (locked || taught || demoRunning || node.classList.contains('walking')) return;
     if (!coach || (!coach.tool && !coach.walk)){ if (lastSpeech) Sound.say(lastSpeech, { delay: 40 }); return; }
     helped = true;
+    checkpoint();
     if (!hintShown && coach.tool){ hint(); return; }
     if (!walked && coach.walk){
       showFeedback('hint', 'やりかたを みせるね');
@@ -1123,6 +1248,7 @@ const Session = (() => {
   function teach(){
     if (locked || taught) return;
     taught = true; taughtQ = true;
+    checkpoint();
     // stop the child racking up misses on a board that is already being answered
     $$('.choice', choicesEl).forEach(b => { if (b !== answerBtn) b.disabled = true; });
     const tb = $('.teachbtn', choicesEl);
@@ -1158,6 +1284,7 @@ const Session = (() => {
         ? given
         : classifyMiss(curItem, curAnswer, given);
     }
+    checkpoint();
     Sound.sfx.wrong();
     setMood('soft');
     if (target && target.classList){
@@ -1233,6 +1360,10 @@ const Session = (() => {
         }
       }
     }
+    // Count the answer on the actual day it happened, even if the child rests now.
+    Store.countToday(1);
+    results[idx]=scaffold ? 'introdone' : clean ? 'done' : 'miss';
+    checkpoint(idx+1,null);
     Sound.sfx.correct();
     setMood('happy');
     const pip = $$('.pip', pipsEl)[idx];
@@ -1248,6 +1379,7 @@ const Session = (() => {
     afterNarration(() => {
       idx++;
       if (idx >= plan.length) finish();
+      else if (breaksOn && idx % 4 === 0 && mode !== 'first') showOverview(true);
       else nextQuestion();
     }, o.delay || 950);
   }
@@ -1263,7 +1395,7 @@ const Session = (() => {
   function finish(){
     killTimers();
     if (mode === 'first'){
-      Store.countToday(plan.length);
+      Store.clearSavedSession();
       FirstSteps.finish(firstTarget.game, firstTarget.levelIndex, firstPhase, visitMilestone);
       return;
     }
@@ -1301,7 +1433,7 @@ const Session = (() => {
     });
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;
-      Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
+      Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total, true);
       if (swift) Store.recordSwift(curGame.id, curLevelIdx);
       /* A sticker means "cleared", so it waits for a pass — and below ★★★ it waits
          for another day too. Eight right first time is not something guessing
@@ -1328,9 +1460,9 @@ const Session = (() => {
       Store.recordDiagnostic(sessionOutcomes, recommended);
     } else {
       if (mode === 'daily'){
-        Store.recordPractice(firstTryRight, total);
+        Store.recordPractice(firstTryRight, total, true);
         Store.completePracticeToday();
-      } else Store.recordFocus(firstTryRight, total);
+      } else Store.recordFocus(firstTryRight, total, true);
       // one sticker per calendar day, per set
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
       if (Store.addSticker(key)) newStickers.push({ key, emoji: stickerFor(key), gold: stars === 3 });
@@ -1338,7 +1470,7 @@ const Session = (() => {
     /* The two lesson questions and another level's three checks are not graded, but
        they were answered: leaving them out of today's count let a first-time level with
        a check run to 13 questions while「きょうは ここまで」still counted 8. */
-    if (mode !== 'diagnostic') Store.countToday(plan.length - total);
+    Store.clearSavedSession();
     const justOpenedG1 = !wasOpen && Progress.g1Open();
     if (justOpenedG1){
       Sound.sfx.unlockSfx();
@@ -1357,7 +1489,7 @@ const Session = (() => {
   }
 
   return {
-    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, build,
+    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, build, resume, pendingSummary,
     _test: {
       flushTimers,
       get idx(){ return idx; },
@@ -1381,6 +1513,8 @@ const Session = (() => {
       get planItems(){ return plan.map(p => p.want || null); },
       /** the first-meeting questions are on by default; most of the suite tests the rest */
       intro(on){ introOn = !!on; },
+      overview(on){ overviewOn=!!on; },
+      breaks(on){ breaksOn=!!on; },
       get introStep(){ return plan[idx] ? plan[idx].intro || null : null; },
       get planIntro(){ return plan.map(p => p.intro || null); },
       get planChecks(){ return plan.map(p => p.check || null); },
