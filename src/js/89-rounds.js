@@ -21,7 +21,7 @@ const Rounds = (() => {
   }
   function go(round){
     if (!select(round)){
-      Book.open();
+      Book.open({section:'rounds'});
       Sound.say('２周目は、本の復習まで、１周目のシール156枚が全部そろうと開くよ。', {delay:180});
       return;
     }

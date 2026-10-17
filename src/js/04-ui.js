@@ -127,6 +127,21 @@ const UI = (() => {
       if (!r.width && !r.height) continue;              // hidden / zero-sized
       if (r.left < b.left - slack || r.right > b.right + slack
        || r.top  < b.top  - slack || r.bottom > b.bottom + slack) return false;
+      // A collection tray has a basket underneath it. Being inside the overall
+      // field is insufficient if a fruit has spilled into that basket's row.
+      if (n.classList.contains('collect-field')){
+        const objects = n.querySelectorAll('.obj');
+        for (const object of objects){
+          const o = object.getBoundingClientRect();
+          if (o.left < r.left - slack || o.right > r.right + slack
+           || o.top < r.top - slack || o.bottom > r.bottom + slack) return false;
+        }
+        for (let a = 0; a < objects.length; a++) for (let z = a + 1; z < objects.length; z++){
+          const p = objects[a].getBoundingClientRect(), q = objects[z].getBoundingClientRect();
+          if (Math.min(p.right,q.right) > Math.max(p.left,q.left) + slack
+           && Math.min(p.bottom,q.bottom) > Math.max(p.top,q.top) + slack) return false;
+        }
+      }
       /* Staying inside the playfield is not enough: なんばんめ's row of animals
          scrolls inside its own container, so it can sit within the field and still
          hide half the animals the child is being asked to count. Only real scroll
@@ -153,7 +168,10 @@ const UI = (() => {
       field.style.setProperty('--u', (base * m).toFixed(2) + 'px');
       return fitsInside(field, kids);
     };
-    let lo = FIT_MIN, hi = FIT_MAX;
+    // Pattern cars are a picture; answers live in the full-size choice buttons.
+    // Ten display cars can therefore become smaller than a direct tap target
+    // instead of hiding the final question mark in a horizontal scroller.
+    let lo = field.querySelector('.pattern-train') ? 0.35 : FIT_MIN, hi = FIT_MAX;
     for (let i = 0; i < 7; i++){                        // ~1.5% precision over a wider range
       const m = (lo + hi) / 2;
       if (at(m)) lo = m; else hi = m;

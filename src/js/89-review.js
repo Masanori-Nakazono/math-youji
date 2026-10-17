@@ -151,7 +151,7 @@ const TextbookReview = (() => {
     UI.register('review',node);
   }
   function open(id,chapter){
-    if(!unlocked()){Book.open();return;}
+    if(!unlocked()){Book.open({section:'review'});return;}
     build();run=null;menu();UI.show('review');
     if(Number.isInteger(id)&&lessonOpen(id)) start(id);
     else if(Number.isInteger(chapter)&&chapterReady(chapter)) start(null,chapter);

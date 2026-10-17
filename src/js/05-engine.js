@@ -774,6 +774,14 @@ const Session = (() => {
         spokenAt = 0;
         Sound.say(lastSpeech, { delay: 220, onend(){ if (!stale()) spokenAt = performance.now(); } });
       },
+      // A completed step can replace its instructions without erasing the fact
+      // that this question used help, or resetting mistakes and scoring.
+      clearHelp(){
+        if (stale()) return;
+        clearFeedback(); hintSpeech = ''; hintShown = false; walked = false;
+        // Let an ongoing demonstration finish its callback: first-time lessons
+        // use it to continue into the next step. The question still keeps help.
+      },
       say(t, o){ if (stale()) return; lastSpeech = t; Sound.say(t, o); },
       afterSpeech(fn){ return Sound.afterSpeech(() => { if (!stale()) fn(); }); },
       /** Name the fact this question asks. `label` is what the result screen and

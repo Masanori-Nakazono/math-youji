@@ -731,6 +731,21 @@ body::before{
 .short-rewards{ display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
 .short-rewards .pokemon-sticker{ width:clamp(112px,calc(var(--u)*9),132px); }
 .short-rewards .pokemon-name{ font-size:max(14px,calc(var(--u)*1.1)); }
+/* The same three steps follow a short course between visits and entrances. */
+.home-short-progress{margin-top:12px;}
+.short-progress{width:100%;min-width:0;box-sizing:border-box;text-align:left;border:2px solid var(--card-edge);border-radius:16px;background:var(--card);padding:12px;}
+.short-progress-course{margin:0 0 5px;font-size:max(14px,calc(var(--u)*1.15));color:var(--ink-soft);font-weight:700;overflow-wrap:anywhere;}
+.short-progress-head{display:flex;align-items:center;gap:8px;justify-content:space-between;}
+.short-progress-title{font-size:clamp(16px,calc(var(--u)*1.5),23px);line-height:1.5;overflow-wrap:anywhere;}
+.short-progress-speak{flex:0 0 44px;width:44px;min-width:44px;height:44px;min-height:44px;padding:4px;font-size:20px;}
+.short-progress-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:0;margin:10px 0;list-style:none;}
+.short-progress-step{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;border:2px solid var(--card-edge);border-radius:12px;padding:8px 4px;font-size:max(14px,calc(var(--u)*1.1));line-height:1.4;background:var(--paper-2);}
+.short-progress-step>span:first-child{font-size:23px;}
+.short-progress-step>span:last-child{white-space:pre-line;}
+.short-progress-step.current{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--card));font-weight:800;}
+.short-progress-step.done{border-color:var(--good);background:var(--good-soft);}
+.short-progress-detail{margin:0;font-size:max(14px,calc(var(--u)*1.2));line-height:1.65;overflow-wrap:anywhere;}
+.level-entry>.short-progress{flex-basis:100%;}
 #progress-album{ gap:calc(var(--u)*.7); }
 .album-intro{ margin:0; text-align:center; font-size:calc(var(--u)*1.4); font-weight:800; }
 .album-cards{ flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; align-content:start;
@@ -1443,6 +1458,7 @@ body::before{
   scrollbar-width: none;
 }
 .train::-webkit-scrollbar{ display: none; }
+.train.pattern-train{overflow:visible;}
 .car{
   flex: 0 0 auto;
   width: calc(var(--u)*6); height: calc(var(--u)*6);
@@ -1453,6 +1469,7 @@ body::before{
   border-radius: var(--wob-b);
   box-shadow: var(--shadow-sm);
 }
+.pattern-train .car{font-size:calc(var(--u)*4.2);}
 .car.blank{
   border-style: dashed; border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--card));
@@ -1495,6 +1512,22 @@ body::before{
   white-space: nowrap;
 }
 .dirmark svg{ width: calc(var(--u)*3); height: calc(var(--u)*1.6); }
+
+.ordinal-board{max-width:100%;display:flex;flex-direction:column;gap:6px;}
+.ordinal-direction{display:flex;justify-content:flex-start;}
+.ordinal-direction.from-right{justify-content:flex-end;}
+.ordinal-board .queue{overflow:visible;}
+.ordinal-answers{display:none;}
+@media(max-width:700px){
+  .ordinal-board{width:100%;}
+  .ordinal-board .queue{display:grid;grid-template-columns:repeat(var(--on),minmax(0,1fr));gap:3px;padding:3px;}
+  .ordinal-board .qi{width:100%;min-width:0;height:52px;min-height:52px;font-size:clamp(22px,6vw,32px);justify-content:center;border-width:2px;}
+  .ordinal-board .dirmark{font-size:16px;}
+  .ordinal-board .dirmark svg{width:32px;height:20px;}
+  .ordinal-answers{display:grid;grid-template-columns:repeat(4,64px);gap:8px;justify-content:center;}
+  .ordinal-answers .ordinal-choice{width:64px;min-width:64px;height:64px;min-height:64px;padding:3px;font-size:36px;}
+  .ordinal-answers .ordinal-choice.picked{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--card));}
+}
 
 /* grid variant */
 .qgrid{
@@ -1812,6 +1845,47 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   color: var(--c-brown); min-width: 1.2em; text-align: right;
 }
 .basket .want{ grid-column: 1 / -1; font-size: calc(var(--u)*1.25); color: var(--ink-soft); font-weight: 800; }
+
+/* The collection tray and its basket reserve separate space. A floating basket
+   covered some of the very objects the child had been asked to take. */
+.give-board{
+  width:100%; height:100%; min-height:0;
+  display:grid; grid-template-rows:minmax(0,1fr) auto; gap:6px;
+}
+.give-board .collect-field{
+  height:auto; min-height:0; padding:6px;
+  border-width:3px;
+  display:grid; grid-template-columns:repeat(5,minmax(0,1fr));
+  grid-auto-rows:minmax(48px,1fr); gap:4px; align-items:center; justify-items:center;
+}
+.give-board .obj{
+  position:relative; left:auto; top:auto; transform:none;
+  width:min(100%,max(48px,calc(var(--u)*7))); height:auto; max-height:100%; aspect-ratio:1; align-self:center;
+  padding:2px; font-size:clamp(32px,min(9vw,calc(var(--u)*4.6)),56px);
+}
+.give-board .obj:active{transform:scale(1.06);}
+.give-board .obj.picked::after{inset:1px;}
+.give-board .basket{
+  position:static; min-width:0; width:100%; min-height:52px;
+  padding:4px 8px; gap:6px; border-width:3px;
+}
+.give-board .basket .b,.give-board .basket .n{font-size:clamp(28px,calc(var(--u)*2.6),44px);line-height:1;}
+.give-board .basket .items{max-width:none; font-size:clamp(16px,calc(var(--u)*1.3),20px);}
+.give-board .basket .want{font-size:clamp(14px,calc(var(--u)*1.25),18px);line-height:1.3;}
+@media(min-width:701px){.give-board .collect-field{grid-auto-rows:minmax(64px,1fr);}}
+@media(max-height:700px){
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)){gap:2px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .topbar>.backbtn{width:48px;height:48px;min-width:48px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt{display:grid;grid-template-columns:minmax(0,1fr) 48px 48px;gap:4px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.mascot{display:none;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.btn-round{width:48px;height:48px;min-width:48px;flex:0 0 48px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.btn-round:not(.showbtn){grid-column:2;grid-row:1;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.showbtn{grid-column:3;grid-row:1;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .txtwrap{display:contents;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .txt{grid-column:1;grid-row:1;font-size:20px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .feedback{grid-column:1/-1;grid-row:2;display:block;font-size:14px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .feedback[hidden]{display:none;}
+}
 
 /* every plate is the same size, so width can no longer give the answer away */
 .plate.fixed{ min-width: 0; width: calc(var(--u)*17); height: calc(var(--u)*10.5); padding: calc(var(--u)*.6); }
@@ -2294,6 +2368,33 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   border-radius: var(--wob-b);
   font-size: calc(var(--u)*3.2);
   background: var(--paper-2);
+}
+
+/* Grid tracks must include the same minimum as the objects: the old fixed
+   tracks shrank to 34px while their 64px buttons overlapped. */
+.pairrow{grid-template-columns:repeat(var(--pn,5),max(var(--tap),calc(var(--u)*6)));}
+@media(max-width:700px){
+  .pairboard{display:grid;grid-template-columns:repeat(var(--pair-cols,5),minmax(48px,1fr));gap:8px 5px;width:min(100%,320px);}
+  .pairboard .pairrow{display:contents;}
+  .pairboard .pairgap{display:none;}
+  .pairboard .pairitem,.pairboard .pairslot{
+    grid-column:var(--pair-col);grid-row:var(--pair-row);
+    width:100%;min-width:48px;height:48px;min-height:48px;
+    font-size:30px;border-width:2px;
+  }
+  .pairboard .pairitem .tag{top:-4px;right:-2px;min-width:18px;height:18px;padding:0 2px;font-size:12px;}
+}
+/* Once pairing is finished, the number pad is the answer surface. Return its
+   completed picture to two compact aligned rows so every pair and leftover can
+   remain visible above the 64px numeric keys, including on a short phone. */
+@media(max-width:700px) and (max-height:700px){
+  #play:has(.choices.pad) .pairboard{display:flex;gap:4px;width:100%;}
+  #play:has(.choices.pad) .pairboard .pairrow{display:grid;grid-template-columns:repeat(var(--pn),minmax(0,1fr));gap:3px;}
+  #play:has(.choices.pad) .pairboard .pairitem{
+    grid-column:auto;grid-row:auto;width:100%;min-width:0;
+    height:max(24px,calc(var(--u)*6));min-height:0;font-size:clamp(16px,calc(var(--u)*3.2),28px);
+  }
+  #play:has(.choices.pad) .pairboard .pairitem .tag{top:-3px;right:-2px;min-width:12px;height:12px;font-size:9px;}
 }
 
 /* ---- 20までの かず ---- */
@@ -2983,4 +3084,48 @@ dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
   .review-help-content{padding:6px 12px 12px;}
   .review-hint .review-support-actions{padding:12px;gap:8px;}
   .review-hint .review-support-actions .btn{font-size:16px;}
+}
+
+/* ---------- a sticker book the child can browse and act on ---------- */
+#book .book-count{font-size:16px;line-height:1.5;margin:8px 0;}
+#book .book-count b{font-size:22px;}
+#book .book-count>span{font-size:14px;}
+#book .book-controls{flex:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,220px);gap:6px 12px;padding:2px 4px 8px;}
+#book .book-filters{display:flex;gap:6px;min-width:0;}
+#book .book-filter,#book .book-world{font:inherit;color:var(--ink);font-size:16px;min-height:64px;border:2px solid var(--card-edge);border-radius:12px;background:var(--card);padding:6px 10px;cursor:pointer;}
+#book .book-filter{flex:1;min-width:0;font-weight:800;padding-inline:4px;}
+#book .book-filter[aria-pressed="true"]{background:var(--good-soft);border-color:var(--good-ink);color:var(--good-ink);}
+#book .book-world{width:100%;min-width:0;}
+#book .book-filter-count{grid-column:1/-1;font-size:14px;color:var(--ink-soft);line-height:1.5;}
+#book .book{display:block;padding:4px 6px 18px;scrollbar-gutter:stable;}
+#book .book-catalog{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:12px;align-content:start;}
+#book .book-slot{font:inherit;flex-direction:column;min-width:0;min-height:172px;margin:0;cursor:pointer;color:var(--ink);padding:6px;gap:5px;transition:transform .15s;}
+#book .book-slot:active{transform:translateY(2px);}
+#book .book-slot .pokemon-sticker{--pokemon-size:128px;width:100%;background:transparent;box-shadow:none;}
+#book .book-slot .pokemon-image{height:92px;}
+#book .book-slot .pokemon-name{font-size:16px;}
+#book .book-slot .pokemon-rarity{font-size:12px;}
+#book .book-slot-state{font-size:14px;line-height:1.5;font-weight:800;}
+#book .book-slot.locked .book-slot-state{color:var(--ink-soft);}
+#book .book-empty{grid-column:1/-1;font-size:17px;line-height:1.8;padding:16px;}
+#book .book-extras{margin-top:20px;}
+#book .book-extras>summary{min-height:64px;display:flex;align-items:center;cursor:pointer;font-size:17px;font-weight:800;padding:12px;background:var(--paper-2);border-radius:14px;list-style:none;}
+#book .book-extras>summary::before{content:'▶';font-size:14px;margin-right:10px;}
+#book .book-extras[open]>summary::before{content:'▼';}
+#book .book-extra-content{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding-top:12px;}
+#book .book-guide{font-size:16px;line-height:1.8;}
+#book-detail .book-detail-body{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:16px;padding:12px 12px 24px;}
+#book-detail .book-detail-body>.pokemon-sticker{--pokemon-size:190px;}
+#book-detail .book-detail-copy{width:100%;max-width:680px;font-size:18px;line-height:1.7;}
+#book-detail .book-detail-copy p{margin:10px 0;}
+#book-detail .book-detail-actions{display:flex;flex-direction:column;width:100%;max-width:580px;gap:12px;}
+#book-detail .book-detail-actions .btn{min-height:64px;font-size:18px;white-space:normal;line-height:1.6;}
+@media(max-width:700px){
+  #book .book-controls{grid-template-columns:minmax(0,1fr);gap:6px;}
+  #book .book-count{margin:4px 0;font-size:14px;}
+  #book .book-count>span{font-size:13px;}
+  #book .book-filter{font-size:14px;}
+  #book .book-catalog{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  #book .book-slot{min-height:174px;}
+  #book .book-slot .pokemon-name{font-size:15px;}
 }

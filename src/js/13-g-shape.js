@@ -506,7 +506,7 @@ function patternQuestion(api, unitKind, blanks){
   holes.sort((a, b) => a - b);
   api.item('pat:' + unitKind + ':' + blanks, unitKind + ' の くりかえし');
   api.setPrompt('つづきは どれ？ きまりを みつけよう', '続きは、どれ？きまりを見つけよう。');
-  const train = el('div.train');
+  const train = el('div.train.pattern-train');
   const cars = seq.map((t, i) => {
     const isHole = holes.indexOf(i) >= 0;
     const c = el('div.car' + (isHole ? '.blank' : ''), { text: isHole ? '' : t });
@@ -559,7 +559,7 @@ function createPattern(api){
   api.item('create:AB', 'じぶんで 2つの くりかえしを つくる');
   api.setPrompt('すきな 2つを えらんで、きまりを つくろう',
                 '好きな二つを選んで、きまりを作ろう。');
-  const train = el('div.train');
+  const train = el('div.train.pattern-train');
   for (let i = 0; i < 8; i++) train.append(el('div.car.empty'));
   api.field.append(train);
   opts.forEach(v => {

@@ -314,8 +314,11 @@ const FirstSteps = (() => {
       button('👆', 'じぶんで 1もん', () => startOne(game, levelIndex, true, active.opts)),
       button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active.opts)));
     const status = Store.shortStatus(game.id, levelIndex);
-    if (status.canStartGold || status.goldActive) choices.append(button('✨', status.goldActive
-      ? 'きんへ つづきの 1もん' : 'きんへ 1もんずつ', () => startGold(game, levelIndex)));
+    if (status.canStartGold || status.goldActive) choices.append(button('✨',
+      ShortProgress.describe(game.id, levelIndex, {gold:true}).nextLabel,
+      () => ShortProgress.start(game, levelIndex, {gold:true})));
+    const progress = ShortProgress.render(game.id, levelIndex);
+    if (progress) detail.append(progress);
     UI.show('first-steps');
     Sound.say('初めてのことは、まず見るだけでもいいよ。一つやったら、そこで終われるよ。', { delay: 180 });
   }
@@ -326,25 +329,14 @@ const FirstSteps = (() => {
     const status = Store.shortStatus(game.id, levelIndex);
     const rewards = short ? status.rewardKeys || [] : [];
     const newGold = rewards.includes(game.id + ':' + levelIndex + ':g');
-    const gold = status.goldActive && status.goldStatus;
     const answered = milestone && milestone.kind === 'together';
     const doneText = short ? milestone ? Store.milestoneText(milestone.kind) : 'ひとつ ためしたね'
       : phase === 'show' || !answered ? 'やりかたを みたね' : 'いっしょに ひとつ できたね';
     info.textContent = doneText;
     if (short){
-      const progress = newGold ? '🌟　きんの シールを ゲット！ べつのひも できたね'
-        : gold ? gold.waiting ? gold.checks === 3 ? 'きんへの たしかめは また べつのひに。できた シールは のこるよ'
-          : '8もん じぶんで できたね。べつのひに きんを たしかめよう'
-          : gold.phase === 'check' ? 'きんへの たしかめ　' + gold.checks + '／3もん'
-          : 'きんの じゅんび　ヒントなしで つづけて ' + gold.independentRun + '／8もん'
-        : status.lastResult === 'confirmed' ? '🌟　べつのひも できたね！ シールが かんせいしたよ'
-        : status.confirmed ? 'できることを たしかめたね'
-        : status.waiting ? status.checks === 3 ? 'たしかめは また べつのひに。きょうは ここまででも いいよ'
-          : '8もんぶん たまったね。べつのひに たしかめよう'
-        : status.phase === 'check' ? 'べつのひの たしかめ　' + status.checks + '／3もん'
-        : status.answered === 8 ? 'ひとつずつ できる もんだいを ふやそう。ヒントも つかって いいよ'
-        : 'じぶんで ためした もんだい　' + status.answered + '／8もん';
-      info.append(el('p.first-progress', { text: progress }));
+      if (newGold) info.append(el('p.first-progress', {text:'🌟　きんの シールを ゲット！ べつのひも できたね'}));
+      else if (status.lastResult === 'confirmed') info.append(el('p.first-progress', {text:'🌟　べつのひも できたね！ シールが かんせいしたよ'}));
+      info.append(ShortProgress.render(game.id, levelIndex));
     }
     if (rewards.length) info.append(el('div.short-rewards', {'aria-label':'もらった シール'},
       rewards.map(key => PokemonStickers.artwork(key))));
@@ -371,6 +363,7 @@ const FirstSteps = (() => {
     UI.show('first-finish', { replace: true });
     finishSpeech = doneText + '。' + (short && status.lastResult === 'confirmed'
       ? '別の日もできたね。シールが完成したよ。' : short && status.waiting ? '確かめは、また別の日にしよう。' : '')
+      + (short ? ShortProgress.describe(game.id, levelIndex).speech : '')
       + '今日はここまででもいいよ。';
     if (rewards.length){
       finishSpeech = doneText + '。' + rewards.map(key => PokemonStickers.reward(key).name).join('と')

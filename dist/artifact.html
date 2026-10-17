@@ -736,6 +736,21 @@ body::before{
 .short-rewards{ display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
 .short-rewards .pokemon-sticker{ width:clamp(112px,calc(var(--u)*9),132px); }
 .short-rewards .pokemon-name{ font-size:max(14px,calc(var(--u)*1.1)); }
+/* The same three steps follow a short course between visits and entrances. */
+.home-short-progress{margin-top:12px;}
+.short-progress{width:100%;min-width:0;box-sizing:border-box;text-align:left;border:2px solid var(--card-edge);border-radius:16px;background:var(--card);padding:12px;}
+.short-progress-course{margin:0 0 5px;font-size:max(14px,calc(var(--u)*1.15));color:var(--ink-soft);font-weight:700;overflow-wrap:anywhere;}
+.short-progress-head{display:flex;align-items:center;gap:8px;justify-content:space-between;}
+.short-progress-title{font-size:clamp(16px,calc(var(--u)*1.5),23px);line-height:1.5;overflow-wrap:anywhere;}
+.short-progress-speak{flex:0 0 44px;width:44px;min-width:44px;height:44px;min-height:44px;padding:4px;font-size:20px;}
+.short-progress-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:0;margin:10px 0;list-style:none;}
+.short-progress-step{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;border:2px solid var(--card-edge);border-radius:12px;padding:8px 4px;font-size:max(14px,calc(var(--u)*1.1));line-height:1.4;background:var(--paper-2);}
+.short-progress-step>span:first-child{font-size:23px;}
+.short-progress-step>span:last-child{white-space:pre-line;}
+.short-progress-step.current{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--card));font-weight:800;}
+.short-progress-step.done{border-color:var(--good);background:var(--good-soft);}
+.short-progress-detail{margin:0;font-size:max(14px,calc(var(--u)*1.2));line-height:1.65;overflow-wrap:anywhere;}
+.level-entry>.short-progress{flex-basis:100%;}
 #progress-album{ gap:calc(var(--u)*.7); }
 .album-intro{ margin:0; text-align:center; font-size:calc(var(--u)*1.4); font-weight:800; }
 .album-cards{ flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; align-content:start;
@@ -1448,6 +1463,7 @@ body::before{
   scrollbar-width: none;
 }
 .train::-webkit-scrollbar{ display: none; }
+.train.pattern-train{overflow:visible;}
 .car{
   flex: 0 0 auto;
   width: calc(var(--u)*6); height: calc(var(--u)*6);
@@ -1458,6 +1474,7 @@ body::before{
   border-radius: var(--wob-b);
   box-shadow: var(--shadow-sm);
 }
+.pattern-train .car{font-size:calc(var(--u)*4.2);}
 .car.blank{
   border-style: dashed; border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--card));
@@ -1500,6 +1517,22 @@ body::before{
   white-space: nowrap;
 }
 .dirmark svg{ width: calc(var(--u)*3); height: calc(var(--u)*1.6); }
+
+.ordinal-board{max-width:100%;display:flex;flex-direction:column;gap:6px;}
+.ordinal-direction{display:flex;justify-content:flex-start;}
+.ordinal-direction.from-right{justify-content:flex-end;}
+.ordinal-board .queue{overflow:visible;}
+.ordinal-answers{display:none;}
+@media(max-width:700px){
+  .ordinal-board{width:100%;}
+  .ordinal-board .queue{display:grid;grid-template-columns:repeat(var(--on),minmax(0,1fr));gap:3px;padding:3px;}
+  .ordinal-board .qi{width:100%;min-width:0;height:52px;min-height:52px;font-size:clamp(22px,6vw,32px);justify-content:center;border-width:2px;}
+  .ordinal-board .dirmark{font-size:16px;}
+  .ordinal-board .dirmark svg{width:32px;height:20px;}
+  .ordinal-answers{display:grid;grid-template-columns:repeat(4,64px);gap:8px;justify-content:center;}
+  .ordinal-answers .ordinal-choice{width:64px;min-width:64px;height:64px;min-height:64px;padding:3px;font-size:36px;}
+  .ordinal-answers .ordinal-choice.picked{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--card));}
+}
 
 /* grid variant */
 .qgrid{
@@ -1817,6 +1850,47 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   color: var(--c-brown); min-width: 1.2em; text-align: right;
 }
 .basket .want{ grid-column: 1 / -1; font-size: calc(var(--u)*1.25); color: var(--ink-soft); font-weight: 800; }
+
+/* The collection tray and its basket reserve separate space. A floating basket
+   covered some of the very objects the child had been asked to take. */
+.give-board{
+  width:100%; height:100%; min-height:0;
+  display:grid; grid-template-rows:minmax(0,1fr) auto; gap:6px;
+}
+.give-board .collect-field{
+  height:auto; min-height:0; padding:6px;
+  border-width:3px;
+  display:grid; grid-template-columns:repeat(5,minmax(0,1fr));
+  grid-auto-rows:minmax(48px,1fr); gap:4px; align-items:center; justify-items:center;
+}
+.give-board .obj{
+  position:relative; left:auto; top:auto; transform:none;
+  width:min(100%,max(48px,calc(var(--u)*7))); height:auto; max-height:100%; aspect-ratio:1; align-self:center;
+  padding:2px; font-size:clamp(32px,min(9vw,calc(var(--u)*4.6)),56px);
+}
+.give-board .obj:active{transform:scale(1.06);}
+.give-board .obj.picked::after{inset:1px;}
+.give-board .basket{
+  position:static; min-width:0; width:100%; min-height:52px;
+  padding:4px 8px; gap:6px; border-width:3px;
+}
+.give-board .basket .b,.give-board .basket .n{font-size:clamp(28px,calc(var(--u)*2.6),44px);line-height:1;}
+.give-board .basket .items{max-width:none; font-size:clamp(16px,calc(var(--u)*1.3),20px);}
+.give-board .basket .want{font-size:clamp(14px,calc(var(--u)*1.25),18px);line-height:1.3;}
+@media(min-width:701px){.give-board .collect-field{grid-auto-rows:minmax(64px,1fr);}}
+@media(max-height:700px){
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)){gap:2px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .topbar>.backbtn{width:48px;height:48px;min-width:48px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt{display:grid;grid-template-columns:minmax(0,1fr) 48px 48px;gap:4px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.mascot{display:none;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.btn-round{width:48px;height:48px;min-width:48px;flex:0 0 48px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.btn-round:not(.showbtn){grid-column:2;grid-row:1;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.showbtn{grid-column:3;grid-row:1;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .txtwrap{display:contents;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .txt{grid-column:1;grid-row:1;font-size:20px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .feedback{grid-column:1/-1;grid-row:2;display:block;font-size:14px;}
+  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .feedback[hidden]{display:none;}
+}
 
 /* every plate is the same size, so width can no longer give the answer away */
 .plate.fixed{ min-width: 0; width: calc(var(--u)*17); height: calc(var(--u)*10.5); padding: calc(var(--u)*.6); }
@@ -2299,6 +2373,33 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   border-radius: var(--wob-b);
   font-size: calc(var(--u)*3.2);
   background: var(--paper-2);
+}
+
+/* Grid tracks must include the same minimum as the objects: the old fixed
+   tracks shrank to 34px while their 64px buttons overlapped. */
+.pairrow{grid-template-columns:repeat(var(--pn,5),max(var(--tap),calc(var(--u)*6)));}
+@media(max-width:700px){
+  .pairboard{display:grid;grid-template-columns:repeat(var(--pair-cols,5),minmax(48px,1fr));gap:8px 5px;width:min(100%,320px);}
+  .pairboard .pairrow{display:contents;}
+  .pairboard .pairgap{display:none;}
+  .pairboard .pairitem,.pairboard .pairslot{
+    grid-column:var(--pair-col);grid-row:var(--pair-row);
+    width:100%;min-width:48px;height:48px;min-height:48px;
+    font-size:30px;border-width:2px;
+  }
+  .pairboard .pairitem .tag{top:-4px;right:-2px;min-width:18px;height:18px;padding:0 2px;font-size:12px;}
+}
+/* Once pairing is finished, the number pad is the answer surface. Return its
+   completed picture to two compact aligned rows so every pair and leftover can
+   remain visible above the 64px numeric keys, including on a short phone. */
+@media(max-width:700px) and (max-height:700px){
+  #play:has(.choices.pad) .pairboard{display:flex;gap:4px;width:100%;}
+  #play:has(.choices.pad) .pairboard .pairrow{display:grid;grid-template-columns:repeat(var(--pn),minmax(0,1fr));gap:3px;}
+  #play:has(.choices.pad) .pairboard .pairitem{
+    grid-column:auto;grid-row:auto;width:100%;min-width:0;
+    height:max(24px,calc(var(--u)*6));min-height:0;font-size:clamp(16px,calc(var(--u)*3.2),28px);
+  }
+  #play:has(.choices.pad) .pairboard .pairitem .tag{top:-3px;right:-2px;min-width:12px;height:12px;font-size:9px;}
 }
 
 /* ---- 20までの かず ---- */
@@ -2988,6 +3089,50 @@ dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
   .review-help-content{padding:6px 12px 12px;}
   .review-hint .review-support-actions{padding:12px;gap:8px;}
   .review-hint .review-support-actions .btn{font-size:16px;}
+}
+
+/* ---------- a sticker book the child can browse and act on ---------- */
+#book .book-count{font-size:16px;line-height:1.5;margin:8px 0;}
+#book .book-count b{font-size:22px;}
+#book .book-count>span{font-size:14px;}
+#book .book-controls{flex:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,220px);gap:6px 12px;padding:2px 4px 8px;}
+#book .book-filters{display:flex;gap:6px;min-width:0;}
+#book .book-filter,#book .book-world{font:inherit;color:var(--ink);font-size:16px;min-height:64px;border:2px solid var(--card-edge);border-radius:12px;background:var(--card);padding:6px 10px;cursor:pointer;}
+#book .book-filter{flex:1;min-width:0;font-weight:800;padding-inline:4px;}
+#book .book-filter[aria-pressed="true"]{background:var(--good-soft);border-color:var(--good-ink);color:var(--good-ink);}
+#book .book-world{width:100%;min-width:0;}
+#book .book-filter-count{grid-column:1/-1;font-size:14px;color:var(--ink-soft);line-height:1.5;}
+#book .book{display:block;padding:4px 6px 18px;scrollbar-gutter:stable;}
+#book .book-catalog{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:12px;align-content:start;}
+#book .book-slot{font:inherit;flex-direction:column;min-width:0;min-height:172px;margin:0;cursor:pointer;color:var(--ink);padding:6px;gap:5px;transition:transform .15s;}
+#book .book-slot:active{transform:translateY(2px);}
+#book .book-slot .pokemon-sticker{--pokemon-size:128px;width:100%;background:transparent;box-shadow:none;}
+#book .book-slot .pokemon-image{height:92px;}
+#book .book-slot .pokemon-name{font-size:16px;}
+#book .book-slot .pokemon-rarity{font-size:12px;}
+#book .book-slot-state{font-size:14px;line-height:1.5;font-weight:800;}
+#book .book-slot.locked .book-slot-state{color:var(--ink-soft);}
+#book .book-empty{grid-column:1/-1;font-size:17px;line-height:1.8;padding:16px;}
+#book .book-extras{margin-top:20px;}
+#book .book-extras>summary{min-height:64px;display:flex;align-items:center;cursor:pointer;font-size:17px;font-weight:800;padding:12px;background:var(--paper-2);border-radius:14px;list-style:none;}
+#book .book-extras>summary::before{content:'▶';font-size:14px;margin-right:10px;}
+#book .book-extras[open]>summary::before{content:'▼';}
+#book .book-extra-content{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding-top:12px;}
+#book .book-guide{font-size:16px;line-height:1.8;}
+#book-detail .book-detail-body{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:16px;padding:12px 12px 24px;}
+#book-detail .book-detail-body>.pokemon-sticker{--pokemon-size:190px;}
+#book-detail .book-detail-copy{width:100%;max-width:680px;font-size:18px;line-height:1.7;}
+#book-detail .book-detail-copy p{margin:10px 0;}
+#book-detail .book-detail-actions{display:flex;flex-direction:column;width:100%;max-width:580px;gap:12px;}
+#book-detail .book-detail-actions .btn{min-height:64px;font-size:18px;white-space:normal;line-height:1.6;}
+@media(max-width:700px){
+  #book .book-controls{grid-template-columns:minmax(0,1fr);gap:6px;}
+  #book .book-count{margin:4px 0;font-size:14px;}
+  #book .book-count>span{font-size:13px;}
+  #book .book-filter{font-size:14px;}
+  #book .book-catalog{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  #book .book-slot{min-height:174px;}
+  #book .book-slot .pokemon-name{font-size:15px;}
 }
 </style>
 <div id="stage"></div>
@@ -5825,6 +5970,21 @@ const UI = (() => {
       if (!r.width && !r.height) continue;              // hidden / zero-sized
       if (r.left < b.left - slack || r.right > b.right + slack
        || r.top  < b.top  - slack || r.bottom > b.bottom + slack) return false;
+      // A collection tray has a basket underneath it. Being inside the overall
+      // field is insufficient if a fruit has spilled into that basket's row.
+      if (n.classList.contains('collect-field')){
+        const objects = n.querySelectorAll('.obj');
+        for (const object of objects){
+          const o = object.getBoundingClientRect();
+          if (o.left < r.left - slack || o.right > r.right + slack
+           || o.top < r.top - slack || o.bottom > r.bottom + slack) return false;
+        }
+        for (let a = 0; a < objects.length; a++) for (let z = a + 1; z < objects.length; z++){
+          const p = objects[a].getBoundingClientRect(), q = objects[z].getBoundingClientRect();
+          if (Math.min(p.right,q.right) > Math.max(p.left,q.left) + slack
+           && Math.min(p.bottom,q.bottom) > Math.max(p.top,q.top) + slack) return false;
+        }
+      }
       /* Staying inside the playfield is not enough: なんばんめ's row of animals
          scrolls inside its own container, so it can sit within the field and still
          hide half the animals the child is being asked to count. Only real scroll
@@ -5851,7 +6011,10 @@ const UI = (() => {
       field.style.setProperty('--u', (base * m).toFixed(2) + 'px');
       return fitsInside(field, kids);
     };
-    let lo = FIT_MIN, hi = FIT_MAX;
+    // Pattern cars are a picture; answers live in the full-size choice buttons.
+    // Ten display cars can therefore become smaller than a direct tap target
+    // instead of hiding the final question mark in a horizontal scroller.
+    let lo = field.querySelector('.pattern-train') ? 0.35 : FIT_MIN, hi = FIT_MAX;
     for (let i = 0; i < 7; i++){                        // ~1.5% precision over a wider range
       const m = (lo + hi) / 2;
       if (at(m)) lo = m; else hi = m;
@@ -6800,6 +6963,14 @@ const Session = (() => {
         lastSpeech = speech != null ? speech : String(html).replace(/<[^>]*>/g, '');
         spokenAt = 0;
         Sound.say(lastSpeech, { delay: 220, onend(){ if (!stale()) spokenAt = performance.now(); } });
+      },
+      // A completed step can replace its instructions without erasing the fact
+      // that this question used help, or resetting mistakes and scoring.
+      clearHelp(){
+        if (stale()) return;
+        clearFeedback(); hintSpeech = ''; hintShown = false; walked = false;
+        // Let an ongoing demonstration finish its callback: first-time lessons
+        // use it to continue into the next step. The question still keeps help.
       },
       say(t, o){ if (stale()) return; lastSpeech = t; Sound.say(t, o); },
       afterSpeech(fn){ return Sound.afterSpeech(() => { if (!stale()) fn(); }); },
@@ -7937,11 +8108,11 @@ const MOVING_THINGS = THINGS.filter(thing => thing.moving);
    1. かぞえよう — one-to-one correspondence & cardinality
    ============================================================ */
 function makeCountField(api, count, thing, layout){
-  const field = el('div.objfield');
+  const field = el('div.objfield' + (layout === 'collect' ? '.collect-field' : ''));
   const pts = layout === 'line' ? lineup(count, .5) : scatter(count);
   const objs = [];
   pts.forEach((p, i) => {
-    const o = el('div.obj', { style: { left: (p[0] * 100) + '%', top: (p[1] * 100) + '%' } }, thing.e);
+    const o = el('div.obj', layout === 'collect' ? null : { style: { left: (p[0] * 100) + '%', top: (p[1] * 100) + '%' } }, thing.e);
     o.dataset.i = i;
     objs.push(o);
     field.append(o);
@@ -8017,13 +8188,18 @@ function giveQuestion(api, lo, hi){
   const total = Math.min(14, target + ri(3, 5));
   api.item('give:' + target, target + 'こ だけ とりだす');
   api.setPrompt(`${thing.n}を ${numTag(target)}こ とって かごに いれよう`, `${thing.n}を${koKana(target)}、とって、かごに入れよう。`);
-  const objs = makeCountField(api, total, thing, 'scatter');
+  // Collecting must never put a fruit behind the basket or another fruit. Keep
+  // the available objects in their own grid and the basket in a separate row.
+  const objs = makeCountField(api, total, thing, 'collect');
+  const board = el('div.give-board');
+  board.append($('.collect-field', api.field));
   const picked = new Set();
   const basketCount = el('div.n', { text: '0' });
   const basketItems = el('div.items');
   const basket = el('div.basket', null,
     el('div.b', { text: '🧺' }), basketItems, basketCount);
-  $('.objfield', api.field).append(basket);
+  board.append(basket);
+  api.field.append(board);
   const doneBtn = el('button.btn.btn-accent', { text: 'できた！' });
   api.choices.append(doneBtn);
   const refresh = () => {
@@ -8890,6 +9066,27 @@ Games.add({
    ============================================================ */
 const CRITTERS = ['🐰','🐻','🦊','🐯','🐨','🐸','🐷','🐮','🐼','🐵','🦁','🐔','🐧','🦉'];
 
+// A long line still reads from the same end on a phone. The complete picture
+// stays above, and an equivalent set of roomy animal buttons appears below it.
+// CSS switches between these and direct picture taps, including after rotation.
+function ordinalAnswers(api, critters, choose){
+  const answers = el('div.ordinal-answers', { 'aria-label': 'どうぶつを えらぶ' });
+  const buttons = critters.map((c, i) => {
+    const b = el('button.choice.pic.ordinal-choice', { type: 'button', text: c,
+      'aria-label': c + 'を えらぶ', onclick(){ choose(i); } });
+    answers.append(b);
+    return b;
+  });
+  api.choices.append(answers);
+  return buttons;
+}
+
+function ordinalBoard(api, queue, marker, fromLeft){
+  const board = el('div.ordinal-board', { style: { '--on': String(queue.children.length) } },
+    el('div.ordinal-direction' + (fromLeft ? '' : '.from-right'), null, marker), queue);
+  api.field.append(board);
+}
+
 function ordinalRow(api, n, dir, target){
   const critters = sample(CRITTERS, n);
   const label = { front: 'まえ', back: 'うしろ', left: 'ひだり', right: 'みぎ' }[dir];
@@ -8898,12 +9095,13 @@ function ordinalRow(api, n, dir, target){
                 `${label}から${banmeKana(target)}の動物をタップ。`);
   const idxWanted = (dir === 'front' || dir === 'left') ? target - 1 : n - target;
   const q = el('div.queue');
+  let answerButtons;
   const mirror = n - 1 - idxWanted;      // the same 「◯ばんめ」 counted from the other end
   critters.forEach((c, i) => {
     const item = el('div.qi', { text: c });
     tappable(item, () => {
       if (api.locked) return;
-      if (i === idxWanted){ item.classList.add('correct'); api.correct(); }
+      if (i === idxWanted){ item.classList.add('correct'); if (answerButtons) answerButtons[i].classList.add('correct'); api.correct(); }
       else {
         item.classList.add('wrong');
         api.later(() => item.classList.remove('wrong'), 460);
@@ -8918,8 +9116,8 @@ function ordinalRow(api, n, dir, target){
   const marker = fromLeft
     ? el('div.dirmark', null, label + 'から', arrowSVG('right'))
     : el('div.dirmark', null, arrowSVG('left'), label + 'から');
-  api.field.append(el('div.row', { style: { flexWrap: 'nowrap', gap: 'calc(var(--u)*.6)', maxWidth: '100%' } },
-    fromLeft ? marker : null, q, fromLeft ? null : marker));
+  ordinalBoard(api, q, marker, fromLeft);
+  answerButtons = ordinalAnswers(api, critters, i => $$('.qi', q)[i].click());
   /* It used to number every animal from the end being counted from, which put the
      asked-for number on the right animal. Now only the start is marked; the counting
      is the child's, and the hand does it only when asked to show. */
@@ -8947,24 +9145,26 @@ function ordinalVsCount(api, n){
     countMode ? `前から${koKana(k)}、タップしてね。` : `前から${banmeKana(k)}だけタップしてね。`);
   const q = el('div.queue');
   const marked = new Set();
+  let answerButtons;
   critters.forEach((c, i) => {
     const item = el('div.qi', { text: c });
     tappable(item, () => {
       if (api.locked) return;
       if (countMode){
-        if (marked.has(i)){ marked.delete(i); item.classList.remove('marked'); Sound.sfx.tap(); return; }
-        marked.add(i); item.classList.add('marked'); Sound.sfx.count(marked.size - 1);
+        if (marked.has(i)){ marked.delete(i); item.classList.remove('marked'); if (answerButtons) answerButtons[i].classList.remove('picked'); Sound.sfx.tap(); return; }
+        marked.add(i); item.classList.add('marked'); if (answerButtons) answerButtons[i].classList.add('picked'); Sound.sfx.count(marked.size - 1);
         if (marked.size === k){
           const ok = Array.from(marked).every(v => v < k);
-          if (ok){ $$('.qi', q).forEach((x, j) => { if (j < k) x.classList.add('correct'); }); api.correct(); }
+          if (ok){ $$('.qi', q).forEach((x, j) => { if (j < k){ x.classList.add('correct'); if (answerButtons) answerButtons[j].classList.add('correct'); } }); api.correct(); }
           else {
             api.wrong();
             marked.forEach(v => $$('.qi', q)[v].classList.remove('marked'));
+            if (answerButtons) answerButtons.forEach(b => b.classList.remove('picked'));
             marked.clear();
           }
         }
       } else {
-        if (i === k - 1){ item.classList.add('correct'); api.correct(); }
+        if (i === k - 1){ item.classList.add('correct'); if (answerButtons) answerButtons[i].classList.add('correct'); api.correct(); }
         else {
           item.classList.add('wrong');
           api.later(() => item.classList.remove('wrong'), 460);
@@ -8979,8 +9179,8 @@ function ordinalVsCount(api, n){
     if (!countMode){ if (items[k - 1]) items[k - 1].click(); return; }
     items.forEach((x, i) => { if (i < k && !x.classList.contains('marked')) x.click(); });
   });
-  api.field.append(el('div.row', { style: { flexWrap: 'nowrap', gap: 'calc(var(--u)*.6)', maxWidth: '100%' } },
-    el('div.dirmark', null, 'まえ', arrowSVG('right')), q));
+  ordinalBoard(api, q, el('div.dirmark', null, 'まえから', arrowSVG('right')), true);
+  answerButtons = ordinalAnswers(api, critters, i => $$('.qi', q)[i].click());
   api.coach({
     text: countMode ? `「${k}こ」は まえから ${k}ひき ぜんぶ` : `「${k}ばんめ」は その 1ぴき だけ`,
     say: countMode ? `${koKana(k)}は、前から${k}匹、全部だよ。` : `${banmeKana(k)}は、その一匹だけだよ。`,
@@ -10499,7 +10699,7 @@ function patternQuestion(api, unitKind, blanks){
   holes.sort((a, b) => a - b);
   api.item('pat:' + unitKind + ':' + blanks, unitKind + ' の くりかえし');
   api.setPrompt('つづきは どれ？ きまりを みつけよう', '続きは、どれ？きまりを見つけよう。');
-  const train = el('div.train');
+  const train = el('div.train.pattern-train');
   const cars = seq.map((t, i) => {
     const isHole = holes.indexOf(i) >= 0;
     const c = el('div.car' + (isHole ? '.blank' : ''), { text: isHole ? '' : t });
@@ -10552,7 +10752,7 @@ function createPattern(api){
   api.item('create:AB', 'じぶんで 2つの くりかえしを つくる');
   api.setPrompt('すきな 2つを えらんで、きまりを つくろう',
                 '好きな二つを選んで、きまりを作ろう。');
-  const train = el('div.train');
+  const train = el('div.train.pattern-train');
   for (let i = 0; i < 8; i++) train.append(el('div.car.empty'));
   api.field.append(train);
   opts.forEach(v => {
@@ -11145,16 +11345,31 @@ function pairUp(api, na, nb, onSettled, opts){
   let t2 = pick(THINGS);
   for (let g = 0; g < 40 && t2.e === t1.e; g++) t2 = pick(THINGS);
 
-  /* One column per pair position, the same width in both rows, and no wrapping.
+  /* One column per pair position, the same width in both rows. Wide boards keep
+     two unbroken rows; narrow boards move both halves of positions 6–10 into a
+     second aligned block together, rather than letting each row wrap itself.
      Centred wrapping rows made this game unreadable: seven stars under five fish
      came out as five-and-two on a second line, and unequal rows that did fit were
      centred against each other, so no pair stood above its partner. The leftover
      — which is the answer to every question here — has to be the bit sticking out
      at the right-hand end. */
   const board = el('div.pairboard', {
-    style: { '--pn': String(Math.max(na, nb) + ((opts && opts.extra) || 0)) } });
+    style: { '--pn': String(Math.max(na, nb) + ((opts && opts.extra) || 0)),
+      '--pair-cols': String(Math.min(5, Math.max(na, nb) + ((opts && opts.extra) || 0))) } });
   const rowA = el('div.pairrow'), rowB = el('div.pairrow');
   const made = { a: t1, b: t2, na, nb, pairs: 0, rowA, rowB, board };
+  // On narrow screens positions 1–5 are one two-row block, positions 6–10
+  // the next. Both sides use the same position, so a leftover never shifts into
+  // a different pair. Retain the two row nodes for the pairing logic and hints.
+  const position = (row, item, i) => {
+    item.style.setProperty('--pair-col', String(i % 5 + 1));
+    item.style.setProperty('--pair-row', String(Math.floor(i / 5) * 3 + (row === rowA ? 1 : 2)));
+  };
+  made.append = (row, item) => {
+    position(row, item, row.children.length);
+    row.append(item);
+  };
+  made.reflow = row => Array.from(row.children).forEach((item,i) => position(row,item,i));
   let marked = null, settled = false;
 
   function itemsOf(row){ return $$('.pairitem', row); }
@@ -11165,6 +11380,9 @@ function pairUp(api, na, nb, onSettled, opts){
       if (!x.classList.contains('paired')) x.classList.add('leftover');
     }));
     if (marked){ marked.classList.remove('marked'); marked = null; }
+    // The next question asks about leftovers; the previous "tap one above and
+    // one below" guidance has finished. Keep its supported-answer record.
+    if (api.clearHelp) api.clearHelp();
     onSettled(made);
   }
 
@@ -11196,7 +11414,7 @@ function pairUp(api, na, nb, onSettled, opts){
       const it = el('div.qi.pairitem', { text: thing.e });
       it.dataset.side = side;
       tappable(it, () => tap(it));
-      row.append(it);
+      made.append(row, it);
     }
   };
   fill(rowA, t1, na, 'a');
@@ -11323,6 +11541,7 @@ function pairMakeSame(api){
           Sound.sfx.place();
           if (added === need){
             $$('.pairslot', short).forEach(s => { if (s.dataset.filled !== '1') s.remove(); });
+            made.reflow(short);
             api.later(() => {
               api.setPrompt(`どちらも <b>${Math.max(A, B)}</b>こ。おなじに なったね！`,
                             `どちらも${koKana(Math.max(A, B))}。同じになったね。`);
@@ -11331,7 +11550,7 @@ function pairMakeSame(api){
             }, 300);
           }
         });
-        short.append(slot);
+        made.append(short, slot);
       }
       api.coach({
         text: 'あまって いる ぶんだけ たそう',
@@ -11355,7 +11574,7 @@ function pairMakeSame(api){
         onPick(){
           for (let i = 0; i < need; i++){
             api.later(() => {
-              short.append(el('div.qi.pairitem.paired.added', { text: shortThing.e }));
+              made.append(short, el('div.qi.pairitem.paired.added', { text: shortThing.e }));
             }, i * 200 + 200);
           }
         }
@@ -12131,8 +12350,11 @@ const FirstSteps = (() => {
       button('👆', 'じぶんで 1もん', () => startOne(game, levelIndex, true, active.opts)),
       button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active.opts)));
     const status = Store.shortStatus(game.id, levelIndex);
-    if (status.canStartGold || status.goldActive) choices.append(button('✨', status.goldActive
-      ? 'きんへ つづきの 1もん' : 'きんへ 1もんずつ', () => startGold(game, levelIndex)));
+    if (status.canStartGold || status.goldActive) choices.append(button('✨',
+      ShortProgress.describe(game.id, levelIndex, {gold:true}).nextLabel,
+      () => ShortProgress.start(game, levelIndex, {gold:true})));
+    const progress = ShortProgress.render(game.id, levelIndex);
+    if (progress) detail.append(progress);
     UI.show('first-steps');
     Sound.say('初めてのことは、まず見るだけでもいいよ。一つやったら、そこで終われるよ。', { delay: 180 });
   }
@@ -12143,25 +12365,14 @@ const FirstSteps = (() => {
     const status = Store.shortStatus(game.id, levelIndex);
     const rewards = short ? status.rewardKeys || [] : [];
     const newGold = rewards.includes(game.id + ':' + levelIndex + ':g');
-    const gold = status.goldActive && status.goldStatus;
     const answered = milestone && milestone.kind === 'together';
     const doneText = short ? milestone ? Store.milestoneText(milestone.kind) : 'ひとつ ためしたね'
       : phase === 'show' || !answered ? 'やりかたを みたね' : 'いっしょに ひとつ できたね';
     info.textContent = doneText;
     if (short){
-      const progress = newGold ? '🌟　きんの シールを ゲット！ べつのひも できたね'
-        : gold ? gold.waiting ? gold.checks === 3 ? 'きんへの たしかめは また べつのひに。できた シールは のこるよ'
-          : '8もん じぶんで できたね。べつのひに きんを たしかめよう'
-          : gold.phase === 'check' ? 'きんへの たしかめ　' + gold.checks + '／3もん'
-          : 'きんの じゅんび　ヒントなしで つづけて ' + gold.independentRun + '／8もん'
-        : status.lastResult === 'confirmed' ? '🌟　べつのひも できたね！ シールが かんせいしたよ'
-        : status.confirmed ? 'できることを たしかめたね'
-        : status.waiting ? status.checks === 3 ? 'たしかめは また べつのひに。きょうは ここまででも いいよ'
-          : '8もんぶん たまったね。べつのひに たしかめよう'
-        : status.phase === 'check' ? 'べつのひの たしかめ　' + status.checks + '／3もん'
-        : status.answered === 8 ? 'ひとつずつ できる もんだいを ふやそう。ヒントも つかって いいよ'
-        : 'じぶんで ためした もんだい　' + status.answered + '／8もん';
-      info.append(el('p.first-progress', { text: progress }));
+      if (newGold) info.append(el('p.first-progress', {text:'🌟　きんの シールを ゲット！ べつのひも できたね'}));
+      else if (status.lastResult === 'confirmed') info.append(el('p.first-progress', {text:'🌟　べつのひも できたね！ シールが かんせいしたよ'}));
+      info.append(ShortProgress.render(game.id, levelIndex));
     }
     if (rewards.length) info.append(el('div.short-rewards', {'aria-label':'もらった シール'},
       rewards.map(key => PokemonStickers.artwork(key))));
@@ -12188,6 +12399,7 @@ const FirstSteps = (() => {
     UI.show('first-finish', { replace: true });
     finishSpeech = doneText + '。' + (short && status.lastResult === 'confirmed'
       ? '別の日もできたね。シールが完成したよ。' : short && status.waiting ? '確かめは、また別の日にしよう。' : '')
+      + (short ? ShortProgress.describe(game.id, levelIndex).speech : '')
       + '今日はここまででもいいよ。';
     if (rewards.length){
       finishSpeech = doneText + '。' + rewards.map(key => PokemonStickers.reward(key).name).join('と')
@@ -12411,6 +12623,135 @@ const StickerWorld = (() => {
       : '自分の島だよ。集めたシールや宝物を、好きな場所に置けるよ。', { delay: 150 });
   }
   return { build, render, open };
+})();
+
+/* ---- 88-short-progress.js ---- */
+/* One read-only account of the child's short course, shared by every entrance.
+   Practice while waiting is still real activity; it does not advance a check. */
+'use strict';
+
+const ShortProgress = (() => {
+  function describe(gameId, levelIndex, opts){
+    const options = opts || {}, game = Games.byId[gameId];
+    if (!game || !Array.isArray(game.levels) || !game.levels[levelIndex]) return null;
+    const key = gameId + ':' + levelIndex, course = (Store.data.shortCourses || {})[key];
+    const status = Store.shortStatus(gameId, levelIndex);
+    const requestedGold = options.gold === undefined
+      ? status.goldActive || !!(course && Store.hasSticker(key + ':g')) : options.gold === true;
+    const gold = requestedGold && status.confirmed;
+    const progress = gold ? status.goldStatus || {
+      answered:0, right:0, independentRun:0, checks:0, checkRight:0,
+      waiting:false, phase:'independent', readyDay:null
+    } : status;
+    const complete = gold ? Store.hasSticker(key + ':g') : status.confirmed;
+    const visible = !!(options.preview || course || status.goldActive);
+    let stage = complete ? 'complete' : progress.waiting ? 'waiting'
+      : progress.phase === 'check' ? 'check' : 'prepare';
+    let title, detail, nextLabel, kind, speech;
+    if (complete){
+      title = gold ? 'きんの シールを もっているよ' : 'シールが かんせいしたよ';
+      detail = 'できた シールは のこるよ。すきなときに また あそべるよ';
+      nextLabel = 'れんしゅうを 1もん'; kind = 'practice';
+      speech = (gold ? '金のシールを持っているよ。' : 'シールが完成したよ。')
+        + 'できたシールは残るよ。好きなときにまた遊べるよ。';
+    } else if (progress.waiting){
+      const retry = progress.checks === 3;
+      title = retry ? 'たしかめは また べつのひに' : 'きょうの じゅんびは できたね';
+      detail = retry ? 'べつのひに 3もん たしかめよう。きょうは れんしゅうしても いいよ'
+        : 'つぎは べつのひに 3もん。きょうの れんしゅうでは たしかめは すすまないよ';
+      nextLabel = 'れんしゅうを 1もん'; kind = 'practice';
+      speech = (retry ? '確かめは、また別の日にしよう。' : '今日の準備はできたね。')
+        + '次は別の日に3問確かめよう。今日の追加の練習では、確かめは進まないよ。';
+    } else if (progress.phase === 'check'){
+      title = (gold ? 'きんへの たしかめ　' : 'べつのひの たしかめ　') + progress.checks + '／3もん';
+      detail = gold ? 'ヒントなしで 3もん できたら きんの シール。1もんずつで いいよ'
+        : '3もんのうち 2もん じぶんで できたら シールが かんせい。1もんずつで いいよ';
+      nextLabel = gold ? 'きんへの たしかめを 1もん' : 'たしかめを 1もん'; kind = 'check';
+      speech = (gold ? '金への確かめ。' : '別の日の確かめ。') + '3問のうち' + progress.checks + '問を試したよ。'
+        + (gold ? '3問ともヒントなしで最初に答えたら、金のシールになるよ。'
+          : '2問をヒントなしで最初に答えたら、シールが完成するよ。') + '1問ずつでいいよ。';
+    } else if (gold){
+      const run = progress.independentRun || 0;
+      title = 'ヒントなしで つづけて ' + run + '／8もん';
+      detail = '8もん つづけて できたら、べつのひに 3もん たしかめよう。できた シールは のこるよ';
+      nextLabel = status.goldActive ? 'きんへ つづきの 1もん' : 'きんへ 1もんずつ';
+      kind = status.goldActive ? 'resume' : 'gold-start';
+      speech = '金の準備。ヒントなしで続けて' + run + '問できたよ。8問続けてできたら、別の日に3問確かめよう。'
+        + 'できたシールは残るよ。';
+    } else {
+      const tried = progress.answered, right = progress.right;
+      title = tried < 8 ? 'ためした ' + tried + '／8もん'
+        : 'さいきんの 8もんで じぶんで できた ' + right + 'もん';
+      detail = tried < 8 ? 'そのうち じぶんで できた ' + right + 'もん。ヒントも つかって、つぎの 1もん'
+        : '8もんのうち 6もん じぶんで できたら、べつのひの たしかめへ。ヒントも つかって いいよ';
+      nextLabel = tried ? 'つづきの 1もん' : 'じゅんびを 1もん'; kind = tried ? 'resume' : 'start';
+      speech = tried < 8 ? '準備は8問のうち' + tried + '問を試したよ。そのうち' + right + '問は自分で答えたね。'
+        : '最近の8問で、自分で答えたのは' + right + '問。6問をヒントなしで最初に答えたら、別の日の確かめに進めるよ。';
+      speech += 'ヒントも使っていいよ。次の1問を試そう。';
+    }
+    const stepIndex = stage === 'complete' ? 2 : stage === 'waiting' || stage === 'check' ? 1 : 0;
+    if (!complete && status.resting){
+      stage = status.supportNeeded ? 'support' : 'rest';
+      title = status.supportNeeded ? 'やりかたを いっしょに ためそう' : 'このあそびは すこし おやすみ';
+      detail = status.supportNeeded ? detail + '。いっしょに 1もん ためしてから、すこし やすもう'
+        : detail + '。ほかの あそびを えらんでも いいよ';
+      nextLabel = status.supportNeeded ? 'いっしょに 1もん' : progress.waiting ? 'れんしゅうを 1もん' : 'このあそびを 1もん';
+      kind = status.supportNeeded ? 'support' : 'rest';
+      speech += status.supportNeeded ? 'やり方を一緒に1問試したら、少し休もう。' : 'この遊びは少しお休み。ほかの遊びを選んでもいいよ。';
+    }
+    if (requestedGold && !status.confirmed){
+      detail = 'きんの まえに、ふつうの シールから。' + detail;
+      nextLabel = 'ふつうの シールへ 1もん';
+      speech = '金の前に、普通のシールから。' + speech;
+    }
+    const steps = [
+      {id:'prepare', icon:'🌱', label:gold ? 'きんの\nじゅんび' : 'じゅんび'},
+      {id:'check', icon:'☀️', label:'べつのひ\nたしかめ'},
+      {id:'complete', icon:'✨', label:gold ? 'きんの\nシール' : 'シール'}
+    ].map((step, i) => Object.assign(step, {complete:i < stepIndex, current:i === stepIndex}));
+    return {visible, key, goal:gold ? 'gold' : 'normal', stage, title, detail, nextLabel, kind,
+      speech:game.name + '。' + speech, steps, status};
+  }
+
+  function render(gameId, levelIndex, opts){
+    const info = describe(gameId, levelIndex, opts);
+    if (!info || !info.visible) return null;
+    const options = opts || {};
+    return el('section.short-progress' + (options.compact ? '.compact' : ''), {
+      'aria-label':'シールまでの すすみぐあい', dataset:{shortKey:info.key,goal:info.goal,stage:info.stage}
+    },
+      el('p.short-progress-course', {text:Games.byId[gameId].name + '　《' + Games.byId[gameId].levels[levelIndex].t + '》'}),
+      el('div.short-progress-head', null, el('b.short-progress-title', {text:info.title}),
+        el('button.btn.btn-ghost.short-progress-speak', {type:'button', 'aria-label':'この すすみぐあいを きく',
+          onclick(){ Sound.sfx.tap(); Sound.say(info.speech, {delay:60}); }
+        }, '🔊')),
+      el('ol.short-progress-steps', null, info.steps.map(step => el('li.short-progress-step'
+        + (step.complete ? '.done' : '') + (step.current ? '.current' : ''),
+      {'data-step':step.id, 'aria-current':step.current ? 'step' : null},
+      el('span', {'aria-hidden':'true', text:step.icon}), el('span', {text:step.label})))),
+      el('p.short-progress-detail', {text:info.detail}));
+  }
+
+  function current(preferred){
+    const courses = Object.keys(Store.data.shortCourses || {}).map(key => {
+      const [id,index] = key.split(':'), levelIndex = Number(index), info = describe(id, levelIndex);
+      return info && info.visible && levelOpen(Games.byId[id], levelIndex) ? {game:Games.byId[id],levelIndex,info} : null;
+    }).filter(Boolean).sort((a,b) => b.info.status.at - a.info.status.at);
+    if (preferred){
+      const matched = courses.find(t => t.game.id === preferred.game.id && t.levelIndex === preferred.levelIndex);
+      if (matched) return matched;
+    }
+    return courses.find(t => t.info.stage !== 'complete') || courses[0] || null;
+  }
+
+  function start(game, levelIndex, opts){
+    const info = game && describe(game.id, levelIndex, Object.assign({preview:true}, opts));
+    if (!info || !levelOpen(game, levelIndex)) return;
+    if (info.kind === 'support') FirstSteps.startPlan({game,levelIndex,kind:'support'});
+    else if (info.goal === 'gold' && !Store.hasSticker(info.key + ':g')) FirstSteps.startGold(game, levelIndex);
+    else FirstSteps.startOne(game, levelIndex, Store.introduced(game.id, levelIndex));
+  }
+  return {describe, render, current, start};
 })();
 
 /* ---- 89-experience.js ---- */
@@ -12896,7 +13237,7 @@ const TextbookReview = (() => {
     UI.register('review',node);
   }
   function open(id,chapter){
-    if(!unlocked()){Book.open();return;}
+    if(!unlocked()){Book.open({section:'review'});return;}
     build();run=null;menu();UI.show('review');
     if(Number.isInteger(id)&&lessonOpen(id)) start(id);
     else if(Number.isInteger(chapter)&&chapterReady(chapter)) start(null,chapter);
@@ -13326,7 +13667,7 @@ const Rounds = (() => {
   }
   function go(round){
     if (!select(round)){
-      Book.open();
+      Book.open({section:'rounds'});
       Sound.say('２周目は、本の復習まで、１周目のシール156枚が全部そろうと開くよ。', {delay:180});
       return;
     }
@@ -13870,6 +14211,7 @@ const Home = (() => {
   let contentEl, todayEl, todayHeading, endedEl, moreContent, moreSummary;
   let parentBtn;
   let renderedDay;
+  let progressEl, progressTarget;
 
   // A sleeping PWA can return to yesterday's Home without a page reload.
   // Refresh only the visible Home when its local calendar day has changed.
@@ -13941,7 +14283,8 @@ const Home = (() => {
     moreEl = el('details.home-more', null, moreSummary, moreContent);
     todayHeading = el('h2', {text:'きょうは ここから'});
     endedEl = el('div.day-ending', {hidden:true});
-    todayEl = el('section.home-today', {'aria-label':'きょうの ぼうけん'}, todayHeading, primaryEl, endedEl);
+    progressEl = el('div.home-short-progress', {hidden:true});
+    todayEl = el('section.home-today', {'aria-label':'きょうの ぼうけん'}, todayHeading, primaryEl, progressEl, endedEl);
     contentEl = el('div.home-content', null, voiceWarnEl, todayEl, choicesEl, moreEl);
     node.append(contentEl);
     return UI.register('home', node);
@@ -13956,6 +14299,7 @@ const Home = (() => {
     }
     const title = primaryEl && $('.t', primaryEl), detail = primaryEl && $('.s', primaryEl);
     return (title ? title.textContent + '。' : '') + (detail ? detail.textContent + '。' : '')
+      + (progressTarget ? progressTarget.info.speech : '')
       + 'ほしいシールから選んでもいいよ。ほかの遊びと地図を開くと、好きな遊びも選べるよ。';
   }
   function endingEntry(entry){
@@ -13989,12 +14333,13 @@ const Home = (() => {
     endedEl.hidden = !ended;
     if (!ended){
       todayEl.insertBefore(primaryEl, endedEl);
+      todayEl.insertBefore(progressEl, endedEl);
       contentEl.insertBefore(choicesEl, moreEl);
       return;
     }
     // Keep every optional entrance, including an unfinished visit, behind the
     // child's explicit choice. The ending marker never consumes its checkpoint.
-    moreContent.prepend(primaryEl, choicesEl);
+    moreContent.prepend(primaryEl, progressEl, choicesEl);
     moreEl.open = false;
     const summary = Store.todaySummary(), entries = summary.entries.map(endingEntry).filter(Boolean).slice(0,3);
     clear(endedEl);
@@ -14088,6 +14433,13 @@ const Home = (() => {
     const pending = Session.pendingSummary();
     const first = firstRun && FirstSteps.target();
     const short = !first && FirstSteps.shortPlan();
+    const saved = Store.savedSession();
+    const savedFirst = saved && saved.mode === 'first' && saved.firstTarget;
+    const savedGame = savedFirst && Games.byId[savedFirst.gameId];
+    progressTarget = ShortProgress.current(savedGame ? {game:savedGame,levelIndex:savedFirst.levelIndex} : short);
+    clear(progressEl);
+    progressEl.hidden = !progressTarget;
+    if (progressTarget) progressEl.append(ShortProgress.render(progressTarget.game.id, progressTarget.levelIndex, {compact:true}));
     const rec = Diagnostic.current();
     const recGame = rec && Games.byId[rec.gameId];
     clear(recommendEl);
@@ -14282,10 +14634,12 @@ const Levels = (() => {
         onclick(){ Sound.sfx.tap(); FirstSteps.open(g, i); }
       }, '👀'));
       const short = Store.shortStatus(g.id, i);
+      const progress = ShortProgress.render(g.id, i, {compact:true});
+      if (progress) entry.append(progress);
       if (unlocked && (short.canStartGold || short.goldActive)) entry.append(el('button.btn.gold-short-start', {
-        type:'button', 'aria-label':lv.t + 'で きんへ 1もんずつ',
-        onclick(){ Sound.sfx.tap(); FirstSteps.startGold(g, i); }
-      }, short.goldActive ? '✨ きんへ つづきの 1もん' : '✨ きんへ 1もんずつ'));
+        type:'button', 'aria-label':lv.t + 'で ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel,
+        onclick(){ Sound.sfx.tap(); ShortProgress.start(g, i, {gold:true}); }
+      }, '✨ ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel));
       listEl.append(entry);
     });
 
@@ -14542,122 +14896,209 @@ const Result = (() => {
 
 /* ---------------------------------------------------------- STICKER BOOK */
 const Book = (() => {
-  let node, grid, count, missing, headEl;
+  let node, body, grid, count, missing, headEl, filters, worldSelect, resultCount, extras;
+  let detailNode, detailHeading, detailBody, detailSpeech = '', filter = 'all', world = 'all';
+  let renderedRound = null, savedScroll = 0, selectedKey = null;
+  const filtersList = [['all','ぜんぶ'], ['owned','あつめた'], ['gold','きん'], ['recent','さいきん']];
   function build(){
     if (node) return node;
-    grid = el('div.book');
-    count = el('div.aim');
-    /* 「あと 4レベル」 without saying *which* four is a number a child cannot act on
-       and a parent cannot help with: the shelf's empty slots are anonymous dots, and
-       working out which level each one belongs to means counting slot positions. */
+    grid = el('div.book-catalog');
+    count = el('div.aim.book-count');
     missing = el('div.book-todo');
+    filters = el('div.book-filters', { 'aria-label':'シールを えらぶ' });
+    filtersList.forEach(([value, label]) => filters.append(el('button.book-filter', {
+      type:'button', text:label, dataset:{ filter:value }, 'aria-pressed':value === filter ? 'true' : 'false',
+      onclick(){ Sound.sfx.tap(); filter = value; renderCatalog(); body.scrollTop = 0;
+        Sound.say(label + 'のシールだよ。' + resultCount.textContent, {delay:100}); }
+    })));
+    worldSelect = el('select.book-world', { 'aria-label':'ばしょを えらぶ', onchange(){
+      world = worldSelect.value; renderCatalog(); body.scrollTop = 0;
+      Sound.say(worldSelect.selectedOptions[0].textContent + '。' + resultCount.textContent, {delay:100});
+    } }, el('option', {value:'all', text:'🗺️ すべての ばしょ'}),
+      WORLDS.map(w => el('option', {value:w.id, text:w.name})));
+    resultCount = el('div.book-filter-count', {role:'status', 'aria-live':'polite'});
+    extras = el('details.book-extras', null,
+      el('summary', {text:'たからもの・ほん・じゅんびを みる'}));
+    body = el('div.book', null, grid, extras);
     node = el('div#book', null,
       el('div.topbar', null,
-        el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+        el('button.btn.btn-ghost.btn-round', {type:'button', 'aria-label':'もどる',
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', {replace:true}); }}, '←'),
         headEl = el('h2'), speakBtn(() => speech())),
-      count, missing, grid);
-    return UI.register('book', node);
+      count, el('div.book-controls', null, filters, worldSelect, resultCount), body);
+    UI.register('book', node);
+    detailHeading = el('h2'); detailBody = el('div.book-detail-body');
+    detailNode = el('div#book-detail', null,
+      el('div.topbar', null,
+        el('button.btn.btn-ghost.btn-round.book-detail-back', {type:'button', 'aria-label':'シールブックに もどる',
+          onclick(){ Sound.sfx.tap(); returnToBook(); }}, '←'),
+        detailHeading, speakBtn(() => detailSpeech)), detailBody);
+    UI.register('book-detail', detailNode);
+    return node;
   }
-  /** Said on the way in: the count under the heading is a sentence a child cannot read yet. */
   function speech(){
-    return 'シールブックだよ。集めたシールが並んでいるよ。一年生の遊びは、それぞれの準備ができたら開くよ。準備を見るボタンから、必要な遊びを選べるよ。';
+    return 'シールブックだよ。持っているシールが先に並んでいるよ。好きなシールを押してみよう。持っているシールは島に貼れるよ。金や場所でも選べるよ。一年生の遊びは、それぞれの準備ができたら開くよ。準備を見るボタンから、必要な遊びを選べるよ。';
   }
-  function open(){
-    render();
-    UI.show('book');
-    Sound.say(speech(), { delay: 200 });      // after the switch, which hushes
+  function open(opts){
+    render(); UI.show('book');
+    const section = opts && {rounds:'.round-collection', review:'.review-collection, .review-gate', treasures:'.treasure-collection'}[opts.section];
+    const destination = section && extras.querySelector(section);
+    if (destination){
+      extras.open = true;
+      destination.scrollIntoView({block:'start'});
+      requestAnimationFrame(() => destination.scrollIntoView({block:'start'}));
+    }
+    Sound.say(speech(), {delay:200});
+  }
+  function lessonFor(key){
+    const match = /^([^:]+):(\d+)(:g)?$/.exec(key);
+    if (!match) return null;
+    const game = Games.byId[match[1]], levelIndex = Number(match[2]);
+    return game && Array.isArray(game.levels) && game.levels[levelIndex] ? {game, levelIndex, gold:!!match[3]} : null;
+  }
+  function owned(key){ return key.startsWith('treasure:') ? Store.hasTreasure(key.slice(9)) : Store.hasSticker(key); }
+  function catalogKeys(){
+    const map = Games.list.flatMap(g => g.levels.flatMap((lv, i) => [g.id + ':' + i, g.id + ':' + i + ':g']));
+    const acquired = Store.data.stickers.concat(Store.data.treasures.map(id => 'treasure:' + id));
+    // Sticker insertion order is the saved acquisition order. Keepsakes have no
+    // shared timestamp, so leave them after stickers instead of inventing recency.
+    const order = new Map(Store.data.stickers.map((key, index) => [key, index]));
+    return Array.from(new Set(map.concat(acquired))).sort((a, b) => Number(owned(b)) - Number(owned(a))
+      || (owned(a) && owned(b) ? (order.get(b) ?? -1) - (order.get(a) ?? -1) : 0));
+  }
+  function keyWorld(key){
+    const lesson = lessonFor(key);
+    if (lesson) return lesson.game.world;
+    return key.startsWith('treasure:') ? key.slice(9) : null;
+  }
+  function renderCatalog(){
+    clear(grid);
+    filters.querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.filter === filter)));
+    worldSelect.value = world;
+    let keys = catalogKeys().filter(key => world === 'all' || keyWorld(key) === world);
+    if (filter === 'owned' || filter === 'recent') keys = keys.filter(owned);
+    if (filter === 'gold') keys = keys.filter(key => key.endsWith(':g'));
+    if (filter === 'recent') keys = keys.filter(key => !key.startsWith('treasure:')).slice(0, 6);
+    resultCount.textContent = keys.length + 'まい' + (filter === 'recent' ? '　あつめた シールから 6まいまで' : '　おすと くわしく みられるよ');
+    if (!keys.length) grid.append(el('p.book-empty', {text:filter === 'owned' || filter === 'recent'
+      ? 'この ばしょの シールは、これから あつめられるよ。「ぜんぶ」で えらんでみよう。'
+      : 'この ばしょには この シールは ないよ。ばしょや えらびかたを かえてみよう。'}));
+    keys.forEach(key => {
+      const has = owned(key), lesson = lessonFor(key), pending = has && Store.isPending(key);
+      const locked = lesson && !levelOpen(lesson.game, lesson.levelIndex);
+      const label = pending ? 'かりの シール' : has ? 'もっている' : locked ? 'じゅんびを みる' : key.endsWith(':g') ? 'きんに チャレンジ' : 'この シールへ';
+      grid.append(el('button.sticker.book-slot' + (has ? '.got' : '') + (key.endsWith(':g') ? '.gold' : '')
+        + (pending ? '.pending' : '') + (locked && !has ? '.locked' : ''), {
+          type:'button', dataset:{ bookKey:key }, 'aria-label':stickerFor(key) + '　' + label,
+          title:stickerFor(key) + '　' + (lesson ? lesson.game.name + '　' + lesson.game.levels[lesson.levelIndex].t + '　' : '') + label,
+          onclick(){ Sound.sfx.tap(); savedScroll = body.scrollTop; selectedKey = key; showDetail(key); }
+        }, PokemonStickers.artwork(key, {silhouette:!has}), el('span.book-slot-state', {text:label})));
+    });
+  }
+  function returnToBook(){
+    UI.show('book', {keepScroll:true}); body.scrollTop = savedScroll;
+    const button = Array.from(grid.querySelectorAll('button')).find(n => n.dataset.bookKey === selectedKey);
+    if (button) requestAnimationFrame(() => button.focus({preventScroll:true}));
+  }
+  function showDetail(key){
+    const lesson = lessonFor(key), has = owned(key), pending = has && Store.isPending(key);
+    detailHeading.textContent = stickerFor(key);
+    clear(detailBody).append(PokemonStickers.artwork(key, {silhouette:!has}));
+    const copy = el('div.book-detail-copy');
+    detailBody.append(copy);
+    if (lesson) copy.append(el('b', {text:lesson.game.ico + '　' + lesson.game.name + '　《' + lesson.game.levels[lesson.levelIndex].t + '》'}));
+    const actions = el('div.book-detail-actions');
+    detailBody.append(actions);
+    const status = pending ? 'かりの シールだよ。べつの ひに また できたら いろが つくよ。'
+      : has ? 'あつめた シールだよ。じぶんの しまに はれるよ。' : 'この シールの あそびを みてみよう。';
+    copy.append(el('p', {text:status}));
+    if (has) actions.append(el('button.btn.btn-accent.book-place', {type:'button', text:'しまに はる',
+      onclick(){ Sound.sfx.tap(); StickerWorld.open(key); }}));
+    let guidanceSpeech = '';
+    if (lesson && (!has || pending)){
+      if (!stageOpen(lesson.game)){
+        guidanceSpeech = lesson.game.name + 'は、準備ができると遊べるよ。準備を見るボタンから、必要な遊びを選べるよ。';
+        copy.append(el('p', {text:lesson.game.name + 'は、じゅんびが できると あそべるよ。'}));
+        actions.append(el('button.btn.btn-accent.book-prepare', {type:'button', text:lesson.game.name + 'の じゅんびを みる',
+          onclick(){ Sound.sfx.tap(); G1Preparation.open(lesson.game); }}));
+      } else if (!levelOpen(lesson.game, lesson.levelIndex)){
+        guidanceSpeech = '前のレベルから遊ぶと開くよ。前のレベルへボタンで、遊びを選べるよ。';
+        copy.append(el('p', {text:'まえの レベルから あそぶと ひらくよ。'}));
+        actions.append(el('button.btn.btn-accent.book-prepare', {type:'button', text:lesson.game.name + 'の まえの レベルへ',
+          onclick(){ Sound.sfx.tap(); Levels.render(lesson.game); UI.show('levels'); }}));
+      } else {
+        // The shared short-course presentation and action are attached below.
+        guidanceSpeech = appendLessonAction(copy, actions, lesson);
+      }
+    }
+    actions.append(el('button.btn.book-return', {type:'button', text:'シールブックに もどる',
+      onclick(){ Sound.sfx.tap(); returnToBook(); }}));
+    detailSpeech = stickerFor(key) + '。' + (lesson ? lesson.game.name + '。' + lesson.game.levels[lesson.levelIndex].t + '。' : '')
+      + status + guidanceSpeech + 'シールブックにも戻れるよ。';
+    UI.show('book-detail'); Sound.say(detailSpeech, {delay:150});
+  }
+  function appendLessonAction(copy, actions, lesson){
+    const {game, levelIndex} = lesson;
+    const gold = lesson.gold && Store.hasConfirmed(game.id + ':' + levelIndex);
+    if (lesson.gold && !gold) copy.append(el('p', {text:'きんの シールは、まず「' + stickerFor(game.id + ':' + levelIndex) + '」の シールに いろが ついてから チャレンジできるよ。'}));
+    // Kept as one call site so the home, level list and book share progress wording.
+    const progress = ShortProgress.describe(game.id, levelIndex, {gold, preview:true});
+    copy.append(ShortProgress.render(game.id, levelIndex, {gold, preview:true}));
+    actions.append(el('button.btn.btn-accent.book-play', {type:'button', text:progress.nextLabel,
+      onclick(){ Sound.sfx.tap(); ShortProgress.start(game, levelIndex, {gold}); }}));
+    return (lesson.gold && !gold ? '金のシールは、まず普通のシールに色がついてから挑戦できるよ。' : '') + progress.speech;
+  }
+  function renderExtras(){
+    const summary = extras.firstElementChild; clear(extras).append(summary);
+    const content = el('div.book-extra-content'); extras.append(content);
+    const preparation = el('div.book-preparation', {'aria-label':'1ねんせいの あそびの じゅんび'});
+    Games.list.filter(g => Progress.stageOf(g) === 'g1').forEach(g => {
+      const path = Progress.pathProgress(g);
+      preparation.append(el('button.btn', {type:'button', dataset:{preparation:g.id},
+        onclick(){ Sound.sfx.tap(); G1Preparation.open(g); }},
+        g.name + '　' + (stageOpen(g) ? '✓ あそべるよ' : path.got + '／' + path.total + '　じゅんびを みる')));
+    });
+    content.append(preparation, PokemonStickers.legend(), Treasures.collection());
+    const specialCollection = TransferAdventure.collection();
+    if (specialCollection) content.append(specialCollection);
+    content.append(TextbookReview.collection(), Rounds.collection());
+    clear(missing);
+    const todo = Progress.gateSlots('pre').filter(k => !Store.hasConfirmed(k)).map(k => {
+      const cut = k.lastIndexOf(':'), g = Games.byId[k.slice(0, cut)], i = Number(k.slice(cut + 1));
+      return g && g.levels[i] ? {g, i, lv:g.levels[i], waiting:Store.isPending(k)} : null;
+    }).filter(Boolean);
+    if (todo.length){
+      const row = el('div.todorow');
+      todo.slice(0,10).forEach(({g,i,lv,waiting}) => {
+        const open = Store.levelUnlocked(g.id,i);
+        row.append(el('button.todochip' + (open ? '' : '.shut') + (waiting ? '.pending' : ''), {
+          type:'button', style:{'--lc':g.color}, title:g.name + '　' + lv.t,
+          onclick(){ Sound.sfx.tap();
+            if (open){ if (g.intro !== false && !Store.introduced(g.id,i)) FirstSteps.open(g,i); else Session.startLevel(g,i); }
+            else { Levels.render(g); UI.show('levels'); }
+          }
+        }, el('span.i', {text:open ? g.ico : '🔒'}), el('span.t', null, g.name,
+          el('small', {text:lv.t + (waiting ? '・たしかめ' : '')}))));
+      });
+      missing.append(el('div.l', {text:'まだ シールがない レベル' + (todo.length > 10 ? '（さいしょの 10こ）' : '')}), row);
+    }
+    content.append(missing);
+    const pre = Progress.preStickers(), waiting = Progress.pendingCount('pre');
+    content.append(el('p.book-guide', {text:'レベルを クリアすると シールが 1まい。ぜんぶ せいかいで きんいろの シール。'
+      + (waiting ? 'かりの シール ' + waiting + 'まい。べつの ひに また できたら いろが つくよ。' : '')
+      + 'にゅうがくまえの シールは ' + pre.got + '／' + pre.total + 'レベル。1ねんせいは あそびごとに じゅんびが できると ひらくよ。'}));
   }
   function render(){
     build();
+    if (renderedRound !== Store.round()){
+      renderedRound = Store.round(); filter = 'all'; world = 'all'; extras.open = false;
+    }
     headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
-    clear(grid);
-    const preparation = el('div.book-preparation', { 'aria-label':'1ねんせいの あそびの じゅんび' });
-    Games.list.filter(g => Progress.stageOf(g) === 'g1').forEach(g => {
-      const path = Progress.pathProgress(g);
-      preparation.append(el('button.btn', { type:'button',
-        dataset:{ preparation:g.id }, onclick(){ Sound.sfx.tap(); G1Preparation.open(g); } },
-        g.name + '　' + (stageOpen(g) ? '✓ あそべるよ' : path.got + '／' + path.total + '　じゅんびを みる')));
-    });
-    grid.append(preparation);
-    grid.append(PokemonStickers.legend());
-    grid.append(Treasures.collection());
-    const specialCollection = TransferAdventure.collection();
-    if (specialCollection) grid.append(specialCollection);
-    grid.append(TextbookReview.collection());
-    grid.append(Rounds.collection());
-    let got = Store.data.treasures.length + Store.data.stickers.filter(k => TransferAdventure.missionFor(k) || TextbookReview.rewardKeys().includes(k)).length;
-    const drawSlots = keys => keys.forEach(key => {
-      const has = Store.hasSticker(key);
-      if (has) got++;
-      grid.append(el('div.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : '')
-          + (has && Store.isPending(key) ? '.pending' : ''),
-        { title: stickerFor(key) + (has ? '　ゲット！' : '　' + (key.endsWith(':g') ? 'ぜんもん さいしょから せいかいで ゲット' : 'クリアで ゲット')) },
-        PokemonStickers.artwork(key, { silhouette: !has })));
-    });
-    /* Keep the collection count separate from each classroom game's readiness. */
-    const pre = Progress.preStickers();
-    drawSlots(Progress.slots('pre'));
-    Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0 || k.indexOf('adventure:') === 0).forEach(k => {
-      got++;
-      const isAdventureMemento = k.indexOf('adventure:') === 0;
-      grid.append(el('div.sticker.got' + (isAdventureMemento ? '.adventure' : '.gold'), null, PokemonStickers.artwork(k)));
-    });
-    if (Progress.g1Open()){
-      grid.append(el('div.bookgroup', { text: '🎓　1ねんせいの きょうしつ' }));
-      drawSlots(Progress.slots('g1'));
-    } else {
-      /* Shown, but plainly not part of the count above: a shelf a child can see
-         waiting for them is the reason to fill the one they are on. */
-      grid.append(el('div.bookgroup.shut', { text: '🔒　1ねんせいの きょうしつ　あそびごとに じゅんびが できると ひらくよ' }));
-      Progress.slots('g1').forEach(() => grid.append(el('div.sticker.shut', { text: '🔒' })));
-    }
-    /* Missing stickers remain named entry points to the pre-school collection. */
-    clear(missing);
-    const todo = Progress.gateSlots('pre')
-      .filter(k => !Store.hasConfirmed(k))
-      .map(k => {
-        const cut = k.lastIndexOf(':');
-        const g = Games.byId[k.slice(0, cut)], i = Number(k.slice(cut + 1));
-        return g && g.levels[i] ? { g, i, lv: g.levels[i], waiting: Store.isPending(k) } : null;
-      })
-      .filter(Boolean);
-    if (todo.length){
-      const row = el('div.todorow');
-      todo.slice(0, 10).forEach(({ g, i, lv, waiting }) => {
-        const open = Store.levelUnlocked(g.id, i);
-        row.append(el('button.todochip' + (open ? '' : '.shut') + (waiting ? '.pending' : ''), {
-          type: 'button', style: { '--lc': g.color },
-          title: g.name + '　' + lv.t,
-          onclick(){
-            Sound.sfx.tap();
-            if (open){
-              if (g.intro !== false && !Store.introduced(g.id, i)) FirstSteps.open(g, i);
-              else Session.startLevel(g, i);
-              return;
-            }
-            // not open yet: show the child where it lives, and what comes first
-            Levels.render(g);
-            UI.show('levels');
-          }
-        },
-          el('span.i', { text: open ? g.ico : '🔒' }),
-          el('span.t', null, g.name, el('small', { text: lv.t + (waiting ? '・たしかめ' : '') }))));
-      });
-      missing.append(
-        el('div.l', { text: 'まだ シールがない レベル' + (todo.length > 10 ? '（さいしょの 10こ）' : '') }),
-        row);
-    }
-
-    const left = Math.max(0, pre.total - pre.got);
-    const waiting = Progress.pendingCount('pre');
-    count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
-      + (waiting ? `<br>かりの シール ${waiting}まい（べつの ひに また できたら いろが つくよ）` : '')
-      + (left
-        ? `<br>にゅうがくまえの シールは <b>${pre.got}／${pre.total}レベル</b>。1ねんせいは あそびごとに じゅんびが できると ひらくよ`
-        : '<br><b>にゅうがくまえの シールを ぜんぶ あつめたね！</b>');
+    const got = Store.data.treasures.length + Store.data.stickers.length;
+    clear(count).append(el('b', {text:got + 'まい'}), ' あつめたよ　', el('span', {text:'シールを おそう'}));
+    renderCatalog(); renderExtras();
   }
-  return { build, render, open, speech };
+  return {build, render, open, speech};
 })();
 
 /* ---- 91-parent.js ---- */
@@ -15720,7 +16161,7 @@ const Parent = (() => {
 /* Expose the internals for debugging / automated checks. */
 window.KazuApp = {
   Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent, Orientation,
-  Diagnostic, Missions, StickerMissions, Adventures, FirstSteps, ProgressAlbum, IslandJobs,
+  Diagnostic, Missions, StickerMissions, Adventures, FirstSteps, ShortProgress, ProgressAlbum, IslandJobs,
   StickerWorld, Treasures, TransferAdventure, TextbookReview, Rounds, Progress, Coach, stageOpen, levelOpen,
   classifyMiss, missChild,
   el, svg, clear, $, $$,

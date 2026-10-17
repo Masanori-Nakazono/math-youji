@@ -304,16 +304,31 @@ function pairUp(api, na, nb, onSettled, opts){
   let t2 = pick(THINGS);
   for (let g = 0; g < 40 && t2.e === t1.e; g++) t2 = pick(THINGS);
 
-  /* One column per pair position, the same width in both rows, and no wrapping.
+  /* One column per pair position, the same width in both rows. Wide boards keep
+     two unbroken rows; narrow boards move both halves of positions 6–10 into a
+     second aligned block together, rather than letting each row wrap itself.
      Centred wrapping rows made this game unreadable: seven stars under five fish
      came out as five-and-two on a second line, and unequal rows that did fit were
      centred against each other, so no pair stood above its partner. The leftover
      — which is the answer to every question here — has to be the bit sticking out
      at the right-hand end. */
   const board = el('div.pairboard', {
-    style: { '--pn': String(Math.max(na, nb) + ((opts && opts.extra) || 0)) } });
+    style: { '--pn': String(Math.max(na, nb) + ((opts && opts.extra) || 0)),
+      '--pair-cols': String(Math.min(5, Math.max(na, nb) + ((opts && opts.extra) || 0))) } });
   const rowA = el('div.pairrow'), rowB = el('div.pairrow');
   const made = { a: t1, b: t2, na, nb, pairs: 0, rowA, rowB, board };
+  // On narrow screens positions 1–5 are one two-row block, positions 6–10
+  // the next. Both sides use the same position, so a leftover never shifts into
+  // a different pair. Retain the two row nodes for the pairing logic and hints.
+  const position = (row, item, i) => {
+    item.style.setProperty('--pair-col', String(i % 5 + 1));
+    item.style.setProperty('--pair-row', String(Math.floor(i / 5) * 3 + (row === rowA ? 1 : 2)));
+  };
+  made.append = (row, item) => {
+    position(row, item, row.children.length);
+    row.append(item);
+  };
+  made.reflow = row => Array.from(row.children).forEach((item,i) => position(row,item,i));
   let marked = null, settled = false;
 
   function itemsOf(row){ return $$('.pairitem', row); }
@@ -324,6 +339,9 @@ function pairUp(api, na, nb, onSettled, opts){
       if (!x.classList.contains('paired')) x.classList.add('leftover');
     }));
     if (marked){ marked.classList.remove('marked'); marked = null; }
+    // The next question asks about leftovers; the previous "tap one above and
+    // one below" guidance has finished. Keep its supported-answer record.
+    if (api.clearHelp) api.clearHelp();
     onSettled(made);
   }
 
@@ -355,7 +373,7 @@ function pairUp(api, na, nb, onSettled, opts){
       const it = el('div.qi.pairitem', { text: thing.e });
       it.dataset.side = side;
       tappable(it, () => tap(it));
-      row.append(it);
+      made.append(row, it);
     }
   };
   fill(rowA, t1, na, 'a');
@@ -482,6 +500,7 @@ function pairMakeSame(api){
           Sound.sfx.place();
           if (added === need){
             $$('.pairslot', short).forEach(s => { if (s.dataset.filled !== '1') s.remove(); });
+            made.reflow(short);
             api.later(() => {
               api.setPrompt(`どちらも <b>${Math.max(A, B)}</b>こ。おなじに なったね！`,
                             `どちらも${koKana(Math.max(A, B))}。同じになったね。`);
@@ -490,7 +509,7 @@ function pairMakeSame(api){
             }, 300);
           }
         });
-        short.append(slot);
+        made.append(short, slot);
       }
       api.coach({
         text: 'あまって いる ぶんだけ たそう',
@@ -514,7 +533,7 @@ function pairMakeSame(api){
         onPick(){
           for (let i = 0; i < need; i++){
             api.later(() => {
-              short.append(el('div.qi.pairitem.paired.added', { text: shortThing.e }));
+              made.append(short, el('div.qi.pairitem.paired.added', { text: shortThing.e }));
             }, i * 200 + 200);
           }
         }

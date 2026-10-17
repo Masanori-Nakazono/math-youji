@@ -62,7 +62,7 @@
 /* Expose the internals for debugging / automated checks. */
 window.KazuApp = {
   Games, WORLDS, Store, Sound, UI, Session, Home, Levels, Result, Book, Parent, Orientation,
-  Diagnostic, Missions, StickerMissions, Adventures, FirstSteps, ProgressAlbum, IslandJobs,
+  Diagnostic, Missions, StickerMissions, Adventures, FirstSteps, ShortProgress, ProgressAlbum, IslandJobs,
   StickerWorld, Treasures, TransferAdventure, TextbookReview, Rounds, Progress, Coach, stageOpen, levelOpen,
   classifyMiss, missChild,
   el, svg, clear, $, $$,

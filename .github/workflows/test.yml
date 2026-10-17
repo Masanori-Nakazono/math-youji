@@ -66,6 +66,12 @@ jobs:
           node tools/test-responsive-keypad.cjs
           node tools/test-day-ending.cjs
 
+      - name: Verify picture controls, short-course progress and sticker navigation
+        run: |
+          node tools/test-playfield-access.cjs
+          node tools/test-short-progress-ui.cjs
+          node tools/test-sticker-book.cjs
+
       - name: Verify parent guidance follows recent learning
         run: node tools/test-parent-guidance.cjs
 

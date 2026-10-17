@@ -31,11 +31,11 @@ const MOVING_THINGS = THINGS.filter(thing => thing.moving);
    1. かぞえよう — one-to-one correspondence & cardinality
    ============================================================ */
 function makeCountField(api, count, thing, layout){
-  const field = el('div.objfield');
+  const field = el('div.objfield' + (layout === 'collect' ? '.collect-field' : ''));
   const pts = layout === 'line' ? lineup(count, .5) : scatter(count);
   const objs = [];
   pts.forEach((p, i) => {
-    const o = el('div.obj', { style: { left: (p[0] * 100) + '%', top: (p[1] * 100) + '%' } }, thing.e);
+    const o = el('div.obj', layout === 'collect' ? null : { style: { left: (p[0] * 100) + '%', top: (p[1] * 100) + '%' } }, thing.e);
     o.dataset.i = i;
     objs.push(o);
     field.append(o);
@@ -111,13 +111,18 @@ function giveQuestion(api, lo, hi){
   const total = Math.min(14, target + ri(3, 5));
   api.item('give:' + target, target + 'こ だけ とりだす');
   api.setPrompt(`${thing.n}を ${numTag(target)}こ とって かごに いれよう`, `${thing.n}を${koKana(target)}、とって、かごに入れよう。`);
-  const objs = makeCountField(api, total, thing, 'scatter');
+  // Collecting must never put a fruit behind the basket or another fruit. Keep
+  // the available objects in their own grid and the basket in a separate row.
+  const objs = makeCountField(api, total, thing, 'collect');
+  const board = el('div.give-board');
+  board.append($('.collect-field', api.field));
   const picked = new Set();
   const basketCount = el('div.n', { text: '0' });
   const basketItems = el('div.items');
   const basket = el('div.basket', null,
     el('div.b', { text: '🧺' }), basketItems, basketCount);
-  $('.objfield', api.field).append(basket);
+  board.append(basket);
+  api.field.append(board);
   const doneBtn = el('button.btn.btn-accent', { text: 'できた！' });
   api.choices.append(doneBtn);
   const refresh = () => {
