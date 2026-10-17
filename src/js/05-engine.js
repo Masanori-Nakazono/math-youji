@@ -662,9 +662,16 @@ const Session = (() => {
 
   /** Each visit stays one question long. Supported turns teach the method;
       independent turns accumulate towards a later-day check in Store. */
-  function startFirst(game, levelIndex, phase){
+  function firstTitle(game, levelIndex){
+    return (Store.shortStatus(game.id, levelIndex).goldActive ? 'きんへ 1もんずつ　'
+      : firstPhase === 'check' ? 'べつのひの たしかめ　'
+      : firstPhase === 'independent' ? 'じぶんで 1もん　' : 'はじめてコース　') + game.name;
+  }
+
+  function startFirst(game, levelIndex, phase, opts){
     if(settleCompleted()) return;
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
+    if (opts && opts.gold && !Store.startShortGold(game.id, levelIndex).goldActive) return;
     build(); killTimers();
     mode = 'first'; curGame = game; curLevelIdx = levelIndex;
     rewardTarget = null; adventureTarget = null;
@@ -676,8 +683,7 @@ const Session = (() => {
       : phase === 'afterShow' ? [Object.assign({}, step, { intro: 'together' })]
       : firstPhase === 'show' ? [Object.assign({}, step, { intro: 'show' })]
       : [Object.assign({}, step, { intro: 'show' }), Object.assign({}, step, { intro: 'together' })];
-    titleEl.textContent = (firstPhase === 'check' ? 'べつのひの たしかめ　'
-      : firstPhase === 'independent' ? 'じぶんで 1もん　' : 'はじめてコース　') + game.name;
+    titleEl.textContent = firstTitle(game, levelIndex);
     begin();
   }
 
@@ -1042,15 +1048,13 @@ const Session = (() => {
     setMood('idle');
     const step = plan[idx];
     if (step.check) titleEl.textContent = 'たしかめ　' + step.game.name + '　' + step.level.t;
+    else if (mode === 'first') titleEl.textContent = firstTitle(step.game, step.levelIndex);
     else if (mode !== 'level'){
       const modeName = mode === 'daily' ? 'きょうの れんしゅう'
                      : mode === 'focus' ? 'とっくん'
-                     : mode === 'adventure' ? 'ちいさな ぼうけん'
-                     : mode === 'first' ? 'はじめてコース' : 'はじめの ぼうけん';
+                     : mode === 'adventure' ? 'ちいさな ぼうけん' : 'はじめの ぼうけん';
       titleEl.textContent = modeName + '　' + step.game.name;
-    } else if (curGame) titleEl.textContent = (mode === 'first'
-      ? firstPhase === 'check' ? 'べつのひの たしかめ　' : firstPhase === 'independent' ? 'じぶんで 1もん　' : 'はじめてコース　'
-      : '') + curGame.name + '　' + curGame.levels[curLevelIdx].t;
+    } else if (curGame) titleEl.textContent = curGame.name + '　' + curGame.levels[curLevelIdx].t;
     demo = step.intro || null;
     touched = false;
     drawQuestion(step);

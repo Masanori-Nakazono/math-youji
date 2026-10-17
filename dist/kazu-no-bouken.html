@@ -589,6 +589,26 @@ body::before{
 .dailies > .daily .go{ font-size:22px; }
 .daily.diagnostic{ background:var(--card); color:var(--ink); border-color:var(--card-edge); }
 .home-primary .t,.home-primary .s{ white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }
+/* An explicit ending remains an ending on today's Home. Extra lessons stay
+   available inside the native disclosure, without another bright start prompt. */
+.day-ending{
+  border:2px solid var(--good); border-radius:20px; padding:clamp(14px,2vw,22px);
+  background:var(--good-soft); color:var(--ink); min-width:0;
+}
+.day-ending-head{ display:flex; align-items:center; gap:14px; }
+.day-ending-head > span{ font-size:40px; line-height:1; }
+.day-ending h3{ margin:0; font-size:clamp(22px,calc(var(--u)*2.1),30px); }
+.day-ending-head p{ margin:4px 0 0; font-size:clamp(16px,calc(var(--u)*1.5),22px); }
+.day-ending-list{ padding:0; margin:14px 0 0; list-style:none; display:grid; gap:10px; }
+.day-ending-entry{ display:flex; gap:10px; align-items:center; background:var(--card); padding:10px 12px; border-radius:12px; min-width:0; }
+.day-ending-icon{ font-size:28px; flex:0 0 auto; }
+.day-ending-entry > div{ min-width:0; overflow-wrap:anywhere; }
+.day-ending-entry b,.day-ending-entry div > span{ display:block; }
+.day-ending-entry b{ font-size:clamp(16px,calc(var(--u)*1.45),21px); }
+.day-ending-entry div > span{ font-size:clamp(14px,calc(var(--u)*1.2),18px); color:var(--ink-soft); }
+.day-ending-bye{ margin:14px 0 10px; font-size:clamp(18px,calc(var(--u)*1.6),24px); font-weight:800; }
+.day-ending-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+.day-ending-actions .btn{ min-height:48px; max-width:100%; white-space:normal; font-size:clamp(15px,calc(var(--u)*1.25),18px); }
 
 /* A child chooses a pictured prize before choosing a task.  This is kept out of
    the daily-routine row: the two have different jobs, and making five equal
@@ -725,6 +745,11 @@ body::before{
 #first-finish .reward-sheet h2{ font-size:calc(var(--u)*2.1); }
 #first-finish{ position:relative; }
 #first-finish > .speakbtn{ position:absolute; top:calc(var(--u)*.6); right:calc(var(--u)*.6); z-index:2; }
+#first-finish .reward-sheet{ overflow-y:auto; justify-content:safe center; }
+#first-finish .reward-sheet>*{ flex-shrink:0; }
+.short-rewards{ display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
+.short-rewards .pokemon-sticker{ width:clamp(112px,calc(var(--u)*9),132px); }
+.short-rewards .pokemon-name{ font-size:max(14px,calc(var(--u)*1.1)); }
 #progress-album{ gap:calc(var(--u)*.7); }
 .album-intro{ margin:0; text-align:center; font-size:calc(var(--u)*1.4); font-weight:800; }
 .album-cards{ flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; align-content:start;
@@ -1023,8 +1048,9 @@ body::before{
   display: flex; flex-direction: column; gap: calc(var(--u)*.8);
   align-items: center; justify-content: center;
 }
-.level-entry{ width:min(100%,calc(var(--u)*53)); display:flex; align-items:stretch; gap:calc(var(--u)*.5); }
+.level-entry{ width:min(100%,calc(var(--u)*53)); display:flex; flex-wrap:wrap; align-items:stretch; gap:calc(var(--u)*.5); }
 .level-entry .levelcard{ width:auto; flex:1 1 auto; min-width:0; }
+.level-entry .gold-short-start{ flex-basis:100%; min-height:var(--tap); font-size:max(14px,calc(var(--u)*1.3)); }
 .first-retry{ flex:0 0 auto; min-width:var(--tap); font-size:calc(var(--u)*2); }
 .levelcard{
   position: relative;
@@ -2071,7 +2097,7 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 /* ---------- number keypad ----------
    A fixed 0–10 row, in the same place every time: the child learns where the
    numbers live, so answering stays about the arithmetic. */
-.choices.pad{ gap: calc(var(--u)*.7); }
+.choices.pad{ gap: calc(var(--u)*.7); max-width:100%; }
 /* eleven keys fit one row in landscape; where they cannot, break 6 + 5 rather
    than letting a lone "10" wrap onto a line of its own */
 @media (max-width: 900px){
@@ -2083,6 +2109,11 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
     justify-content: center; justify-items: center;
     gap: max(16px, calc(var(--u)*1.2));
   }
+  /* Eleven number keys leave one cell free: keep the explicit demonstration
+     there, beside the answers, instead of taking space from the picture. */
+  .choices.pad .teachbtn{grid-column:auto;display:flex;flex-direction:column;gap:0;width:var(--tap);min-width:var(--tap);min-height:var(--tap);padding:4px;font-size:14px;line-height:1.2;}
+  .choices.pad .teachbtn .bi{display:block;margin:0;}
+  .choices.pad .teachbtn .bl{display:block;max-width:100%;white-space:normal;}
 }
 .choice.padkey{
   /* the keypad is now the way the answer is given, so it gets real estate:
@@ -2091,6 +2122,28 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   min-height: max(calc(var(--u)*6), var(--tap));
   font-size: calc(var(--u)*3.2);
   padding: calc(var(--u)*.4) calc(var(--u)*.5);
+}
+/* Six 64px keys with 16px gaps need 464px. Phones keep the same large
+   targets in four columns, so 0/5/6 (or 10/15/16) never leave the screen. */
+@media (max-width:479px){
+  .choices.pad{grid-template-columns:repeat(4,var(--tap));gap:12px;}
+  .choices.pad .padkey{width:var(--tap);min-width:var(--tap);}
+}
+@media (max-width:479px) and (max-height:700px){
+  /* A short phone still needs the real picture after a hint. Use the full
+     prompt width for readable feedback; keep icons 48px and number keys 64px. */
+  #play:has(.choices.pad){gap:2px;}
+  .choices.pad{gap:8px;}
+  #play:has(.choices.pad) .topbar>.backbtn{width:48px;height:48px;min-width:48px;}
+  #play:has(.choices.pad) .prompt{display:grid;grid-template-columns:minmax(0,1fr) 48px 48px;gap:4px;}
+  #play:has(.choices.pad) .prompt>.mascot{display:none;}
+  #play:has(.choices.pad) .prompt>.btn-round{width:48px;height:48px;min-width:48px;flex:0 0 48px;}
+  #play:has(.choices.pad) .prompt>.btn-round:not(.showbtn){grid-column:2;grid-row:1;}
+  #play:has(.choices.pad) .prompt>.showbtn{grid-column:3;grid-row:1;}
+  #play:has(.choices.pad) .txtwrap{display:contents;}
+  #play:has(.choices.pad) .txt{grid-column:1;grid-row:1;}
+  #play:has(.choices.pad) .feedback{grid-column:1/-1;grid-row:2;display:block;}
+  #play:has(.choices.pad) .feedback[hidden]{display:none;}
 }
 
 /* ---------- diagnostic and real-world mission ---------- */
@@ -3761,6 +3814,7 @@ const reviewRecordValid = (k, v) => !!v && typeof v === 'object' && !Array.isArr
 
 const Store = (() => {
   const KEY = 'kazu-no-bouken.v1';
+  const endedDayValid = v => v === null || Number.isSafeInteger(v) && v >= 0;
   const blank = () => ({
     stars: {},        // "gameId:levelIndex" -> 0..3
     plays: {},        // "gameId:levelIndex" -> attempts
@@ -3822,6 +3876,9 @@ const Store = (() => {
     reviewRecords: {}, // textbook observations, separate from this lap's map stars/facts
     reviewChaptersOpen: {}, // chapter number -> 1; related preparation opens each entrance once
     reviewSession: null, // unfinished textbook run and the exact current question
+    // Ending is the child's choice for the whole day, shared across both laps.
+    // It changes presentation only; unfinished visits and learning stay intact.
+    endedDay: null,
     name: '',
     sfx: true, voice: true, voiceId: null,
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
@@ -3871,6 +3928,20 @@ const Store = (() => {
         || !['practice','ready','check','confirmed','retry'].includes(v.lastResult)) return false;
     if (v.items !== undefined && (!Array.isArray(v.items) || v.items.length > 64
         || v.items.some(item => typeof item !== 'string' || item.length > 240))) return false;
+    if (v.rewardKeys !== undefined && (!Array.isArray(v.rewardKeys) || v.rewardKeys.length > 2
+        || v.rewardKeys.some(k => typeof k !== 'string' || !/^[a-z0-9]+:\d+(?::g)?$/.test(k)))) return false;
+    if (v.gold !== undefined){
+      const g = v.gold;
+      if (!g || typeof g !== 'object' || Array.isArray(g) || typeof g.active !== 'boolean'
+          || !bits(g.answers, 8) || !bits(g.checks, 3)
+          || !(g.readyDay === null || count(g.readyDay)) || !(g.checkDay === null || count(g.checkDay))
+          || !['practice','ready','check','confirmed','retry'].includes(g.lastResult)) return false;
+      if (g.readyDay !== null && g.answers !== '11111111') return false;
+      if (g.checks.length && (g.readyDay === null || g.checkDay === null || g.checkDay <= g.readyDay)) return false;
+      if (!g.checks.length && g.checkDay !== null) return false;
+      if (!g.active && (g.lastResult !== 'confirmed' || g.checks !== '111')) return false;
+      if (g.lastResult === 'confirmed' && (g.active || g.answers !== '11111111' || g.checks !== '111')) return false;
+    }
     if (v.adaptive !== undefined){
       const a = v.adaptive;
       if (!a || typeof a !== 'object' || Array.isArray(a) || !bits(a.recent, 12)
@@ -4078,10 +4149,11 @@ const Store = (() => {
           const want = shape(fresh[k]), got = shape(record[k]);
           if (want === got) continue;
           if ((['diagnostic', 'savedSession', 'reviewSession', 'transferSession'].includes(k) && got === 'object') || (k === 'voiceId' && got === 'string')
-              || (k === 'roundTwo' && got === 'object')) continue;
+              || (k === 'roundTwo' && got === 'object') || (k === 'endedDay' && got === 'number')) continue;
           record[k] = fresh[k];
           bent = true;
         }
+        if (!endedDayValid(record.endedDay)){ record.endedDay = null; bent = true; }
         if (parsed.roundSchema !== 1){
           // A legacy selectedRound=2 meant the textbook, not a fresh repeat lap.
           record.roundSchema = 1; record.selectedRound = 1;
@@ -4366,6 +4438,10 @@ const Store = (() => {
         out.selectedRound = 1;
       }
     }
+    if (data.endedDay !== undefined){
+      if (!endedDayValid(data.endedDay)) return null;
+      out.endedDay = data.endedDay;
+    }
     if (data.voiceId !== undefined){
       if (data.voiceId !== null && typeof data.voiceId !== 'string') return null;
       out.voiceId = data.voiceId;
@@ -4420,6 +4496,9 @@ const Store = (() => {
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
   function mergeState(base, add){
     const out = Object.assign(blank(), base);
+    // A historical backup must not make this device end (or reopen) its day.
+    // Replacement deliberately restores that saved presentation state instead.
+    out.endedDay = base.endedDay == null ? null : base.endedDay;
     /* Merging a historical backup must not resurrect a visit finished since it
        was exported. Only replacement restores the backup's interrupted visit. */
     out.savedSession = normalizeSavedSession(base.savedSession);
@@ -4733,25 +4812,38 @@ const Store = (() => {
       misses:Array.from(recent, () => ''), sinceRest:reason ? '' : recent,
       lastDay, restUntil:reason ? lastDay + 3 : null, supportDone:false};
   }
+  function shortProgress(s, complete, required){
+    const today = dayNo();
+    const failed = !!(s && s.checks.length === 3 && rightIn(s.checks) < required);
+    const due = !!(s && s.readyDay !== null && today > s.readyDay && !(failed && s.checkDay >= today));
+    const restart = failed && due;
+    return {phase:!complete && due ? 'check' : 'independent',
+      answered:s ? s.answers.length : 0, right:s ? rightIn(s.answers) : 0,
+      readyDay:s ? s.readyDay : null, checks:s && !restart ? s.checks.length : 0,
+      checkRight:s && !restart ? rightIn(s.checks) : 0,
+      waiting:!!(s && s.readyDay !== null && !complete && !due),
+      lastResult:s ? s.lastResult : 'practice'};
+  }
   function shortStatus(g, l){
     const k = key(g, l), s = mem.shortCourses[k], today = dayNo();
     const confirmed = !!(s && s.confirmed) || mem.stickers.includes(k) && !mem.pending[k];
-    const failed = !!(s && s.checks.length === 3 && rightIn(s.checks) < 2);
-    const due = !!(s && s.readyDay !== null && today > s.readyDay && !(failed && s.checkDay >= today));
-    const restart = failed && due;
+    const hasGold = mem.stickers.includes(k + ':g');
+    const goldActive = !!(confirmed && !hasGold && s && s.gold && s.gold.active);
+    const goldStatus = s && s.gold ? Object.assign(shortProgress(s.gold, hasGold, 3),
+      {active:goldActive, complete:hasGold, independentRun:s.gold.answers.match(/1*$/)[0].length}) : null;
     const adaptive = s ? shortAdaptive(k, s) : null;
     const supportReason = adaptive ? shortSupportReason(adaptive.recent, adaptive.misses) : null;
-    return { phase: !confirmed && due ? 'check' : 'independent',
-      answered:s ? s.answers.length : 0, right:s ? rightIn(s.answers) : 0,
-      readyDay:s ? s.readyDay : null, checks:s && !restart ? s.checks.length : 0,
-      checkRight:s && !restart ? rightIn(s.checks) : 0, confirmed,
-      waiting:!!(s && s.readyDay !== null && !confirmed && !due),
-      lastId:s ? s.lastId : '', lastResult:s ? s.lastResult : 'practice',
+    const learning = !confirmed || goldActive;
+    return Object.assign(goldActive ? shortProgress(s.gold, false, 3) : shortProgress(s, confirmed, 2), {
+      confirmed, goldActive, goldStatus, canStartGold:confirmed && !hasGold && !goldActive,
+      rewardKeys:s && s.rewardKeys ? Array.from(new Set(s.rewardKeys))
+        .filter(r => (r === k || r === k + ':g') && mem.stickers.includes(r)) : [],
+      lastId:s ? s.lastId : '',
       at:s ? s.at : 0, lastDay:adaptive ? adaptive.lastDay : null,
-      supportNeeded:!confirmed && !!supportReason && adaptive.restUntil !== null && !adaptive.supportDone,
-      supportReason:!confirmed ? supportReason : null,
-      resting:!confirmed && !!(adaptive && adaptive.restUntil !== null && today < adaptive.restUntil),
-      restUntil:!confirmed && adaptive ? adaptive.restUntil : null };
+      supportNeeded:learning && !!supportReason && adaptive.restUntil !== null && !adaptive.supportDone,
+      supportReason:learning ? supportReason : null,
+      resting:learning && !!(adaptive && adaptive.restUntil !== null && today < adaptive.restUntil),
+      restUntil:learning && adaptive ? adaptive.restUntil : null });
   }
 
   function startShortCourse(g, l){
@@ -4763,6 +4855,21 @@ const Store = (() => {
         confirmed:false, evidence:mem.recent[k] || '', items:[], lastId:'', lastResult:'practice', at:Date.now()};
       save();
     }
+    return shortStatus(g, l);
+  }
+
+  function startShortGold(g, l){
+    if (typeof g !== 'string' || !/^[a-z0-9]+$/.test(g) || !Number.isSafeInteger(l) || l < 0
+        || !shortStatus(g, l).canStartGold) return shortStatus(g, l);
+    startShortCourse(g, l);
+    const s = mem.shortCourses[key(g, l)];
+    s.gold = {active:true, answers:'', readyDay:null, checks:'', checkDay:null, lastResult:'practice'};
+    s.rewardKeys = [];
+    // This optional challenge observes a fresh run of independent work. Its
+    // guidance cycle is separate from difficulties before the ordinary clear.
+    s.adaptive = {recent:'', kinds:'', misses:[], sinceRest:'', lastDay:dayNo(), restUntil:null, supportDone:false};
+    s.at = Math.max(Date.now(), s.at + 1);
+    save();
     return shortStatus(g, l);
   }
 
@@ -4808,12 +4915,40 @@ const Store = (() => {
       typeof item === 'string' && item.length <= 240))).slice(-64);
     s.lastId = runId;
     s.lastResult = 'practice';
+    s.rewardKeys = [];
     // Each one-question visit is complete in its own right. Keep every observed
     // answer in lifetime statistics, including extra practice and failed checks.
     mem.seen[g] = (mem.seen[g] || 0) + 1;
     const ft = mem.firstTry[g] || [0, 0];
     mem.firstTry[g] = [ft[0] + Number(clean), ft[1] + 1];
-    if (!before.confirmed && phase === 'check' && before.phase === 'check'){
+    if (before.goldActive){
+      const challenge = s.gold;
+      challenge.lastResult = 'practice';
+      if (phase === 'check' && before.phase === 'check'){
+        if (challenge.checks.length === 3) challenge.checks = '';
+        challenge.checks += clean ? '1' : '0';
+        challenge.checkDay = today;
+        challenge.lastResult = 'check';
+        if (challenge.checks.length === 3){
+          if (challenge.checks === '111'){
+            challenge.active = false; challenge.lastResult = 'confirmed';
+            mem.stars[k] = Math.max(mem.stars[k] || 0, 3);
+            if (!mem.stickers.includes(k + ':g')){
+              mem.stickers.push(k + ':g'); gold = true; s.rewardKeys.push(k + ':g');
+            }
+            // This completed challenge supplies eleven real observations, not
+            // an invented ordinary session or another award for the first clear.
+            s.evidence = (s.evidence + challenge.answers + challenge.checks).slice(-30);
+          } else challenge.lastResult = 'retry';
+        }
+      } else if (challenge.readyDay === null){
+        challenge.answers = (challenge.answers + bit).slice(-8);
+        if (challenge.answers === '11111111'){
+          challenge.readyDay = today; challenge.lastResult = 'ready';
+        }
+      }
+      s.lastResult = challenge.lastResult;
+    } else if (!before.confirmed && phase === 'check' && before.phase === 'check'){
       if (s.checks.length === 3) s.checks = '';
       s.checks += clean ? '1' : '0';
       s.checkDay = today;
@@ -4825,9 +4960,9 @@ const Store = (() => {
           const stars = perfect ? 3 : 2;
           mem.stars[k] = Math.max(mem.stars[k] || 0, stars);
           mem.plays[k] = (mem.plays[k] || 0) + 1;
-          if (!mem.stickers.includes(k)){ mem.stickers.push(k); newSticker = true; }
+          if (!mem.stickers.includes(k)){ mem.stickers.push(k); newSticker = true; s.rewardKeys.push(k); }
           delete mem.pending[k];
-          if (perfect && !mem.stickers.includes(k + ':g')){ mem.stickers.push(k + ':g'); gold = true; }
+          if (perfect && !mem.stickers.includes(k + ':g')){ mem.stickers.push(k + ':g'); gold = true; s.rewardKeys.push(k + ':g'); }
           s.evidence = (s.evidence + s.answers + s.checks).slice(-30);
         } else s.lastResult = 'retry';
       }
@@ -4845,17 +4980,59 @@ const Store = (() => {
 
   function noteShortSupport(g, l){
     const k = key(g, l), s = mem.shortCourses[k];
-    if (!s || !shortStatus(g, l).supportNeeded) return false;
-    const adaptive = shortAdaptive(k, s);
-    adaptive.supportDone = true;
-    s.adaptive = adaptive;
+    if (!s) return false;
+    const needed = shortStatus(g, l).supportNeeded, reward = s.rewardKeys && s.rewardKeys.length;
+    if (!needed && !reward) return false;
+    if (needed){
+      const adaptive = shortAdaptive(k, s);
+      adaptive.supportDone = true;
+      s.adaptive = adaptive;
+    }
+    s.rewardKeys = [];
     s.at = Math.max(Date.now(), s.at + 1);
     save();
     return true;
   }
 
+  /** Today's actual observations, across both laps. A familiar item need not earn
+      another milestone: its last-practised day still proves it was tried today.
+      Such entries deliberately say nothing about independent correctness. */
+  function todaySummary(){
+    const day = dayNo(), entries = new Map();
+    [record, record.roundTwo].forEach((source, index) => {
+      if (!source) return;
+      const lap = index + 1;
+      for (const [key, m] of Object.entries(source.milestones || {})){
+        const match = /^([a-z0-9]+):(\d+):(viewed|together|supported|revised|independent)$/.exec(key);
+        if (!match || !m || m.day !== day) continue;
+        const group = lap + ':' + match[1] + ':' + match[2], current = entries.get(group);
+        if (!current || MILESTONE_RANK[match[3]] > MILESTONE_RANK[current.kind])
+          entries.set(group, {round:lap, type:'milestone', gameId:match[1], levelIndex:Number(match[2]), kind:match[3], label:m.label});
+      }
+      for (const [key, r] of Object.entries(source.reviewRecords || {}))
+        if (r && r.day === day) entries.set(lap + ':review:' + key, {round:lap, type:'review', key});
+      for (const [key, r] of Object.entries(source.transferRecords || {}))
+        if (r && r.day === day) entries.set(lap + ':transfer:' + key, {round:lap, type:'transfer', key:'transfer:' + key});
+      for (const f of Object.values(source.facts || {})){
+        const match = f && typeof f[4] === 'string' && /^([a-z0-9]+):(\d+)$/.exec(f[4]);
+        if (!match || !f[0] || f[2] !== day) continue;
+        const group = lap + ':' + match[1] + ':' + match[2];
+        if (!entries.has(group)) entries.set(group, {round:lap, type:'practice', gameId:match[1], levelIndex:Number(match[2]),
+          label:typeof f[3] === 'string' ? f[3].slice(0,80) : ''});
+      }
+    });
+    return {day, date:todayKey(), total:dailyTotal(todayKey()), entries:Array.from(entries.values())};
+  }
+
   return {
     get data(){ return mem; },
+    endToday(){
+      const today = dayNo();
+      if (record.endedDay === today) return false;
+      record.endedDay = today; save(); return true;
+    },
+    endedToday: () => record.endedDay === dayNo(),
+    todaySummary,
     round, selectRound,
     roundData: n => n === 1 ? record : n === 2 ? record.roundTwo : null,
     unlockRoundTwo(){
@@ -4933,7 +5110,7 @@ const Store = (() => {
       save();
     },
 
-    shortStatus, startShortCourse, recordShortAnswer, noteShortSupport,
+    shortStatus, startShortCourse, startShortGold, recordShortAnswer, noteShortSupport,
     shortItems(g, l){
       const course = mem.shortCourses[key(g, l)];
       return course && course.items ? course.items.slice() : [];
@@ -6528,9 +6705,16 @@ const Session = (() => {
 
   /** Each visit stays one question long. Supported turns teach the method;
       independent turns accumulate towards a later-day check in Store. */
-  function startFirst(game, levelIndex, phase){
+  function firstTitle(game, levelIndex){
+    return (Store.shortStatus(game.id, levelIndex).goldActive ? 'きんへ 1もんずつ　'
+      : firstPhase === 'check' ? 'べつのひの たしかめ　'
+      : firstPhase === 'independent' ? 'じぶんで 1もん　' : 'はじめてコース　') + game.name;
+  }
+
+  function startFirst(game, levelIndex, phase, opts){
     if(settleCompleted()) return;
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
+    if (opts && opts.gold && !Store.startShortGold(game.id, levelIndex).goldActive) return;
     build(); killTimers();
     mode = 'first'; curGame = game; curLevelIdx = levelIndex;
     rewardTarget = null; adventureTarget = null;
@@ -6542,8 +6726,7 @@ const Session = (() => {
       : phase === 'afterShow' ? [Object.assign({}, step, { intro: 'together' })]
       : firstPhase === 'show' ? [Object.assign({}, step, { intro: 'show' })]
       : [Object.assign({}, step, { intro: 'show' }), Object.assign({}, step, { intro: 'together' })];
-    titleEl.textContent = (firstPhase === 'check' ? 'べつのひの たしかめ　'
-      : firstPhase === 'independent' ? 'じぶんで 1もん　' : 'はじめてコース　') + game.name;
+    titleEl.textContent = firstTitle(game, levelIndex);
     begin();
   }
 
@@ -6908,15 +7091,13 @@ const Session = (() => {
     setMood('idle');
     const step = plan[idx];
     if (step.check) titleEl.textContent = 'たしかめ　' + step.game.name + '　' + step.level.t;
+    else if (mode === 'first') titleEl.textContent = firstTitle(step.game, step.levelIndex);
     else if (mode !== 'level'){
       const modeName = mode === 'daily' ? 'きょうの れんしゅう'
                      : mode === 'focus' ? 'とっくん'
-                     : mode === 'adventure' ? 'ちいさな ぼうけん'
-                     : mode === 'first' ? 'はじめてコース' : 'はじめの ぼうけん';
+                     : mode === 'adventure' ? 'ちいさな ぼうけん' : 'はじめの ぼうけん';
       titleEl.textContent = modeName + '　' + step.game.name;
-    } else if (curGame) titleEl.textContent = (mode === 'first'
-      ? firstPhase === 'check' ? 'べつのひの たしかめ　' : firstPhase === 'independent' ? 'じぶんで 1もん　' : 'はじめてコース　'
-      : '') + curGame.name + '　' + curGame.levels[curLevelIdx].t;
+    } else if (curGame) titleEl.textContent = curGame.name + '　' + curGame.levels[curLevelIdx].t;
     demo = step.intro || null;
     touched = false;
     drawQuestion(step);
@@ -11833,7 +12014,7 @@ const FirstSteps = (() => {
     }).filter(Boolean).sort((a, b) => b.status.at - a.status.at);
   }
   function shortTarget(){
-    return shortCourses().filter(t => !t.status.confirmed && !t.status.waiting
+    return shortCourses().filter(t => (!t.status.confirmed || t.status.goldActive) && !t.status.waiting
       && !Diagnostic.resting(t.game.id, t.levelIndex))
       .sort((a, b) => Number(b.status.phase === 'check') - Number(a.status.phase === 'check')
         || b.status.at - a.status.at)[0] || null;
@@ -11841,7 +12022,7 @@ const FirstSteps = (() => {
   function shortPlan(){
     const courses = shortCourses();
     if (!courses.length) return null;
-    const unfinished = courses.filter(t => !t.status.confirmed);
+    const unfinished = courses.filter(t => !t.status.confirmed || t.status.goldActive);
     const available = t => !Diagnostic.resting(t.game.id, t.levelIndex);
     const due = unfinished.find(t => t.status.phase === 'check' && available(t));
     if (due) return {...due, kind:'check'};
@@ -11883,7 +12064,10 @@ const FirstSteps = (() => {
       return:'すこし やすんだ あそびを ためそう', resume:'1もんずつでも すすむよ',
       easier:'できる ところから ためそう', known:'できる ところから ためそう',
       new:'1もんだけ。ヒントも あるよ', review:'たしかめは また べつのひでも いいよ'};
-    return {title:titles[t.kind] || titles.resume, reason:reasons[t.kind] || reasons.resume};
+    const gold = t.status && t.status.goldActive;
+    return {title:gold && t.kind === 'check' ? 'きんへの たしかめを 1もん'
+      : gold && (t.kind === 'resume' || t.kind === 'return') ? 'きんへ つづきの 1もん' : titles[t.kind] || titles.resume,
+      reason:gold && t.kind === 'resume' ? 'できた シールを のこして、きんに チャレンジ' : reasons[t.kind] || reasons.resume};
   }
   function startPlan(t, opts){
     if (!t) return;
@@ -11944,6 +12128,12 @@ const FirstSteps = (() => {
     Session.startFirst(game, levelIndex, independent || Store.introduced(game.id, levelIndex)
       ? Store.shortStatus(game.id, levelIndex).phase : 'afterShow');
   }
+  function startGold(game, levelIndex){
+    if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
+    build(); active = {game, levelIndex, opts:null};
+    // The engine settles any completed checkpoint before starting a fresh goal.
+    Session.startFirst(game, levelIndex, 'independent', {gold:true});
+  }
   function open(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
     build(); active = { game, levelIndex, opts: opts || null };
@@ -11956,6 +12146,9 @@ const FirstSteps = (() => {
       button('🤝', 'みてから ひとつ', () => Session.startFirst(game, levelIndex, 'together')),
       button('👆', 'じぶんで 1もん', () => startOne(game, levelIndex, true, active.opts)),
       button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active.opts)));
+    const status = Store.shortStatus(game.id, levelIndex);
+    if (status.canStartGold || status.goldActive) choices.append(button('✨', status.goldActive
+      ? 'きんへ つづきの 1もん' : 'きんへ 1もんずつ', () => startGold(game, levelIndex)));
     UI.show('first-steps');
     Sound.say('初めてのことは、まず見るだけでもいいよ。一つやったら、そこで終われるよ。', { delay: 180 });
   }
@@ -11964,12 +12157,20 @@ const FirstSteps = (() => {
     const info = $('.first-detail', result), actions = $('.first-actions', result);
     const short = phase === 'independent' || phase === 'check';
     const status = Store.shortStatus(game.id, levelIndex);
+    const rewards = short ? status.rewardKeys || [] : [];
+    const newGold = rewards.includes(game.id + ':' + levelIndex + ':g');
+    const gold = status.goldActive && status.goldStatus;
     const answered = milestone && milestone.kind === 'together';
     const doneText = short ? milestone ? Store.milestoneText(milestone.kind) : 'ひとつ ためしたね'
       : phase === 'show' || !answered ? 'やりかたを みたね' : 'いっしょに ひとつ できたね';
     info.textContent = doneText;
     if (short){
-      const progress = status.lastResult === 'confirmed' ? '🌟　べつのひも できたね！ シールが かんせいしたよ'
+      const progress = newGold ? '🌟　きんの シールを ゲット！ べつのひも できたね'
+        : gold ? gold.waiting ? gold.checks === 3 ? 'きんへの たしかめは また べつのひに。できた シールは のこるよ'
+          : '8もん じぶんで できたね。べつのひに きんを たしかめよう'
+          : gold.phase === 'check' ? 'きんへの たしかめ　' + gold.checks + '／3もん'
+          : 'きんの じゅんび　ヒントなしで つづけて ' + gold.independentRun + '／8もん'
+        : status.lastResult === 'confirmed' ? '🌟　べつのひも できたね！ シールが かんせいしたよ'
         : status.confirmed ? 'できることを たしかめたね'
         : status.waiting ? status.checks === 3 ? 'たしかめは また べつのひに。きょうは ここまででも いいよ'
           : '8もんぶん たまったね。べつのひに たしかめよう'
@@ -11978,6 +12179,8 @@ const FirstSteps = (() => {
         : 'じぶんで ためした もんだい　' + status.answered + '／8もん';
       info.append(el('p.first-progress', { text: progress }));
     }
+    if (rewards.length) info.append(el('div.short-rewards', {'aria-label':'もらった シール'},
+      rewards.map(key => PokemonStickers.artwork(key))));
     if (status.resting) info.append(el('p.first-progress', {text:status.supportNeeded
       ? 'いっしょに やりかたを みよう。そのあとは べつの あそびに しよう'
       : 'このあそびは すこし おやすみ。また あとで もどれるよ'}));
@@ -11985,23 +12188,31 @@ const FirstSteps = (() => {
     if (phase === 'show') actions.append(button('🤝', 'いっしょに ひとつ',
       () => Session.startFirst(game, levelIndex, 'afterShow'), true));
     actions.append(button('🏠', 'きょうは ここまで', () => {
-      Home.render(); UI.show('home', { replace: true });
+      Home.endToday();
     }, phase !== 'show'));
+    if (rewards.length) actions.append(button('🏡', 'しまに はる', () => StickerWorld.open(rewards[rewards.length - 1])));
     if (phase !== 'show'){
       const next = shortPlan() || {game, levelIndex, kind:'resume'};
       const same = next.game.id === game.id && next.levelIndex === levelIndex;
-      actions.append(button(next.kind === 'support' ? '🤝' : '👆', same && next.kind === 'resume'
+      actions.append(button(next.kind === 'support' ? '🤝' : '👆', same && next.kind === 'resume' && !status.goldActive
         ? 'じぶんで もう 1もん' : planCopy(next).title, () => startPlan(next, same && active && active.opts)));
     }
+    if (phase !== 'show' && status.canStartGold) actions.append(button('✨', 'きんへ 1もんずつ',
+      () => startGold(game, levelIndex)));
     actions.append(button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active && active.opts)));
     if (milestone && milestone.label) info.append(el('small', { text: '📒 ' + milestone.label }));
     UI.show('first-finish', { replace: true });
     finishSpeech = doneText + '。' + (short && status.lastResult === 'confirmed'
       ? '別の日もできたね。シールが完成したよ。' : short && status.waiting ? '確かめは、また別の日にしよう。' : '')
       + '今日はここまででもいいよ。';
+    if (rewards.length){
+      finishSpeech = doneText + '。' + rewards.map(key => PokemonStickers.reward(key).name).join('と')
+        + 'のシールをもらったよ。島に貼っても、今日はここまででもいいよ。';
+      Sound.sfx.finish(); UI.confetti(40);
+    }
     Sound.say(finishSpeech, { delay: 200 });
   }
-  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, build, open, startOne, finish, get active(){ return active; } };
+  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, build, open, startOne, startGold, finish, get active(){ return active; } };
 })();
 
 const ProgressAlbum = (() => {
@@ -12282,8 +12493,8 @@ const Diagnostic = (() => {
   const REST_DAYS = 3;
   // Short visits have their own observations: they need relief even though they
   // never invent a completed ordinary attempt just to open the next level.
-  const resting = (id, i) => !cleared(id, i) && (Store.shortStatus(id, i).resting
-    || Store.plays(id, i) >= 3 && Store.daysSince(id, i) < REST_DAYS);
+  const resting = (id, i) => Store.shortStatus(id, i).resting
+    || !cleared(id, i) && Store.plays(id, i) >= 3 && Store.daysSince(id, i) < REST_DAYS;
 
   /* All automatically chosen entrances honour the same breathing space.
      A child may still choose any open lesson from the map. */
@@ -13099,7 +13310,7 @@ const TextbookReview = (() => {
         lessonOpen(nextId)?button('つぎの レッスン',()=>start(nextId),'btn-accent'):null,
         has&&!pending?button('じぶんの しまに かざる',()=>StickerWorld.open(done.key)):null,
         button('もういちど あそぶ',()=>start(done.id,done.chapter,done.kind==='check'&&due(done.key))),button('ほんの もくじへ',menu),
-        button('きょうは ここまで',()=>{Home.render();UI.show('home');}))));
+        button('きょうは ここまで',()=>Home.endToday()))));
     if(fresh||confirmed)UI.confetti(40);focusHeading();say((fresh?stickerFor(done.key)+'の シール。':'')+note);
   }
   return {open,unlocked,progress,earned,homeCard,collection,parentSummary,lessons,chapters,generate,lessonOpen,chapterOpen,preparation,chapterReady,rewardKeys,pendingSummary,resume,
@@ -13509,7 +13720,7 @@ const TransferAdventure = (() => {
       el('div.transfer-actions', null,
         owned ? button('じぶんの しまに かざる', () => StickerWorld.open(key(id)), 'btn-accent')
           : button('もういちど あそぶ', () => start(id), 'btn-accent'),
-        button('きょうは ここまで', () => { Home.render(); UI.show('home'); }),
+        button('きょうは ここまで', () => Home.endToday()),
         button('ぼうけんを えらぶ', menu),
         TextbookReview.unlocked() ? button('ほんを うらがえす', () => TextbookReview.open(), 'btn-accent') : null,
         Store.round() === 1 && Rounds.unlocked() ? button('２しゅうめへ', () => Rounds.go(2), 'btn-accent') : null)));
@@ -13672,7 +13883,19 @@ const G1Preparation = (() => {
 const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl, roundsEl;
   let primaryEl, choicesEl, moreEl, diagnosticEl;
+  let contentEl, todayEl, todayHeading, endedEl, moreContent, moreSummary;
   let parentBtn;
+  let renderedDay;
+
+  // A sleeping PWA can return to yesterday's Home without a page reload.
+  // Refresh only the visible Home when its local calendar day has changed.
+  function refreshDay(){
+    if (node && !document.hidden && UI.currentName() === 'home'
+        && renderedDay !== new Date().toDateString()) render();
+  }
+  window.addEventListener('focus', refreshDay);
+  window.addEventListener('pageshow', refreshDay);
+  document.addEventListener('visibilitychange', refreshDay);
 
   function updateVoiceWarning(){
     if (!voiceWarnEl) return;
@@ -13728,21 +13951,82 @@ const Home = (() => {
       el('span.grow', null, el('span.t', { text: 'はじまりを さがす' }),
         el('span.s', { text: '10もんで ぴったりの あそびを みつけよう' })),
       el('span.go', { text: '▶', 'aria-hidden': 'true' }));
-    moreEl = el('details.home-more', null,
-      el('summary', null, el('span', { text: '🗺️', 'aria-hidden': 'true' }), 'ほかの あそび・ちず'),
-      el('div.home-more-content', null, dailiesEl, diagnosticEl, questsEl, worldsEl, shelfEl,
-        el('section.home-round-section', null, el('h2', { text: 'もういちどの ぼうけん' }), roundsEl)));
-    node.append(el('div.home-content', null, voiceWarnEl,
-      el('section.home-today', { 'aria-label': 'きょうの ぼうけん' },
-        el('h2', { text: 'きょうは ここから' }), primaryEl), choicesEl, moreEl));
+    moreSummary = el('summary');
+    moreContent = el('div.home-more-content', null, dailiesEl, diagnosticEl, questsEl, worldsEl, shelfEl,
+      el('section.home-round-section', null, el('h2', { text: 'もういちどの ぼうけん' }), roundsEl));
+    moreEl = el('details.home-more', null, moreSummary, moreContent);
+    todayHeading = el('h2', {text:'きょうは ここから'});
+    endedEl = el('div.day-ending', {hidden:true});
+    todayEl = el('section.home-today', {'aria-label':'きょうの ぼうけん'}, todayHeading, primaryEl, endedEl);
+    contentEl = el('div.home-content', null, voiceWarnEl, todayEl, choicesEl, moreEl);
+    node.append(contentEl);
     return UI.register('home', node);
   }
 
   const BANNER_ICON = { recommend: '🗺️', first: '🤝', daily: '📅', review: '💬', focus: '🎯' };
   function homeSpeech(){
+    if (Store.endedToday()){
+      const summary = Store.todaySummary();
+      return '今日はここまで。' + (summary.total ? summary.total + '問遊んだね。' : '')
+        + '今日取り組んだことを見てみよう。また明日、遊ぼう。もっと遊びたいときだけ、下の「もうすこしあそぶ」を開いて選べるよ。';
+    }
     const title = primaryEl && $('.t', primaryEl), detail = primaryEl && $('.s', primaryEl);
     return (title ? title.textContent + '。' : '') + (detail ? detail.textContent + '。' : '')
       + 'ほしいシールから選んでもいいよ。ほかの遊びと地図を開くと、好きな遊びも選べるよ。';
+  }
+  function endingEntry(entry){
+    let icon, title, note;
+    if (entry.type === 'review'){
+      const match = /^(r2|r2chapter):(\d+)$/.exec(entry.key);
+      const item = match && (match[1] === 'r2' ? TextbookReview.lessons : TextbookReview.chapters)[Number(match[2])];
+      if (!item) return null;
+      icon = '📘'; title = item.title; note = 'ほんで とりくんだね';
+    } else if (entry.type === 'transfer'){
+      const item = TransferAdventure.missionFor(entry.key);
+      if (!item) return null;
+      icon = item.icon; title = item.title; note = 'ぼうけんに とりくんだね';
+    } else {
+      const game = Games.byId[entry.gameId], level = game && Array.isArray(game.levels) && game.levels[entry.levelIndex];
+      if (!level) return null;
+      icon = game.ico; title = entry.label || game.name + '《' + level.t + '》';
+      note = entry.type === 'milestone' ? Store.milestoneText(entry.kind) : 'とりくんだね';
+    }
+    return el('li.day-ending-entry', {'data-round':entry.round, 'data-kind':entry.type},
+      el('span.day-ending-icon', {'aria-hidden':'true', text:icon}),
+      el('div', null, el('b', {text:title}), el('span', {text:(entry.round === 2 ? '２しゅうめで　' : '') + note})));
+  }
+  function renderEnding(){
+    const ended = Store.endedToday();
+    node.classList.toggle('day-ended', ended);
+    todayHeading.textContent = ended ? 'きょうは ここまで' : 'きょうは ここから';
+    clear(moreSummary);
+    moreSummary.append(el('span', {'aria-hidden':'true', text:ended ? '🌱' : '🗺️'}),
+      ended ? 'もうすこし あそぶ（じぶんで えらぶ）' : 'ほかの あそび・ちず');
+    endedEl.hidden = !ended;
+    if (!ended){
+      todayEl.insertBefore(primaryEl, endedEl);
+      contentEl.insertBefore(choicesEl, moreEl);
+      return;
+    }
+    // Keep every optional entrance, including an unfinished visit, behind the
+    // child's explicit choice. The ending marker never consumes its checkpoint.
+    moreContent.prepend(primaryEl, choicesEl);
+    moreEl.open = false;
+    const summary = Store.todaySummary(), entries = summary.entries.map(endingEntry).filter(Boolean).slice(0,3);
+    clear(endedEl);
+    endedEl.append(el('div.day-ending-head', null, el('span', {'aria-hidden':'true', text:'🌙'}),
+      el('div', null, el('h3', {text:'きょうの できた'}),
+        el('p', {text:summary.total ? summary.total + 'もん あそんだね' : 'じぶんの ペースで いいよ'}))),
+      entries.length ? el('ul.day-ending-list', null, entries) : null,
+      el('p.day-ending-bye', {text:'また あした あそぼう'}),
+      el('div.day-ending-actions', null,
+        el('button.btn.btn-ghost', {type:'button', text:'📒 できたアルバム', onclick(){ Sound.sfx.tap(); ProgressAlbum.open(); }}),
+        el('button.btn.btn-ghost', {type:'button', text:'🏡 じぶんの しま', onclick(){ Sound.sfx.tap(); StickerWorld.open(); }})));
+  }
+  function endToday(){
+    Store.endToday(); Store.flush();
+    Sound.hush(); render(); UI.show('home', {replace:true});
+    Sound.say(homeSpeech(), {delay:180});
   }
   function banner(button, icon, title, detail, action){
     clear(button).append(el('span.ico', { text:icon, 'aria-hidden':'true' }),
@@ -13803,6 +14087,7 @@ const Home = (() => {
 
   function render(){
     build();
+    renderedDay = new Date().toDateString();
     clear(roundsEl); roundsEl.append(Rounds.switcher());
     starEl.textContent = String(Store.totalStars());
     /* A quiet mark for the adult, on the button only they press. The child sees a
@@ -13954,8 +14239,9 @@ const Home = (() => {
             el('span.sub', { text: shut ? 'じゅんびが できると ひらくよ' : w.sub })),
           Treasures.card(w.id)), grid));
     });
+    renderEnding();
   }
-  return { build, render };
+  return { build, render, endToday };
 })();
 
 /* ---------------------------------------------------------- LEVELS */
@@ -14011,6 +14297,11 @@ const Levels = (() => {
         type: 'button', 'aria-label': lv.t + 'の やりかたを みる', title: 'もういちど やりかたを みる',
         onclick(){ Sound.sfx.tap(); FirstSteps.open(g, i); }
       }, '👀'));
+      const short = Store.shortStatus(g.id, i);
+      if (unlocked && (short.canStartGold || short.goldActive)) entry.append(el('button.btn.gold-short-start', {
+        type:'button', 'aria-label':lv.t + 'で きんへ 1もんずつ',
+        onclick(){ Sound.sfx.tap(); FirstSteps.startGold(g, i); }
+      }, short.goldActive ? '✨ きんへ つづきの 1もん' : '✨ きんへ 1もんずつ'));
       listEl.append(entry);
     });
 
@@ -14236,13 +14527,10 @@ const Result = (() => {
       actions.append(act('.btn-accent.primary', '🎓', '1ねんせいの きょうしつへ', home, '一年生の教室に行けるよ。'));
     }
     const homeBtn = act(r.mode === 'level' || r.mode === 'diagnostic' || r.mode === 'adventure' || lead || again || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent',
-      '🏠', 'あそびを えらぶ', home, '遊びを選べるよ。');
+      '🏠', 'きょうは ここまで', () => { Sound.sfx.tap(); Home.endToday(); }, '今日はここまでにできるよ。');
     actions.append(homeBtn);
-    /* 1日10分 — one level and one れんしゅう — is the whole plan, and nothing on the
-       child's side of the app ever said so: every result offered another go, and
-       とっくん's「もういちど」went round for as long as the child kept pressing it.
-       Once today holds that much, this screen says it is enough and the bright
-       button is the way home. Nothing is locked; the other buttons still work. */
+    /* Ending is available after every visit. A longer day makes that choice the
+       leading action too, without locking a child out of optional extra play. */
     if (r.mode !== 'diagnostic' && !r.unlockedG1 && Store.todayCount() >= DAY_ENOUGH){
       inner.append(el('div.enough', null,
         el('span.mk', { text: '🌙', 'aria-hidden': 'true' }), 'きょうは ここまで で じゅうぶん！ また あした あそぼう'));
@@ -14282,7 +14570,7 @@ const Book = (() => {
     node = el('div#book', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
         headEl = el('h2'), speakBtn(() => speech())),
       count, missing, grid);
     return UI.register('book', node);
@@ -14453,7 +14741,7 @@ const Parent = (() => {
     gateNode = el('div#gate', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); clearTimeout(waitTimer); waitTimer = null; UI.show('home', { replace: true }); } }, '←'),
+          onclick(){ Sound.sfx.tap(); clearTimeout(waitTimer); waitTimer = null; Home.render(); UI.show('home', { replace: true }); } }, '←'),
         el('h2', { text: 'おうちの かたへ' })),
       el('div.gate', null,
         el('div.hint', { text: 'おとなの かた だけが すすめます。けいさんの こたえを ' + GATE_RUN + 'もん つづけて えらんで ください。' }),

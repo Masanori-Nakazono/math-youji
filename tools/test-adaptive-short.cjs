@@ -93,6 +93,7 @@ const server = http.createServer((req, res) => {
       assert.deepEqual(await plan(page),{kind:'support',gameId:'count',levelIndex:0});
       await page.getByRole('button',{name:'きょうは ここまで',exact:true}).click();
       assert.match(await page.locator('#home .home-primary').textContent(),/いっしょに 1もん/);
+      await page.locator('#home .home-more > summary').click();
       await page.locator('#home .home-primary').click();
       assert.equal(await page.evaluate(()=>KazuApp.Session._test.introStep),'together');
       assert.equal(await page.evaluate(()=>KazuApp.Session._test.planLength),1);
@@ -266,7 +267,12 @@ const server = http.createServer((req, res) => {
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
         await page.screenshot({path:`/tmp/math-youji-adaptive-finish-${width}.png`,animations:'disabled'});
         await stop.click();
-        const primary=page.locator('#home .home-primary'), box=await primary.boundingBox();
+        assert.equal(await page.locator('#home .day-ending').isVisible(),true);
+        assert.equal(await page.locator('#home .home-primary').isVisible(),false);
+        await page.locator('#home .home-more > summary').click();
+        const primary=page.locator('#home .home-primary');
+        await primary.scrollIntoViewIfNeeded();
+        const box=await primary.boundingBox();
         assert.ok(box.width>=44&&box.height>=44,`large home action at ${width}px`);
         const height=await page.evaluate(()=>innerHeight);
         assert.ok(box.y>=0&&box.y+box.height<=height,`home primary within viewport at ${width}px`);

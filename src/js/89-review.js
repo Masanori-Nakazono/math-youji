@@ -549,7 +549,7 @@ const TextbookReview = (() => {
         lessonOpen(nextId)?button('つぎの レッスン',()=>start(nextId),'btn-accent'):null,
         has&&!pending?button('じぶんの しまに かざる',()=>StickerWorld.open(done.key)):null,
         button('もういちど あそぶ',()=>start(done.id,done.chapter,done.kind==='check'&&due(done.key))),button('ほんの もくじへ',menu),
-        button('きょうは ここまで',()=>{Home.render();UI.show('home');}))));
+        button('きょうは ここまで',()=>Home.endToday()))));
     if(fresh||confirmed)UI.confetti(40);focusHeading();say((fresh?stickerFor(done.key)+'の シール。':'')+note);
   }
   return {open,unlocked,progress,earned,homeCard,collection,parentSummary,lessons,chapters,generate,lessonOpen,chapterOpen,preparation,chapterReady,rewardKeys,pendingSummary,resume,

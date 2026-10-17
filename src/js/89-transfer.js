@@ -322,7 +322,7 @@ const TransferAdventure = (() => {
       el('div.transfer-actions', null,
         owned ? button('じぶんの しまに かざる', () => StickerWorld.open(key(id)), 'btn-accent')
           : button('もういちど あそぶ', () => start(id), 'btn-accent'),
-        button('きょうは ここまで', () => { Home.render(); UI.show('home'); }),
+        button('きょうは ここまで', () => Home.endToday()),
         button('ぼうけんを えらぶ', menu),
         TextbookReview.unlocked() ? button('ほんを うらがえす', () => TextbookReview.open(), 'btn-accent') : null,
         Store.round() === 1 && Rounds.unlocked() ? button('２しゅうめへ', () => Rounds.go(2), 'btn-accent') : null)));

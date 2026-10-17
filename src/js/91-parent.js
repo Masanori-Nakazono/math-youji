@@ -62,7 +62,7 @@ const Parent = (() => {
     gateNode = el('div#gate', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); clearTimeout(waitTimer); waitTimer = null; UI.show('home', { replace: true }); } }, '←'),
+          onclick(){ Sound.sfx.tap(); clearTimeout(waitTimer); waitTimer = null; Home.render(); UI.show('home', { replace: true }); } }, '←'),
         el('h2', { text: 'おうちの かたへ' })),
       el('div.gate', null,
         el('div.hint', { text: 'おとなの かた だけが すすめます。けいさんの こたえを ' + GATE_RUN + 'もん つづけて えらんで ください。' }),

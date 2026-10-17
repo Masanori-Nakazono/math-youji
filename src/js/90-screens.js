@@ -148,7 +148,19 @@ const G1Preparation = (() => {
 const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl, roundsEl;
   let primaryEl, choicesEl, moreEl, diagnosticEl;
+  let contentEl, todayEl, todayHeading, endedEl, moreContent, moreSummary;
   let parentBtn;
+  let renderedDay;
+
+  // A sleeping PWA can return to yesterday's Home without a page reload.
+  // Refresh only the visible Home when its local calendar day has changed.
+  function refreshDay(){
+    if (node && !document.hidden && UI.currentName() === 'home'
+        && renderedDay !== new Date().toDateString()) render();
+  }
+  window.addEventListener('focus', refreshDay);
+  window.addEventListener('pageshow', refreshDay);
+  document.addEventListener('visibilitychange', refreshDay);
 
   function updateVoiceWarning(){
     if (!voiceWarnEl) return;
@@ -204,21 +216,82 @@ const Home = (() => {
       el('span.grow', null, el('span.t', { text: 'はじまりを さがす' }),
         el('span.s', { text: '10もんで ぴったりの あそびを みつけよう' })),
       el('span.go', { text: '▶', 'aria-hidden': 'true' }));
-    moreEl = el('details.home-more', null,
-      el('summary', null, el('span', { text: '🗺️', 'aria-hidden': 'true' }), 'ほかの あそび・ちず'),
-      el('div.home-more-content', null, dailiesEl, diagnosticEl, questsEl, worldsEl, shelfEl,
-        el('section.home-round-section', null, el('h2', { text: 'もういちどの ぼうけん' }), roundsEl)));
-    node.append(el('div.home-content', null, voiceWarnEl,
-      el('section.home-today', { 'aria-label': 'きょうの ぼうけん' },
-        el('h2', { text: 'きょうは ここから' }), primaryEl), choicesEl, moreEl));
+    moreSummary = el('summary');
+    moreContent = el('div.home-more-content', null, dailiesEl, diagnosticEl, questsEl, worldsEl, shelfEl,
+      el('section.home-round-section', null, el('h2', { text: 'もういちどの ぼうけん' }), roundsEl));
+    moreEl = el('details.home-more', null, moreSummary, moreContent);
+    todayHeading = el('h2', {text:'きょうは ここから'});
+    endedEl = el('div.day-ending', {hidden:true});
+    todayEl = el('section.home-today', {'aria-label':'きょうの ぼうけん'}, todayHeading, primaryEl, endedEl);
+    contentEl = el('div.home-content', null, voiceWarnEl, todayEl, choicesEl, moreEl);
+    node.append(contentEl);
     return UI.register('home', node);
   }
 
   const BANNER_ICON = { recommend: '🗺️', first: '🤝', daily: '📅', review: '💬', focus: '🎯' };
   function homeSpeech(){
+    if (Store.endedToday()){
+      const summary = Store.todaySummary();
+      return '今日はここまで。' + (summary.total ? summary.total + '問遊んだね。' : '')
+        + '今日取り組んだことを見てみよう。また明日、遊ぼう。もっと遊びたいときだけ、下の「もうすこしあそぶ」を開いて選べるよ。';
+    }
     const title = primaryEl && $('.t', primaryEl), detail = primaryEl && $('.s', primaryEl);
     return (title ? title.textContent + '。' : '') + (detail ? detail.textContent + '。' : '')
       + 'ほしいシールから選んでもいいよ。ほかの遊びと地図を開くと、好きな遊びも選べるよ。';
+  }
+  function endingEntry(entry){
+    let icon, title, note;
+    if (entry.type === 'review'){
+      const match = /^(r2|r2chapter):(\d+)$/.exec(entry.key);
+      const item = match && (match[1] === 'r2' ? TextbookReview.lessons : TextbookReview.chapters)[Number(match[2])];
+      if (!item) return null;
+      icon = '📘'; title = item.title; note = 'ほんで とりくんだね';
+    } else if (entry.type === 'transfer'){
+      const item = TransferAdventure.missionFor(entry.key);
+      if (!item) return null;
+      icon = item.icon; title = item.title; note = 'ぼうけんに とりくんだね';
+    } else {
+      const game = Games.byId[entry.gameId], level = game && Array.isArray(game.levels) && game.levels[entry.levelIndex];
+      if (!level) return null;
+      icon = game.ico; title = entry.label || game.name + '《' + level.t + '》';
+      note = entry.type === 'milestone' ? Store.milestoneText(entry.kind) : 'とりくんだね';
+    }
+    return el('li.day-ending-entry', {'data-round':entry.round, 'data-kind':entry.type},
+      el('span.day-ending-icon', {'aria-hidden':'true', text:icon}),
+      el('div', null, el('b', {text:title}), el('span', {text:(entry.round === 2 ? '２しゅうめで　' : '') + note})));
+  }
+  function renderEnding(){
+    const ended = Store.endedToday();
+    node.classList.toggle('day-ended', ended);
+    todayHeading.textContent = ended ? 'きょうは ここまで' : 'きょうは ここから';
+    clear(moreSummary);
+    moreSummary.append(el('span', {'aria-hidden':'true', text:ended ? '🌱' : '🗺️'}),
+      ended ? 'もうすこし あそぶ（じぶんで えらぶ）' : 'ほかの あそび・ちず');
+    endedEl.hidden = !ended;
+    if (!ended){
+      todayEl.insertBefore(primaryEl, endedEl);
+      contentEl.insertBefore(choicesEl, moreEl);
+      return;
+    }
+    // Keep every optional entrance, including an unfinished visit, behind the
+    // child's explicit choice. The ending marker never consumes its checkpoint.
+    moreContent.prepend(primaryEl, choicesEl);
+    moreEl.open = false;
+    const summary = Store.todaySummary(), entries = summary.entries.map(endingEntry).filter(Boolean).slice(0,3);
+    clear(endedEl);
+    endedEl.append(el('div.day-ending-head', null, el('span', {'aria-hidden':'true', text:'🌙'}),
+      el('div', null, el('h3', {text:'きょうの できた'}),
+        el('p', {text:summary.total ? summary.total + 'もん あそんだね' : 'じぶんの ペースで いいよ'}))),
+      entries.length ? el('ul.day-ending-list', null, entries) : null,
+      el('p.day-ending-bye', {text:'また あした あそぼう'}),
+      el('div.day-ending-actions', null,
+        el('button.btn.btn-ghost', {type:'button', text:'📒 できたアルバム', onclick(){ Sound.sfx.tap(); ProgressAlbum.open(); }}),
+        el('button.btn.btn-ghost', {type:'button', text:'🏡 じぶんの しま', onclick(){ Sound.sfx.tap(); StickerWorld.open(); }})));
+  }
+  function endToday(){
+    Store.endToday(); Store.flush();
+    Sound.hush(); render(); UI.show('home', {replace:true});
+    Sound.say(homeSpeech(), {delay:180});
   }
   function banner(button, icon, title, detail, action){
     clear(button).append(el('span.ico', { text:icon, 'aria-hidden':'true' }),
@@ -279,6 +352,7 @@ const Home = (() => {
 
   function render(){
     build();
+    renderedDay = new Date().toDateString();
     clear(roundsEl); roundsEl.append(Rounds.switcher());
     starEl.textContent = String(Store.totalStars());
     /* A quiet mark for the adult, on the button only they press. The child sees a
@@ -430,8 +504,9 @@ const Home = (() => {
             el('span.sub', { text: shut ? 'じゅんびが できると ひらくよ' : w.sub })),
           Treasures.card(w.id)), grid));
     });
+    renderEnding();
   }
-  return { build, render };
+  return { build, render, endToday };
 })();
 
 /* ---------------------------------------------------------- LEVELS */
@@ -487,6 +562,11 @@ const Levels = (() => {
         type: 'button', 'aria-label': lv.t + 'の やりかたを みる', title: 'もういちど やりかたを みる',
         onclick(){ Sound.sfx.tap(); FirstSteps.open(g, i); }
       }, '👀'));
+      const short = Store.shortStatus(g.id, i);
+      if (unlocked && (short.canStartGold || short.goldActive)) entry.append(el('button.btn.gold-short-start', {
+        type:'button', 'aria-label':lv.t + 'で きんへ 1もんずつ',
+        onclick(){ Sound.sfx.tap(); FirstSteps.startGold(g, i); }
+      }, short.goldActive ? '✨ きんへ つづきの 1もん' : '✨ きんへ 1もんずつ'));
       listEl.append(entry);
     });
 
@@ -712,13 +792,10 @@ const Result = (() => {
       actions.append(act('.btn-accent.primary', '🎓', '1ねんせいの きょうしつへ', home, '一年生の教室に行けるよ。'));
     }
     const homeBtn = act(r.mode === 'level' || r.mode === 'diagnostic' || r.mode === 'adventure' || lead || again || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent',
-      '🏠', 'あそびを えらぶ', home, '遊びを選べるよ。');
+      '🏠', 'きょうは ここまで', () => { Sound.sfx.tap(); Home.endToday(); }, '今日はここまでにできるよ。');
     actions.append(homeBtn);
-    /* 1日10分 — one level and one れんしゅう — is the whole plan, and nothing on the
-       child's side of the app ever said so: every result offered another go, and
-       とっくん's「もういちど」went round for as long as the child kept pressing it.
-       Once today holds that much, this screen says it is enough and the bright
-       button is the way home. Nothing is locked; the other buttons still work. */
+    /* Ending is available after every visit. A longer day makes that choice the
+       leading action too, without locking a child out of optional extra play. */
     if (r.mode !== 'diagnostic' && !r.unlockedG1 && Store.todayCount() >= DAY_ENOUGH){
       inner.append(el('div.enough', null,
         el('span.mk', { text: '🌙', 'aria-hidden': 'true' }), 'きょうは ここまで で じゅうぶん！ また あした あそぼう'));
@@ -758,7 +835,7 @@ const Book = (() => {
     node = el('div#book', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
         headEl = el('h2'), speakBtn(() => speech())),
       count, missing, grid);
     return UI.register('book', node);

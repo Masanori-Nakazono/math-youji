@@ -59,6 +59,12 @@ jobs:
           node tools/test-short-store.cjs
           node tools/test-short-browser.cjs
           node tools/test-adaptive-short.cjs
+          node tools/test-short-gold.cjs
+
+      - name: Verify responsive number keys and daily endings
+        run: |
+          node tools/test-responsive-keypad.cjs
+          node tools/test-day-ending.cjs
 
       - name: Verify parent guidance follows recent learning
         run: node tools/test-parent-guidance.cjs

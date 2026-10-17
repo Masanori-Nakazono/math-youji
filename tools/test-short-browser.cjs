@@ -82,6 +82,7 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#home .home-primary').getAttribute('data-action'),'short');
       await reload(page);
       await page.evaluate(()=>{KazuApp.Home.render();KazuApp.UI.show('home');});
+      await page.locator('#home .home-more > summary').click();
       await page.locator('#home .home-primary').click();
       assert.equal(await page.evaluate(()=>KazuApp.Session._test.planLength),1);
       assert.equal(await page.evaluate(()=>KazuApp.Session._test.introStep),null);
@@ -94,6 +95,7 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.evaluate(()=>KazuApp.FirstSteps.oneTarget().game.id),'count');
       await reload(page);
       await page.evaluate(()=>{KazuApp.Home.render();KazuApp.UI.show('home');});
+      await page.locator('#home .home-more > summary').click();
       await page.locator('#home .home-primary').click();
       assert.equal(await page.evaluate(()=>KazuApp.Session._test.introStep),null);
     });

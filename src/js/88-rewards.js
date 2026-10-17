@@ -181,7 +181,7 @@ const FirstSteps = (() => {
     }).filter(Boolean).sort((a, b) => b.status.at - a.status.at);
   }
   function shortTarget(){
-    return shortCourses().filter(t => !t.status.confirmed && !t.status.waiting
+    return shortCourses().filter(t => (!t.status.confirmed || t.status.goldActive) && !t.status.waiting
       && !Diagnostic.resting(t.game.id, t.levelIndex))
       .sort((a, b) => Number(b.status.phase === 'check') - Number(a.status.phase === 'check')
         || b.status.at - a.status.at)[0] || null;
@@ -189,7 +189,7 @@ const FirstSteps = (() => {
   function shortPlan(){
     const courses = shortCourses();
     if (!courses.length) return null;
-    const unfinished = courses.filter(t => !t.status.confirmed);
+    const unfinished = courses.filter(t => !t.status.confirmed || t.status.goldActive);
     const available = t => !Diagnostic.resting(t.game.id, t.levelIndex);
     const due = unfinished.find(t => t.status.phase === 'check' && available(t));
     if (due) return {...due, kind:'check'};
@@ -231,7 +231,10 @@ const FirstSteps = (() => {
       return:'すこし やすんだ あそびを ためそう', resume:'1もんずつでも すすむよ',
       easier:'できる ところから ためそう', known:'できる ところから ためそう',
       new:'1もんだけ。ヒントも あるよ', review:'たしかめは また べつのひでも いいよ'};
-    return {title:titles[t.kind] || titles.resume, reason:reasons[t.kind] || reasons.resume};
+    const gold = t.status && t.status.goldActive;
+    return {title:gold && t.kind === 'check' ? 'きんへの たしかめを 1もん'
+      : gold && (t.kind === 'resume' || t.kind === 'return') ? 'きんへ つづきの 1もん' : titles[t.kind] || titles.resume,
+      reason:gold && t.kind === 'resume' ? 'できた シールを のこして、きんに チャレンジ' : reasons[t.kind] || reasons.resume};
   }
   function startPlan(t, opts){
     if (!t) return;
@@ -292,6 +295,12 @@ const FirstSteps = (() => {
     Session.startFirst(game, levelIndex, independent || Store.introduced(game.id, levelIndex)
       ? Store.shortStatus(game.id, levelIndex).phase : 'afterShow');
   }
+  function startGold(game, levelIndex){
+    if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
+    build(); active = {game, levelIndex, opts:null};
+    // The engine settles any completed checkpoint before starting a fresh goal.
+    Session.startFirst(game, levelIndex, 'independent', {gold:true});
+  }
   function open(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
     build(); active = { game, levelIndex, opts: opts || null };
@@ -304,6 +313,9 @@ const FirstSteps = (() => {
       button('🤝', 'みてから ひとつ', () => Session.startFirst(game, levelIndex, 'together')),
       button('👆', 'じぶんで 1もん', () => startOne(game, levelIndex, true, active.opts)),
       button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active.opts)));
+    const status = Store.shortStatus(game.id, levelIndex);
+    if (status.canStartGold || status.goldActive) choices.append(button('✨', status.goldActive
+      ? 'きんへ つづきの 1もん' : 'きんへ 1もんずつ', () => startGold(game, levelIndex)));
     UI.show('first-steps');
     Sound.say('初めてのことは、まず見るだけでもいいよ。一つやったら、そこで終われるよ。', { delay: 180 });
   }
@@ -312,12 +324,20 @@ const FirstSteps = (() => {
     const info = $('.first-detail', result), actions = $('.first-actions', result);
     const short = phase === 'independent' || phase === 'check';
     const status = Store.shortStatus(game.id, levelIndex);
+    const rewards = short ? status.rewardKeys || [] : [];
+    const newGold = rewards.includes(game.id + ':' + levelIndex + ':g');
+    const gold = status.goldActive && status.goldStatus;
     const answered = milestone && milestone.kind === 'together';
     const doneText = short ? milestone ? Store.milestoneText(milestone.kind) : 'ひとつ ためしたね'
       : phase === 'show' || !answered ? 'やりかたを みたね' : 'いっしょに ひとつ できたね';
     info.textContent = doneText;
     if (short){
-      const progress = status.lastResult === 'confirmed' ? '🌟　べつのひも できたね！ シールが かんせいしたよ'
+      const progress = newGold ? '🌟　きんの シールを ゲット！ べつのひも できたね'
+        : gold ? gold.waiting ? gold.checks === 3 ? 'きんへの たしかめは また べつのひに。できた シールは のこるよ'
+          : '8もん じぶんで できたね。べつのひに きんを たしかめよう'
+          : gold.phase === 'check' ? 'きんへの たしかめ　' + gold.checks + '／3もん'
+          : 'きんの じゅんび　ヒントなしで つづけて ' + gold.independentRun + '／8もん'
+        : status.lastResult === 'confirmed' ? '🌟　べつのひも できたね！ シールが かんせいしたよ'
         : status.confirmed ? 'できることを たしかめたね'
         : status.waiting ? status.checks === 3 ? 'たしかめは また べつのひに。きょうは ここまででも いいよ'
           : '8もんぶん たまったね。べつのひに たしかめよう'
@@ -326,6 +346,8 @@ const FirstSteps = (() => {
         : 'じぶんで ためした もんだい　' + status.answered + '／8もん';
       info.append(el('p.first-progress', { text: progress }));
     }
+    if (rewards.length) info.append(el('div.short-rewards', {'aria-label':'もらった シール'},
+      rewards.map(key => PokemonStickers.artwork(key))));
     if (status.resting) info.append(el('p.first-progress', {text:status.supportNeeded
       ? 'いっしょに やりかたを みよう。そのあとは べつの あそびに しよう'
       : 'このあそびは すこし おやすみ。また あとで もどれるよ'}));
@@ -333,23 +355,31 @@ const FirstSteps = (() => {
     if (phase === 'show') actions.append(button('🤝', 'いっしょに ひとつ',
       () => Session.startFirst(game, levelIndex, 'afterShow'), true));
     actions.append(button('🏠', 'きょうは ここまで', () => {
-      Home.render(); UI.show('home', { replace: true });
+      Home.endToday();
     }, phase !== 'show'));
+    if (rewards.length) actions.append(button('🏡', 'しまに はる', () => StickerWorld.open(rewards[rewards.length - 1])));
     if (phase !== 'show'){
       const next = shortPlan() || {game, levelIndex, kind:'resume'};
       const same = next.game.id === game.id && next.levelIndex === levelIndex;
-      actions.append(button(next.kind === 'support' ? '🤝' : '👆', same && next.kind === 'resume'
+      actions.append(button(next.kind === 'support' ? '🤝' : '👆', same && next.kind === 'resume' && !status.goldActive
         ? 'じぶんで もう 1もん' : planCopy(next).title, () => startPlan(next, same && active && active.opts)));
     }
+    if (phase !== 'show' && status.canStartGold) actions.append(button('✨', 'きんへ 1もんずつ',
+      () => startGold(game, levelIndex)));
     actions.append(button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active && active.opts)));
     if (milestone && milestone.label) info.append(el('small', { text: '📒 ' + milestone.label }));
     UI.show('first-finish', { replace: true });
     finishSpeech = doneText + '。' + (short && status.lastResult === 'confirmed'
       ? '別の日もできたね。シールが完成したよ。' : short && status.waiting ? '確かめは、また別の日にしよう。' : '')
       + '今日はここまででもいいよ。';
+    if (rewards.length){
+      finishSpeech = doneText + '。' + rewards.map(key => PokemonStickers.reward(key).name).join('と')
+        + 'のシールをもらったよ。島に貼っても、今日はここまででもいいよ。';
+      Sound.sfx.finish(); UI.confetti(40);
+    }
     Sound.say(finishSpeech, { delay: 200 });
   }
-  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, build, open, startOne, finish, get active(){ return active; } };
+  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, build, open, startOne, startGold, finish, get active(){ return active; } };
 })();
 
 const ProgressAlbum = (() => {

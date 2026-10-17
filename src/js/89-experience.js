@@ -61,8 +61,8 @@ const Diagnostic = (() => {
   const REST_DAYS = 3;
   // Short visits have their own observations: they need relief even though they
   // never invent a completed ordinary attempt just to open the next level.
-  const resting = (id, i) => !cleared(id, i) && (Store.shortStatus(id, i).resting
-    || Store.plays(id, i) >= 3 && Store.daysSince(id, i) < REST_DAYS);
+  const resting = (id, i) => Store.shortStatus(id, i).resting
+    || !cleared(id, i) && Store.plays(id, i) >= 3 && Store.daysSince(id, i) < REST_DAYS;
 
   /* All automatically chosen entrances honour the same breathing space.
      A child may still choose any open lesson from the map. */

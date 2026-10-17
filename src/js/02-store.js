@@ -32,6 +32,7 @@ const reviewRecordValid = (k, v) => !!v && typeof v === 'object' && !Array.isArr
 
 const Store = (() => {
   const KEY = 'kazu-no-bouken.v1';
+  const endedDayValid = v => v === null || Number.isSafeInteger(v) && v >= 0;
   const blank = () => ({
     stars: {},        // "gameId:levelIndex" -> 0..3
     plays: {},        // "gameId:levelIndex" -> attempts
@@ -93,6 +94,9 @@ const Store = (() => {
     reviewRecords: {}, // textbook observations, separate from this lap's map stars/facts
     reviewChaptersOpen: {}, // chapter number -> 1; related preparation opens each entrance once
     reviewSession: null, // unfinished textbook run and the exact current question
+    // Ending is the child's choice for the whole day, shared across both laps.
+    // It changes presentation only; unfinished visits and learning stay intact.
+    endedDay: null,
     name: '',
     sfx: true, voice: true, voiceId: null,
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
@@ -142,6 +146,20 @@ const Store = (() => {
         || !['practice','ready','check','confirmed','retry'].includes(v.lastResult)) return false;
     if (v.items !== undefined && (!Array.isArray(v.items) || v.items.length > 64
         || v.items.some(item => typeof item !== 'string' || item.length > 240))) return false;
+    if (v.rewardKeys !== undefined && (!Array.isArray(v.rewardKeys) || v.rewardKeys.length > 2
+        || v.rewardKeys.some(k => typeof k !== 'string' || !/^[a-z0-9]+:\d+(?::g)?$/.test(k)))) return false;
+    if (v.gold !== undefined){
+      const g = v.gold;
+      if (!g || typeof g !== 'object' || Array.isArray(g) || typeof g.active !== 'boolean'
+          || !bits(g.answers, 8) || !bits(g.checks, 3)
+          || !(g.readyDay === null || count(g.readyDay)) || !(g.checkDay === null || count(g.checkDay))
+          || !['practice','ready','check','confirmed','retry'].includes(g.lastResult)) return false;
+      if (g.readyDay !== null && g.answers !== '11111111') return false;
+      if (g.checks.length && (g.readyDay === null || g.checkDay === null || g.checkDay <= g.readyDay)) return false;
+      if (!g.checks.length && g.checkDay !== null) return false;
+      if (!g.active && (g.lastResult !== 'confirmed' || g.checks !== '111')) return false;
+      if (g.lastResult === 'confirmed' && (g.active || g.answers !== '11111111' || g.checks !== '111')) return false;
+    }
     if (v.adaptive !== undefined){
       const a = v.adaptive;
       if (!a || typeof a !== 'object' || Array.isArray(a) || !bits(a.recent, 12)
@@ -349,10 +367,11 @@ const Store = (() => {
           const want = shape(fresh[k]), got = shape(record[k]);
           if (want === got) continue;
           if ((['diagnostic', 'savedSession', 'reviewSession', 'transferSession'].includes(k) && got === 'object') || (k === 'voiceId' && got === 'string')
-              || (k === 'roundTwo' && got === 'object')) continue;
+              || (k === 'roundTwo' && got === 'object') || (k === 'endedDay' && got === 'number')) continue;
           record[k] = fresh[k];
           bent = true;
         }
+        if (!endedDayValid(record.endedDay)){ record.endedDay = null; bent = true; }
         if (parsed.roundSchema !== 1){
           // A legacy selectedRound=2 meant the textbook, not a fresh repeat lap.
           record.roundSchema = 1; record.selectedRound = 1;
@@ -637,6 +656,10 @@ const Store = (() => {
         out.selectedRound = 1;
       }
     }
+    if (data.endedDay !== undefined){
+      if (!endedDayValid(data.endedDay)) return null;
+      out.endedDay = data.endedDay;
+    }
     if (data.voiceId !== undefined){
       if (data.voiceId !== null && typeof data.voiceId !== 'string') return null;
       out.voiceId = data.voiceId;
@@ -691,6 +714,9 @@ const Store = (() => {
   const maxNum = (a, b) => Math.max(a || 0, b || 0);
   function mergeState(base, add){
     const out = Object.assign(blank(), base);
+    // A historical backup must not make this device end (or reopen) its day.
+    // Replacement deliberately restores that saved presentation state instead.
+    out.endedDay = base.endedDay == null ? null : base.endedDay;
     /* Merging a historical backup must not resurrect a visit finished since it
        was exported. Only replacement restores the backup's interrupted visit. */
     out.savedSession = normalizeSavedSession(base.savedSession);
@@ -1004,25 +1030,38 @@ const Store = (() => {
       misses:Array.from(recent, () => ''), sinceRest:reason ? '' : recent,
       lastDay, restUntil:reason ? lastDay + 3 : null, supportDone:false};
   }
+  function shortProgress(s, complete, required){
+    const today = dayNo();
+    const failed = !!(s && s.checks.length === 3 && rightIn(s.checks) < required);
+    const due = !!(s && s.readyDay !== null && today > s.readyDay && !(failed && s.checkDay >= today));
+    const restart = failed && due;
+    return {phase:!complete && due ? 'check' : 'independent',
+      answered:s ? s.answers.length : 0, right:s ? rightIn(s.answers) : 0,
+      readyDay:s ? s.readyDay : null, checks:s && !restart ? s.checks.length : 0,
+      checkRight:s && !restart ? rightIn(s.checks) : 0,
+      waiting:!!(s && s.readyDay !== null && !complete && !due),
+      lastResult:s ? s.lastResult : 'practice'};
+  }
   function shortStatus(g, l){
     const k = key(g, l), s = mem.shortCourses[k], today = dayNo();
     const confirmed = !!(s && s.confirmed) || mem.stickers.includes(k) && !mem.pending[k];
-    const failed = !!(s && s.checks.length === 3 && rightIn(s.checks) < 2);
-    const due = !!(s && s.readyDay !== null && today > s.readyDay && !(failed && s.checkDay >= today));
-    const restart = failed && due;
+    const hasGold = mem.stickers.includes(k + ':g');
+    const goldActive = !!(confirmed && !hasGold && s && s.gold && s.gold.active);
+    const goldStatus = s && s.gold ? Object.assign(shortProgress(s.gold, hasGold, 3),
+      {active:goldActive, complete:hasGold, independentRun:s.gold.answers.match(/1*$/)[0].length}) : null;
     const adaptive = s ? shortAdaptive(k, s) : null;
     const supportReason = adaptive ? shortSupportReason(adaptive.recent, adaptive.misses) : null;
-    return { phase: !confirmed && due ? 'check' : 'independent',
-      answered:s ? s.answers.length : 0, right:s ? rightIn(s.answers) : 0,
-      readyDay:s ? s.readyDay : null, checks:s && !restart ? s.checks.length : 0,
-      checkRight:s && !restart ? rightIn(s.checks) : 0, confirmed,
-      waiting:!!(s && s.readyDay !== null && !confirmed && !due),
-      lastId:s ? s.lastId : '', lastResult:s ? s.lastResult : 'practice',
+    const learning = !confirmed || goldActive;
+    return Object.assign(goldActive ? shortProgress(s.gold, false, 3) : shortProgress(s, confirmed, 2), {
+      confirmed, goldActive, goldStatus, canStartGold:confirmed && !hasGold && !goldActive,
+      rewardKeys:s && s.rewardKeys ? Array.from(new Set(s.rewardKeys))
+        .filter(r => (r === k || r === k + ':g') && mem.stickers.includes(r)) : [],
+      lastId:s ? s.lastId : '',
       at:s ? s.at : 0, lastDay:adaptive ? adaptive.lastDay : null,
-      supportNeeded:!confirmed && !!supportReason && adaptive.restUntil !== null && !adaptive.supportDone,
-      supportReason:!confirmed ? supportReason : null,
-      resting:!confirmed && !!(adaptive && adaptive.restUntil !== null && today < adaptive.restUntil),
-      restUntil:!confirmed && adaptive ? adaptive.restUntil : null };
+      supportNeeded:learning && !!supportReason && adaptive.restUntil !== null && !adaptive.supportDone,
+      supportReason:learning ? supportReason : null,
+      resting:learning && !!(adaptive && adaptive.restUntil !== null && today < adaptive.restUntil),
+      restUntil:learning && adaptive ? adaptive.restUntil : null });
   }
 
   function startShortCourse(g, l){
@@ -1034,6 +1073,21 @@ const Store = (() => {
         confirmed:false, evidence:mem.recent[k] || '', items:[], lastId:'', lastResult:'practice', at:Date.now()};
       save();
     }
+    return shortStatus(g, l);
+  }
+
+  function startShortGold(g, l){
+    if (typeof g !== 'string' || !/^[a-z0-9]+$/.test(g) || !Number.isSafeInteger(l) || l < 0
+        || !shortStatus(g, l).canStartGold) return shortStatus(g, l);
+    startShortCourse(g, l);
+    const s = mem.shortCourses[key(g, l)];
+    s.gold = {active:true, answers:'', readyDay:null, checks:'', checkDay:null, lastResult:'practice'};
+    s.rewardKeys = [];
+    // This optional challenge observes a fresh run of independent work. Its
+    // guidance cycle is separate from difficulties before the ordinary clear.
+    s.adaptive = {recent:'', kinds:'', misses:[], sinceRest:'', lastDay:dayNo(), restUntil:null, supportDone:false};
+    s.at = Math.max(Date.now(), s.at + 1);
+    save();
     return shortStatus(g, l);
   }
 
@@ -1079,12 +1133,40 @@ const Store = (() => {
       typeof item === 'string' && item.length <= 240))).slice(-64);
     s.lastId = runId;
     s.lastResult = 'practice';
+    s.rewardKeys = [];
     // Each one-question visit is complete in its own right. Keep every observed
     // answer in lifetime statistics, including extra practice and failed checks.
     mem.seen[g] = (mem.seen[g] || 0) + 1;
     const ft = mem.firstTry[g] || [0, 0];
     mem.firstTry[g] = [ft[0] + Number(clean), ft[1] + 1];
-    if (!before.confirmed && phase === 'check' && before.phase === 'check'){
+    if (before.goldActive){
+      const challenge = s.gold;
+      challenge.lastResult = 'practice';
+      if (phase === 'check' && before.phase === 'check'){
+        if (challenge.checks.length === 3) challenge.checks = '';
+        challenge.checks += clean ? '1' : '0';
+        challenge.checkDay = today;
+        challenge.lastResult = 'check';
+        if (challenge.checks.length === 3){
+          if (challenge.checks === '111'){
+            challenge.active = false; challenge.lastResult = 'confirmed';
+            mem.stars[k] = Math.max(mem.stars[k] || 0, 3);
+            if (!mem.stickers.includes(k + ':g')){
+              mem.stickers.push(k + ':g'); gold = true; s.rewardKeys.push(k + ':g');
+            }
+            // This completed challenge supplies eleven real observations, not
+            // an invented ordinary session or another award for the first clear.
+            s.evidence = (s.evidence + challenge.answers + challenge.checks).slice(-30);
+          } else challenge.lastResult = 'retry';
+        }
+      } else if (challenge.readyDay === null){
+        challenge.answers = (challenge.answers + bit).slice(-8);
+        if (challenge.answers === '11111111'){
+          challenge.readyDay = today; challenge.lastResult = 'ready';
+        }
+      }
+      s.lastResult = challenge.lastResult;
+    } else if (!before.confirmed && phase === 'check' && before.phase === 'check'){
       if (s.checks.length === 3) s.checks = '';
       s.checks += clean ? '1' : '0';
       s.checkDay = today;
@@ -1096,9 +1178,9 @@ const Store = (() => {
           const stars = perfect ? 3 : 2;
           mem.stars[k] = Math.max(mem.stars[k] || 0, stars);
           mem.plays[k] = (mem.plays[k] || 0) + 1;
-          if (!mem.stickers.includes(k)){ mem.stickers.push(k); newSticker = true; }
+          if (!mem.stickers.includes(k)){ mem.stickers.push(k); newSticker = true; s.rewardKeys.push(k); }
           delete mem.pending[k];
-          if (perfect && !mem.stickers.includes(k + ':g')){ mem.stickers.push(k + ':g'); gold = true; }
+          if (perfect && !mem.stickers.includes(k + ':g')){ mem.stickers.push(k + ':g'); gold = true; s.rewardKeys.push(k + ':g'); }
           s.evidence = (s.evidence + s.answers + s.checks).slice(-30);
         } else s.lastResult = 'retry';
       }
@@ -1116,17 +1198,59 @@ const Store = (() => {
 
   function noteShortSupport(g, l){
     const k = key(g, l), s = mem.shortCourses[k];
-    if (!s || !shortStatus(g, l).supportNeeded) return false;
-    const adaptive = shortAdaptive(k, s);
-    adaptive.supportDone = true;
-    s.adaptive = adaptive;
+    if (!s) return false;
+    const needed = shortStatus(g, l).supportNeeded, reward = s.rewardKeys && s.rewardKeys.length;
+    if (!needed && !reward) return false;
+    if (needed){
+      const adaptive = shortAdaptive(k, s);
+      adaptive.supportDone = true;
+      s.adaptive = adaptive;
+    }
+    s.rewardKeys = [];
     s.at = Math.max(Date.now(), s.at + 1);
     save();
     return true;
   }
 
+  /** Today's actual observations, across both laps. A familiar item need not earn
+      another milestone: its last-practised day still proves it was tried today.
+      Such entries deliberately say nothing about independent correctness. */
+  function todaySummary(){
+    const day = dayNo(), entries = new Map();
+    [record, record.roundTwo].forEach((source, index) => {
+      if (!source) return;
+      const lap = index + 1;
+      for (const [key, m] of Object.entries(source.milestones || {})){
+        const match = /^([a-z0-9]+):(\d+):(viewed|together|supported|revised|independent)$/.exec(key);
+        if (!match || !m || m.day !== day) continue;
+        const group = lap + ':' + match[1] + ':' + match[2], current = entries.get(group);
+        if (!current || MILESTONE_RANK[match[3]] > MILESTONE_RANK[current.kind])
+          entries.set(group, {round:lap, type:'milestone', gameId:match[1], levelIndex:Number(match[2]), kind:match[3], label:m.label});
+      }
+      for (const [key, r] of Object.entries(source.reviewRecords || {}))
+        if (r && r.day === day) entries.set(lap + ':review:' + key, {round:lap, type:'review', key});
+      for (const [key, r] of Object.entries(source.transferRecords || {}))
+        if (r && r.day === day) entries.set(lap + ':transfer:' + key, {round:lap, type:'transfer', key:'transfer:' + key});
+      for (const f of Object.values(source.facts || {})){
+        const match = f && typeof f[4] === 'string' && /^([a-z0-9]+):(\d+)$/.exec(f[4]);
+        if (!match || !f[0] || f[2] !== day) continue;
+        const group = lap + ':' + match[1] + ':' + match[2];
+        if (!entries.has(group)) entries.set(group, {round:lap, type:'practice', gameId:match[1], levelIndex:Number(match[2]),
+          label:typeof f[3] === 'string' ? f[3].slice(0,80) : ''});
+      }
+    });
+    return {day, date:todayKey(), total:dailyTotal(todayKey()), entries:Array.from(entries.values())};
+  }
+
   return {
     get data(){ return mem; },
+    endToday(){
+      const today = dayNo();
+      if (record.endedDay === today) return false;
+      record.endedDay = today; save(); return true;
+    },
+    endedToday: () => record.endedDay === dayNo(),
+    todaySummary,
     round, selectRound,
     roundData: n => n === 1 ? record : n === 2 ? record.roundTwo : null,
     unlockRoundTwo(){
@@ -1204,7 +1328,7 @@ const Store = (() => {
       save();
     },
 
-    shortStatus, startShortCourse, recordShortAnswer, noteShortSupport,
+    shortStatus, startShortCourse, startShortGold, recordShortAnswer, noteShortSupport,
     shortItems(g, l){
       const course = mem.shortCourses[key(g, l)];
       return course && course.items ? course.items.slice() : [];

@@ -40,6 +40,13 @@ function answer(S, clean = true, phase, id = 'short-' + (++serial)){
 function prepare(S, bits = '11111111'){
   for (const bit of bits) answer(S,bit === '1','independent');
 }
+function silver(fixture){
+  const S = fixture.store;
+  prepare(S,'11111110'); fixture.advance(1);
+  answer(S); answer(S); answer(S);
+  assert.equal(S.stars('count',0),2); assert.equal(S.hasSticker('count:0:g'),false);
+  return S;
+}
 
 {
   const fixture = load(), S = fixture.store;
@@ -442,6 +449,185 @@ function prepare(S, bits = '11111111'){
   assert.deepEqual(clone(restored.shortStatus('count',0)),observed);
   assert.equal(restored.plays('count',0),0);assert.equal(restored.totalStars(),0);
   passed('a backwards local date keeps adaptive observations reloadable and importable without moving calendar counts');
+}
+
+{
+  const fixture = load(), S = fixture.store;
+  const empty = raw(S);
+  assert.equal(S.startShortGold('count',0).goldActive,false);
+  assert.deepEqual(raw(S),empty);
+  silver(fixture);
+  assert.deepEqual(clone(S.shortStatus('count',0).rewardKeys),['count:0']);
+  for (let i = 0; i < 100; i++) answer(S);
+  assert.equal(S.stars('count',0),2); assert.equal(S.shortStatus('count',0).canStartGold,true);
+  const before = raw(S), ordinary = clone(S.data.shortCourses['count:0']);
+  const begun = S.startShortGold('count',0);
+  assert.equal(begun.goldActive,true); assert.equal(begun.confirmed,true);
+  assert.equal(begun.answered,0); assert.equal(begun.right,0); assert.equal(begun.readyDay,null);
+  assert.equal(begun.canStartGold,false); assert.deepEqual(clone(begun.rewardKeys),[]);
+  for (const field of ['seen','firstTry','recent','daily','plays','stars','stickers','intro'])
+    assert.deepEqual(raw(S)[field],before[field]);
+  for (const field of ['answers','readyDay','checks','checkDay','confirmed','evidence'])
+    assert.deepEqual(S.data.shortCourses['count:0'][field],ordinary[field]);
+  for (let i = 0; i < 8; i++) answer(S);
+  assert.equal(S.shortStatus('count',0).waiting,true);
+  assert.equal(S.shortStatus('count',0).answered,8); assert.equal(S.shortStatus('count',0).right,8);
+  assert.equal(S.stars('count',0),2); assert.equal(S.plays('count',0),1);
+  answer(S,true,'check');
+  assert.equal(S.shortStatus('count',0).checks,0); // The gold check also requires a later day.
+  fixture.advance(1); answer(S); answer(S);
+  const won = answer(S,true,'check','gold-final');
+  assert.equal(won.gold,true); assert.equal(won.newSticker,false); assert.equal(won.justConfirmed,false);
+  assert.equal(won.goldActive,false); assert.equal(won.goldStatus.complete,true);
+  assert.equal(won.goldStatus.lastResult,'confirmed');
+  assert.deepEqual(clone(won.rewardKeys),['count:0:g']);
+  assert.equal(S.stars('count',0),3); assert.equal(S.plays('count',0),1);
+  assert.equal(S.readiness('count',0).count,22); assert.equal(S.readiness('count',0).accuracy,21/22);
+  assert.equal(S.data.shortCourses['count:0'].answers,'11111110');
+  assert.equal(S.data.shortCourses['count:0'].checks,'111');
+  assert.deepEqual(clone(S.data.firstTry.count),[122,123]);
+  const awarded = raw(S);
+  assert.equal(answer(S,true,'check','gold-final').updated,false);
+  assert.deepEqual(raw(S),awarded);
+  assert.equal(S.startShortGold('count',0).goldActive,false);
+  assert.deepEqual(raw(S),awarded);
+  passed('an optional fresh eight-question course and later-day perfect check can upgrade silver to gold without re-awarding the clear or inflating ordinary attempts');
+}
+
+{
+  const fixture = load(), S = silver(fixture);
+  S.startShortGold('count',0);
+  answer(S,false); answer(S,false); answer(S,false);
+  const paused = S.shortStatus('count',0);
+  assert.equal(paused.confirmed,true); assert.equal(paused.goldActive,true);
+  assert.equal(paused.supportNeeded,true); assert.equal(paused.resting,true);
+  assert.equal(paused.answered,3); assert.equal(paused.right,0);
+  assert.equal(S.hasConfirmed('count:0'),true); assert.equal(S.stars('count',0),2);
+  assert.equal(S.noteShortSupport('count',0),true);
+  assert.equal(S.shortStatus('count',0).supportNeeded,false);
+  fixture.advance(3); prepare(S);
+  assert.equal(S.shortStatus('count',0).waiting,true);
+  fixture.advance(1); answer(S); answer(S); answer(S,false);
+  assert.equal(S.shortStatus('count',0).lastResult,'retry');
+  assert.equal(S.shortStatus('count',0).waiting,true);
+  assert.equal(S.shortStatus('count',0).goldActive,true);
+  assert.equal(S.stars('count',0),2); assert.equal(S.hasSticker('count:0:g'),false);
+  assert.deepEqual(clone(S.shortStatus('count',0).rewardKeys),[]);
+  answer(S,true,'check');
+  assert.equal(S.shortStatus('count',0).checks,3);
+  fixture.advance(1); assert.equal(S.shortStatus('count',0).checks,0);
+  answer(S); answer(S); const won = answer(S);
+  assert.equal(won.gold,true); assert.equal(S.hasSticker('count:0:g'),true);
+  assert.equal(S.plays('count',0),1); assert.equal(S.hasConfirmed('count:0'),true);
+  passed('supported gold practice receives relief, a two-of-three check cannot earn gold, and another-day retry preserves the ordinary clear');
+}
+
+{
+  const fixture = load(), S = silver(fixture);
+  S.startShortGold('count',0); answer(S);
+  const active = raw(S);
+  S.startShortGold('count',0);
+  assert.deepEqual(raw(S),active);
+  const backup = S.exportText(), status = clone(S.shortStatus('count',0));
+  const reloaded = load(raw(S),1).store;
+  assert.deepEqual(clone(reloaded.shortStatus('count',0)),status);
+  assert.equal(answer(reloaded,true,'independent',S.shortStatus('count',0).lastId).updated,false);
+  const replacement = load(undefined,1).store;
+  assert.equal(replacement.importText(backup,'replace').ok,true);
+  assert.deepEqual(clone(replacement.shortStatus('count',0)),status);
+  answer(replacement,true,'independent','new-local-gold-answer');
+  const newest = raw(replacement);
+  replacement.importText(backup); replacement.importText(backup);
+  assert.deepEqual(raw(replacement),newest);
+  S.unlockRoundTwo(); S.selectRound(2);
+  assert.equal(S.shortStatus('count',0).goldActive,false);
+  assert.equal(S.shortStatus('count',0).canStartGold,false);
+  S.recordLevel('count',0,2,6,8); S.addSticker('count:0');
+  S.startShortGold('count',0); answer(S,false);
+  assert.equal(S.shortStatus('count',0).goldActive,true);
+  assert.equal(S.shortStatus('count',0).right,0);
+  S.selectRound(1);
+  assert.deepEqual(clone(S.shortStatus('count',0)),status);
+  const both = load(undefined,1).store;
+  assert.equal(both.importText(S.exportText(),'replace').ok,true);
+  assert.equal(both.shortStatus('count',0).right,1);
+  both.selectRound(2); assert.equal(both.shortStatus('count',0).right,0);
+  passed('gold snapshots survive reload, answer replay, replacement and repeated merges while each lap keeps its own optional challenge');
+}
+
+{
+  const fixture = load(), S = fixture.store;
+  S.recordLevel('count',0,2,6,8); S.addSticker('count:0');
+  assert.equal(S.data.shortCourses['count:0'],undefined);
+  assert.equal(S.shortStatus('count',0).canStartGold,true);
+  const before = raw(S);
+  assert.equal(S.startShortGold('count',0).goldActive,true);
+  for (const field of ['seen','firstTry','daily','plays','stars','stickers','intro'])
+    assert.deepEqual(raw(S)[field],before[field]);
+  assert.equal(S.shortStatus('count',0).confirmed,true);
+  assert.equal(S.shortStatus('count',0).answered,0);
+  S.addSticker('count:0:g'); // An ordinary perfect course or a merged backup can finish first.
+  assert.equal(S.shortStatus('count',0).goldActive,false);
+  assert.equal(S.shortStatus('count',0).goldStatus.complete,true);
+  assert.equal(S.shortStatus('count',0).canStartGold,false);
+  const wonElsewhere = raw(S);
+  S.startShortGold('count',0);
+  assert.deepEqual(raw(S),wonElsewhere);
+  passed('ordinary and legacy confirmed clears can enter without short history and a gold earned elsewhere safely ends the optional challenge');
+}
+
+{
+  const fixture = load(), S = fixture.store;
+  prepare(S); fixture.advance(1); answer(S); answer(S); answer(S);
+  assert.deepEqual(clone(S.shortStatus('count',0).rewardKeys),['count:0','count:0:g']);
+  const reloaded = load(raw(S),1).store;
+  assert.deepEqual(clone(reloaded.shortStatus('count',0).rewardKeys),['count:0','count:0:g']);
+  reloaded.shortStatus('count',0).rewardKeys.push('mutated');
+  assert.equal(reloaded.shortStatus('count',0).rewardKeys.length,2);
+  reloaded.noteShortSupport('count',0); // A different, guided answer is not another award.
+  assert.deepEqual(clone(reloaded.shortStatus('count',0).rewardKeys),[]);
+  answer(S);
+  assert.deepEqual(clone(S.shortStatus('count',0).rewardKeys),[]);
+  const foreign = raw(S);
+  foreign.stickers.push('numeral:0:g');
+  foreign.shortCourses['count:0'].rewardKeys=['numeral:0:g'];
+  const restored = load().store;
+  assert.equal(restored.importText(JSON.stringify(foreign),'replace').ok,true);
+  assert.deepEqual(clone(restored.shortStatus('count',0).rewardKeys),[]);
+  foreign.shortCourses['count:0'].rewardKeys=['count:0:g'];
+  foreign.stickers=foreign.stickers.filter(k=>k!=='count:0:g');
+  assert.equal(restored.importText(JSON.stringify(foreign),'replace').ok,true);
+  assert.deepEqual(clone(restored.shortStatus('count',0).rewardKeys),[]);
+  const legacy = raw(S); delete legacy.shortCourses['count:0'].rewardKeys;
+  assert.deepEqual(clone(load(legacy).store.shortStatus('count',0).rewardKeys),[]);
+  passed('only this answer\'s newly owned stickers survive result reload, and another level or an unowned backup key cannot masquerade as the reward');
+}
+
+{
+  const fixture = load(), S = silver(fixture);
+  S.startShortGold('count',0); answer(S);
+  const valid = raw(S), mutations = [
+    c=>{c.gold.active='yes';}, c=>{c.gold.answers='111111111';},
+    c=>{c.gold.readyDay=S.dayNumber();}, c=>{c.gold.checks='1';},
+    c=>{c.gold.lastResult='gold';}, c=>{c.gold.active=false;},
+    c=>{c.gold.checkDay=0;}, c=>{c.rewardKeys='count:0:g';},
+    c=>{c.rewardKeys=[{}];}
+  ];
+  for (const mutate of mutations){
+    const broken = clone(valid); mutate(broken.shortCourses['count:0']);
+    assert.equal(load().store.importText(JSON.stringify(broken),'replace').ok,false);
+  }
+  const broken = clone(valid); broken.shortCourses['count:0'].gold.active=null;
+  const recovered = load(broken);
+  assert.equal(recovered.store.shortStatus('count',0).goldActive,false);
+  assert.equal(recovered.store.hasConfirmed('count:0'),true);
+  assert.equal(recovered.store.stars('count',0),2);
+  assert.ok(recovered.storage.has('kazu-no-bouken.v1.unreadable'));
+  fixture.advance(-1); answer(S);
+  const rolled = clone(S.shortStatus('count',0));
+  assert.deepEqual(clone(load(raw(S)).store.shortStatus('count',0)),rolled);
+  assert.equal(load().store.importText(S.exportText(),'replace').ok,true);
+  passed('gold metadata validates atomically, damaged startup progress preserves earned clears and local clock rollback cannot corrupt the challenge');
 }
 
 console.log('All short-course store tests passed.');

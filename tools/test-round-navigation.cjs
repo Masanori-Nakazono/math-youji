@@ -188,7 +188,7 @@ const server = http.createServer((req, res) => {
     assert.equal(played.screen, 'result'); assert.equal(played.stars, 3); assert.equal(played.normal, true); assert.equal(played.gold, true);
     assert.equal(played.first, fresh.first); await expectRound(page, 'result', 2);
     assert.ok(await page.locator('#result .pokemon-second-round .pokemon-round-badge').count() > 0); await capture(page, 'sticker2');
-    await page.locator('#result .result-actions button').filter({ hasText: /あそびを えらぶ|きょうは おしまい/ }).click();
+    await page.locator('#result .result-actions button').filter({ hasText: /きょうは ここまで|きょうは おしまい/ }).click();
     await expectRound(page, 'home', 2);
     passed('a replayed level earns distinct lap 2 normal and gold stickers without changing any first-lap learning field');
 

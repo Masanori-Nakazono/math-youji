@@ -12,7 +12,7 @@
    less likely to throw away the localStorage the records live in. */
 'use strict';
 
-const VERSION = '5c5df3d47ffd';
+const VERSION = '6b094b2b53c4';
 const CACHE   = 'kazu-no-bouken-' + VERSION;
 /* Every name the app itself is served under. Pages publishes the one file twice
    (index.html and kazu-no-bouken.html), and a name missing here was only cached
