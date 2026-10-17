@@ -2001,6 +2001,24 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 #parent .factchip.slow{ background:color-mix(in srgb, var(--c-yellow) 32%, var(--card)); }
 /* what kind of wrong it was — the sentence, not the percentage */
 #parent .factchip em{ font-style:normal; font-weight:500; color:var(--oops-ink); font-size:.78em }
+/* Parent observations stay readable beside their one-question action, including
+   narrow phones. Each tone describes today's state rather than lifetime errors. */
+#parent .parent-recommendation{
+  padding:calc(var(--u)*.9); margin:calc(var(--u)*.7) 0;
+  border:2px solid var(--good); border-radius:calc(var(--u)*.8); background:var(--good-soft);
+}
+#parent .parent-recommendation b{ display:block; overflow-wrap:anywhere }
+#parent .parent-recommendation p, #parent .parent-fact p{ margin:calc(var(--u)*.35) 0 calc(var(--u)*.65) }
+#parent .parent-fact-copy{ flex:1; min-width:0; overflow-wrap:anywhere }
+#parent .parent-fact-copy > small{ color:var(--ink-soft) }
+#parent .parent-practice-note{ font-size:.85em; color:var(--ink-soft) }
+#parent .parent-fact[data-fact-state="need"] .mk{ background:var(--c-yellow); color:var(--ink) }
+#parent .parent-fact[data-fact-state="rest"] .mk,
+#parent .parent-fact[data-fact-state="stale"] .mk{ background:var(--paper-2); color:var(--ink-soft) }
+#parent .parent-next .btn{
+  max-width:100%; min-height:44px; min-width:44px; white-space:normal;
+  font-size:max(14px,calc(var(--u)*1.1)); padding:8px 12px;
+}
 #parent .misslist{ display:grid; gap:calc(var(--u)*.4); margin:calc(var(--u)*.6) 0 }
 #parent .missrow{
   display:grid; grid-template-columns:1fr auto; gap:0 calc(var(--u)*.8);
@@ -2895,6 +2913,29 @@ polygon.slot-focus{ stroke:var(--ring); stroke-width:2.8; stroke-dasharray:none;
 .review-support-pair i{display:block;width:25px;height:25px;border:2px solid #8B723C;background:#E9C26C;border-radius:5px;}
 .review-support-pair>span{height:25px;font-size:18px;line-height:25px;}
 .review-support-empty{border:2px dashed var(--card-edge);border-radius:50%;padding:22px 15px;}
+
+/* Keep help and its next action together, independent of the long question page. */
+dialog.review-hint{position:fixed;inset:0;width:min(680px,calc(100vw - 28px));max-width:none;max-height:calc(100vh - 28px);max-height:calc(100dvh - 28px);margin:auto;padding:0;border:3px solid var(--c-blue);border-radius:20px;background:var(--paper);color:var(--ink);overflow:hidden;box-sizing:border-box;box-shadow:0 12px 48px rgba(0,0,0,.25);font-size:18px;line-height:1.7;}
+dialog.review-hint[open]{display:flex;flex-direction:column;}
+dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
+.review-help-heading{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 12px;border-bottom:2px solid var(--card-edge);flex:none;}
+.review-help-heading>div{min-width:0;flex:1;}
+.review-help-heading h3{font-size:22px;margin:0 0 4px;}
+.review-help-heading p{font-size:17px;line-height:1.6;margin:0;}
+.review-help-heading .review-hint-hear{flex:none;min-width:56px;min-height:56px;padding:6px;}
+.review-help-content{overflow:auto;min-height:0;padding:8px 18px 12px;overscroll-behavior:contain;}
+.review-help-content>p{margin:10px 0 0;}
+.review-help-response{font-weight:900;color:var(--ink);}
+.review-hint .review-support-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px 18px 16px;background:var(--paper-2);border-top:2px solid var(--card-edge);flex:none;}
+.review-hint .review-support-actions .btn{min-width:0;min-height:64px;white-space:normal;line-height:1.5;font-size:17px;padding:10px;}
+@media(max-width:480px){
+  .review-help-heading{padding:12px;gap:8px;}
+  .review-help-heading h3{font-size:20px;}
+  .review-help-heading p{font-size:16px;}
+  .review-help-content{padding:6px 12px 12px;}
+  .review-hint .review-support-actions{padding:12px;gap:8px;}
+  .review-hint .review-support-actions .btn{font-size:16px;}
+}
 </style>
 <div id="stage"></div>
 <div id="fx" aria-hidden="true"></div>
@@ -3814,6 +3855,22 @@ const Store = (() => {
         || !['practice','ready','check','confirmed','retry'].includes(v.lastResult)) return false;
     if (v.items !== undefined && (!Array.isArray(v.items) || v.items.length > 64
         || v.items.some(item => typeof item !== 'string' || item.length > 240))) return false;
+    if (v.adaptive !== undefined){
+      const a = v.adaptive;
+      if (!a || typeof a !== 'object' || Array.isArray(a) || !bits(a.recent, 12)
+          || !bits(a.sinceRest, 12) || !count(a.lastDay)
+          || typeof a.supportDone !== 'boolean'
+          || !(a.restUntil === null || count(a.restUntil))
+          || typeof a.kinds !== 'string' || !/^[irsv]*$/.test(a.kinds)
+          || a.kinds.length !== a.recent.length || !Array.isArray(a.misses)
+          || a.misses.length !== a.recent.length
+          || a.misses.some(m => typeof m !== 'string' || m.length > 40 || !/^[a-z0-9-]*$/.test(m))
+          || !a.recent.endsWith(a.sinceRest)
+          || (a.restUntil !== null && a.restUntil > a.lastDay + 3)) return false;
+      // The observation's meaning travels with its outcome, including on import.
+      if (Array.from(a.recent).some((bit, i) => (bit === '1') !== (a.kinds[i] === 'i')
+          || bit === '1' && a.misses[i] !== '')) return false;
+    }
     if (v.readyDay !== null && (v.answers.length !== 8 || v.answers.split('1').length - 1 < 6)) return false;
     if (v.checks.length && (v.readyDay === null || v.checkDay === null || v.checkDay <= v.readyDay)) return false;
     if (!v.checks.length && v.checkDay !== null) return false;
@@ -4579,23 +4636,34 @@ const Store = (() => {
     return (1 - acc) * 1.6 + (age / 30) * 0.6 + (f[0] < 3 ? 0.25 : 0) + slow * 0.5;
   }
 
+  /** One reading of item-level progress for both the child's practice and the
+      parent page. Lifetime misses remain in the backup, while recent independent
+      answers can retire an old difficulty without rewriting that history. */
+  function factStatus(k){
+    const f = mem.facts[k];
+    if (!f || !f[0]) return null;
+    const recent = (mem.factRecent && mem.factRecent[k]) || '';
+    const recentRight = recent.split('1').length - 1;
+    const missed = f[0] - f[1], accuracy = f[1] / f[0];
+    const recovered = recent.length >= 6 && recentRight / recent.length >= .85;
+    const slow = f[5] >= FLUENT_SLOW_MS;
+    const needsPractice = !!f[4] && (slow || missed >= 1 && !recovered
+      && !(accuracy >= .8 && missed < 2));
+    return {key:k, label:f[3] || k, at:f[4] || null, n:f[0], right:f[1], accuracy,
+      recentN:recent.length, recentAccuracy:recent.length ? recentRight / recent.length : null,
+      recovered, slow, needsPractice, daysSince:Math.max(0, dayNo() - f[2]),
+      missed, due:dueOf(k), ms:f[5] || null};
+  }
+
   /** The facts this child keeps missing, worst first.
       Only facts they have actually met and actually got wrong: 集中練習 is practice,
       not first contact, and one slip is not a gap. */
   function weakFacts(limit){
     const out = [];
     for (const k in mem.facts){
-      const f = mem.facts[k];
-      if (!f || !f[0] || !f[4]) continue;        // never asked, or nowhere to ask it again
-      const missed = f[0] - f[1];
-      const recent = (mem.factRecent && mem.factRecent[k]) || '';
-      const recentRight = recent.split('').filter(x => x === '1').length;
-      const recovered = recent.length >= 6 && recentRight / recent.length >= .85;
-      // right every time but still being counted out: the case a percentage cannot show
-      const slow = f[5] >= FLUENT_SLOW_MS;
-      if ((missed < 1 || recovered) && !slow) continue;
-      if (!slow && f[1] / f[0] >= 0.8 && missed < 2) continue;   // one slip on a solid fact
-      out.push({ key: k, label: f[3] || k, at: f[4], due: dueOf(k), missed, ms: f[5] || null, slow });
+      const status = factStatus(k);
+      if (!status || !status.needsPractice) continue;
+      out.push(status);
     }
     out.sort((a, b) => b.due - a.due || b.missed - a.missed);
     return limit ? out.slice(0, limit) : out;
@@ -4633,18 +4701,41 @@ const Store = (() => {
   }
 
   const rightIn = bits => bits.split('1').length - 1;
+  function shortSupportReason(bits, misses){
+    const repeated = misses && misses.length >= 3 && misses.slice(-3).every(m => m && m === misses[misses.length - 1]);
+    if (repeated) return 'repeated-error';
+    if (bits.endsWith('000') || bits.length >= 6 && rightIn(bits.slice(-6)) < 3) return 'support';
+    return null;
+  }
+  function shortAdaptive(k, s){
+    if (s.adaptive) return s.adaptive;
+    // Older one-question courses already contain real observations. Use them to
+    // offer relief immediately, without inventing an ordinary level attempt.
+    const recent = (s.answers + s.checks).slice(-12), lastDay = mem.last[k] || dayOf(s.at);
+    const reason = shortSupportReason(recent);
+    return {recent, kinds:Array.from(recent, bit => bit === '1' ? 'i' : 's').join(''),
+      misses:Array.from(recent, () => ''), sinceRest:reason ? '' : recent,
+      lastDay, restUntil:reason ? lastDay + 3 : null, supportDone:false};
+  }
   function shortStatus(g, l){
     const k = key(g, l), s = mem.shortCourses[k], today = dayNo();
     const confirmed = !!(s && s.confirmed) || mem.stickers.includes(k) && !mem.pending[k];
     const failed = !!(s && s.checks.length === 3 && rightIn(s.checks) < 2);
     const due = !!(s && s.readyDay !== null && today > s.readyDay && !(failed && s.checkDay >= today));
     const restart = failed && due;
+    const adaptive = s ? shortAdaptive(k, s) : null;
+    const supportReason = adaptive ? shortSupportReason(adaptive.recent, adaptive.misses) : null;
     return { phase: !confirmed && due ? 'check' : 'independent',
       answered:s ? s.answers.length : 0, right:s ? rightIn(s.answers) : 0,
       readyDay:s ? s.readyDay : null, checks:s && !restart ? s.checks.length : 0,
       checkRight:s && !restart ? rightIn(s.checks) : 0, confirmed,
       waiting:!!(s && s.readyDay !== null && !confirmed && !due),
-      lastId:s ? s.lastId : '', lastResult:s ? s.lastResult : 'practice' };
+      lastId:s ? s.lastId : '', lastResult:s ? s.lastResult : 'practice',
+      at:s ? s.at : 0, lastDay:adaptive ? adaptive.lastDay : null,
+      supportNeeded:!confirmed && !!supportReason && adaptive.restUntil !== null && !adaptive.supportDone,
+      supportReason:!confirmed ? supportReason : null,
+      resting:!confirmed && !!(adaptive && adaptive.restUntil !== null && today < adaptive.restUntil),
+      restUntil:!confirmed && adaptive ? adaptive.restUntil : null };
   }
 
   function startShortCourse(g, l){
@@ -4659,7 +4750,7 @@ const Store = (() => {
     return shortStatus(g, l);
   }
 
-  function recordShortAnswer(g, l, clean, runId, phase, items){
+  function recordShortAnswer(g, l, clean, runId, phase, items, observation){
     const unchanged = () => Object.assign(shortStatus(g, l),
       {updated:false, newSticker:false, gold:false, justConfirmed:false});
     if (typeof g !== 'string' || !/^[a-z0-9]+$/.test(g) || !Number.isSafeInteger(l) || l < 0
@@ -4675,6 +4766,27 @@ const Store = (() => {
       s = mem.shortCourses[k];
     }
     const before = shortStatus(g, l);
+    const adaptive = shortAdaptive(k, s), bit = clean ? '1' : '0';
+    const kind = clean ? 'i' : observation && ['revised','viewed'].includes(observation.kind)
+      ? observation.kind[0] : 's';
+    const miss = !clean && observation && typeof observation.missType === 'string'
+      && /^[a-z0-9-]{1,40}$/.test(observation.missType) ? observation.missType : '';
+    adaptive.recent = (adaptive.recent + bit).slice(-12);
+    adaptive.kinds = (adaptive.kinds + kind).slice(-12);
+    adaptive.misses = adaptive.misses.concat(miss).slice(-12);
+    // Free practice remains available during a rest, but does not keep pushing
+    // its end further away. A new rest needs fresh observations after it ends.
+    if (adaptive.restUntil === null || today >= adaptive.restUntil){
+      adaptive.sinceRest = (adaptive.sinceRest + bit).slice(-12);
+      if (adaptive.sinceRest.length >= 3 && shortSupportReason(adaptive.sinceRest,
+          adaptive.misses.slice(-adaptive.sinceRest.length))){
+        adaptive.restUntil = today + 3;
+        adaptive.sinceRest = '';
+        adaptive.supportDone = false;
+      }
+    }
+    adaptive.lastDay = Math.max(adaptive.lastDay, today);
+    s.adaptive = adaptive;
     let newSticker = false, gold = false, justConfirmed = false;
     if (Array.isArray(items)) s.items = Array.from(new Set(items.filter(item =>
       typeof item === 'string' && item.length <= 240))).slice(-64);
@@ -4713,6 +4825,17 @@ const Store = (() => {
     s.at = Math.max(Date.now(), s.at + 1);
     save();
     return Object.assign(shortStatus(g, l), {updated:true, newSticker, gold, justConfirmed});
+  }
+
+  function noteShortSupport(g, l){
+    const k = key(g, l), s = mem.shortCourses[k];
+    if (!s || !shortStatus(g, l).supportNeeded) return false;
+    const adaptive = shortAdaptive(k, s);
+    adaptive.supportDone = true;
+    s.adaptive = adaptive;
+    s.at = Math.max(Date.now(), s.at + 1);
+    save();
+    return true;
   }
 
   return {
@@ -4794,7 +4917,7 @@ const Store = (() => {
       save();
     },
 
-    shortStatus, startShortCourse, recordShortAnswer,
+    shortStatus, startShortCourse, recordShortAnswer, noteShortSupport,
     shortItems(g, l){
       const course = mem.shortCourses[key(g, l)];
       return course && course.items ? course.items.slice() : [];
@@ -5046,6 +5169,7 @@ const Store = (() => {
       save();
     },
     fact: k => mem.facts[k] || null,
+    factStatus,
     /** The mistake this child keeps making on this fact: { kind, n, of } or null.
         Only the diagnostic kinds, only when it has happened more than once, and
         only when it is actually the dominant reading — one stray tap is not a
@@ -7094,8 +7218,13 @@ const Session = (() => {
         && (missType === 'up' || missType === 'down')) missType = null;
     if (scaffold === 'together' && !taughtQ && (mode === 'level' || mode === 'adventure' || mode === 'first')){
       Store.markIntroduced(g.id, plan[idx].levelIndex);
-      if (mode === 'first') Store.startShortCourse(g.id, plan[idx].levelIndex);
+      if (mode === 'first'){
+        Store.startShortCourse(g.id, plan[idx].levelIndex);
+      }
     }
+    // Completing a supported visit also gives relief when the child needed the
+    // final demonstration. It does not mark that method as learned.
+    if (scaffold === 'together' && mode === 'first') Store.noteShortSupport(g.id, plan[idx].levelIndex);
     if (mode !== 'diagnostic'){
       const kind = scaffold === 'show' || taughtQ ? 'viewed' : scaffold === 'together' ? 'together'
         : helped ? 'supported' : wrongThisQ ? 'revised' : 'independent';
@@ -7105,7 +7234,8 @@ const Session = (() => {
     }
     if (mode !== 'diagnostic' && !scaffold){
       const short = mode === 'first' && (firstPhase === 'independent' || firstPhase === 'check');
-      if (short) Store.recordShortAnswer(g.id, plan[idx].levelIndex, clean, runId, firstPhase, Array.from(usedItems));
+      if (short) Store.recordShortAnswer(g.id, plan[idx].levelIndex, clean, runId, firstPhase, Array.from(usedItems),
+        {kind:taughtQ ? 'viewed' : helped ? 'supported' : wrongThisQ ? 'revised' : 'independent', missType});
       if (short && clean) Store.markIntroduced(g.id, plan[idx].levelIndex);
       Store.noteOutcome(g.id, plan[idx].levelIndex, clean, !short);
       if (curItem){
@@ -11678,17 +11808,76 @@ const FirstSteps = (() => {
     }
     return null;
   }
-  function shortTarget(){
+  function shortCourses(){
     return Object.keys(Store.data.shortCourses || {}).map(key => {
       const [id, index] = key.split(':'), game = Games.byId[id], levelIndex = Number(index);
-      if (!game || !Array.isArray(game.levels) || !game.levels[levelIndex] || !levelOpen(game, levelIndex)
-          || Diagnostic.resting(id, levelIndex)) return null;
+      if (!game || !Array.isArray(game.levels) || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return null;
       const status = Store.shortStatus(id, levelIndex);
-      return status.confirmed ? null : { game, levelIndex, status };
-    }).filter(Boolean).sort((a, b) => Number(b.status.phase === 'check') - Number(a.status.phase === 'check'))[0] || null;
+      return { game, levelIndex, status };
+    }).filter(Boolean).sort((a, b) => b.status.at - a.status.at);
+  }
+  function shortTarget(){
+    return shortCourses().filter(t => !t.status.confirmed && !t.status.waiting
+      && !Diagnostic.resting(t.game.id, t.levelIndex))
+      .sort((a, b) => Number(b.status.phase === 'check') - Number(a.status.phase === 'check')
+        || b.status.at - a.status.at)[0] || null;
+  }
+  function shortPlan(){
+    const courses = shortCourses();
+    if (!courses.length) return null;
+    const unfinished = courses.filter(t => !t.status.confirmed);
+    const available = t => !Diagnostic.resting(t.game.id, t.levelIndex);
+    const due = unfinished.find(t => t.status.phase === 'check' && available(t));
+    if (due) return {...due, kind:'check'};
+    const support = unfinished.find(t => t.status.resting && t.status.supportNeeded);
+    if (support) return {...support, kind:'support'};
+    const returning = unfinished.find(t => available(t) && !t.status.waiting
+      && t.status.restUntil !== null && t.status.lastDay < t.status.restUntil);
+    if (returning) return {...returning, kind:'return'};
+    const current = unfinished.find(t => available(t) && !t.status.waiting);
+    if (current) return {...current, kind:'resume'};
+    const rest = unfinished.find(t => !available(t));
+    const known = (game, i) => levelOpen(game, i) && !Diagnostic.resting(game.id, i)
+      && (Store.introduced(game.id, i) || Store.hasConfirmed(game.id + ':' + i))
+      && !Store.shortStatus(game.id, i).waiting;
+    if (rest){
+      for (let i = rest.levelIndex - 1; i >= 0; i--)
+        if (known(rest.game, i)) return {game:rest.game, levelIndex:i, kind:'easier'};
+      for (const game of Games.list){
+        if (game.intro === false || game.id === rest.game.id) continue;
+        for (let i = 0; i < game.levels.length; i++)
+          if (known(game, i)) return {game, levelIndex:i, kind:'known'};
+      }
+    }
+    const next = target();
+    if (next) return {...next, kind:'new'};
+    for (const game of Games.list){
+      if (game.intro === false) continue;
+      for (let i = 0; i < game.levels.length; i++)
+        if (known(game, i)) return {game, levelIndex:i, kind:'review'};
+    }
+    const waiting = unfinished.find(available);
+    return waiting ? {...waiting, kind:'review'} : null;
+  }
+  function planCopy(t){
+    const titles = {check:'べつのひの たしかめを 1もん', support:'いっしょに 1もん',
+      return:'まえの あそびを 1もん', resume:'つづきの 1もん', easier:'やさしい もんだいを 1もん',
+      known:'できる あそびを 1もん', new:'あたらしい あそびを 1もん', review:'ふくしゅうを 1もん'};
+    const reasons = {check:'べつのひにも できるかな', support:'やりかたを みてから。このあそびは あとで また',
+      return:'すこし やすんだ あそびを ためそう', resume:'1もんずつでも すすむよ',
+      easier:'できる ところから ためそう', known:'できる ところから ためそう',
+      new:'1もんだけ。ヒントも あるよ', review:'たしかめは また べつのひでも いいよ'};
+    return {title:titles[t.kind] || titles.resume, reason:reasons[t.kind] || reasons.resume};
+  }
+  function startPlan(t, opts){
+    if (!t) return;
+    if (t.kind === 'support'){
+      build(); active = {game:t.game, levelIndex:t.levelIndex, opts:opts || null};
+      Session.startFirst(t.game, t.levelIndex, 'afterShow');
+    } else startOne(t.game, t.levelIndex, t.kind ? t.kind !== 'new' : undefined, opts);
   }
   function oneTarget(){
-    const current = shortTarget();
+    const current = shortPlan();
     if (current) return current;
     const rec = Diagnostic.current(), g = rec && Games.byId[rec.gameId];
     if (g && g.intro !== false && levelOpen(g, rec.levelIndex) && !Diagnostic.resting(g.id, rec.levelIndex))
@@ -11704,10 +11893,10 @@ const FirstSteps = (() => {
     const one = opts && opts.one, t = one ? oneTarget() : target();
     if (!t) return null;
     return el('button.home-quest.adventure-card.first-card', { type: 'button',
-      onclick(){ Sound.sfx.tap(); if (one) startOne(t.game, t.levelIndex); else open(t.game, t.levelIndex); } },
+      onclick(){ Sound.sfx.tap(); if (one) startPlan(t); else open(t.game, t.levelIndex); } },
       el('span.icon', { text: one ? '👆' : '👀', 'aria-hidden': 'true' }),
       el('span.copy', null, el('b', { text: one ? 'ひとつだけ やってみる' : 'まず みてみる' }),
-        el('small', { text: t.game.name + (one ? Store.introduced(t.game.id, t.levelIndex)
+        el('small', { text: t.game.name + (one && t.kind ? '　' + planCopy(t).title : one ? Store.introduced(t.game.id, t.levelIndex)
           ? Store.shortStatus(t.game.id, t.levelIndex).phase === 'check' ? '　べつのひの たしかめ 1もん' : '　じぶんで 1もん。ヒントも あるよ'
           : '　ヒントつきの 1もん' : '　みるだけでも いいよ') })),
       el('span.arrow', { text: '▶', 'aria-hidden': 'true' }));
@@ -11773,15 +11962,21 @@ const FirstSteps = (() => {
         : 'じぶんで ためした もんだい　' + status.answered + '／8もん';
       info.append(el('p.first-progress', { text: progress }));
     }
+    if (status.resting) info.append(el('p.first-progress', {text:status.supportNeeded
+      ? 'いっしょに やりかたを みよう。そのあとは べつの あそびに しよう'
+      : 'このあそびは すこし おやすみ。また あとで もどれるよ'}));
     clear(actions);
     if (phase === 'show') actions.append(button('🤝', 'いっしょに ひとつ',
       () => Session.startFirst(game, levelIndex, 'afterShow'), true));
     actions.append(button('🏠', 'きょうは ここまで', () => {
       Home.render(); UI.show('home', { replace: true });
     }, phase !== 'show'));
-    if (phase !== 'show') actions.append(button('👆', status.phase === 'check' ? 'たしかめを 1もん'
-      : status.waiting ? 'ふくしゅうを 1もん' : 'じぶんで もう 1もん',
-      () => startOne(game, levelIndex, true, active && active.opts)));
+    if (phase !== 'show'){
+      const next = shortPlan() || {game, levelIndex, kind:'resume'};
+      const same = next.game.id === game.id && next.levelIndex === levelIndex;
+      actions.append(button(next.kind === 'support' ? '🤝' : '👆', same && next.kind === 'resume'
+        ? 'じぶんで もう 1もん' : planCopy(next).title, () => startPlan(next, same && active && active.opts)));
+    }
     actions.append(button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active && active.opts)));
     if (milestone && milestone.label) info.append(el('small', { text: '📒 ' + milestone.label }));
     UI.show('first-finish', { replace: true });
@@ -11790,7 +11985,7 @@ const FirstSteps = (() => {
       + '今日はここまででもいいよ。';
     Sound.say(finishSpeech, { delay: 200 });
   }
-  return { target, shortTarget, oneTarget, homeCard, build, open, startOne, finish, get active(){ return active; } };
+  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, build, open, startOne, finish, get active(){ return active; } };
 })();
 
 const ProgressAlbum = (() => {
@@ -12069,7 +12264,10 @@ const Diagnostic = (() => {
      for a few days, and the roadmap moves on; it comes back afterwards, and it comes
      back at once if there is nothing else left to name. */
   const REST_DAYS = 3;
-  const resting = (id, i) => !cleared(id, i) && Store.plays(id, i) >= 3 && Store.daysSince(id, i) < REST_DAYS;
+  // Short visits have their own observations: they need relief even though they
+  // never invent a completed ordinary attempt just to open the next level.
+  const resting = (id, i) => !cleared(id, i) && (Store.shortStatus(id, i).resting
+    || Store.plays(id, i) >= 3 && Store.daysSince(id, i) < REST_DAYS);
 
   /* All automatically chosen entrances honour the same breathing space.
      A child may still choose any open lesson from the map. */
@@ -12361,7 +12559,7 @@ const TextbookReview = (() => {
     [['add',0],['add',1]],
     [['sub',1],['sub',2]]
   ];
-  let node, body, heading, exitBtn, speech='', run=null, q=null, exitArmed=false;
+  let node, body, heading, exitBtn, speech='', run=null, q=null, exitArmed=false, supportOpen=false;
   function checkpoint(){if(run&&q)Store.saveReviewSession({at:Date.now(),run,q});}
   function pendingSummary(){
     const saved=Store.reviewSession();if(!saved)return null;
@@ -12372,12 +12570,13 @@ const TextbookReview = (() => {
     const saved=Store.reviewSession();if(!saved)return false;
     const r=saved.run;
     if(r.kind==='chapter'?!chapterReady(r.chapter):!lessonOpen(r.id)){Store.clearReviewSession();return false;}
-    build();run=r;q=saved.q;exitArmed=false;renderQuestion();UI.show('review');focusHeading();
+    build();run=r;q=saved.q;exitArmed=false;supportOpen=!!q.showHint&&!q.done;UI.show('review');renderQuestion();
+    if(!supportOpen)focusHeading();
     say('つづきから。'+(q.done?q.result:q.prompt));return true;
   }
   function pause(){
     if(!run)return;checkpoint();const remaining=run.total-run.outcomes.length;
-    run=null;q=null;Home.render();UI.show('home',{replace:true});
+    closeSupport();run=null;q=null;Home.render();UI.show('home',{replace:true});
     say('ここまで、よく取り組んだね。'+(remaining?'つぎは、あと'+remaining+'問から。':'つぎは、できた！を押してシールを確かめよう。'));
   }
   function progress(){
@@ -12493,7 +12692,7 @@ const TextbookReview = (() => {
     else say('準備ができた単元から、本で復習しよう。単元の中では、順番に進めるよ。');
   }
   function menu(){
-    run=null;q=null;exitArmed=false;clear(body);heading.textContent='うらの さんすう';
+    closeSupport();run=null;q=null;exitArmed=false;clear(body);heading.textContent='うらの さんすう';
     const pending=pendingSummary();
     exitBtn.setAttribute('aria-label','ちずに もどる');
     body.append(el('div.review-menu-intro',null,
@@ -12549,7 +12748,7 @@ const TextbookReview = (() => {
   function nextQuestion(){
     const id=run.kind==='chapter'?(run.step<4?run.chapter*4+run.step:run.chapter?run.chapter*4-1:3):run.id;
     q=generate(id,run.step);q.lessonId=id;q.missed=false;q.supported=false;q.done=false;q.selected=[];q.pairs=[];q.active=0;q.values=[null,null,null];q.op=null;q.left=0;q.supportStage=0;q.wrongAttempts=0;
-    exitArmed=false;renderQuestion();focusHeading();say(q.prompt);
+    exitArmed=false;supportOpen=false;renderQuestion();focusHeading();say(q.prompt);
   }
   // Own vector illustrations: keep quantity and spatial direction clear at any screen size.
   function illustration(kind='animal',variant=0){
@@ -12617,6 +12816,8 @@ const TextbookReview = (() => {
     checkpoint();
     exitBtn.setAttribute('aria-label','もくじに もどる');
     const focus=restore&&document.activeElement&&document.activeElement.getAttribute('data-focus');
+    // Close the old top-layer sheet before rebuilding its problem and controls.
+    const oldHelp=$('.review-hint',body);if(oldHelp&&oldHelp.open)oldHelp.close();
     clear(body);const c=chapters[lessons[q.lessonId].chapter];
     heading.textContent=run.kind==='chapter'?chapters[run.chapter].title+'の まとめ':lessons[run.id].title;
     const scene=el('div.review-scene');
@@ -12676,15 +12877,36 @@ const TextbookReview = (() => {
     body.append(feedback,el('div.review-actions',null,q.done?button(run.step+1===run.total?'できた！':'つぎの もんだい',advance,'btn-accent.review-next'):
       [button('👀 ヒント',hint),button('たしかめる',check,'btn-accent.review-check')],
       button('ここで 休む',pause,'btn-ghost.review-pause')));
-    if(q.showHint&&!q.done)body.append(el('div.review-hint',{'aria-label':'たすけの ヒント'},
-      el('strong',{text:supportStage()>=2?'ひとつ みたら、つぎは きみの ばん':'ここを みてみよう'}),
-      supportScene(),el('p',{text:q.hintText}),
-      el('div.review-support-actions',null,
-        supportStage()<2?button('ひとつ みてみる',model,'btn-accent.review-model'):null,
-        supportStage()>=2?button('こたえを みる',reveal,'btn-ghost.review-reveal'):null,
-        button('🔊 ヒントを きく',()=>say(q.hintText),'btn-ghost.review-hint-hear'))));
+    if(q.showHint&&!q.done)renderSupport();
     if(q.done) $$('button',scene).forEach(b=>b.disabled=true);
-    if(focus){const b=$('[data-focus="'+focus+'"]',body);if(b&&!b.disabled)b.focus({preventScroll:true});}
+    if(!supportOpen&&focus){const b=$('[data-focus="'+focus+'"]',body);if(b&&!b.disabled)b.focus({preventScroll:true});}
+  }
+  function closeSupport(){
+    supportOpen=false;const help=body&&$('.review-hint',body);if(help&&help.open)help.close();
+  }
+  function returnToQuestion(){
+    closeSupport();
+    // Return straight to the real manipulatives or answer fields, preserving work.
+    const equation=equationTypes.includes(q.type), numeric=!!$('.review-keypad',body);
+    const region=equation?$('.review-equation',body):numeric?$('.review-answer',body):$('.review-scene',body);
+    const target=equation?$('[data-focus="field'+q.active+'"]',body):numeric?$('.review-keypad button',body):$('.review-scene button:not(:disabled)',body);
+    if(region)region.scrollIntoView({block:'start'});
+    if(target)target.focus({preventScroll:true});
+  }
+  function renderSupport(){
+    const help=el('dialog.review-hint',{'aria-labelledby':'review-help-title','aria-describedby':'review-help-prompt'},
+      el('div.review-help-heading',null,
+        el('div',null,el('h3#review-help-title',{text:supportStage()>=2?'つぎは きみの ばん':'ここを みてみよう'}),el('p#review-help-prompt',{text:q.prompt})),
+        button('🔊',()=>say(q.prompt+' '+q.hintText),'btn-ghost.btn-round.review-hint-hear')),
+      el('div.review-help-content',null,supportScene(),el('p',{text:q.hintText}),
+        supportStage()>=2&&q.message?el('p.review-help-response',{role:'status',text:q.message}):null),
+      el('div.review-support-actions',null,
+        supportStage()<2?button('ひとつ みてみる',model,'btn-accent.review-model'):button('こたえを みる',reveal,'btn-ghost.review-reveal'),
+        button('もんだいで やってみる',returnToQuestion,'btn-accent.review-try')));
+    $('.review-hint-hear',help).setAttribute('aria-label','もんだいと ヒントを きく');
+    help.addEventListener('cancel',event=>{event.preventDefault();returnToQuestion();});
+    body.append(help);
+    if(supportOpen){help.showModal();$(supportStage()<2?'.review-model':'.review-try',help).focus({preventScroll:true});}
   }
   function equation(){
     return el('div.review-equation',null,el('p',{text:'□を えらんで、すうじを いれよう。＋か − も えらぼう。'}),el('div.review-equation-row',null,
@@ -12714,10 +12936,11 @@ const TextbookReview = (() => {
       q.missed=true;q.wrongAttempts=Math.min(100000,previous+1);
       q.message=retryText();
       if(q.wrongAttempts>=2){q.supported=true;q.showHint=true;q.supportStage=Math.max(1,supportStage());q.hintText=hintText();}
+      if(q.wrongAttempts===2||q.wrongAttempts===4)supportOpen=true;
       if(q.wrongAttempts>=4&&supportStage()<2)q.message='ひとつ みてみる ボタンで、さいしょの やりかたを みられるよ。';
       Sound.sfx.tap();renderQuestion();$('.review-check',body).focus({preventScroll:true});say(q.message+(q.wrongAttempts===2?' '+q.hintText:''));return;
     }
-    q.done=true;
+    closeSupport();q.done=true;
     const outcome=q.supported?'supported':q.missed?'revised':'independent';run.outcomes.push(outcome);Store.countToday(1);
     q.result=({independent:'じぶんで できたね！',revised:'もういちど ためして できたね！',supported:'ヒントで できたね！'})[outcome];
     Sound.sfx.correct();renderQuestion();say(q.result);
@@ -12770,10 +12993,12 @@ const TextbookReview = (() => {
       scene.append(el('div.review-support-order'+(q.type==='vertical'?'.vertical':''),{'aria-label':'かぞえはじめを たしかめよう'},
         range(0,q.a-1).map(i=>el('span'+(i===first&&supportStage()>=2?'.first':''),{text:i===first?(supportStage()>=2?'1':q.type==='vertical'?(q.reverse?'↑':'↓'):(q.reverse&&!q.cardinality?'←':'→')):'●','aria-hidden':'true'}))));
     }else if(q.type==='splitSmall'||q.type==='splitLarge'){
-      const shown=supportStage()>=2,towardRight=q.left>q.b,left=towardRight?q.a-Number(shown):Number(shown),right=q.a-left;
+      const left=q.left,right=q.a-q.left,towardRight=q.left>q.b,ready=q.left===q.b;
       scene.classList.add('review-support-spatial');
-      scene.append(el('div.review-support-part',null,el('small',{text:towardRight?(shown?'ひだりの のこり':'ひだりから １こ うつそう'):(shown?'ひだりへ １こ':'ひだりは からっぽ')}),left?supportBlocks(left,0,!towardRight):el('span',{text:'○'})),
-        el('span',{text:towardRight?'→':'←'}),el('div.review-support-part',null,el('small',{text:towardRight?(shown?'みぎへ １こ':'みぎは からっぽ'):(shown?'みぎの のこり':'みぎから １こ うつそう')}),right?supportBlocks(right,0,towardRight):el('span',{text:'○'})));
+      scene.setAttribute('aria-label','いまの おさら。ひだり '+left+'こ、みぎ '+right+'こ');
+      scene.append(el('div.review-support-part',null,el('small',{text:'ひだり　'+left+'こ'}),left?supportBlocks(left,0,false):el('span',{text:'○'})),
+        el('span',{'aria-label':ready?'この かずで たしかめよう':(towardRight?'みぎ':'ひだり')+'へ １こ うつそう',text:ready?'✓':towardRight?'→':'←'}),
+        el('div.review-support-part',null,el('small',{text:'みぎ　'+right+'こ'}),right?supportBlocks(right,0,false):el('span',{text:'○'})));
     }else if(q.type==='difference'){
       scene.append(el('div.review-support-pairs',{'aria-label':'うえと したを １こずつ ならべた え'},range(0,q.a-1).map(i=>el('span.review-support-pair'+(supportStage()>=2&&i===0?'.first':''),{'aria-hidden':'true'},el('i'),i<q.b?el('i'):el('span',{text:'？'})))));
     }else if(q.type==='sumCards')scene.append(el('small',{text:'この かずと おなじに なる カード'}),supportBlocks(q.a));
@@ -12797,8 +13022,8 @@ const TextbookReview = (() => {
     return scene;
   }
   function hint(){
-    if(!q||q.done) return;q.supported=true;q.showHint=true;q.supportStage=Math.max(1,supportStage());q.hintText=hintText();
-    renderQuestion();$('.review-hint button',body).focus({preventScroll:true});say(q.hintText);
+    if(!q||q.done) return;q.supported=true;q.showHint=true;q.supportStage=Math.max(1,supportStage());q.hintText=hintText();supportOpen=true;
+    renderQuestion();say(q.hintText);
   }
   function model(){
     if(!q||q.done||supportStage()>=2)return;q.supported=true;q.supportStage=2;
@@ -12815,7 +13040,6 @@ const TextbookReview = (() => {
       if(q.values[0]!==q.a&&!(q.type==='combine'&&q.values[0]===q.b))q.values[0]=q.a;q.active=q.values[1]===null?1:2;
     }
     q.hintText=hintText();q.message='ひとつ みたね。つづきは きみの ばん。';renderQuestion();say(q.message+' '+q.hintText);
-    const next=$('.review-check',body);if(next)next.focus({preventScroll:true});
   }
   function reveal(){
     if(!q||q.done)return;q.supported=true;q.supportStage=3;
@@ -13578,7 +13802,7 @@ const Home = (() => {
       && !Store.milestones().some(m => Store.milestoneRank(m.kind) >= Store.milestoneRank('together'));
     const pending = Session.pendingSummary();
     const first = firstRun && FirstSteps.target();
-    const short = !first && FirstSteps.shortTarget();
+    const short = !first && FirstSteps.shortPlan();
     const rec = Diagnostic.current();
     const recGame = rec && Games.byId[rec.gameId];
     clear(recommendEl);
@@ -13597,10 +13821,9 @@ const Home = (() => {
         first.game.name + '　1もんだけ。ヒントを つかって いいよ',
         () => FirstSteps.startOne(first.game, first.levelIndex));
     } else if (short){
-      banner(primaryEl, '👆', short.status.phase === 'check' ? 'べつのひの たしかめを 1もん'
-        : short.status.waiting ? 'ふくしゅうを 1もん' : 'つづきの 1もん',
-        short.game.name + (short.status.waiting ? '　たしかめは また べつのひに' : '　1もんずつでも すすむよ'),
-        () => FirstSteps.startOne(short.game, short.levelIndex, true));
+      const copy = FirstSteps.planCopy(short);
+      banner(primaryEl, short.kind === 'support' ? '🤝' : '👆', copy.title,
+        short.game.name + '　' + copy.reason, () => FirstSteps.startPlan(short));
     } else if (recGame){
       const lv = recGame.levels[rec.levelIndex] || recGame.levels[0];
       banner(primaryEl, BANNER_ICON.recommend, 'きょうの おすすめ',
@@ -14279,7 +14502,7 @@ const Parent = (() => {
         const now = Store.gameRecentAccuracy(g.id, g.levels.length);   // the one to act on
         const acc = Store.accuracy(g.id);                              // lifetime, for context
         const seen = Store.data.seen[g.id] || 0;
-        /* The second axis. 「1回目で正解」cannot separate a child who remembers
+        /* The second axis. 「ヒントなし初回正解」cannot separate a child who remembers
            「10は4と6」from one who counted the six empty cells for nine seconds —
            and only the first of those is what くり上がり needs. */
         const ms = g.fluent ? Store.gameSpeed(g.id) : null;
@@ -14302,125 +14525,127 @@ const Parent = (() => {
     t.append(body);
     sec.append(el('div', { style: { overflowX: 'auto' } }, t));
     sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
-      text: '「直近30問」「通算」はどちらも「1回目のタップで正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
+      text: '「直近30問」「通算」はどちらも「ヒントなしで初回正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
     sec.append(el('p', {
-      text: '「こたえるまで」は、けいさんの やま の4つの遊びだけに出ます。問題が出てから最初に答えるまでの時間で、正解だったときだけ記録しています。3.0秒までなら緑（思い出している）、9.0秒を超えると茶色（数えて出している）。正答率だけを見ていると「できている」と「数えればできる」が同じ数字になりますが、くり上がりの計算で効くのは前者だけです。茶色はこの時期には自然な段階で、まちがいではありません。次は「かたまりで見る」練習がいちばん効きます（下の「できるけれど、数えている」）。' }));
+      text: '「こたえるまで」は、けいさんの やま の4つの遊びだけに出ます。ヒントなしで初回正解したときの、問題が出てから答えるまでの時間です。3.0秒までは緑、9.0秒以上は茶色で表示します。時間がかかっても間違いではありません。答えを急がせる指標にはせず、具体物を数えたり、かたまりで見たりする支援の参考にできます。' }));
     return sec;
   }
 
-  /* ---- 今週やること ----
-     The dashboard used to be a table plus an essay, and deciding what the child
-     should practise was left entirely to the reader. The app has the data. */
+  /* The next action shares the child's planner; item-level growth shares Store's
+     recovery window. Old lifetime misses never turn a recovered fact into today's
+     homework, and a resting lesson stays outside automatic practice suggestions. */
   function nextUpSection(){
-    const sec = el('section');
-    sec.append(el('div.eyebrow', { text: 'next' }), el('h3', { text: '今週やること' }));
-    const short = FirstSteps.shortTarget();
-    if (short){
-      const s = short.status;
-      sec.append(el('p', { text: '1問ずつのコース：' + short.game.name + '《' + short.game.levels[short.levelIndex].t + '》。'
-        + (s.waiting ? '別の日に定着を確かめます。今日はここまでで十分です。'
-          : s.phase === 'check' ? '別日の確認を' + s.checks + '／3問まで終えています。次も1問だけで終われます。'
-          : '自分で試した問題が' + s.answered + '／8問たまっています。支援の有無を分けて記録し、別の日にも確かめます。') }));
+    const sec = el('section.parent-next');
+    sec.append(el('div.eyebrow', { text: 'next' }), el('h3', { text: 'いまの成長と次の1問' }));
+    const plan = FirstSteps.shortPlan();
+    if (plan){
+      const copy = FirstSteps.planCopy(plan), status = plan.status;
+      const detail = status && status.phase === 'check'
+        ? '別日の確認を' + status.checks + '／3問まで終えています。'
+        : status ? '自分で試した問題が' + status.answered + '／8問たまっています。' : '';
+      sec.append(el('div.parent-recommendation', { 'data-parent-plan':plan.kind },
+        el('b', { text: '1問ずつのコース：' + plan.game.name + '《' + plan.game.levels[plan.levelIndex].t + '》' }),
+        el('p', { text: detail + (plan.kind === 'support'
+          ? '支援や答え直しが続いたので、やり方を一緒に確認します。その後はこの内容を少し休み、別の遊びへ進めます。'
+          : plan.kind === 'easier' || plan.kind === 'known'
+          ? 'いま難しい内容は少し休み、できるところから試せます。'
+          : plan.kind === 'return' ? '少し休んだ内容へ戻る1問です。ヒントも使えます。'
+          : copy.reason + '。1問で終えても、途中で休んでも大丈夫です。') }),
+        el('button.btn.btn-accent.parent-plan-start', { type:'button', text:copy.title,
+          onclick(){ Sound.sfx.tap(); FirstSteps.startPlan(plan); } })));
+    } else {
+      sec.append(el('p', { text: '「ひとつだけ」から、やり方を見て、自分で1問ずつ試せます。何回かに分けても記録はたまり、別の日の確認につながります。1問で終えても大丈夫です。' }));
     }
 
-    /* One question answered wrong is not a diagnosis. Nothing is named here until
-       there is a level's worth of evidence behind it. */
-    const ENOUGH = 8;
+    const targetFor = status => {
+      if (!status || !status.at) return null;
+      const cut = status.at.lastIndexOf(':'), game = Games.byId[status.at.slice(0, cut)];
+      const levelIndex = Number(status.at.slice(cut + 1));
+      return game && Array.isArray(game.levels) && Number.isSafeInteger(levelIndex) && game.levels[levelIndex] && levelOpen(game, levelIndex)
+        ? {game, levelIndex} : null;
+    };
+    const facts = Object.keys(Store.data.facts || {}).map(k => Store.factStatus(k))
+      .map(status => ({status, target:targetFor(status)})).filter(x => x.target);
+    const byKey = new Map(facts.map(x => [x.status.key, x]));
+    const weak = Diagnostic.weakFacts().map(x => byKey.get(x.key)).filter(Boolean);
+    const resting = facts.filter(x => x.status.needsPractice && Diagnostic.resting(x.target.game.id, x.target.levelIndex));
+    const recovered = facts.filter(x => x.status.recovered && !x.status.needsPractice
+      && x.status.missed >= 2 && x.status.daysSince < 7).sort((a, b) => a.status.daysSince - b.status.daysSince);
+    const stale = facts.filter(x => !x.status.needsPractice && x.status.daysSince >= 7
+      && (x.status.recovered || x.status.n >= 6 && x.status.accuracy >= .8))
+      .sort((a, b) => b.status.daysSince - a.status.daysSince);
+    const factCard = (item, state, message, action) => {
+      const s = item.status, content = el('div.parent-fact-copy', null,
+        el('small', { text:item.target.game.name }), el('b', { text:s.label }), el('p', { text:message }),
+        el('p.parent-practice-note', {text:'この項目を優先して、同じ遊びから1問出します。'}));
+      if (action) content.append(el('button.btn.btn-ghost.parent-fact-start', {
+        type:'button', text:action, 'aria-label':item.target.game.name + 'を1問',
+        onclick(){ Sound.sfx.tap(); Session.startFocus([s.key], {n:1}); }
+      }));
+      return el('div.todo.parent-fact', {'data-fact-state':state, 'data-fact-key':s.key},
+        el('div.mk', {'aria-hidden':'true', text:state === 'recovered' ? '✓' : state === 'rest' ? '☕' : '○'}), content);
+    };
+    const accuracyText = s => s.recentN
+      ? '直近' + s.recentN + '問のヒントなし初回正答率 ' + pct(s.recentAccuracy) + '。'
+      : 'これまでのヒントなし初回正答率 ' + pct(s.accuracy) + '。';
+
+    sec.append(el('h4', { text:'いま支援が必要' }));
+    if (weak.length){
+      weak.slice(0, 6).forEach(item => {
+        const s = item.status, miss = Store.factMiss(s.key);
+        sec.append(factCard(item, 'need', accuracyText(s) + (s.slow
+          ? '自力で答えられても、時間がかかっている記録があります。急がせず、具体物をかたまりで見るところから。'
+          : 'ヒントを使っても大丈夫です。おはじきなどで同じ数を作り、一緒に確かめられます。')
+          + (miss ? 'これまでにみられた答え方：' + missParent(miss.kind) + '。' : ''), 'この遊びを 1問'));
+      });
+    } else sec.append(el('p', { text:'いま自動で取り上げる支援項目はありません。通算の間違いだけで苦手とは判断せず、最近の回答と休息の状態を見ています。' }));
+
+    if (resting.length){
+      sec.append(el('h4', { text:'いまは少し休む内容' }),
+        el('p', { text:'同じ内容を続ける負担を減らすため、自動の練習候補から外しています。上の1問では、やり方を一緒に確認したり、別の遊びへ進めたりします。ここから選ぶ場合だけ、同じ内容を試せます。' }));
+      resting.slice(0, 4).forEach(item => sec.append(factCard(item, 'rest',
+        'いったん休んで、また後で戻れます。今日は取り組まなくても大丈夫です。', '試したい遊びを 1問')));
+    }
+    if (recovered.length){
+      sec.append(el('h4', { text:'最近できるようになった' }),
+        el('p', { text:'以前はヒントや答え直しが必要だった内容です。「前はむずかしかったね。今は自分でできたね」と、変わったところを声かけに使えます。' }));
+      recovered.slice(0, 6).forEach(item => sec.append(factCard(item, 'recovered',
+        accuracyText(item.status) + '子どもの練習でも、以前の苦手から外れています。確かめたいときだけ1問にできます。', 'できた遊びを 1問')));
+    }
+    if (stale.length){
+      sec.append(el('h4', { text:'しばらく触れていない' }));
+      stale.slice(0, 4).forEach(item => sec.append(factCard(item, 'stale',
+        item.status.daysSince + '日ふれていません。以前できていた内容です。忘れたと決めつけず、思い出す1問を任意で試せます。', '思い出す 1問（同じ遊び）')));
+    }
+    sec.append(missSection(new Set(weak.map(x => x.status.key))));
+
+    // Level summaries are secondary to item-level observations. A short visit can
+    // already reveal a useful item even before eight answers exist for its level.
     const levels = [];
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
-      if (!levelOpen(g, i)) return;
+      if (!levelOpen(g, i) || Diagnostic.resting(g.id, i)) return;
       const n = Store.recentCount(g.id, i);
-      if (n < ENOUGH) return;
-      levels.push({ g, lv, i, n, acc: Store.recentAccuracy(g.id, i), cold: Store.daysSince(g.id, i) });
+      if (n >= 8) levels.push({g, lv, i, n, acc:Store.recentAccuracy(g.id, i), cold:Store.daysSince(g.id, i)});
     }));
-
-    if (!levels.length){
-      sec.append(el('p', { text: '成績を判断できるだけの記録はまだありません。「ひとつだけ」から、やり方を見て、自分で1問ずつ試せます。何回かに分けても記録はたまり、別の日の確認につながります。1問で終えても大丈夫です。' }));
-      return sec;
-    }
-
-    const focus = levels.slice().sort((a, b) => a.acc - b.acc)[0];
-    const stale = levels.slice()
-      .filter(x => x.acc >= .75 && x.cold >= 7)
-      .sort((a, b) => b.cold - a.cold)[0];
-
-    const line = (mark, head, body2) => el('div.todo', null,
-      el('div.mk', { text: mark }),
-      el('div', null, el('b', { text: head }), el('div', { text: body2 })));
-
-    if (focus.acc < .75){
-      sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
-        '直近' + focus.n + '問の初回正答率 ' + pct(focus.acc) + '。少しずつ取り組めます。「ひとつだけ」で1問、通常コースなら4問で休憩できます。途中の続きは残ります。'));
-    } else {
-      /* Levels are judged on eight questions or more, facts on two misses — so a page
-         could say「よく仕上がっています」and list three gaps directly under it. Say
-         only what both halves agree on. */
-      const facts0 = Store.data.facts || {};
-      const gaps = Object.keys(facts0).some(k => {
-        const f = facts0[k];
-        return f && (f[0] - f[1]) >= 2 && f[1] / f[0] < .6;
-      });
-      sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
-        '直近' + focus.n + '問で ' + pct(focus.acc) + '。' + (gaps
-          ? 'レベルとしては安定しています。次のレベルに進みながら、下の「つまずいている中身」だけを「とっくん」で拾ってください。'
-          : 'いちばん低いところがこれなら、よく仕上がっています。次のレベルに進んで構いません。')));
-    }
-    // what that game is actually for — the one place a parent is most likely to read it
-    if (focus.g.aim) sec.append(el('div.aimnote', { html: focus.g.aim }));
-    if (stale && stale !== focus){
-      sec.append(line('○', stale.g.name + '　《' + stale.lv.t + '》',
-        stale.cold + '日ふれていません。できていたことなので、思い出す時間として1回だけ。'));
-    }
-
-    /* the exact facts that are missing — the thing a per-game percentage can never say */
-    const facts = Store.data.facts || {};
-    const weak = [];
-    for (const k in facts){
-      const f = facts[k];
-      // "missed it at least twice", not "missed it once" — one slip is not a gap
-      if (!f || (f[0] - f[1]) < 2) continue;
-      const acc = f[1] / f[0];
-      if (acc >= .6) continue;
-      const gid = k.slice(0, k.indexOf(':'));
-      weak.push({ acc, n: f[0], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid,
-                  miss: Store.factMiss(k) });
-    }
-    weak.sort((a, b) => a.acc - b.acc || b.n - a.n);
-    if (weak.length){
-      sec.append(el('h4', { text: 'つまずいている中身' }));
-      const chips = el('div.factchips');
-      weak.slice(0, 8).forEach(w => chips.append(
-        el('span.factchip', null, el('small', { text: w.game }), w.label,
-          w.miss ? el('em', { text: missParent(w.miss.kind) }) : null)));
-      sec.append(chips);
-      sec.append(el('p', { text: 'ここに出た項目は「きょうの れんしゅう」が自動で多めに出します。声かけに使うなら、答えを教えるより、おはじきやお菓子で同じ数を作ってみせるほうが早いです。' }));
-    } else {
-      sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
-        text: '取りこぼしている項目はいまのところありません。' }));
-    }
-
-    sec.append(missSection());
-
-    /* Right every time, and still counted out. Invisible to every number on this
-       page until answers were timed, and the single most useful thing to work on
-       once the accuracy is already there. */
-    const slowOnes = [];
-    for (const k in facts){
-      const f = facts[k];
-      if (!f || !f[0] || !f[5] || f[5] < FLUENT_SLOW_MS) continue;
-      if (f[1] / f[0] < .6) continue;                 // already named above
-      const gid = k.slice(0, k.indexOf(':'));
-      slowOnes.push({ ms: f[5], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid });
-    }
-    slowOnes.sort((a, b) => b.ms - a.ms);
-    if (slowOnes.length){
-      sec.append(el('h4', { text: 'できるけれど、数えている' }));
-      const chips = el('div.factchips');
-      slowOnes.slice(0, 8).forEach(w => chips.append(
-        el('span.factchip.slow', null, el('small', { text: w.game + '　' + secs(w.ms) }), w.label)));
-      sec.append(chips);
-      sec.append(el('p', { text: '正解はしていますが、答えが出るまでに時間がかかっています。指を折る、枠のマスを数える、というやり方で合わせている状態です。まちがいではないので放っておかれがちですが、くり上がりのたし算は「9+4 を 9+1+3 にする」途中でこの答えを即座に使うので、ここが遅いとその先が進みません。「とっくん」はこれらも拾います。家では、答えを急がせるより、おはじきを5と5、6と4 のように置いて見せて「かたまりで見る」経験を足すほうが早いです。' }));
-    }
+    const focus = levels.sort((a, b) => a.acc - b.acc)[0];
+    if (focus){
+      sec.append(el('h4', { text:'レベル全体のようす' }), el('p', {
+        text:focus.g.name + '《' + focus.lv.t + '》：直近' + focus.n + '問のヒントなし初回正答率 ' + pct(focus.acc) + '。'
+          + (focus.acc < .75 ? '一度に終える必要はありません。次の1問と、必要なら具体物のヒントを使えます。'
+            : weak.length ? 'レベル全体は安定しています。必要な支援は上の項目ごとに確かめられます。'
+            : '最近は安定して答えています。次の遊びへ進んでも大丈夫です。') }));
+      if (focus.g.aim) sec.append(el('div.aimnote', {html:focus.g.aim}));
+      if (!stale.length){
+        const cold = levels.filter(x => x.acc >= .75 && x.cold >= 7).sort((a, b) => b.cold - a.cold)[0];
+        if (cold) sec.append(el('div.todo.parent-level-stale', {'data-level-key':cold.g.id + ':' + cold.i},
+          el('div.mk', {'aria-hidden':'true', text:'○'}), el('div.parent-fact-copy', null,
+            el('b', {text:'しばらく触れていない：' + cold.g.name + '《' + cold.lv.t + '》'}),
+            el('p', {text:cold.cold + '日ふれていません。思い出したいときに1問だけ試せます。'}),
+            el('button.btn.btn-ghost', {type:'button', text:'この遊びを 1問', onclick(){
+              Sound.sfx.tap(); FirstSteps.startOne(cold.g, cold.i, true);
+            }}))));
+      }
+    } else if (!facts.length) sec.append(el('p', {text:'成績を判断できるだけの記録はまだありません。まずは1問から、子どものペースで試せます。'}));
     return sec;
   }
 
@@ -14430,11 +14655,12 @@ const Parent = (() => {
      cover the four rather than to drill the fact. The app throws away nothing now:
      the value pressed on the first mistake is classified and counted (06-miss.js),
      so this is the one place on the page that says what to actually do. */
-  function missSection(){
+  function missSection(currentKeys){
     const facts = Store.data.facts || {};
     const tally = {};                   // kind -> { n, games:Set, examples:[] }
     let taught = 0;
     for (const k in facts){
+      if (!currentKeys.has(k)) continue;
       const m = facts[k] && facts[k][6];
       if (!m) continue;
       const gid = k.slice(0, k.indexOf(':'));
@@ -14453,9 +14679,9 @@ const Parent = (() => {
     if (!kinds.length && !taught) return el('span', { hidden: true });
 
     const s = el('div');
-    s.append(el('h4', { text: 'まちがえ方の型' }));
+    s.append(el('h4', { text: 'いま支援する内容で、これまでにみられた答え方' }));
     if (kinds.length){
-      s.append(el('p', { text: '同じ「不正解」でも中身は違います。1回目に押した答えを分類して数えたものです。正答率だけを見ていても出てこない情報で、家庭での声かけを変えられるのはここです。' }));
+      s.append(el('p', { text: '上の「いま支援が必要」に出た項目について、これまでの最初の誤答を分類した記録です。回復した項目や休息中の項目は含めません。現在の答え方と一緒に見て、声かけの参考にできます。' }));
       const list = el('div.misslist');
       kinds.forEach(k => {
         const t = tally[k];
@@ -14469,8 +14695,8 @@ const Parent = (() => {
     if (taught){
       s.append(el('p', { style: { marginTop: 'calc(var(--u)*.7)' },
         text: '※ 自力では届かず、アプリが答えを見せて終えた回が ' + taught
-            + ' 回あります（6回まちがえると出ます）。★にも「1回目で正解」にも数えていません。'
-            + 'この回の項目は「とっくん」が必ず拾います。' }));
+            + ' 回あります（6回まちがえると出ます）。★にも「ヒントなし初回正解」にも数えていません。'
+            + '上の項目から、その遊びを1問試せます。' }));
     }
     return s;
   }
@@ -14600,7 +14826,7 @@ const Parent = (() => {
 
   const PLAN = [
     ['1〜2か月め', 'かずの しま を中心に', 'かぞえよう / すうじ どれかな / かずの じゅんばん。まず10までを確実に。数字のなぞり書きも並行して少しずつ。'],
-    ['3〜4か月め', 'けいさんの やま に入る', 'いくつと いくつ → 10の おともだち の順で。ここが半年計画の山場です。毎日「きょうの れんしゅう」を1回。'],
+    ['3〜4か月め', 'けいさんの やま に入る', 'いくつと いくつ → 10の おともだち の順で。難しいときは具体物を使い、1問ずつ。できるところを挟み、後で戻っても大丈夫です。'],
     ['5〜6か月め', 'たしざん・ひきざん と 生活の数', '式の形に慣れ、とけい・おおきさくらべ・なんばんめ で入学後の単元に先に触れておきます。'],
     ['準備ができたら', '1ねんせいの きょうしつ', '各遊びに関連する2〜3レベルの準備ができると、その遊びから開きます。金色のシールは条件に入りません。なかまづくり（同じものの集まり）と 1たい1で くらべる（一対一対応）から、20までの数・式へ。1年生の1学期の順番そのままです。']
   ];
@@ -14650,7 +14876,7 @@ const Parent = (() => {
         : '入学前の48レベルはすべてクリア済みです。あとは「きょうの れんしゅう」と「とっくん」で保つのと、「1ねんせいの きょうしつ」を進めるので十分です。' }));
     } else if (elapsed < 7 || pre.got === 0){
       s.append(el('p', { text: 'ペースを見積もれるだけの日数がまだありません（1週間ほど使うと出ます）。'
-        + '目安は1日1レベル・10分です。48レベルなら、休む日を入れても2〜3か月で終わる分量です。' }));
+        + '1問で終えても記録はたまり、別の日の確認につながります。1日に終えるレベル数は決めず、難しい内容は休みながら進められます。' }));
     } else {
       const rate = pre.got / Math.max(1, elapsed);            // levels per calendar day
       const eta = Math.ceil(left / rate);
@@ -14668,10 +14894,9 @@ const Parent = (() => {
           el('div', { text: '使い始めてから ' + elapsed + '日で ' + pre.got + 'レベル（週 ' + perWeek + 'レベル）。'
             + 'のこり ' + left + 'レベルを同じペースで進めた場合の見込みです。' }))));
       if (!inTime){
-        s.append(el('p', { text: '追いつき方は2つです。1つは「いまの おすすめ」を毎日1回、最後まで（8問）。'
-          + 'これがそのまま1日1レベルになります。もう1つは、間違いが多いレベルを繰り返すより'
-          + '「とっくん」で該当する項目だけを10問回すほうが、同じ10分で進みます。'
-          + 'なお、間に合わなくても内容が消えるわけではありません——入学後も続けられます。' }));
+        s.append(el('p', { text: 'これは過去のクリア数だけから計算した見込みです。見込みに合わせて1日の問題数を増やす必要はありません。'
+          + '「ひとつだけ」で1問ずつ進め、支援や答え直しが続く内容は少し休んでから戻れます。'
+          + '入学の時点で全部終わっていなくても、記録は残り、入学後も続けられます。' }));
       }
     }
 
@@ -14693,7 +14918,7 @@ const Parent = (() => {
   function planSection(){
     const s = el('section');
     s.append(el('div.eyebrow', { text: 'roadmap' }), el('h3', { text: '入学までの半年、どう進めるか' }),
-      el('p', { text: '1日10分・1レベル（8問）を目安に。「きょうの れんしゅう」は解けるようになった遊びから10問を混ぜて出すので、復習にちょうど良い分量です。' }));
+      el('p', { text: '時期は目安です。「ひとつだけ」で1問ずつ進め、別の日にも確かめられます。1日で1レベルを終える必要はありません。余裕がある日は通常コースや「きょうの れんしゅう」も選べ、4問ごとに休憩できます。' }));
     const t = el('table.skilltable');
     t.append(el('thead', null, el('tr', null,
       el('th', { text: '時期' }), el('th', { text: '中心にする世界' }), el('th', { text: 'ねらい' }))));
@@ -15103,10 +15328,10 @@ const Parent = (() => {
         // counted, not typed: the sentence used to say 15 and quietly went stale
         el('p', { text: '小学校1年生の算数は「数える」「数を分ける・合わせる」「比べる」「形をとらえる」の4つの土台の上に立っています。逆に言えば、入学前にやるべきことは計算の先取りではなく、この土台を手と目と声で確かめておくことです。このアプリは入学前の'
           + Games.list.filter(g => Progress.stageOf(g) === 'pre').length
-          + 'の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。'
+          + 'の遊びを4つの世界に分けています。1問ずつ成長できるコースと、4問ごとに休める通常コースがあり、短い時間でも記録を重ねられます。'
           + '関連する2〜3レベルの準備ができた遊びから、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
-        el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると、答えではなく「解き直すための道具」が画面に出て、声でも伝えます（タップして数える、空いたマスを埋める、端をそろえる、など）。ここでは選択肢を減らしません。4回で指のアニメがやり方を最後まで見せて「こたえを みる」ボタンが出て、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、1回目の正解には数えません）。' }),
-        el('p', { text: 'はじめて開くレベルは、テストから始めません。最初の1問は指のアニメがやり方を見せ（「みてて」）、次の1問は道具を出したまま一緒に解き（「いっしょに」）、そのあとに本番の問題が続きます。この2問は★にも記録にも数えません。問題の横の 👀 を押すと、まちがえる前でも道具が出ます（押した問題は自力の正解には数えません）。' }));
+        el('p', { text: '答えを間違えても減点や時間制限はありません。通常の遊びでは2回間違えると、答えではなく「解き直すための道具」が画面に出て、声でも伝えます（タップして数える、空いたマスを埋める、端をそろえる、など）。ここでは選択肢を減らしません。4回で指のアニメがやり方を最後まで見せて「こたえを みる」ボタンが出て、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、ヒントなし初回正解には数えません）。' }),
+        el('p', { text: 'はじめて開くレベルは、テストから始めません。最初の1問は指のアニメがやり方を見せ（「みてて」）、次の1問は道具を出したまま一緒に解き（「いっしょに」）、そのあとに本番の問題が続きます。この2問は自力の成績や★には数えず、「見た」「一緒にできた」として別に記録します。問題の横の 👀 を押すと、まちがえる前でも道具が出ます（押した問題は自力の正解には数えません）。' }));
     sheetInner.append(
       Rounds.parentSummary(),
       nextUpSection(),

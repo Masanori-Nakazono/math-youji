@@ -1368,8 +1368,13 @@ const Session = (() => {
         && (missType === 'up' || missType === 'down')) missType = null;
     if (scaffold === 'together' && !taughtQ && (mode === 'level' || mode === 'adventure' || mode === 'first')){
       Store.markIntroduced(g.id, plan[idx].levelIndex);
-      if (mode === 'first') Store.startShortCourse(g.id, plan[idx].levelIndex);
+      if (mode === 'first'){
+        Store.startShortCourse(g.id, plan[idx].levelIndex);
+      }
     }
+    // Completing a supported visit also gives relief when the child needed the
+    // final demonstration. It does not mark that method as learned.
+    if (scaffold === 'together' && mode === 'first') Store.noteShortSupport(g.id, plan[idx].levelIndex);
     if (mode !== 'diagnostic'){
       const kind = scaffold === 'show' || taughtQ ? 'viewed' : scaffold === 'together' ? 'together'
         : helped ? 'supported' : wrongThisQ ? 'revised' : 'independent';
@@ -1379,7 +1384,8 @@ const Session = (() => {
     }
     if (mode !== 'diagnostic' && !scaffold){
       const short = mode === 'first' && (firstPhase === 'independent' || firstPhase === 'check');
-      if (short) Store.recordShortAnswer(g.id, plan[idx].levelIndex, clean, runId, firstPhase, Array.from(usedItems));
+      if (short) Store.recordShortAnswer(g.id, plan[idx].levelIndex, clean, runId, firstPhase, Array.from(usedItems),
+        {kind:taughtQ ? 'viewed' : helped ? 'supported' : wrongThisQ ? 'revised' : 'independent', missType});
       if (short && clean) Store.markIntroduced(g.id, plan[idx].levelIndex);
       Store.noteOutcome(g.id, plan[idx].levelIndex, clean, !short);
       if (curItem){

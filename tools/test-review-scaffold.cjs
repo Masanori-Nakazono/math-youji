@@ -27,6 +27,7 @@ const server=http.createServer((req,res)=>{
         if(!S.saveReviewSession({at:Date.now(),run:{id,chapter:null,kind:'lesson',step,total:8,outcomes:Array(step).fill('independent'),key:'r2:'+id},q})||!R.resume())throw new Error('Invalid fixture '+id+':'+step);
       };
       const answer=()=>{
+        if(document.querySelector('.review-hint[open]'))click('.review-try');
         let {q}=R.inspect();
         if(q.type==='match'){
           for(let i=0;i<q.a;i++)if(!q.pairs.some(p=>p[0]===i)){
@@ -66,7 +67,10 @@ const server=http.createServer((req,res)=>{
           return parts[0]===q.a&&parts[1]===q.b&&(q.expectedOp==='＋'?parts[0]+parts[1]:parts[0]-parts[1])===q.answer;
         }
         if(q.type==='sumCards')return all.length===q.a&&q.answer.every(i=>q.cards[i].a+q.cards[i].b===all.length);
-        if(q.type==='splitSmall'||q.type==='splitLarge')return all.length===q.a;
+        if(q.type==='splitSmall'||q.type==='splitLarge'){
+          const parts=[...scene.querySelectorAll('.review-support-part')].map(p=>p.querySelectorAll('.review-support-block').length);
+          return parts[0]===q.left&&parts[1]===q.a-q.left;
+        }
         if(['horizontal','vertical','train','cardinal'].includes(q.type)){
           const cells=[...scene.querySelectorAll('.review-support-order>span')],first=cells.findIndex(n=>n.classList.contains('first'));
           return cells.length===q.a&&(q.supportStage<2||first===(q.reverse&&!q.cardinality?q.a-1:0))&&(q.cardinality||q.answer===(q.reverse?q.a-q.n:q.n-1));
@@ -83,9 +87,9 @@ const server=http.createServer((req,res)=>{
         const partial=JSON.stringify(S.reviewSession().q);
         check(type+': one-step support is checkpointed',S.reviewSession().q.supportStage===2&&R.inspect().q.supported&&!!document.querySelector('.review-reveal'));
         check(type+': model quantities still describe the correct operation',quantityMeaning());
-        click('.review-pause');const backup=S.exportText();S.reset();
+        click('.review-try');click('.review-pause');const backup=S.exportText();S.reset();
         check(type+': backup and resume keep the exact support step',S.importText(backup,'replace').ok&&R.resume()&&JSON.stringify(R.inspect().q)===partial);
-        click('.review-check');
+        click('.review-try');click('.review-check');
         check(type+': the example leaves an answer for the child',!R.inspect().q.done&&R.inspect().run.outcomes.length===step&&S.todayCount()===before);
         answer();
         check(type+': completing the child action records supported success',R.inspect().q.done&&R.inspect().run.outcomes.at(-1)==='supported'&&S.todayCount()===before+1);
@@ -106,7 +110,7 @@ const server=http.createServer((req,res)=>{
       open(19);click('.review-actions .btn-ghost');click('.review-model');
       check('subtraction-story support depicts the starting and taken counts and requests a story',quantityMeaning()&&R.inspect().q.hintText.includes('おはなしを きいて えらぼう')&&spoken.at(-1).endsWith(R.inspect().q.hintText)&&R.inspect().q.selected.length===0&&!document.querySelector('.review-keypad'));
       open(8,0,q=>{q.b=1;q.answer=q.a-1;});click('.review-actions .btn-ghost');click('.review-model');
-      check('a one-move split uses the separate example and leaves the move to the child',R.inspect().q.left===0&&!document.querySelector('.review-keypad'));
+      check('a one-move split keeps the current plates and leaves the move to the child',R.inspect().q.left===0&&!document.querySelector('.review-keypad')&&quantityMeaning());
       answer();check('the child can finish the one-move split with the original controls',R.inspect().q.done&&R.inspect().run.outcomes.at(-1)==='supported');
       open(8,0,q=>{q.b=3;q.answer=q.a-3;});click('.review-actions .btn-ghost');click('.review-model');
       check('a longer split moves exactly one object',R.inspect().q.left===1);
@@ -115,11 +119,11 @@ const server=http.createServer((req,res)=>{
       open(0);const q=R.inspect().q;q.answer.slice(0,2).forEach(i=>click('[data-focus="object'+i+'"]'));const already=R.inspect().q.selected.slice();
       click('.review-actions .btn-ghost');click('.review-model');check('a model preserves correct selections already made by the child',already.every(i=>R.inspect().q.selected.includes(i)));
       open(12);click('[data-number="'+R.inspect().q.a+'"]');const first=R.inspect().q.values[0];click('.review-actions .btn-ghost');click('.review-model');check('a model preserves a correct first operand and leaves other fields empty',R.inspect().q.values[0]===first&&R.inspect().q.values[1]===null&&R.inspect().q.values[2]===null&&R.inspect().q.op===null);
-      click('.review-reveal');click('.review-check');check('seeing all answers is a separate explicit supported action',R.inspect().q.done&&R.inspect().q.supportStage===3&&R.inspect().run.outcomes.at(-1)==='supported');
+      click('.review-reveal');click('.review-try');click('.review-check');check('seeing all answers is a separate explicit supported action',R.inspect().q.done&&R.inspect().q.supportStage===3&&R.inspect().run.outcomes.at(-1)==='supported');
       open(0);const wrong=R.inspect().q.things.findIndex(v=>v!==R.inspect().q.thing);click('[data-focus="object'+wrong+'"]');
       click('.review-check');check('one wrong try gives specific feedback without automatically taking over',R.inspect().q.wrongAttempts===1&&!R.inspect().q.showHint&&document.querySelector('.review-feedback').textContent.includes('ちがう なかま'));
       click('.review-check');check('two wrong tries open concrete support without changing the answer',R.inspect().q.wrongAttempts===2&&R.inspect().q.supportStage===1&&R.inspect().q.selected.length===1&&R.inspect().q.selected[0]===wrong&&!!document.querySelector('.review-model'));
-      click('.review-check');click('.review-check');check('four wrong tries invite one-step support without executing it',R.inspect().q.wrongAttempts===4&&R.inspect().q.supportStage===1&&document.querySelector('.review-feedback').textContent.includes('ひとつ みてみる'));
+      click('.review-try');click('.review-check');click('.review-check');check('four wrong tries invite one-step support without executing it',R.inspect().q.wrongAttempts===4&&R.inspect().q.supportStage===1&&document.querySelector('.review-feedback').textContent.includes('ひとつ みてみる'));
       click('.review-model');const backup=S.exportText(),bad=JSON.parse(backup);bad.data.reviewSession.q.supportStage=4;
       check('an unknown support stage is rejected atomically',!S.importText(JSON.stringify(bad),'replace').ok&&S.reviewSession().q.supportStage===2);
       const badAttempts=JSON.parse(backup);badAttempts.data.reviewSession.q.wrongAttempts=-1;check('invalid support attempt counters are rejected',!S.importText(JSON.stringify(badAttempts),'replace').ok);

@@ -287,4 +287,161 @@ function prepare(S, bits = '11111111'){
   passed('completed one-question practice and check checkpoints survive persistence and backup replacement');
 }
 
+{
+  const fixture = load(), S = fixture.store;
+  answer(S,false); answer(S,false);
+  assert.equal(S.shortStatus('count',0).resting,false);
+  assert.equal(S.shortStatus('count',0).supportNeeded,false);
+  answer(S,false);
+  const paused = S.shortStatus('count',0), until = S.dayNumber() + 3;
+  assert.equal(paused.resting,true); assert.equal(paused.restUntil,until);
+  assert.equal(paused.supportNeeded,true); assert.equal(paused.supportReason,'support');
+  const beforeSupport = raw(S);
+  assert.equal(S.noteShortSupport('count',0),true);
+  assert.equal(S.shortStatus('count',0).supportNeeded,false);
+  assert.equal(S.shortStatus('count',0).resting,true);
+  for (const field of ['recent','facts','firstTry','seen','daily','plays','stars','stickers'])
+    assert.deepEqual(raw(S)[field],beforeSupport[field]);
+  const afterSupport = raw(S);
+  assert.equal(S.noteShortSupport('count',0),false);
+  assert.deepEqual(raw(S),afterSupport);
+  fixture.advance(1);
+  for (let i = 0; i < 8; i++) answer(S,false);
+  assert.equal(S.shortStatus('count',0).restUntil,until); // Explicit practice never extends this rest.
+  assert.equal(S.shortStatus('count',0).supportNeeded,false);
+  fixture.advance(2);
+  assert.equal(S.shortStatus('count',0).resting,false);
+  answer(S,false); answer(S,false);
+  assert.equal(S.shortStatus('count',0).resting,false);
+  answer(S,false);
+  assert.equal(S.shortStatus('count',0).resting,true);
+  assert.equal(S.shortStatus('count',0).supportNeeded,true);
+  assert.equal(S.shortStatus('count',0).restUntil,S.dayNumber()+3);
+  assert.equal(S.plays('count',0),0); assert.equal(S.totalStars(),0);
+  assert.equal(S.readiness('count',0).count,0);
+  passed('three non-independent answers offer one supported visit then a bounded rest, requiring fresh observations for the next cycle');
+}
+
+{
+  const fixture = load(), S = fixture.store;
+  for (const bit of '010100') answer(S,bit === '1'); // Two clean among six, no three-zero streak.
+  assert.equal(S.shortStatus('count',0).supportReason,'support');
+  assert.equal(S.shortStatus('count',0).resting,true);
+  assert.equal(S.shortStatus('count',0).right,2);
+  assert.equal(S.shortStatus('count',0).readyDay,null);
+  assert.equal(S.noteShortSupport('count',0),true);
+  for (let day = 1; day < 6; day++){
+    fixture.advance(1);
+    for (let i = 0; i < 8; i++) answer(S,false);
+  }
+  const status = S.shortStatus('count',0);
+  assert.equal(status.resting,true); assert.equal(status.supportNeeded,true);
+  assert.equal(S.plays('count',0),0); assert.equal(S.totalStars(),0);
+  assert.equal(S.hasSticker('count:0'),false); assert.equal(S.readiness('count',0).count,0);
+  assert.equal(S.data.seen.count,46); assert.equal(S.data.shortCourses['count:0'].adaptive.recent.length,12);
+  passed('low success across six questions and days of explicit supported practice never create mastery or ordinary attempts');
+}
+
+{
+  const fixture = load(), S = fixture.store;
+  S.startShortCourse('count',0);
+  for (let i = 0; i < 3; i++){
+    const result = S.recordShortAnswer('count',0,false,'same-miss-'+i,'independent',[],
+      {kind:'revised',missType:'up'});
+    assert.equal(result.updated,true);
+    S.noteOutcome('count',0,false,false);
+  }
+  assert.equal(S.shortStatus('count',0).supportReason,'repeated-error');
+  assert.equal(S.data.shortCourses['count:0'].adaptive.kinds,'rrr');
+  assert.deepEqual(clone(S.data.shortCourses['count:0'].adaptive.misses),['up','up','up']);
+  const before = raw(S);
+  assert.equal(S.recordShortAnswer('count',0,false,'same-miss-2','independent',[],
+    {kind:'viewed',missType:'far'}).updated,false);
+  assert.deepEqual(raw(S),before);
+  S.noteShortSupport('count',0);
+  fixture.advance(3);
+  answer(S,true); answer(S,true); answer(S,true);
+  assert.equal(S.shortStatus('count',0).resting,false);
+  assert.equal(S.shortStatus('count',0).supportNeeded,false);
+  assert.equal(S.shortStatus('count',0).supportReason,null);
+  assert.equal(S.data.shortCourses['count:0'].adaptive.kinds.slice(-3),'iii');
+  assert.deepEqual(clone(S.data.shortCourses['count:0'].adaptive.misses.slice(-3)),['','','']);
+  passed('repeated misconceptions retain their reason, duplicate answer IDs remain harmless, and fresh clean answers recover without lowering mastery thresholds');
+}
+
+{
+  const fixture = load(), S = fixture.store;
+  prepare(S,'00000000');
+  const legacy = raw(S); delete legacy.shortCourses['count:0'].adaptive;
+  const restored = load(legacy), status = restored.store.shortStatus('count',0);
+  assert.equal(status.supportNeeded,true); assert.equal(status.resting,true);
+  assert.equal(status.restUntil,restored.store.dayNumber()+3);
+  const before = raw(restored.store);
+  restored.store.shortStatus('count',0); // Reading old data never rewrites it.
+  assert.deepEqual(raw(restored.store),before);
+  assert.equal(restored.store.noteShortSupport('count',0),true);
+  const saved = restored.store.exportText();
+  restored.store.unlockRoundTwo(); restored.store.selectRound(2);
+  assert.equal(restored.store.shortStatus('count',0).supportNeeded,false);
+  assert.equal(restored.store.noteShortSupport('count',0),false);
+  const imported = load().store;
+  assert.equal(imported.importText(saved,'replace').ok,true);
+  assert.equal(imported.shortStatus('count',0).supportNeeded,false);
+  assert.equal(imported.shortStatus('count',0).resting,true);
+  const snapshot = raw(imported);
+  assert.equal(imported.importText(JSON.stringify(legacy)).ok,true);
+  assert.equal(imported.importText(JSON.stringify(legacy)).ok,true);
+  assert.deepEqual(raw(imported),snapshot);
+  const zero = load().store;
+  zero.startShortCourse('count',0);
+  assert.equal(zero.noteShortSupport('count',0),false);
+  assert.equal(zero.shortStatus('count',0).answered,0);
+  passed('legacy short histories gain relief safely, support completion survives backup merge, and empty courses and other laps remain unaffected');
+}
+
+{
+  const fixture = load(), S = fixture.store;
+  prepare(S,'00000000');
+  const valid = raw(S), mutations = [
+    a => {a.recent='2';}, a => {a.sinceRest='111';}, a => {a.lastDay=-1;},
+    a => {a.restUntil=a.lastDay+4;}, a => {a.supportDone='yes';},
+    a => {a.kinds='iii';}, a => {a.kinds='iiiiiiii';},
+    a => {a.misses[0]={};}, a => {a.misses.pop();}
+  ];
+  for (const mutate of mutations){
+    const broken = clone(valid); mutate(broken.shortCourses['count:0'].adaptive);
+    assert.equal(load().store.importText(JSON.stringify(broken),'replace').ok,false);
+  }
+  const broken = clone(valid); broken.shortCourses['count:0'].adaptive.supportDone=null;
+  const startup = load(broken);
+  assert.equal(startup.store.shortStatus('count',0).answered,0);
+  assert.ok(startup.storage.has('kazu-no-bouken.v1.unreadable'));
+  // A normal pass remains authoritative, irrespective of a short-course rest.
+  S.addSticker('count:0');
+  assert.equal(S.shortStatus('count',0).confirmed,true);
+  assert.equal(S.shortStatus('count',0).resting,false);
+  assert.equal(S.shortStatus('count',0).supportNeeded,false);
+  passed('adaptive metadata rejects corrupt imports, isolates corrupt startup entries and never rests an already confirmed level');
+}
+
+{
+  const fixture = load(), S = fixture.store;
+  prepare(S,'000');
+  const paused = S.shortStatus('count',0);
+  fixture.advance(-1); // Travel or a corrected device clock can move the local date backwards.
+  answer(S,false);
+  const observed = clone(S.shortStatus('count',0));
+  assert.equal(observed.answered,4);
+  assert.equal(observed.lastDay,paused.lastDay);
+  assert.equal(observed.restUntil,paused.restUntil);
+  assert.equal(S.data.last['count:0'],S.dayNumber()); // Calendar statistics still use the actual date.
+  const saved = raw(S), reloaded = load(saved,-1).store;
+  assert.deepEqual(clone(reloaded.shortStatus('count',0)),observed);
+  const restored = load(undefined,-1).store;
+  assert.equal(restored.importText(S.exportText(),'replace').ok,true);
+  assert.deepEqual(clone(restored.shortStatus('count',0)),observed);
+  assert.equal(restored.plays('count',0),0);assert.equal(restored.totalStars(),0);
+  passed('a backwards local date keeps adaptive observations reloadable and importable without moving calendar counts');
+}
+
 console.log('All short-course store tests passed.');

@@ -142,6 +142,22 @@ const Store = (() => {
         || !['practice','ready','check','confirmed','retry'].includes(v.lastResult)) return false;
     if (v.items !== undefined && (!Array.isArray(v.items) || v.items.length > 64
         || v.items.some(item => typeof item !== 'string' || item.length > 240))) return false;
+    if (v.adaptive !== undefined){
+      const a = v.adaptive;
+      if (!a || typeof a !== 'object' || Array.isArray(a) || !bits(a.recent, 12)
+          || !bits(a.sinceRest, 12) || !count(a.lastDay)
+          || typeof a.supportDone !== 'boolean'
+          || !(a.restUntil === null || count(a.restUntil))
+          || typeof a.kinds !== 'string' || !/^[irsv]*$/.test(a.kinds)
+          || a.kinds.length !== a.recent.length || !Array.isArray(a.misses)
+          || a.misses.length !== a.recent.length
+          || a.misses.some(m => typeof m !== 'string' || m.length > 40 || !/^[a-z0-9-]*$/.test(m))
+          || !a.recent.endsWith(a.sinceRest)
+          || (a.restUntil !== null && a.restUntil > a.lastDay + 3)) return false;
+      // The observation's meaning travels with its outcome, including on import.
+      if (Array.from(a.recent).some((bit, i) => (bit === '1') !== (a.kinds[i] === 'i')
+          || bit === '1' && a.misses[i] !== '')) return false;
+    }
     if (v.readyDay !== null && (v.answers.length !== 8 || v.answers.split('1').length - 1 < 6)) return false;
     if (v.checks.length && (v.readyDay === null || v.checkDay === null || v.checkDay <= v.readyDay)) return false;
     if (!v.checks.length && v.checkDay !== null) return false;
@@ -907,23 +923,34 @@ const Store = (() => {
     return (1 - acc) * 1.6 + (age / 30) * 0.6 + (f[0] < 3 ? 0.25 : 0) + slow * 0.5;
   }
 
+  /** One reading of item-level progress for both the child's practice and the
+      parent page. Lifetime misses remain in the backup, while recent independent
+      answers can retire an old difficulty without rewriting that history. */
+  function factStatus(k){
+    const f = mem.facts[k];
+    if (!f || !f[0]) return null;
+    const recent = (mem.factRecent && mem.factRecent[k]) || '';
+    const recentRight = recent.split('1').length - 1;
+    const missed = f[0] - f[1], accuracy = f[1] / f[0];
+    const recovered = recent.length >= 6 && recentRight / recent.length >= .85;
+    const slow = f[5] >= FLUENT_SLOW_MS;
+    const needsPractice = !!f[4] && (slow || missed >= 1 && !recovered
+      && !(accuracy >= .8 && missed < 2));
+    return {key:k, label:f[3] || k, at:f[4] || null, n:f[0], right:f[1], accuracy,
+      recentN:recent.length, recentAccuracy:recent.length ? recentRight / recent.length : null,
+      recovered, slow, needsPractice, daysSince:Math.max(0, dayNo() - f[2]),
+      missed, due:dueOf(k), ms:f[5] || null};
+  }
+
   /** The facts this child keeps missing, worst first.
       Only facts they have actually met and actually got wrong: 集中練習 is practice,
       not first contact, and one slip is not a gap. */
   function weakFacts(limit){
     const out = [];
     for (const k in mem.facts){
-      const f = mem.facts[k];
-      if (!f || !f[0] || !f[4]) continue;        // never asked, or nowhere to ask it again
-      const missed = f[0] - f[1];
-      const recent = (mem.factRecent && mem.factRecent[k]) || '';
-      const recentRight = recent.split('').filter(x => x === '1').length;
-      const recovered = recent.length >= 6 && recentRight / recent.length >= .85;
-      // right every time but still being counted out: the case a percentage cannot show
-      const slow = f[5] >= FLUENT_SLOW_MS;
-      if ((missed < 1 || recovered) && !slow) continue;
-      if (!slow && f[1] / f[0] >= 0.8 && missed < 2) continue;   // one slip on a solid fact
-      out.push({ key: k, label: f[3] || k, at: f[4], due: dueOf(k), missed, ms: f[5] || null, slow });
+      const status = factStatus(k);
+      if (!status || !status.needsPractice) continue;
+      out.push(status);
     }
     out.sort((a, b) => b.due - a.due || b.missed - a.missed);
     return limit ? out.slice(0, limit) : out;
@@ -961,18 +988,41 @@ const Store = (() => {
   }
 
   const rightIn = bits => bits.split('1').length - 1;
+  function shortSupportReason(bits, misses){
+    const repeated = misses && misses.length >= 3 && misses.slice(-3).every(m => m && m === misses[misses.length - 1]);
+    if (repeated) return 'repeated-error';
+    if (bits.endsWith('000') || bits.length >= 6 && rightIn(bits.slice(-6)) < 3) return 'support';
+    return null;
+  }
+  function shortAdaptive(k, s){
+    if (s.adaptive) return s.adaptive;
+    // Older one-question courses already contain real observations. Use them to
+    // offer relief immediately, without inventing an ordinary level attempt.
+    const recent = (s.answers + s.checks).slice(-12), lastDay = mem.last[k] || dayOf(s.at);
+    const reason = shortSupportReason(recent);
+    return {recent, kinds:Array.from(recent, bit => bit === '1' ? 'i' : 's').join(''),
+      misses:Array.from(recent, () => ''), sinceRest:reason ? '' : recent,
+      lastDay, restUntil:reason ? lastDay + 3 : null, supportDone:false};
+  }
   function shortStatus(g, l){
     const k = key(g, l), s = mem.shortCourses[k], today = dayNo();
     const confirmed = !!(s && s.confirmed) || mem.stickers.includes(k) && !mem.pending[k];
     const failed = !!(s && s.checks.length === 3 && rightIn(s.checks) < 2);
     const due = !!(s && s.readyDay !== null && today > s.readyDay && !(failed && s.checkDay >= today));
     const restart = failed && due;
+    const adaptive = s ? shortAdaptive(k, s) : null;
+    const supportReason = adaptive ? shortSupportReason(adaptive.recent, adaptive.misses) : null;
     return { phase: !confirmed && due ? 'check' : 'independent',
       answered:s ? s.answers.length : 0, right:s ? rightIn(s.answers) : 0,
       readyDay:s ? s.readyDay : null, checks:s && !restart ? s.checks.length : 0,
       checkRight:s && !restart ? rightIn(s.checks) : 0, confirmed,
       waiting:!!(s && s.readyDay !== null && !confirmed && !due),
-      lastId:s ? s.lastId : '', lastResult:s ? s.lastResult : 'practice' };
+      lastId:s ? s.lastId : '', lastResult:s ? s.lastResult : 'practice',
+      at:s ? s.at : 0, lastDay:adaptive ? adaptive.lastDay : null,
+      supportNeeded:!confirmed && !!supportReason && adaptive.restUntil !== null && !adaptive.supportDone,
+      supportReason:!confirmed ? supportReason : null,
+      resting:!confirmed && !!(adaptive && adaptive.restUntil !== null && today < adaptive.restUntil),
+      restUntil:!confirmed && adaptive ? adaptive.restUntil : null };
   }
 
   function startShortCourse(g, l){
@@ -987,7 +1037,7 @@ const Store = (() => {
     return shortStatus(g, l);
   }
 
-  function recordShortAnswer(g, l, clean, runId, phase, items){
+  function recordShortAnswer(g, l, clean, runId, phase, items, observation){
     const unchanged = () => Object.assign(shortStatus(g, l),
       {updated:false, newSticker:false, gold:false, justConfirmed:false});
     if (typeof g !== 'string' || !/^[a-z0-9]+$/.test(g) || !Number.isSafeInteger(l) || l < 0
@@ -1003,6 +1053,27 @@ const Store = (() => {
       s = mem.shortCourses[k];
     }
     const before = shortStatus(g, l);
+    const adaptive = shortAdaptive(k, s), bit = clean ? '1' : '0';
+    const kind = clean ? 'i' : observation && ['revised','viewed'].includes(observation.kind)
+      ? observation.kind[0] : 's';
+    const miss = !clean && observation && typeof observation.missType === 'string'
+      && /^[a-z0-9-]{1,40}$/.test(observation.missType) ? observation.missType : '';
+    adaptive.recent = (adaptive.recent + bit).slice(-12);
+    adaptive.kinds = (adaptive.kinds + kind).slice(-12);
+    adaptive.misses = adaptive.misses.concat(miss).slice(-12);
+    // Free practice remains available during a rest, but does not keep pushing
+    // its end further away. A new rest needs fresh observations after it ends.
+    if (adaptive.restUntil === null || today >= adaptive.restUntil){
+      adaptive.sinceRest = (adaptive.sinceRest + bit).slice(-12);
+      if (adaptive.sinceRest.length >= 3 && shortSupportReason(adaptive.sinceRest,
+          adaptive.misses.slice(-adaptive.sinceRest.length))){
+        adaptive.restUntil = today + 3;
+        adaptive.sinceRest = '';
+        adaptive.supportDone = false;
+      }
+    }
+    adaptive.lastDay = Math.max(adaptive.lastDay, today);
+    s.adaptive = adaptive;
     let newSticker = false, gold = false, justConfirmed = false;
     if (Array.isArray(items)) s.items = Array.from(new Set(items.filter(item =>
       typeof item === 'string' && item.length <= 240))).slice(-64);
@@ -1041,6 +1112,17 @@ const Store = (() => {
     s.at = Math.max(Date.now(), s.at + 1);
     save();
     return Object.assign(shortStatus(g, l), {updated:true, newSticker, gold, justConfirmed});
+  }
+
+  function noteShortSupport(g, l){
+    const k = key(g, l), s = mem.shortCourses[k];
+    if (!s || !shortStatus(g, l).supportNeeded) return false;
+    const adaptive = shortAdaptive(k, s);
+    adaptive.supportDone = true;
+    s.adaptive = adaptive;
+    s.at = Math.max(Date.now(), s.at + 1);
+    save();
+    return true;
   }
 
   return {
@@ -1122,7 +1204,7 @@ const Store = (() => {
       save();
     },
 
-    shortStatus, startShortCourse, recordShortAnswer,
+    shortStatus, startShortCourse, recordShortAnswer, noteShortSupport,
     shortItems(g, l){
       const course = mem.shortCourses[key(g, l)];
       return course && course.items ? course.items.slice() : [];
@@ -1374,6 +1456,7 @@ const Store = (() => {
       save();
     },
     fact: k => mem.facts[k] || null,
+    factStatus,
     /** The mistake this child keeps making on this fact: { kind, n, of } or null.
         Only the diagnostic kinds, only when it has happened more than once, and
         only when it is actually the dominant reading — one stray tap is not a

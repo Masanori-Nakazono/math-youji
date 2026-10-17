@@ -1996,6 +1996,24 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 #parent .factchip.slow{ background:color-mix(in srgb, var(--c-yellow) 32%, var(--card)); }
 /* what kind of wrong it was — the sentence, not the percentage */
 #parent .factchip em{ font-style:normal; font-weight:500; color:var(--oops-ink); font-size:.78em }
+/* Parent observations stay readable beside their one-question action, including
+   narrow phones. Each tone describes today's state rather than lifetime errors. */
+#parent .parent-recommendation{
+  padding:calc(var(--u)*.9); margin:calc(var(--u)*.7) 0;
+  border:2px solid var(--good); border-radius:calc(var(--u)*.8); background:var(--good-soft);
+}
+#parent .parent-recommendation b{ display:block; overflow-wrap:anywhere }
+#parent .parent-recommendation p, #parent .parent-fact p{ margin:calc(var(--u)*.35) 0 calc(var(--u)*.65) }
+#parent .parent-fact-copy{ flex:1; min-width:0; overflow-wrap:anywhere }
+#parent .parent-fact-copy > small{ color:var(--ink-soft) }
+#parent .parent-practice-note{ font-size:.85em; color:var(--ink-soft) }
+#parent .parent-fact[data-fact-state="need"] .mk{ background:var(--c-yellow); color:var(--ink) }
+#parent .parent-fact[data-fact-state="rest"] .mk,
+#parent .parent-fact[data-fact-state="stale"] .mk{ background:var(--paper-2); color:var(--ink-soft) }
+#parent .parent-next .btn{
+  max-width:100%; min-height:44px; min-width:44px; white-space:normal;
+  font-size:max(14px,calc(var(--u)*1.1)); padding:8px 12px;
+}
 #parent .misslist{ display:grid; gap:calc(var(--u)*.4); margin:calc(var(--u)*.6) 0 }
 #parent .missrow{
   display:grid; grid-template-columns:1fr auto; gap:0 calc(var(--u)*.8);
@@ -2890,3 +2908,26 @@ polygon.slot-focus{ stroke:var(--ring); stroke-width:2.8; stroke-dasharray:none;
 .review-support-pair i{display:block;width:25px;height:25px;border:2px solid #8B723C;background:#E9C26C;border-radius:5px;}
 .review-support-pair>span{height:25px;font-size:18px;line-height:25px;}
 .review-support-empty{border:2px dashed var(--card-edge);border-radius:50%;padding:22px 15px;}
+
+/* Keep help and its next action together, independent of the long question page. */
+dialog.review-hint{position:fixed;inset:0;width:min(680px,calc(100vw - 28px));max-width:none;max-height:calc(100vh - 28px);max-height:calc(100dvh - 28px);margin:auto;padding:0;border:3px solid var(--c-blue);border-radius:20px;background:var(--paper);color:var(--ink);overflow:hidden;box-sizing:border-box;box-shadow:0 12px 48px rgba(0,0,0,.25);font-size:18px;line-height:1.7;}
+dialog.review-hint[open]{display:flex;flex-direction:column;}
+dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
+.review-help-heading{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 12px;border-bottom:2px solid var(--card-edge);flex:none;}
+.review-help-heading>div{min-width:0;flex:1;}
+.review-help-heading h3{font-size:22px;margin:0 0 4px;}
+.review-help-heading p{font-size:17px;line-height:1.6;margin:0;}
+.review-help-heading .review-hint-hear{flex:none;min-width:56px;min-height:56px;padding:6px;}
+.review-help-content{overflow:auto;min-height:0;padding:8px 18px 12px;overscroll-behavior:contain;}
+.review-help-content>p{margin:10px 0 0;}
+.review-help-response{font-weight:900;color:var(--ink);}
+.review-hint .review-support-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px 18px 16px;background:var(--paper-2);border-top:2px solid var(--card-edge);flex:none;}
+.review-hint .review-support-actions .btn{min-width:0;min-height:64px;white-space:normal;line-height:1.5;font-size:17px;padding:10px;}
+@media(max-width:480px){
+  .review-help-heading{padding:12px;gap:8px;}
+  .review-help-heading h3{font-size:20px;}
+  .review-help-heading p{font-size:16px;}
+  .review-help-content{padding:6px 12px 12px;}
+  .review-hint .review-support-actions{padding:12px;gap:8px;}
+  .review-hint .review-support-actions .btn{font-size:16px;}
+}

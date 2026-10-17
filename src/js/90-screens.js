@@ -294,7 +294,7 @@ const Home = (() => {
       && !Store.milestones().some(m => Store.milestoneRank(m.kind) >= Store.milestoneRank('together'));
     const pending = Session.pendingSummary();
     const first = firstRun && FirstSteps.target();
-    const short = !first && FirstSteps.shortTarget();
+    const short = !first && FirstSteps.shortPlan();
     const rec = Diagnostic.current();
     const recGame = rec && Games.byId[rec.gameId];
     clear(recommendEl);
@@ -313,10 +313,9 @@ const Home = (() => {
         first.game.name + '　1もんだけ。ヒントを つかって いいよ',
         () => FirstSteps.startOne(first.game, first.levelIndex));
     } else if (short){
-      banner(primaryEl, '👆', short.status.phase === 'check' ? 'べつのひの たしかめを 1もん'
-        : short.status.waiting ? 'ふくしゅうを 1もん' : 'つづきの 1もん',
-        short.game.name + (short.status.waiting ? '　たしかめは また べつのひに' : '　1もんずつでも すすむよ'),
-        () => FirstSteps.startOne(short.game, short.levelIndex, true));
+      const copy = FirstSteps.planCopy(short);
+      banner(primaryEl, short.kind === 'support' ? '🤝' : '👆', copy.title,
+        short.game.name + '　' + copy.reason, () => FirstSteps.startPlan(short));
     } else if (recGame){
       const lv = recGame.levels[rec.levelIndex] || recGame.levels[0];
       banner(primaryEl, BANNER_ICON.recommend, 'きょうの おすすめ',

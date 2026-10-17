@@ -172,17 +172,76 @@ const FirstSteps = (() => {
     }
     return null;
   }
-  function shortTarget(){
+  function shortCourses(){
     return Object.keys(Store.data.shortCourses || {}).map(key => {
       const [id, index] = key.split(':'), game = Games.byId[id], levelIndex = Number(index);
-      if (!game || !Array.isArray(game.levels) || !game.levels[levelIndex] || !levelOpen(game, levelIndex)
-          || Diagnostic.resting(id, levelIndex)) return null;
+      if (!game || !Array.isArray(game.levels) || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return null;
       const status = Store.shortStatus(id, levelIndex);
-      return status.confirmed ? null : { game, levelIndex, status };
-    }).filter(Boolean).sort((a, b) => Number(b.status.phase === 'check') - Number(a.status.phase === 'check'))[0] || null;
+      return { game, levelIndex, status };
+    }).filter(Boolean).sort((a, b) => b.status.at - a.status.at);
+  }
+  function shortTarget(){
+    return shortCourses().filter(t => !t.status.confirmed && !t.status.waiting
+      && !Diagnostic.resting(t.game.id, t.levelIndex))
+      .sort((a, b) => Number(b.status.phase === 'check') - Number(a.status.phase === 'check')
+        || b.status.at - a.status.at)[0] || null;
+  }
+  function shortPlan(){
+    const courses = shortCourses();
+    if (!courses.length) return null;
+    const unfinished = courses.filter(t => !t.status.confirmed);
+    const available = t => !Diagnostic.resting(t.game.id, t.levelIndex);
+    const due = unfinished.find(t => t.status.phase === 'check' && available(t));
+    if (due) return {...due, kind:'check'};
+    const support = unfinished.find(t => t.status.resting && t.status.supportNeeded);
+    if (support) return {...support, kind:'support'};
+    const returning = unfinished.find(t => available(t) && !t.status.waiting
+      && t.status.restUntil !== null && t.status.lastDay < t.status.restUntil);
+    if (returning) return {...returning, kind:'return'};
+    const current = unfinished.find(t => available(t) && !t.status.waiting);
+    if (current) return {...current, kind:'resume'};
+    const rest = unfinished.find(t => !available(t));
+    const known = (game, i) => levelOpen(game, i) && !Diagnostic.resting(game.id, i)
+      && (Store.introduced(game.id, i) || Store.hasConfirmed(game.id + ':' + i))
+      && !Store.shortStatus(game.id, i).waiting;
+    if (rest){
+      for (let i = rest.levelIndex - 1; i >= 0; i--)
+        if (known(rest.game, i)) return {game:rest.game, levelIndex:i, kind:'easier'};
+      for (const game of Games.list){
+        if (game.intro === false || game.id === rest.game.id) continue;
+        for (let i = 0; i < game.levels.length; i++)
+          if (known(game, i)) return {game, levelIndex:i, kind:'known'};
+      }
+    }
+    const next = target();
+    if (next) return {...next, kind:'new'};
+    for (const game of Games.list){
+      if (game.intro === false) continue;
+      for (let i = 0; i < game.levels.length; i++)
+        if (known(game, i)) return {game, levelIndex:i, kind:'review'};
+    }
+    const waiting = unfinished.find(available);
+    return waiting ? {...waiting, kind:'review'} : null;
+  }
+  function planCopy(t){
+    const titles = {check:'べつのひの たしかめを 1もん', support:'いっしょに 1もん',
+      return:'まえの あそびを 1もん', resume:'つづきの 1もん', easier:'やさしい もんだいを 1もん',
+      known:'できる あそびを 1もん', new:'あたらしい あそびを 1もん', review:'ふくしゅうを 1もん'};
+    const reasons = {check:'べつのひにも できるかな', support:'やりかたを みてから。このあそびは あとで また',
+      return:'すこし やすんだ あそびを ためそう', resume:'1もんずつでも すすむよ',
+      easier:'できる ところから ためそう', known:'できる ところから ためそう',
+      new:'1もんだけ。ヒントも あるよ', review:'たしかめは また べつのひでも いいよ'};
+    return {title:titles[t.kind] || titles.resume, reason:reasons[t.kind] || reasons.resume};
+  }
+  function startPlan(t, opts){
+    if (!t) return;
+    if (t.kind === 'support'){
+      build(); active = {game:t.game, levelIndex:t.levelIndex, opts:opts || null};
+      Session.startFirst(t.game, t.levelIndex, 'afterShow');
+    } else startOne(t.game, t.levelIndex, t.kind ? t.kind !== 'new' : undefined, opts);
   }
   function oneTarget(){
-    const current = shortTarget();
+    const current = shortPlan();
     if (current) return current;
     const rec = Diagnostic.current(), g = rec && Games.byId[rec.gameId];
     if (g && g.intro !== false && levelOpen(g, rec.levelIndex) && !Diagnostic.resting(g.id, rec.levelIndex))
@@ -198,10 +257,10 @@ const FirstSteps = (() => {
     const one = opts && opts.one, t = one ? oneTarget() : target();
     if (!t) return null;
     return el('button.home-quest.adventure-card.first-card', { type: 'button',
-      onclick(){ Sound.sfx.tap(); if (one) startOne(t.game, t.levelIndex); else open(t.game, t.levelIndex); } },
+      onclick(){ Sound.sfx.tap(); if (one) startPlan(t); else open(t.game, t.levelIndex); } },
       el('span.icon', { text: one ? '👆' : '👀', 'aria-hidden': 'true' }),
       el('span.copy', null, el('b', { text: one ? 'ひとつだけ やってみる' : 'まず みてみる' }),
-        el('small', { text: t.game.name + (one ? Store.introduced(t.game.id, t.levelIndex)
+        el('small', { text: t.game.name + (one && t.kind ? '　' + planCopy(t).title : one ? Store.introduced(t.game.id, t.levelIndex)
           ? Store.shortStatus(t.game.id, t.levelIndex).phase === 'check' ? '　べつのひの たしかめ 1もん' : '　じぶんで 1もん。ヒントも あるよ'
           : '　ヒントつきの 1もん' : '　みるだけでも いいよ') })),
       el('span.arrow', { text: '▶', 'aria-hidden': 'true' }));
@@ -267,15 +326,21 @@ const FirstSteps = (() => {
         : 'じぶんで ためした もんだい　' + status.answered + '／8もん';
       info.append(el('p.first-progress', { text: progress }));
     }
+    if (status.resting) info.append(el('p.first-progress', {text:status.supportNeeded
+      ? 'いっしょに やりかたを みよう。そのあとは べつの あそびに しよう'
+      : 'このあそびは すこし おやすみ。また あとで もどれるよ'}));
     clear(actions);
     if (phase === 'show') actions.append(button('🤝', 'いっしょに ひとつ',
       () => Session.startFirst(game, levelIndex, 'afterShow'), true));
     actions.append(button('🏠', 'きょうは ここまで', () => {
       Home.render(); UI.show('home', { replace: true });
     }, phase !== 'show'));
-    if (phase !== 'show') actions.append(button('👆', status.phase === 'check' ? 'たしかめを 1もん'
-      : status.waiting ? 'ふくしゅうを 1もん' : 'じぶんで もう 1もん',
-      () => startOne(game, levelIndex, true, active && active.opts)));
+    if (phase !== 'show'){
+      const next = shortPlan() || {game, levelIndex, kind:'resume'};
+      const same = next.game.id === game.id && next.levelIndex === levelIndex;
+      actions.append(button(next.kind === 'support' ? '🤝' : '👆', same && next.kind === 'resume'
+        ? 'じぶんで もう 1もん' : planCopy(next).title, () => startPlan(next, same && active && active.opts)));
+    }
     actions.append(button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active && active.opts)));
     if (milestone && milestone.label) info.append(el('small', { text: '📒 ' + milestone.label }));
     UI.show('first-finish', { replace: true });
@@ -284,7 +349,7 @@ const FirstSteps = (() => {
       + '今日はここまででもいいよ。';
     Sound.say(finishSpeech, { delay: 200 });
   }
-  return { target, shortTarget, oneTarget, homeCard, build, open, startOne, finish, get active(){ return active; } };
+  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, build, open, startOne, finish, get active(){ return active; } };
 })();
 
 const ProgressAlbum = (() => {
