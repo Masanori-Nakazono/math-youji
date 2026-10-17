@@ -133,7 +133,7 @@ const TextbookReview = (() => {
     const rows=Object.entries(Store.data.reviewRecords||{});
     if(!unlocked() && !rows.length) return null;
     return el('section.section.review-parent',null,el('h3',{text:'教科書の見せ方で復習'}),
-      el('p',{text:'各単元に関係する地図の教材が確定済み、または直近6問以上で自力初回正答率75％以上なら、その単元から復習できます。金シールの完全収集は不要です。一度開いた単元は閉じません。'}),
+      el('p',{text:'各単元に関係する地図の教材が確定済み、または直近6問以上で自力初回正答率75％以上なら、その単元から復習できます。短い1問コースで蓄積した自力回答は、別の日の確認に合格してから準備へ反映します。金シールの完全収集は不要です。一度開いた単元は閉じません。'}),
       el('p',{text:'東京書籍「あたらしいさんすう1 上」（平成20年発行）の添付範囲を、独自の絵と1問ずつの操作に対応させています。通常は8問中4問の自力初回正解で仮獲得、8問すべてなら即確定。別の日の3問中2問で確定します。まとめは各単元4枚の確定後、5問中4問の自力初回正解で獲得します。'}),
       rows.map(([k,r])=>el('p',{text:(k.startsWith('r2chapter:')?chapters[Number(k.split(':')[1])].title+'のまとめ':lessons[Number(k.split(':')[1])].title)
         +'：自力で初回正解 '+r.independent+'問／答え直して正解 '+r.revised+'問／ヒント・見本を使用 '+r.supported+'問（直近の'+({lesson:'レッスン',check:'別の日の確認',chapter:'まとめ'})[r.kind]+'）'})));
@@ -212,7 +212,7 @@ const TextbookReview = (() => {
   }
   function nextQuestion(){
     const id=run.kind==='chapter'?(run.step<4?run.chapter*4+run.step:run.chapter?run.chapter*4-1:3):run.id;
-    q=generate(id,run.step);q.lessonId=id;q.missed=false;q.supported=false;q.done=false;q.selected=[];q.pairs=[];q.active=0;q.values=[null,null,null];q.op=null;q.left=0;
+    q=generate(id,run.step);q.lessonId=id;q.missed=false;q.supported=false;q.done=false;q.selected=[];q.pairs=[];q.active=0;q.values=[null,null,null];q.op=null;q.left=0;q.supportStage=0;q.wrongAttempts=0;
     exitArmed=false;renderQuestion();focusHeading();say(q.prompt);
   }
   // Own vector illustrations: keep quantity and spatial direction clear at any screen size.
@@ -340,7 +340,13 @@ const TextbookReview = (() => {
     body.append(feedback,el('div.review-actions',null,q.done?button(run.step+1===run.total?'できた！':'つぎの もんだい',advance,'btn-accent.review-next'):
       [button('👀 ヒント',hint),button('たしかめる',check,'btn-accent.review-check')],
       button('ここで 休む',pause,'btn-ghost.review-pause')));
-    if(q.showHint&&!q.done)body.append(el('div.review-hint',{role:'status'},el('p',{text:q.hintText}),button('いっしょに やってみる',model)));
+    if(q.showHint&&!q.done)body.append(el('div.review-hint',{'aria-label':'たすけの ヒント'},
+      el('strong',{text:supportStage()>=2?'ひとつ みたら、つぎは きみの ばん':'ここを みてみよう'}),
+      supportScene(),el('p',{text:q.hintText}),
+      el('div.review-support-actions',null,
+        supportStage()<2?button('ひとつ みてみる',model,'btn-accent.review-model'):null,
+        supportStage()>=2?button('こたえを みる',reveal,'btn-ghost.review-reveal'):null,
+        button('🔊 ヒントを きく',()=>say(q.hintText),'btn-ghost.review-hint-hear'))));
     if(q.done) $$('button',scene).forEach(b=>b.disabled=true);
     if(focus){const b=$('[data-focus="'+focus+'"]',body);if(b&&!b.disabled)b.focus({preventScroll:true});}
   }
@@ -367,27 +373,116 @@ const TextbookReview = (() => {
       ['count','five','zeroCount','sequence','hidden','makeTen','take','difference'].includes(q.type)?q.value===undefined:
       q.type==='match'?q.pairs.length<q.a:['splitSmall','splitLarge'].includes(q.type)?false:q.selected.length===0;
     if(incomplete){q.message='まだ えらんでいない ところが あるよ。';renderQuestion();$('.review-check',body).focus({preventScroll:true});say(q.message);return;}
-    if(!correct()){q.missed=true;q.message='もういちど、えや むきを よく みてみよう。';Sound.sfx.tap();renderQuestion();$('.review-check',body).focus({preventScroll:true});say(q.message);return;}
+    if(!correct()){
+      const previous=q.wrongAttempts===undefined?Number(q.missed):q.wrongAttempts;
+      q.missed=true;q.wrongAttempts=Math.min(100000,previous+1);
+      q.message=retryText();
+      if(q.wrongAttempts>=2){q.supported=true;q.showHint=true;q.supportStage=Math.max(1,supportStage());q.hintText=hintText();}
+      if(q.wrongAttempts>=4&&supportStage()<2)q.message='ひとつ みてみる ボタンで、さいしょの やりかたを みられるよ。';
+      Sound.sfx.tap();renderQuestion();$('.review-check',body).focus({preventScroll:true});say(q.message+(q.wrongAttempts===2?' '+q.hintText:''));return;
+    }
     q.done=true;
     const outcome=q.supported?'supported':q.missed?'revised':'independent';run.outcomes.push(outcome);Store.countToday(1);
     q.result=({independent:'じぶんで できたね！',revised:'もういちど ためして できたね！',supported:'ヒントで できたね！'})[outcome];
     Sound.sfx.correct();renderQuestion();say(q.result);
     const next=$('.review-next',body);if(next)next.focus({preventScroll:true});
   }
+  function supportStage(){return q.supportStage===undefined?(q.showHint?1:0):q.supportStage;}
+  function retryText(){
+    if(q.type==='group')return 'ちがう なかまは はずして、おなじ なかまを えらぼう。';
+    if(q.type==='sumCards')return 'それぞれの カードを たして、おなじ こたえを ２まい えらぼう。';
+    if(q.type==='splitSmall'||q.type==='splitLarge')return 'ひだりの おさらが '+q.b+'こに なるように、１こずつ うごかそう。';
+    if(q.cardinality)return q.n+'こ えらぶよ。えらんだ くまを かぞえよう。';
+    if(['horizontal','vertical','train','cardinal'].includes(q.type))return 'どちらから かぞえるか、むきを たしかめよう。';
+    if(q.type==='subStory')return '「とる」おはなしで、２つの かずも あうかな？';
+    if(equationTypes.includes(q.type))return 'はじめの かず、つぎの かず、＋か −、こたえを えと くらべよう。';
+    return '１つずつ かぞえて、すうじを もういちど えらぼう。';
+  }
+  function hintText(){
+    if(q.type==='hidden'||q.type==='makeTen')return 'ぜんぶの '+q.a+'こから、みえている '+q.b+'こを よけたよ。のこりを かぞえよう。';
+    if(q.type==='five')return '５この まとまりと、そのほかに わけたよ。「あと」の ぶんを、１から かぞえて こたえよう。';
+    if(q.type==='match')return 'くまを １ぴき、かさを １つ。まだ むすんでいない ものどうしを むすぼう。';
+    if(q.type==='group')return 'この なかまと おなじ ものだけを えらぼう。';
+    if(q.type==='sumCards'){
+      const left=q.answer.filter(i=>!q.selected.includes(i)).length;
+      return left===0?'２まい えらべたね。それぞれの こたえが '+q.a+'に なるか、たしかめよう。'
+        :'カードの ２つの かずを あわせるよ。'+q.a+'こに なる カードを '+(supportStage()>=2?'あと '+left+'まい':'２まい')+' えらぼう。';
+    }
+    if(q.type==='splitSmall'||q.type==='splitLarge')return '１こを タップすると、もうひとつの おさらに うつるよ。ひだりを '+q.b+'こに しよう。';
+    if(q.cardinality)return '１、２と かぞえながら、'+q.n+'こ えらぼう。なんばんめかは きかれていないよ。';
+    if(['horizontal','vertical','train','cardinal'].includes(q.type)){
+      const dir=q.type==='vertical'?(q.reverse?'した':'うえ'):q.type==='train'?(q.reverse?'うしろ':'まえ'):(q.reverse?'みぎ':'ひだり');
+      return dir+'の はしが １ばんめ。そこから '+q.n+'ばんめまで かぞえよう。';
+    }
+    if(q.type==='difference')return 'うえと したを １こずつ ならべたよ。あまった ぶんを かぞえよう。';
+    if(q.type==='take')return 'はじめの '+q.a+'こから、'+q.b+'こを よけたよ。のこりを かぞえよう。';
+    if(q.type==='subStory')return '「ひく」は とる おはなし。'+q.a+'こ あって、'+q.b+'こ とる おはなしを きいて えらぼう。';
+    if(equationTypes.includes(q.type))return 'さいしょの □は はじめの かず。つぎに '+(q.expectedOp==='＋'?'あわせる・ふえる':'とる')+' かずと、＋か −を えらぼう。こたえは じぶんで かぞえよう。';
+    if(q.type==='sequence')return (q.reverse?'ひとつずつ ちいさく':'ひとつずつ おおきく')+' なるよ。'+(q.reverse?q.a+1:q.a-1)+'から、ひとつ '+(q.reverse?'へらして':'ふやして')+' みよう。';
+    return q.a===0?'おさらは からっぽ。ひとつも ないときの すうじを えらぼう。':'１つずつ ゆびで おって かぞえよう。さいごに いった かずを えらぼう。';
+  }
+  function supportBlocks(n,known=0,mark=true){
+    return el('div.review-support-blocks',{'aria-label':n+'この ブロック'},range(0,n-1).map(i=>el('span.review-support-block'+(i<known?'.aside':'')+(mark&&supportStage()>=2&&i===known?'.first':''),{'aria-hidden':'true'},
+      i<known?el('span',{text:'✓'}):mark&&supportStage()>=2&&i===known?el('span',{text:'1'}):null)));
+  }
+  function supportScene(){
+    const scene=el('div.review-support-scene',{'aria-label':'かんがえる ための え'});
+    if(q.type==='group')scene.append(illustration(q.thing),el('span',{text:'→ おなじ なかま'}));
+    else if(q.type==='match')scene.append(illustration('animal'),el('span',{text:'１ぴき ↔ １つ'}),illustration('umbrella'));
+    else if(['horizontal','vertical','train','cardinal'].includes(q.type)){
+      const first=q.cardinality||!q.reverse?0:q.a-1;
+      scene.append(el('div.review-support-order'+(q.type==='vertical'?'.vertical':''),{'aria-label':'かぞえはじめを たしかめよう'},
+        range(0,q.a-1).map(i=>el('span'+(i===first&&supportStage()>=2?'.first':''),{text:i===first?(supportStage()>=2?'1':q.type==='vertical'?(q.reverse?'↑':'↓'):(q.reverse&&!q.cardinality?'←':'→')):'●','aria-hidden':'true'}))));
+    }else if(q.type==='splitSmall'||q.type==='splitLarge'){
+      const shown=supportStage()>=2,towardRight=q.left>q.b,left=towardRight?q.a-Number(shown):Number(shown),right=q.a-left;
+      scene.classList.add('review-support-spatial');
+      scene.append(el('div.review-support-part',null,el('small',{text:towardRight?(shown?'ひだりの のこり':'ひだりから １こ うつそう'):(shown?'ひだりへ １こ':'ひだりは からっぽ')}),left?supportBlocks(left,0,!towardRight):el('span',{text:'○'})),
+        el('span',{text:towardRight?'→':'←'}),el('div.review-support-part',null,el('small',{text:towardRight?(shown?'みぎへ １こ':'みぎは からっぽ'):(shown?'みぎの のこり':'みぎから １こ うつそう')}),right?supportBlocks(right,0,towardRight):el('span',{text:'○'})));
+    }else if(q.type==='difference'){
+      scene.append(el('div.review-support-pairs',{'aria-label':'うえと したを １こずつ ならべた え'},range(0,q.a-1).map(i=>el('span.review-support-pair'+(supportStage()>=2&&i===0?'.first':''),{'aria-hidden':'true'},el('i'),i<q.b?el('i'):el('span',{text:'？'})))));
+    }else if(q.type==='sumCards')scene.append(el('small',{text:'この かずと おなじに なる カード'}),supportBlocks(q.a));
+    else if(equationTypes.includes(q.type)){
+      scene.classList.add('review-support-spatial');
+      scene.append(el('div.review-support-part',null,el('small',{text:'はじめ'}),supportBlocks(q.a)),el('span',{text:q.expectedOp}),el('div.review-support-part',null,el('small',{text:q.expectedOp==='＋'?'あわせる・ふえる':'とる'}),supportBlocks(q.b)));
+    }else if(q.type==='five'){
+      scene.classList.add('review-support-spatial');
+      scene.append(el('div.review-support-part',null,el('small',{text:'５この まとまり'}),supportBlocks(5,0,false)),el('span',{text:'＋'}),
+        el('div.review-support-part',null,el('small',{text:'あと いくつ？'}),supportBlocks(q.a-5)));
+    }else if(q.type==='subStory')scene.append(el('small',{text:'はじめに '+q.a+'こ。✓の '+q.b+'こを とった おはなしだよ。'}),supportBlocks(q.a,q.b,false));
+    else if(['hidden','makeTen','take'].includes(q.type))scene.append(el('small',{text:'ぜんぶで '+q.a+'こ。✓の '+q.b+'こを よけて、のこりを かぞえよう。'}),supportBlocks(q.a,q.b));
+    else if(q.type==='sequence'){
+      const start=q.reverse?q.a+1:q.a-1,shown=supportStage()>=2;
+      scene.append(el('small',{text:start+'から ひとつ '+(q.reverse?'へらす':'ふやす')}),
+        el('div.review-support-blocks',{'aria-label':shown?(q.reverse?'１こ よけた え':'１こ ふやした え'):start+'この ブロック'},
+          range(0,(shown?Math.max(start,q.a):start)-1).map(i=>el('span.review-support-block'+(shown&&i===(q.reverse?start-1:q.a-1)?(q.reverse?'.aside':'.first'):''),{'aria-hidden':'true'},
+            shown&&i===(q.reverse?start-1:q.a-1)?el('span',{text:q.reverse?'×':'+1'}):null))));
+    }
+    else scene.append(q.a?supportBlocks(q.a):el('span.review-support-empty'+(supportStage()>=2?'.first':''),{text:'からっぽの おさら'}));
+    return scene;
+  }
   function hint(){
-    if(!q||q.done) return;q.supported=true;q.showHint=true;
-    q.hintText=q.type==='hidden'?'ぜんぶの かずから、みえている かずを とると、かくれた かずが わかるよ。'
-      :['horizontal','vertical','train','cardinal'].includes(q.type)?'「どちらから」と「なんばんめ」を たしかめて、１つずつ かぞえよう。'
-      :q.type==='match'?'くまを １ぴき えらんで、まだ むすんでいない かさを １つ えらぼう。'
-      :q.type==='group'?'おなじ なかまだけを えらぼう。ちがう なかまは えらばないよ。'
-      :q.type==='difference'?'１つずつ むすんで くらべると、あまった ぶんが ちがいだよ。'
-      :equationTypes.includes(q.type)?'はじめの かず、あわせる・ふえる・とる かずを しきに しよう。０は １つもない かずだよ。'
-      :q.type==='subStory'?'「ひく」は、とる おはなし。はじめの かずと、とる かずも たしかめよう。'
-      :'１つずつ かぞえたり、５つの まとまりを つかったりして たしかめよう。';
+    if(!q||q.done) return;q.supported=true;q.showHint=true;q.supportStage=Math.max(1,supportStage());q.hintText=hintText();
     renderQuestion();$('.review-hint button',body).focus({preventScroll:true});say(q.hintText);
   }
   function model(){
-    if(!q||q.done)return;q.supported=true;
+    if(!q||q.done||supportStage()>=2)return;q.supported=true;q.supportStage=2;
+    // Show one useful step without replacing work the child has already done.
+    if(q.type==='match'){
+      const target=range(0,q.a-1).find(i=>!q.pairs.some(p=>p[0]===i)), object=range(0,q.b-1).find(i=>!q.pairs.some(p=>p[1]===i));
+      if(target!==undefined&&object!==undefined&&q.pairs.length<q.a-1)q.pairs.push([target,object]);q.target=undefined;
+    }else if(q.type==='group'||q.type==='sumCards'){
+      q.selected=q.selected.filter(i=>q.answer.includes(i));const i=q.answer.find(i=>!q.selected.includes(i));
+      if(i!==undefined&&q.selected.length<q.answer.length-1)q.selected.push(i);
+    }else if(q.type==='splitSmall'||q.type==='splitLarge'){
+      if(Math.abs(q.b-q.left)>1)q.left+=Math.sign(q.b-q.left);
+    }else if(equationTypes.includes(q.type)){
+      if(q.values[0]!==q.a&&!(q.type==='combine'&&q.values[0]===q.b))q.values[0]=q.a;q.active=q.values[1]===null?1:2;
+    }
+    q.hintText=hintText();q.message='ひとつ みたね。つづきは きみの ばん。';renderQuestion();say(q.message+' '+q.hintText);
+    const next=$('.review-check',body);if(next)next.focus({preventScroll:true});
+  }
+  function reveal(){
+    if(!q||q.done)return;q.supported=true;q.supportStage=3;
     if(q.type==='match')q.pairs=range(0,q.a-1).map(i=>[i,i]);
     else if(q.type==='group'||q.type==='sumCards')q.selected=q.answer.slice();
     else if(q.type==='splitSmall'||q.type==='splitLarge')q.left=q.b;
@@ -395,7 +490,7 @@ const TextbookReview = (() => {
     else if(['horizontal','vertical','train','cardinal','subStory'].includes(q.type))q.selected=[q.answer];
     else if(equationTypes.includes(q.type)){q.values=[q.a,q.b,q.answer];q.op=q.expectedOp;}
     else q.value=q.answer;
-    q.message='いっしょに できたね。えと こたえを たしかめよう。';renderQuestion();say(q.message);
+    q.message='こたえを みたよ。えと くらべて、やりかたを たしかめよう。';renderQuestion();say(q.message);
   }
   function advance(){if(!run||!q.done)return;run.step++;if(run.step<run.total)nextQuestion();else finish();}
   function finish(){

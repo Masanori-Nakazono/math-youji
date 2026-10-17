@@ -48,6 +48,10 @@ const Store = (() => {
     facts: {},
     factRecent: {},  // item key -> last 12 first-try outcomes; recovered facts can graduate
     recent: {},       // "gameId:levelIndex" -> last 30 first-try outcomes, "1011…"
+    /* One-question visits form a course across visits. Unchecked short answers
+       remain observations in recent, but do not become readiness evidence until
+       eight practice questions and a later-day check have been completed. */
+    shortCourses: {},
     last:  {},        // "gameId:levelIndex" -> day number last played
     swift: {},        // "gameId:levelIndex" -> 1 when cleared without counting
     /* "gameId:levelIndex" -> 1 once the hand has shown this level's method and the
@@ -118,7 +122,7 @@ const Store = (() => {
      fields are routed to the independent second record while playing lap 2.
      Settings and the decorated island belong to the child, across both laps. */
   const LOCAL_FIELDS = new Set([
-    'stars', 'plays', 'seen', 'firstTry', 'facts', 'factRecent', 'recent', 'last',
+    'stars', 'plays', 'seen', 'firstTry', 'facts', 'factRecent', 'recent', 'shortCourses', 'last',
     'swift', 'intro', 'milestones', 'pending', 'stickers', 'treasures', 'daily',
     'practice', 'practiceDays', 'diagnostic', 'savedSession', 'missions', 'islandJobs',
     'transferReached', 'transferRecords', 'transferSession', 'transferStickerRule', 'secondRoundReached',
@@ -126,6 +130,26 @@ const Store = (() => {
   ]);
   const localFields = data => Object.fromEntries(Array.from(LOCAL_FIELDS, k => [k, data[k]]));
   const blankProgress = () => localFields(blank());
+
+  function shortCourseValid(v){
+    const count = n => Number.isSafeInteger(n) && n >= 0;
+    const bits = (s, max) => typeof s === 'string' && s.length <= max && /^[01]*$/.test(s);
+    if (!v || typeof v !== 'object' || Array.isArray(v)
+        || !bits(v.answers, 8) || !bits(v.checks, 3) || !bits(v.evidence, 30)
+        || !(v.readyDay === null || count(v.readyDay)) || !(v.checkDay === null || count(v.checkDay))
+        || typeof v.confirmed !== 'boolean' || !count(v.at)
+        || typeof v.lastId !== 'string' || v.lastId.length > 120
+        || !['practice','ready','check','confirmed','retry'].includes(v.lastResult)) return false;
+    if (v.items !== undefined && (!Array.isArray(v.items) || v.items.length > 64
+        || v.items.some(item => typeof item !== 'string' || item.length > 240))) return false;
+    if (v.readyDay !== null && (v.answers.length !== 8 || v.answers.split('1').length - 1 < 6)) return false;
+    if (v.checks.length && (v.readyDay === null || v.checkDay === null || v.checkDay <= v.readyDay)) return false;
+    if (!v.checks.length && v.checkDay !== null) return false;
+    if (!v.lastId && (v.answers.length || v.checks.length || v.readyDay !== null
+        || v.confirmed || v.lastResult !== 'practice')) return false;
+    if (v.confirmed && (v.checks.length !== 3 || v.checks.split('1').length - 1 < 2)) return false;
+    return true;
+  }
 
   function normalizeReviewSession(s){
     const object=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -153,6 +177,8 @@ const Store = (() => {
     if(q.done&&r.outcomes.at(-1)!==(q.supported?'supported':q.missed?'revised':'independent'))return null;
     for(const k of ['message','hintText','result'])if(q[k]!==undefined&&!text(q[k]))return null;
     for(const k of ['reverse','cardinality','showHint'])if(q[k]!==undefined&&typeof q[k]!=='boolean')return null;
+    if(q.supportStage!==undefined&&(!count(q.supportStage,3)||(q.supportStage>0&&!q.supported)))return null;
+    if(q.wrongAttempts!==undefined&&(!count(q.wrongAttempts,100000)||(q.wrongAttempts>0&&!q.missed)))return null;
     if(q.expectedOp!==undefined&&!['＋','−'].includes(q.expectedOp))return null;
     if(q.n!==undefined&&!count(q.n))return null;
     if(q.done&&!text(q.result)||q.showHint&&!text(q.hintText))return null;
@@ -170,7 +196,7 @@ const Store = (() => {
       ||q.stories.filter(v=>v.correct).length!==1||!q.stories[q.answer]||!q.stories[q.answer].correct))return null;
     if(['combine','increase','zeroAdd','subEquation'].includes(q.type)&&!['＋','−'].includes(q.expectedOp))return null;
     const savedQ={};
-    for(const k of ['type','thing','a','b','answer','prompt','lessonId','missed','supported','done','selected','pairs','active','values','op','left','n','reverse','cardinality','expectedOp','value','target','message','hintText','showHint','result']){
+    for(const k of ['type','thing','a','b','answer','prompt','lessonId','missed','supported','done','selected','pairs','active','values','op','left','n','reverse','cardinality','expectedOp','value','target','message','hintText','showHint','result','supportStage','wrongAttempts']){
       if(q[k]!==undefined)savedQ[k]=q[k];
     }
     if(q.type==='group')savedQ.things=q.things;
@@ -219,7 +245,7 @@ const Store = (() => {
         || !(s.adventureTarget === null || (target(s.adventureTarget)
           && (s.adventureTarget.want === null || text(s.adventureTarget.want))))
         || !(s.firstTarget === null || target(s.firstTarget))
-        || ![null, 'show', 'together'].includes(s.firstPhase)
+        || ![null, 'show', 'together', 'independent', 'check'].includes(s.firstPhase)
         || !(s.visitMilestone === null || (target(s.visitMilestone)
           && ['viewed', 'together', 'supported', 'revised', 'independent'].includes(s.visitMilestone.kind)
           && text(s.visitMilestone.label)))) return null;
@@ -337,6 +363,11 @@ const Store = (() => {
         for(const [k,v] of Object.entries(record.reviewChaptersOpen)){
           if(!/^[0-4]$/.test(k)||v!==1){delete record.reviewChaptersOpen[k];bent=true;}
         }
+        for (const [k, v] of Object.entries(record.shortCourses)){
+          if (!/^[a-z0-9]+:\d+$/.test(k) || !shortCourseValid(v)){
+            delete record.shortCourses[k]; bent = true;
+          }
+        }
         if(record.reviewSession!==null){
           const visit=normalizeReviewSession(record.reviewSession);
           if(!visit)bent=true;
@@ -445,6 +476,7 @@ const Store = (() => {
           && typeof v.label === 'string' && v.label.length <= 80)
      || !copyMap('pending', v => Array.isArray(v) && v.length >= 3 && v.slice(0, 3).every(isCount))
      || !copyMap('recent', v => typeof v === 'string' && /^[01]{0,30}$/.test(v))
+     || !copyMap('shortCourses', shortCourseValid)
      || !copyMap('factRecent', v => typeof v === 'string' && /^[01]{0,12}$/.test(v))
      || !copyMap('firstTry', v => Array.isArray(v) && v.length >= 2
           && isCount(v[0]) && isCount(v[1]) && v[0] <= v[1])
@@ -456,6 +488,7 @@ const Store = (() => {
           && (v[6] == null || isMissMap(v[6], startup)))) return null;
     for (const k of Object.keys(out.milestones))
       if (!/^[a-z0-9]+:\d+:(viewed|together|supported|revised|independent)$/.test(k)) return null;
+    if (Object.keys(out.shortCourses).some(k => !/^[a-z0-9]+:\d+$/.test(k))) return null;
     if (Object.keys(out.transferRecords).some(k => !/^[0-5]$/.test(k))) return null;
     if (Object.entries(out.reviewRecords).some(([k, v]) => !reviewRecordValid(k, v))) return null;
     if (Object.keys(out.reviewChaptersOpen).some(k => !/^[0-4]$/.test(k))) return null;
@@ -647,6 +680,13 @@ const Store = (() => {
     out.savedSession = normalizeSavedSession(base.savedSession);
     out.transferSession = transferSessionValid(base.transferSession) ? JSON.parse(JSON.stringify(base.transferSession)) : null;
     out.reviewSession = normalizeReviewSession(base.reviewSession);
+    // A course is one coherent snapshot, never a sum of two copies of a backup.
+    out.shortCourses = {};
+    for (const k of new Set(Object.keys(base.shortCourses || {}).concat(Object.keys(add.shortCourses || {})))){
+      const mine = base.shortCourses && base.shortCourses[k], theirs = add.shortCourses && add.shortCourses[k];
+      const latest = !mine || theirs && theirs.at > mine.at ? theirs : mine;
+      out.shortCourses[k] = JSON.parse(JSON.stringify(latest));
+    }
     ['stars', 'plays', 'seen', 'daily', 'swift', 'intro', 'g1GamesOpen', 'reviewChaptersOpen', 'practiceDays'].forEach(k => {
       const src = add[k] || {};
       out[k] = Object.assign({}, base[k] || {});
@@ -703,11 +743,34 @@ const Store = (() => {
        met only inside きょうの れんしゅう or とっくん is 0 on both sides — and a strict
        「more」 dropped its record even when this device had none at all. */
     out.recent = Object.assign({}, base.recent || {});
+    const recentSource = Object.fromEntries(Object.keys(base.recent || {}).map(k => [k, base]));
     out.last   = Object.assign({}, base.last || {});
     for (const k in (add.recent || {})){
       const ap = (add.plays && add.plays[k]) || 0, bp = (base.plays && base.plays[k]) || 0;
       const newer = ((add.last && add.last[k]) || 0) > ((base.last && base.last[k]) || 0);
-      if (!(k in out.recent) || ap > bp || (ap === bp && newer)) out.recent[k] = add.recent[k];
+      if (!(k in out.recent) || ap > bp || (ap === bp && newer)){
+        out.recent[k] = add.recent[k]; recentSource[k] = add;
+      }
+    }
+    for (const [k, course] of Object.entries(out.shortCourses)){
+      // Follow the same actual observations as recent. A normal-only record has
+      // no short-course wrapper: all of its recent answers are valid evidence.
+      // Never promote recent from a record that contains unchecked short work.
+      const source = recentSource[k];
+      let evidence = source ? source.shortCourses && source.shortCourses[k]
+        ? source.shortCourses[k].evidence : source.recent[k] || '' : course.evidence;
+      for (const candidate of [base, add]){
+        const short = candidate.shortCourses && candidate.shortCourses[k];
+        const ordinary = short ? short.evidence : candidate.recent && candidate.recent[k] || '';
+        // More unchecked short visits can win recent's source selection while
+        // containing fewer eligible observations. Keep the fuller actual window;
+        // ties follow recent's selected source and no windows are ever summed.
+        if (ordinary.length > evidence.length) evidence = ordinary;
+      }
+      if (course.evidence !== evidence){
+        course.evidence = evidence;
+        course.at = Math.max(Date.now(), course.at + 1);
+      }
     }
     for (const k in (add.last || {})) out.last[k] = maxNum(out.last[k], add.last[k]);
     out.stickers = Array.from(new Set((base.stickers || []).concat(add.stickers || [])));
@@ -897,6 +960,89 @@ const Store = (() => {
       ? keys(record.roundTwo).map(k => 'lap2:' + k) : [])));
   }
 
+  const rightIn = bits => bits.split('1').length - 1;
+  function shortStatus(g, l){
+    const k = key(g, l), s = mem.shortCourses[k], today = dayNo();
+    const confirmed = !!(s && s.confirmed) || mem.stickers.includes(k) && !mem.pending[k];
+    const failed = !!(s && s.checks.length === 3 && rightIn(s.checks) < 2);
+    const due = !!(s && s.readyDay !== null && today > s.readyDay && !(failed && s.checkDay >= today));
+    const restart = failed && due;
+    return { phase: !confirmed && due ? 'check' : 'independent',
+      answered:s ? s.answers.length : 0, right:s ? rightIn(s.answers) : 0,
+      readyDay:s ? s.readyDay : null, checks:s && !restart ? s.checks.length : 0,
+      checkRight:s && !restart ? rightIn(s.checks) : 0, confirmed,
+      waiting:!!(s && s.readyDay !== null && !confirmed && !due),
+      lastId:s ? s.lastId : '', lastResult:s ? s.lastResult : 'practice' };
+  }
+
+  function startShortCourse(g, l){
+    if (typeof g !== 'string' || !/^[a-z0-9]+$/.test(g) || !Number.isSafeInteger(l) || l < 0)
+      return shortStatus(g, l);
+    const k = key(g, l);
+    if (!mem.shortCourses[k]){
+      mem.shortCourses[k] = {answers:'', readyDay:null, checks:'', checkDay:null,
+        confirmed:false, evidence:mem.recent[k] || '', items:[], lastId:'', lastResult:'practice', at:Date.now()};
+      save();
+    }
+    return shortStatus(g, l);
+  }
+
+  function recordShortAnswer(g, l, clean, runId, phase, items){
+    const unchanged = () => Object.assign(shortStatus(g, l),
+      {updated:false, newSticker:false, gold:false, justConfirmed:false});
+    if (typeof g !== 'string' || !/^[a-z0-9]+$/.test(g) || !Number.isSafeInteger(l) || l < 0
+        || typeof clean !== 'boolean' || typeof runId !== 'string' || !runId || runId.length > 120
+        || !['independent','check'].includes(phase)) return unchanged();
+    const k = key(g, l), today = dayNo();
+    let s = mem.shortCourses[k];
+    if (s && s.lastId === runId) return unchanged();
+    if (!s){
+      // Call this before noteOutcome(..., false): legacy ordinary answers retain
+      // their readiness evidence while this first short answer remains ungraded.
+      startShortCourse(g, l);
+      s = mem.shortCourses[k];
+    }
+    const before = shortStatus(g, l);
+    let newSticker = false, gold = false, justConfirmed = false;
+    if (Array.isArray(items)) s.items = Array.from(new Set(items.filter(item =>
+      typeof item === 'string' && item.length <= 240))).slice(-64);
+    s.lastId = runId;
+    s.lastResult = 'practice';
+    // Each one-question visit is complete in its own right. Keep every observed
+    // answer in lifetime statistics, including extra practice and failed checks.
+    mem.seen[g] = (mem.seen[g] || 0) + 1;
+    const ft = mem.firstTry[g] || [0, 0];
+    mem.firstTry[g] = [ft[0] + Number(clean), ft[1] + 1];
+    if (!before.confirmed && phase === 'check' && before.phase === 'check'){
+      if (s.checks.length === 3) s.checks = '';
+      s.checks += clean ? '1' : '0';
+      s.checkDay = today;
+      s.lastResult = 'check';
+      if (s.checks.length === 3){
+        if (rightIn(s.checks) >= 2){
+          s.confirmed = true; justConfirmed = true; s.lastResult = 'confirmed';
+          const perfect = rightIn(s.answers) === 8 && rightIn(s.checks) === 3;
+          const stars = perfect ? 3 : 2;
+          mem.stars[k] = Math.max(mem.stars[k] || 0, stars);
+          mem.plays[k] = (mem.plays[k] || 0) + 1;
+          if (!mem.stickers.includes(k)){ mem.stickers.push(k); newSticker = true; }
+          delete mem.pending[k];
+          if (perfect && !mem.stickers.includes(k + ':g')){ mem.stickers.push(k + ':g'); gold = true; }
+          s.evidence = (s.evidence + s.answers + s.checks).slice(-30);
+        } else s.lastResult = 'retry';
+      }
+    } else if (!before.confirmed && s.readyDay === null){
+      s.answers = (s.answers + (clean ? '1' : '0')).slice(-8);
+      if (s.answers.length === 8 && rightIn(s.answers) >= 6){
+        s.readyDay = today; s.lastResult = 'ready';
+      }
+    }
+    // Advancing the same snapshot within a millisecond must still beat its backup.
+    s.at = Math.max(Date.now(), s.at + 1);
+    save();
+    return Object.assign(shortStatus(g, l), {updated:true, newSticker, gold, justConfirmed});
+  }
+
   return {
     get data(){ return mem; },
     round, selectRound,
@@ -964,11 +1110,27 @@ const Store = (() => {
     /** One question's first-try result, attributed to the level it came from.
         Recorded per question rather than per level so that a question met inside
         きょうの れんしゅう counts towards that level's recent form too. */
-    noteOutcome(g, l, ok){
+    noteOutcome(g, l, ok, eligible = true){
       const k = key(g, l);
       mem.recent[k] = ((mem.recent[k] || '') + (ok ? '1' : '0')).slice(-30);
+      const course = mem.shortCourses[k];
+      if (course && eligible){
+        course.evidence = (course.evidence + (ok ? '1' : '0')).slice(-30);
+        course.at = Math.max(Date.now(), course.at + 1);
+      }
       mem.last[k] = dayNo();
       save();
+    },
+
+    shortStatus, startShortCourse, recordShortAnswer,
+    shortItems(g, l){
+      const course = mem.shortCourses[key(g, l)];
+      return course && course.items ? course.items.slice() : [];
+    },
+    readiness(g, l){
+      const k = key(g, l), s = mem.shortCourses[k];
+      const evidence = s ? s.evidence : mem.recent[k] || '';
+      return {count:evidence.length, accuracy:evidence.length ? rightIn(evidence) / evidence.length : null};
     },
 
     recordLevel(g, l, stars, right, total, alreadyCounted = false){

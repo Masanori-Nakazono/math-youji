@@ -75,7 +75,8 @@ const Progress = (() => {
   };
   function levelReady(id, i){
     if (Store.hasConfirmed(id + ':' + i)) return true;
-    return Store.recentCount(id, i) >= 6 && Store.recentAccuracy(id, i) >= .75;
+    const evidence = Store.readiness(id, i);
+    return evidence.count >= 6 && evidence.accuracy >= .75;
   }
   function g1GameOpen(g){
     if (stageOf(g) !== 'g1') return false;
@@ -331,7 +332,12 @@ const Session = (() => {
       countEl = el('div.session-count',{'aria-live':'polite'}), fieldEl, choicesEl);
     UI.register('play', node);
     // has a finger been on this question yet — the together-tool must not wipe the child's own work
-    const touch = () => { touched = true; };
+    const touch = e => {
+      // Listening is part of reading the question, not the child's first answer.
+      // This listener runs in capture phase, before the audio button can stop it.
+      if (e.target.closest && e.target.closest('.choice-hear')) return;
+      touched = true;
+    };
     node.addEventListener('pointerdown', touch, true);
     node.addEventListener('click', touch, true);
     refit = UI.watchFit(fieldEl);
@@ -654,20 +660,24 @@ const Session = (() => {
     begin();
   }
 
-  /** A child may see the method and stop, or choose one supported turn. Neither
-      visit is a level attempt or evidence for a sticker or unlock. */
+  /** Each visit stays one question long. Supported turns teach the method;
+      independent turns accumulate towards a later-day check in Store. */
   function startFirst(game, levelIndex, phase){
     if(settleCompleted()) return;
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
     build(); killTimers();
     mode = 'first'; curGame = game; curLevelIdx = levelIndex;
     rewardTarget = null; adventureTarget = null;
-    firstTarget = { game, levelIndex }; firstPhase = phase === 'show' ? 'show' : 'together';
+    firstTarget = { game, levelIndex };
+    firstPhase = phase === 'independent' || phase === 'check'
+      ? Store.shortStatus(game.id, levelIndex).phase : phase === 'show' ? 'show' : 'together';
     const step = { game, level: game.levels[levelIndex], levelIndex };
-    plan = phase === 'afterShow' ? [Object.assign({}, step, { intro: 'together' })]
+    plan = firstPhase === 'independent' || firstPhase === 'check' ? [step]
+      : phase === 'afterShow' ? [Object.assign({}, step, { intro: 'together' })]
       : firstPhase === 'show' ? [Object.assign({}, step, { intro: 'show' })]
       : [Object.assign({}, step, { intro: 'show' }), Object.assign({}, step, { intro: 'together' })];
-    titleEl.textContent = 'はじめてコース　' + game.name;
+    titleEl.textContent = (firstPhase === 'check' ? 'べつのひの たしかめ　'
+      : firstPhase === 'independent' ? 'じぶんで 1もん　' : 'はじめてコース　') + game.name;
     begin();
   }
 
@@ -726,7 +736,9 @@ const Session = (() => {
     runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10); runRound=Store.round();
     results=[]; resumeQuestion=null;
     if (mode !== 'focus') focusKeys = [];
-    usedItems = new Set(); shaky = []; sessionOutcomes = []; visitMilestone = null;
+    usedItems = new Set(mode === 'first' && (firstPhase === 'independent' || firstPhase === 'check')
+      ? Store.shortItems(curGame.id, curLevelIdx) : []);
+    shaky = []; sessionOutcomes = []; visitMilestone = null;
     checkTally = {}; announced = new Set();
     renderPips();
     const unfinished = previous && (previous.index > 0 || previous.question && (previous.question.wrongThisQ || previous.question.helped));
@@ -778,7 +790,7 @@ const Session = (() => {
           the same level, which is the right topic if not the exact fact. */
       /** A check question on another day. A generator with a two-way format (two
           plates, おなじ／かわった) asks it with three instead: a coin toss confirms nothing. */
-      get check(){ return !!(plan[idx] && plan[idx].check); },
+      get check(){ return !!(plan[idx] && plan[idx].check) || mode === 'first' && firstPhase === 'check'; },
       get want(){
         const w = plan[idx] && plan[idx].want;
         if (!w) return null;
@@ -902,7 +914,7 @@ const Session = (() => {
         choicesEl.dataset.built = '1';
         hintBtns = [];
         let settled = false;              // one accepted answer per set of buttons
-        values.forEach(v => {
+        values.forEach((v, i) => {
           const val = (v && typeof v === 'object' && 'v' in v) ? v.v : v;
           const b = el('button.choice' + (o.cls ? '.' + o.cls : ''), { type: 'button' });
           const content = o.render ? o.render(val, v) : String(val);
@@ -932,7 +944,19 @@ const Session = (() => {
           });
           if (hit && !answerBtn){ answerBtn = b; answerText = typeof content === 'string' ? content : String(val); }
           if (!hit) hintBtns.push(b);
-          choicesEl.append(b);
+          if (o.speech){
+            const say = typeof o.speech === 'function' ? o.speech(val, v) : String(o.speech);
+            const hear = el('button.choice-hear', { type: 'button',
+              'aria-label': (i + 1) + 'ばんめの こたえを きく',
+              onclick(e){
+                e.stopPropagation();
+                if (locked || stale()) return;
+                Sound.sfx.tap(); Sound.say(say, { delay: 0 });
+              } }, '🔊');
+            const pair = el('div.choice-audio', null, b, hear);
+            if (o.cls === 'story') pair.classList.add('story-audio');
+            choicesEl.append(pair);
+          } else choicesEl.append(b);
         });
         return choicesEl;
       }
@@ -1024,7 +1048,9 @@ const Session = (() => {
                      : mode === 'adventure' ? 'ちいさな ぼうけん'
                      : mode === 'first' ? 'はじめてコース' : 'はじめの ぼうけん';
       titleEl.textContent = modeName + '　' + step.game.name;
-    } else if (curGame) titleEl.textContent = curGame.name + '　' + curGame.levels[curLevelIdx].t;
+    } else if (curGame) titleEl.textContent = (mode === 'first'
+      ? firstPhase === 'check' ? 'べつのひの たしかめ　' : firstPhase === 'independent' ? 'じぶんで 1もん　' : 'はじめてコース　'
+      : '') + curGame.name + '　' + curGame.levels[curLevelIdx].t;
     demo = step.intro || null;
     touched = false;
     drawQuestion(step);
@@ -1034,7 +1060,8 @@ const Session = (() => {
       if (helped || wrongThisQ >= hintAfter) hint();
       resumeQuestion=null;
     }
-    countEl.textContent = (idx+1)+'／'+plan.length+'もん'+(step.intro ? '　みほん・いっしょに' : step.check ? '　たしかめ' : '');
+    countEl.textContent = (idx+1)+'／'+plan.length+'もん'+(step.intro ? '　みほん・いっしょに'
+      : step.check || mode === 'first' && firstPhase === 'check' ? '　たしかめ' : '');
     checkpoint();
     // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
     // call buildChoices, so start their clock here
@@ -1339,8 +1366,10 @@ const Session = (() => {
     if (graded && timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
     if (slipAt && wrongThisQ === 1 && performance.now() - slipAt < PAD_SLIP_MS
         && (missType === 'up' || missType === 'down')) missType = null;
-    if (scaffold === 'together' && !taughtQ && (mode === 'level' || mode === 'adventure' || mode === 'first'))
+    if (scaffold === 'together' && !taughtQ && (mode === 'level' || mode === 'adventure' || mode === 'first')){
       Store.markIntroduced(g.id, plan[idx].levelIndex);
+      if (mode === 'first') Store.startShortCourse(g.id, plan[idx].levelIndex);
+    }
     if (mode !== 'diagnostic'){
       const kind = scaffold === 'show' || taughtQ ? 'viewed' : scaffold === 'together' ? 'together'
         : helped ? 'supported' : wrongThisQ ? 'revised' : 'independent';
@@ -1349,7 +1378,10 @@ const Session = (() => {
         visitMilestone = { gameId: g.id, levelIndex: plan[idx].levelIndex, kind, label: curLabel || '' };
     }
     if (mode !== 'diagnostic' && !scaffold){
-      Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
+      const short = mode === 'first' && (firstPhase === 'independent' || firstPhase === 'check');
+      if (short) Store.recordShortAnswer(g.id, plan[idx].levelIndex, clean, runId, firstPhase, Array.from(usedItems));
+      if (short && clean) Store.markIntroduced(g.id, plan[idx].levelIndex);
+      Store.noteOutcome(g.id, plan[idx].levelIndex, clean, !short);
       if (curItem){
         /* 'taught' outranks the reading of the first mistake: what matters about
            this question is that the child did not get there on their own. */
@@ -1518,7 +1550,8 @@ const Session = (() => {
       get introStep(){ return plan[idx] ? plan[idx].intro || null : null; },
       get planIntro(){ return plan.map(p => p.intro || null); },
       get planChecks(){ return plan.map(p => p.check || null); },
-      get helped(){ return helped; }
+      get helped(){ return helped; },
+      get touched(){ return touched; }
     }
   };
 })();

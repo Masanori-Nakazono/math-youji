@@ -2950,7 +2950,7 @@
       go.click();
       d.firstChoice = c.game.intro === false || K.UI.currentName() === 'first-steps';
       if (K.UI.currentName() === 'first-steps'){
-        const direct = qa('#first-steps .first-actions .btn').find(b => /じぶんで/.test(b.textContent));
+        const direct = qa('#first-steps .first-actions .btn').find(b => /たくさん/.test(b.textContent));
         if (direct) direct.click();
       }
       d.startsTarget = S.mode === 'level' && S.planGames.every(x => x === c.game.id + ':' + c.levelIndex);

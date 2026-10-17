@@ -39,7 +39,7 @@ const server=http.createServer((req,res)=>{
       const finish=(supported=0,wrong=0)=>{
         const total=R.inspect().run.total;
         for(let step=0;step<total;step++){
-          if(step<supported){text('👀 ヒント');text('いっしょに やってみる');click('.review-check');}
+          if(step<supported){text('👀 ヒント');text('ひとつ みてみる');text('こたえを みる');click('.review-check');}
           else {if(step<supported+wrong){const {q}=R.inspect();click('[data-number="'+((q.answer+1)%11)+'"]');click('.review-check');}answer();}
           click('.review-next');
         }
@@ -89,11 +89,11 @@ const server=http.createServer((req,res)=>{
       check('resuming restores the same original question',R.resume()&&JSON.stringify(R.inspect().q,Object.keys(exact).sort())===JSON.stringify(exact,Object.keys(exact).sort()));
       text('👀 ヒント');click('.topbar button');const paused=S.exportText();S.reset();S.importText(paused,'replace');
       check('backup replacement restores hint and unfinished lesson',R.resume()&&R.inspect().q.supported&&R.inspect().q.showHint);
-      text('いっしょに やってみる');click('.review-check');const one=S.todayCount();click('.review-pause');R.resume();
+      text('ひとつ みてみる');text('こたえを みる');click('.review-check');const one=S.todayCount();click('.review-pause');R.resume();
       check('resuming an answered question does not count it twice',R.inspect().q.done&&S.todayCount()===one&&R.pendingSummary().remaining===7);
       click('.review-pause');R.open(4);click('.review-start-new');
       check('only an explicit new choice replaces a saved lesson without removing answered effort',R.inspect().run.id===4&&S.reviewSession().run.id===4&&S.todayCount()===one);
-      S.importText(paused,'replace');R.resume();text('いっしょに やってみる');click('.review-check');
+      S.importText(paused,'replace');R.resume();text('ひとつ みてみる');text('こたえを みる');click('.review-check');
       const damaged=JSON.parse(S.exportText());damaged.data.reviewSession.run.outcomes=[];
       check('malformed resumed outcomes are rejected without losing history',!S.importText(JSON.stringify(damaged),'replace').ok&&S.todayCount()===one);
       S.clearReviewSession();S.importText(paused);check('merging an old backup cannot resurrect a finished or dismissed visit',!R.pendingSummary());
@@ -117,7 +117,7 @@ const server=http.createServer((req,res)=>{
         check('lesson progression opens '+id,R.lessonOpen(id));R.open(id);finish();check('lesson '+id+' earns its unique confirmed reward',S.hasConfirmed('r2:'+id));
         if(id===3){R.open(null,0);finish(2);check('3/5 clean chapter answers earn no summary medal',!S.hasSticker('r2chapter:0'));}
       }
-      for(let i=0;i<5;i++){check('summary waits for four confirmed lessons '+i,R.chapterReady(i));R.open(null,i);const seen=[];for(let n=0;n<5;n++){seen.push(R.inspect().q.lessonId);if(n===0){text('👀 ヒント');text('いっしょに やってみる');click('.review-check');}else answer();click('.review-next');}check('4/5 clean answers earn chapter '+i,S.hasSticker('r2chapter:'+i));check('summary revisits an earlier chapter '+i,i===0||seen[4]===i*4-1);}
+      for(let i=0;i<5;i++){check('summary waits for four confirmed lessons '+i,R.chapterReady(i));R.open(null,i);const seen=[];for(let n=0;n<5;n++){seen.push(R.inspect().q.lessonId);if(n===0){text('👀 ヒント');text('ひとつ みてみる');text('こたえを みる');click('.review-check');}else answer();click('.review-next');}check('4/5 clean answers earn chapter '+i,S.hasSticker('r2chapter:'+i));check('summary revisits an earlier chapter '+i,i===0||seen[4]===i*4-1);}
       check('textbook review does not rewrite map mastery',front===JSON.stringify([S.data.stars,S.data.facts,S.data.recent,S.data.firstTry]));
       check('25 textbook species are unique and absent from the original map slots',R.rewardKeys().length===25&&new Set(R.rewardKeys().map(k=>K.PokemonStickers.reward(k).id)).size===25&&R.rewardKeys().every(k=>!gate.some(o=>K.PokemonStickers.reward(k).id===K.PokemonStickers.reward(o).id)));
       check('every solved question contributes once to today',S.todayCount()===8*24+3+5*6); // 24 lesson runs, one check, six summaries
@@ -165,7 +165,7 @@ const server=http.createServer((req,res)=>{
         if(id!==null){await page.locator('.review-check').scrollIntoViewIfNeeded();assert.equal(await page.locator('.review-check').isVisible(),true);}
         if(dir)await page.screenshot({path:path.join(dir,`${size.width}-${id===null?'menu':id}.png`)});
         if([0,3,7].includes(id)){
-          await page.evaluate(()=>{const tap=t=>[...document.querySelectorAll('#review button')].find(b=>b.textContent===t).click();tap('👀 ヒント');tap('いっしょに やってみる');document.querySelector('.review-check').click();document.querySelector('.review-next').click();});
+          await page.evaluate(()=>{const tap=t=>[...document.querySelectorAll('#review button')].find(b=>b.textContent===t).click();tap('👀 ヒント');tap('ひとつ みてみる');tap('こたえを みる');document.querySelector('.review-check').click();document.querySelector('.review-next').click();});
           assert.equal(await page.evaluate(()=>document.querySelector('.review-body').scrollWidth<=document.querySelector('.review-body').clientWidth+1),true,'alternate representation fits '+size.width+' lesson '+id);
           if(dir)await page.screenshot({path:path.join(dir,`${size.width}-${id}-variant.png`)});
         }

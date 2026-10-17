@@ -611,8 +611,9 @@ function traceQuestion(api, digits){
   const s = svg('svg', { viewBox: '0 0 100 140', preserveAspectRatio: 'xMidYMid meet' });
   const gGuide = svg('g'), gDone = svg('g'), gLive = svg('g'), gMark = svg('g');
   s.append(gGuide, gDone, gLive, gMark);
-  box.append(s, el('div.trace-numlabel', { text: 'なぞりがき' }));
-  api.field.append(box);
+  const cue = el('div.trace-numlabel', { text: 'あかい てんから なぞろう' });
+  box.append(s);
+  api.field.append(box, cue);
 
   strokes.forEach(st => {
     gGuide.append(svg('path', { d: toPath(st), class: 'trace-guide', fill: 'none',
@@ -630,8 +631,9 @@ function traceQuestion(api, digits){
     idleTimer = api.later(() => {           // no progress for a while: show, don't scold
       if (si >= strokes.length) return;
       nudged = true;
+      startMark();
       showGuide();
-      Sound.say('赤い点から、なぞってみよう。', { delay: 100 });
+      Sound.say(progress ? '赤い点から、つづけてなぞろう。' : '赤い点から、なぞってみよう。', { delay: 100 });
     }, 9000);
   }
   function showGuide(){
@@ -641,10 +643,13 @@ function traceQuestion(api, digits){
   }
 
   function startMark(){
+    const guided = !!$('.trace-ghost', box);
     clear(gMark);
     if (si >= strokes.length) return;
-    const p = strokes[si][0];
-    const q = strokes[si][Math.min(6, strokes[si].length - 1)];
+    const at = Math.min(progress, strokes[si].length - 1);
+    const p = strokes[si][at];
+    const q = strokes[si][Math.min(at + 6, strokes[si].length - 1)];
+    cue.textContent = progress ? 'ここから つづけよう' : 'あかい てんから なぞろう';
     gMark.append(svg('circle', { cx: p[0], cy: p[1], r: 6.5, class: 'trace-start pulse' }));
     gMark.append(svg('text', { x: p[0], y: p[1] + 2.6, 'text-anchor': 'middle', fill: '#fff',
       'font-size': 7.5, 'font-weight': 800, 'font-family': 'var(--fs-num)' }, String(si + 1)));
@@ -653,6 +658,7 @@ function traceQuestion(api, digits){
       d: `M${p[0] + Math.cos(a) * 11} ${p[1] + Math.sin(a) * 11} l${Math.cos(a) * 8} ${Math.sin(a) * 8}`,
       stroke: 'var(--c-red)', 'stroke-width': 3, 'stroke-linecap': 'round', opacity: .7
     }));
+    if (guided) showGuide();
   }
   function redraw(){
     clear(gLive);
@@ -672,9 +678,13 @@ function traceQuestion(api, digits){
   function onDown(e){
     const p = pt(e); if (!p || si >= strokes.length) return;
     const st = strokes[si];
-    const near = dist(p[0], p[1], st[progress ? Math.min(progress, st.length - 1) : 0][0],
-                                  st[progress ? Math.min(progress, st.length - 1) : 0][1]);
-    if (near <= START_TOL){
+    const at = Math.min(progress, st.length - 1);
+    const near = dist(p[0], p[1], st[at][0], st[at][1]);
+    // A lifted finger can continue at the moved red dot, or start this stroke
+    // again from its original start. Prefer continuation where a loop overlaps.
+    const restart = near > START_TOL && progress > 0 && dist(p[0], p[1], st[0][0], st[0][1]) <= START_TOL;
+    if (near <= START_TOL || restart){
+      if (restart){ progress = 0; redraw(); startMark(); }
       drawing = true;
       clearTimeout(idleTimer);
       box.setPointerCapture && box.setPointerCapture(e.pointerId);
@@ -688,8 +698,9 @@ function traceQuestion(api, digits){
         { duration: 420 });
       if (++strays % 2 === 0){
         nudged = true;
+        startMark();
         showGuide();
-        Sound.say('赤い点から、なぞってみよう。', { delay: 100 });
+        Sound.say(progress ? '赤い点から、つづけてなぞろう。' : '赤い点から、なぞってみよう。', { delay: 100 });
       }
       armIdle();
     }
@@ -724,7 +735,14 @@ function traceQuestion(api, digits){
       Sound.say('次の線も、なぞってね。', { delay: 150 });
     }
   }
-  function onUp(){ drawing = false; }
+  function onUp(){
+    const wasDrawing = drawing;
+    drawing = false;
+    if (si >= strokes.length || !wasDrawing) return;
+    startMark();
+    armIdle();
+    if (progress > 0) Sound.say('ここから、つづけよう。', { delay: 100 });
+  }
 
   box.addEventListener('pointerdown', onDown);
   box.addEventListener('pointermove', onMove);

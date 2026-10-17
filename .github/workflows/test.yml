@@ -54,6 +54,11 @@ jobs:
           node tools/test-session-store.cjs
           node tools/test-session-browser.cjs
 
+      - name: Verify one-question learning and later-day mastery checks
+        run: |
+          node tools/test-short-store.cjs
+          node tools/test-short-browser.cjs
+
       - name: Verify island treasure chests and saved keepsakes
         run: node tools/test-treasures.cjs
 
@@ -61,7 +66,12 @@ jobs:
         run: node tools/test-transfer.cjs
 
       - name: Verify textbook review lessons and persistence in the first lap
-        run: node tools/test-review.cjs
+        run: |
+          node tools/test-review.cjs
+          node tools/test-review-scaffold.cjs
+
+      - name: Verify answer audio and tracing recovery
+        run: node tools/test-input-accessibility.cjs
 
       - name: Verify separate learning records, legacy migration and backup merging
         run: node tools/test-round-store.cjs

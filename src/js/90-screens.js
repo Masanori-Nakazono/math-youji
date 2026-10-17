@@ -294,6 +294,7 @@ const Home = (() => {
       && !Store.milestones().some(m => Store.milestoneRank(m.kind) >= Store.milestoneRank('together'));
     const pending = Session.pendingSummary();
     const first = firstRun && FirstSteps.target();
+    const short = !first && FirstSteps.shortTarget();
     const rec = Diagnostic.current();
     const recGame = rec && Games.byId[rec.gameId];
     clear(recommendEl);
@@ -303,7 +304,7 @@ const Home = (() => {
       banner(recommendEl, BANNER_ICON.recommend, 'いまの おすすめ',
         recGame.name + '　《' + lv.t + '》', () => Diagnostic.startRecommended());
     }
-    primaryEl.dataset.action = pending ? 'resume' : first ? 'first' : recGame ? 'recommend' : 'daily';
+    primaryEl.dataset.action = pending ? 'resume' : first ? 'first' : short ? 'short' : recGame ? 'recommend' : 'daily';
     if (pending){
       banner(primaryEl, '▶️', pending.remaining ? 'つづきから　あと ' + pending.remaining + 'もん' : 'できた！ けっかを みよう',
         pending.title + (pending.done ? '　' + pending.done + 'もん できたね' : ''), () => Session.resume());
@@ -311,6 +312,11 @@ const Home = (() => {
       banner(primaryEl, BANNER_ICON.first, 'いっしょに ひとつ',
         first.game.name + '　1もんだけ。ヒントを つかって いいよ',
         () => FirstSteps.startOne(first.game, first.levelIndex));
+    } else if (short){
+      banner(primaryEl, '👆', short.status.phase === 'check' ? 'べつのひの たしかめを 1もん'
+        : short.status.waiting ? 'ふくしゅうを 1もん' : 'つづきの 1もん',
+        short.game.name + (short.status.waiting ? '　たしかめは また べつのひに' : '　1もんずつでも すすむよ'),
+        () => FirstSteps.startOne(short.game, short.levelIndex, true));
     } else if (recGame){
       const lv = recGame.levels[rec.levelIndex] || recGame.levels[0];
       banner(primaryEl, BANNER_ICON.recommend, 'きょうの おすすめ',

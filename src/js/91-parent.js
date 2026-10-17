@@ -162,6 +162,14 @@ const Parent = (() => {
   function nextUpSection(){
     const sec = el('section');
     sec.append(el('div.eyebrow', { text: 'next' }), el('h3', { text: '今週やること' }));
+    const short = FirstSteps.shortTarget();
+    if (short){
+      const s = short.status;
+      sec.append(el('p', { text: '1問ずつのコース：' + short.game.name + '《' + short.game.levels[short.levelIndex].t + '》。'
+        + (s.waiting ? '別の日に定着を確かめます。今日はここまでで十分です。'
+          : s.phase === 'check' ? '別日の確認を' + s.checks + '／3問まで終えています。次も1問だけで終われます。'
+          : '自分で試した問題が' + s.answered + '／8問たまっています。支援の有無を分けて記録し、別の日にも確かめます。') }));
+    }
 
     /* One question answered wrong is not a diagnosis. Nothing is named here until
        there is a level's worth of evidence behind it. */
@@ -175,7 +183,7 @@ const Parent = (() => {
     }));
 
     if (!levels.length){
-      sec.append(el('p', { text: '判断できるだけの回数がまだありません（1レベル＝8問を、どれか1つ最後まで）。「かずの しま」の《かぞえよう》から始めてください。1日1レベルで十分です。' }));
+      sec.append(el('p', { text: '成績を判断できるだけの記録はまだありません。「ひとつだけ」から、やり方を見て、自分で1問ずつ試せます。何回かに分けても記録はたまり、別の日の確認につながります。1問で終えても大丈夫です。' }));
       return sec;
     }
 
@@ -190,7 +198,7 @@ const Parent = (() => {
 
     if (focus.acc < .75){
       sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
-        '直近' + focus.n + '問の初回正答率 ' + pct(focus.acc) + '。ここを中心に、1日1回。8問を最後までやりきれば十分です。'));
+        '直近' + focus.n + '問の初回正答率 ' + pct(focus.acc) + '。少しずつ取り組めます。「ひとつだけ」で1問、通常コースなら4問で休憩できます。途中の続きは残ります。'));
     } else {
       /* Levels are judged on eight questions or more, facts on two misses — so a page
          could say「よく仕上がっています」and list three gaps directly under it. Say
