@@ -628,23 +628,45 @@ const Levels = (() => {
     titleEl.textContent = g.ico + '　' + g.name;
     clear(chestEl); chestEl.append(Treasures.card(g.world));
     clear(listEl);
+    const round = Store.round(), pending = Session.pendingSummaries().filter(p=>p.kind==='session');
+    const activate = (control, action) => {
+      if (!control.isConnected || control.disabled || UI.currentName()!=='levels') return;
+      if (Store.round() !== round){ render(g,{homeOrigin:null}); UI.show('levels'); return; }
+      Sound.sfx.tap(); action();
+    };
     g.levels.forEach((lv, i) => {
       const stars = Store.stars(g.id, i);
       const unlocked = Store.levelUnlocked(g.id, i);
       const goldKey = g.id + ':' + i + ':g';
       const gold = Store.hasSticker(goldKey);
+      const info = ShortProgress.describe(g.id,i);
+      const saved = pending.find(p=>p.gameId===g.id && p.levelIndex===i);
+      const shortSaved = saved && saved.mode==='first' ? saved : null;
+      const courseSaved = saved && saved.mode==='level' ? saved : null;
+      const n = lv.n || 8;
+      const kind = courseSaved && !courseSaved.remaining ? 'course'
+        : shortSaved || info && info.visible ? 'short'
+        : g.intro !== false && !Store.introduced(g.id,i) ? 'preview' : 'course';
+      const courseLabel = courseSaved ? courseSaved.remaining ? 'コースの つづき　あと '+courseSaved.remaining+'もん'
+        : 'コースの けっかを みる' : n+'もんの コース';
+      const label = kind==='short' ? shortSaved ? shortSaved.remaining===0 ? 'けっかを みる'
+        : shortSaved.remaining===1 ? 'つづきの 1もん' : 'つづきから　あと '+shortSaved.remaining+'もん' : info.nextLabel
+        : kind==='preview' ? 'あそびかたを えらぶ' : courseLabel;
+      const startShort = () => shortSaved ? FirstSteps.resume(shortSaved,g,i) : ShortProgress.start(g,i);
+      const startCourse = () => courseSaved ? Session.resume(courseSaved) : Session.startLevel(g,i);
       const card = el('button.levelcard' + (unlocked ? '' : '.locked') + (gold ? '.gold' : ''), {
-        type: 'button', dataset:{levelIndex:String(i), levelAction:'play'}, style: { '--lc': g.color },
+        type: 'button', dataset:{levelIndex:String(i), levelAction:'play',levelKind:kind}, style: { '--lc': g.color },
         title: lv.t + (gold ? '　きんの シールを ゲット' : '　きんの シールは まだ'),
-        onclick(){
-          Sound.sfx.tap();
+        onclick(){ activate(this,()=>{
           if (!unlocked){ Sound.say('前のレベルをクリアすると、遊べるよ。', { delay: 120 }); return; }
-          if (g.intro !== false && !Store.introduced(g.id, i)) FirstSteps.open(g, i);
-          else Session.startLevel(g, i);
-        }
+          if (kind==='short') startShort();
+          else if (kind==='preview') FirstSteps.open(g,i);
+          else startCourse();
+        }); }
       },
         el('div.num', { text: unlocked ? String(i + 1) : '🔒' }),
-        el('div.body', null, el('div.t', { text: lv.t }), el('div.d', { text: lv.d })),
+        el('div.body', null, el('div.t', { text: lv.t }), el('div.d', { text: lv.d }),
+          unlocked ? el('b.level-next-action',{text:label}) : null),
         // ★★★ is "all right first time"; this is "and without counting"
         Store.isSwift(g.id, i) ? el('span.swiftmark', { title: 'すぐ こたえられた', text: '⚡️' }) : null,
         UI.stars(stars),
@@ -654,14 +676,23 @@ const Levels = (() => {
       const entry = el('div.level-entry', null, card);
       if (unlocked && g.intro !== false) entry.append(el('button.btn.first-retry', {
         type: 'button', dataset:{levelIndex:String(i), levelAction:'preview'}, 'aria-label': lv.t + 'の やりかたを みる', title: 'もういちど やりかたを みる',
-        onclick(){ Sound.sfx.tap(); FirstSteps.open(g, i); }
+        onclick(){ activate(this,()=>FirstSteps.open(g,i)); }
       }, '👀'));
       const short = Store.shortStatus(g.id, i);
       const progress = ShortProgress.render(g.id, i, {compact:true});
       if (progress) entry.append(progress);
+      if (unlocked && kind==='short'){
+        const course = FirstSteps.longCourse(g,i);
+        course.classList.add('level-normal-course');
+        $('summary',course).textContent=courseSaved ? n+'もんコースの つづき' : 'まとめて '+n+'もん あそぶとき';
+        const original=$('button',course);
+        original.replaceWith(el('button.btn.btn-accent',{type:'button',text:courseLabel,
+          dataset:{levelIndex:String(i),levelAction:'course'},onclick(){activate(this,startCourse);}}));
+        entry.append(course);
+      }
       if (unlocked && (short.canStartGold || short.goldActive)) entry.append(el('button.btn.gold-short-start', {
         type:'button', dataset:{levelIndex:String(i), levelAction:'gold'}, 'aria-label':lv.t + 'で ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel,
-        onclick(){ Sound.sfx.tap(); ShortProgress.start(g, i, {gold:true}); }
+        onclick(){ activate(this,()=>shortSaved && short.goldActive ? FirstSteps.resume(shortSaved,g,i) : ShortProgress.start(g,i,{gold:true})); }
       }, '✨ ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel));
       listEl.append(entry);
     });
@@ -669,13 +700,17 @@ const Levels = (() => {
   }
   function captureReturn(levelIndex){
     const focused = document.activeElement;
+    const course = listEl.querySelector('.levelcard[data-level-index="'+levelIndex+'"]')?.closest('.level-entry')?.querySelector('.level-normal-course');
     return {round:Store.round(), gameId:game.id, levelIndex, scroll:listEl.scrollTop, homeOrigin,
+      courseOpen:!!(course && course.open),
       action:focused && focused.dataset.levelIndex === String(levelIndex) ? focused.dataset.levelAction : 'preview'};
   }
   function returnToList(saved){
     const g = saved && saved.round === Store.round() && Games.byId[saved.gameId];
     if (!g || !g.levels[saved.levelIndex]){ Home.returnToMap(null); return; }
     render(g, {homeOrigin:saved.homeOrigin});
+    const course = listEl.querySelector('.levelcard[data-level-index="'+saved.levelIndex+'"]')?.closest('.level-entry')?.querySelector('.level-normal-course');
+    if (course) course.open=!!saved.courseOpen;
     UI.show('levels', {focus:false}); listEl.scrollTop = saved.scroll;
     requestAnimationFrame(() => {
       if (UI.currentName() !== 'levels' || saved.round !== Store.round()) return;

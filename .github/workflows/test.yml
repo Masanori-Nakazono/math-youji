@@ -84,6 +84,15 @@ jobs:
           COLLECTION_JOURNEY_HTML=dist/kazu-no-bouken.html node tools/test-collection-journey.cjs
           COLLECTION_JOURNEY_HTML=dist/artifact.html node tools/test-collection-journey.cjs
 
+      - name: Verify level continuations, normal answer controls and saved island layouts
+        run: |
+          LEVEL_SHORT_HTML=dist/kazu-no-bouken.html node tools/test-level-short-entry.cjs
+          LEVEL_SHORT_HTML=dist/artifact.html node tools/test-level-short-entry.cjs
+          PLAY_WORKSPACE_HTML=dist/kazu-no-bouken.html node tools/test-play-workspace.cjs
+          PLAY_WORKSPACE_HTML=dist/artifact.html node tools/test-play-workspace.cjs
+          ISLAND_LAYOUT_HTML=dist/kazu-no-bouken.html node tools/test-island-layout.cjs
+          ISLAND_LAYOUT_HTML=dist/artifact.html node tools/test-island-layout.cjs
+
       - name: Verify one-question learning and later-day mastery checks
         run: |
           node tools/test-short-store.cjs

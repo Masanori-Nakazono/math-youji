@@ -152,7 +152,11 @@ const server = http.createServer((req, res) => {
             }
           }
           await page.evaluate(() => { KazuApp.Store.putWorldSticker('count:0', 0, 100); KazuApp.StickerWorld.open('count:0'); });
-          await page.waitForFunction(() => { const p = KazuApp.Store.stickerWorld().items['count:0']; return p.x > 0 && p.y < 100; });
+          await page.waitForFunction(() => {
+            const n = document.querySelector('.world-sticker[data-world-key="count:0"]'), a = n.getBoundingClientRect(), b = n.parentElement.getBoundingClientRect();
+            return a.left >= b.left - .1 && a.right <= b.right + .1 && a.top >= b.top - .1 && a.bottom <= b.bottom + .1;
+          });
+          assert.deepEqual((await world(page)).items['count:0'], { x: 0, y: 100 }, 'view fitting preserves the saved logical edge');
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
           await page.screenshot({ path: `/tmp/math-youji-island-editor-${size.width}-${format}.png`, animations: 'disabled' });
         }

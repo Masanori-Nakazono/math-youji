@@ -141,6 +141,7 @@ const Session = (() => {
   let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, showBtn, backBtn, moodEl, feedbackEl;
   let answerControls, nextBtn, answerSpeech = '', advancePending = null;
   let autoAdvanceOverride = null, blockAnswerUntil = 0;
+  let lastAnswerGesture = null, lastTouchPointer = null, surfaceVersion = 0;
   let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
@@ -350,6 +351,39 @@ const Session = (() => {
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn, showBtn),
       countEl = el('div.session-count',{'aria-live':'polite'}), fieldEl, choicesEl, answerControls);
     UI.register('play', node);
+    const explicitField = target => target && target.closest && target.closest('.three-sum-slot');
+    const answerAction = target => target && target.closest && target.closest('.playfield button,.playfield [role="button"],.choices button,.choices [role="button"],.answer-next');
+    const nativeGesture = e => {
+      if (!e.isTrusted) return;
+      const control = answerAction(e.target), active = UI.currentName() === 'play';
+      const previous = lastAnswerGesture, elapsed = previous ? e.timeStamp - previous.at : Infinity;
+      if (!active && elapsed >= 1200) return;
+      if (explicitField(e.target)){ lastAnswerGesture = null; return; }
+      if (e.type === 'click' && e.detail === 0) return;
+      const touch = e.pointerType === 'touch' || e.sourceCapabilities?.firesTouchEvents
+        || lastTouchPointer && e.timeStamp - lastTouchPointer.at < 100
+          && Math.hypot(e.clientX-lastTouchPointer.x,e.clientY-lastTouchPointer.y) < 4;
+      const same = previous && elapsed < 1200
+        && Math.hypot(e.clientX-previous.x,e.clientY-previous.y) < 20;
+      const handoff = previous && (previous.numeric || wrongThisQ > previous.wrong || previous.epoch !== epoch || previous.surface !== surfaceVersion);
+      if (same && (e.detail > 1 || touch && handoff && elapsed < 450)){
+        e.preventDefault();e.stopImmediatePropagation();return;
+      }
+      if (e.type === 'click' && active && control) lastAnswerGesture = {
+        at:e.timeStamp,x:e.clientX,y:e.clientY,epoch,surface:surfaceVersion,wrong:wrongThisQ,
+        numeric:control.matches('.padkey,.answer-submit,.answer-next,.three-undo')
+      };
+    };
+    document.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch') lastTouchPointer = {at:e.timeStamp,x:e.clientX,y:e.clientY};
+      nativeGesture(e);
+    }, true);
+    document.addEventListener('click', nativeGesture, true);
+    node.addEventListener('keydown', e => {
+      if (e.repeat && (e.key === 'Enter' || e.key === ' ') && answerAction(e.target)){
+        e.preventDefault();e.stopImmediatePropagation();
+      }
+    }, true);
     // has a finger been on this question yet — the together-tool must not wipe the child's own work
     const touch = e => {
       // The second tap of a double tap on Next must not land on the new answer
@@ -540,6 +574,10 @@ const Session = (() => {
     const saved = Store.savedSession();
     if (!saved || !enginePendingSummary()) return false;
     if (levelReturn && (levelReturn.id !== saved.id || levelReturn.origin.round !== Store.round())) levelReturn = null;
+    if (saved.mode === 'level' && UI.currentName() === 'levels'
+        && Levels.game === Games.byId[saved.gameId]){
+      levelReturn = {id:saved.id, origin:Levels.captureReturn(saved.levelIndex)};
+    }
     build(); killTimers(); blockAnswerUntil = 0;
     runId=saved.id; runRound=Store.round(); mode=saved.mode; curGame=saved.gameId ? Games.byId[saved.gameId] : null;
     curLevelIdx=saved.levelIndex; idx=saved.index; mistakes=saved.mistakes; firstTryRight=saved.firstTryRight; swiftCount=saved.swiftCount;
@@ -848,6 +886,7 @@ const Session = (() => {
   }
 
   function begin(){
+    lastAnswerGesture = null;
     const previous = Store.savedSession();
     blockAnswerUntil = 0;
     disarmQuit();
@@ -966,8 +1005,8 @@ const Session = (() => {
           diagnosis, never the behaviour. */
       wrong(target, given){ if (!stale() && !restoringDraft) onWrong(target, given); },
       /** delayed work that dies with the question */
-      later(fn, ms){ if (restoringDraft) return null; return later(fn, ms); },
-      get locked(){ return locked; },
+      later(fn, ms){ if (stale() || restoringDraft) return null; return later(fn, ms); },
+      get locked(){ return locked || stale(); },
 
       /** A fixed 0–10 keypad.
 
@@ -988,6 +1027,7 @@ const Session = (() => {
         askedAt = performance.now();     // a story animation is not thinking time
         curAnswer = answer;
         newSurface();
+        const surface = surfaceVersion;
         choicesEl.classList.add('pad');
         choicesEl.dataset.built = '1';
         /* No hintBtns: the engine's fallback dims one more wrong answer on every
@@ -1001,7 +1041,7 @@ const Session = (() => {
           const b = el('button.choice.padkey', { type: 'button', text: String(v) });
           const val = v;
           b.addEventListener('click', () => {
-            if (locked || stale()) return;
+            if (locked || stale() || surface !== surfaceVersion) return;
             markResponse();
             if (val === answer){
               if (settled) return;
@@ -1049,6 +1089,7 @@ const Session = (() => {
         askedAt = performance.now();
         curAnswer = answer;
         newSurface();
+        const surface = surfaceVersion;
         choicesEl.dataset.built = '1';
         hintBtns = [];
         let settled = false;              // one accepted answer per set of buttons
@@ -1059,7 +1100,7 @@ const Session = (() => {
           if (content && content.nodeType) b.append(content); else b.textContent = content;
           const hit = o.match ? o.match(val, answer) : val === answer;
           b.addEventListener('click', () => {
-            if (locked || stale()) return;
+            if (locked || stale() || surface !== surfaceVersion) return;
             markResponse();
             if (hit){
               /* A five-year-old taps twice. The picked button was never disabled —
@@ -1108,6 +1149,7 @@ const Session = (() => {
      on a board where nothing works. Mistakes keep accumulating across the blanks,
      so a child who needed showing on the first one is shown the next one quickly. */
   function newSurface(){
+    surfaceVersion++;
     answerBtn = null; answerText = null; hintStrongFns = []; taught = false;
   }
 

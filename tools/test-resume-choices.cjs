@@ -82,8 +82,18 @@ if(shots)fs.mkdirSync(shots,{recursive:true});
         await check('preparation names and resumes the ordinary checkpoint, latest/true compatibility',async()=>{
           await makeThree(page);const before=await records(page),learning=await evidence(page);
           await page.evaluate(()=>KazuApp.Session._test.overview(true));
-          await page.locator('#home .home-more > summary').click();await page.locator('#home [data-game-id="count"]').click();
+          if(!await page.locator('#home .home-more').evaluate(n=>n.open))await page.locator('#home .home-more > summary').click();
+          await page.locator('#home [data-game-id="count"]').click();
           await page.locator('#levels [data-level-index="0"][data-level-action="play"]').click();
+          await expectRestored(page,'session');unchangedOthers(before,await records(page),'session');assert.deepEqual(await evidence(page),learning);
+          await pause(page,'session');
+          // The level card now resumes its named checkpoint directly. An explicit
+          // fresh full course still offers the ordinary checkpoint in its overview.
+          if(!await page.locator('#home .home-more').evaluate(n=>n.open))await page.locator('#home .home-more > summary').click();
+          await page.locator('#home [data-game-id="count"]').click();
+          await page.locator('#levels [data-level-index="0"][data-level-action="preview"]').click();
+          await page.locator('#first-steps .long-course > summary').click();
+          await page.locator('#first-steps .long-course button').click();
           assert.match(await page.locator('#session-overview .session-previous').textContent(),new RegExp(before.session.title));
           await page.locator('#session-overview').getByRole('button',{name:'まえの つづきから',exact:true}).click();
           await expectRestored(page,'session');unchangedOthers(before,await records(page),'session');assert.deepEqual(await evidence(page),learning);

@@ -3239,10 +3239,10 @@ dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
 #sticker-world .world-choose{flex:none;min-width:88px;max-width:112px;min-height:48px;padding:6px 9px;font-size:14px;line-height:1.4;}
 #sticker-world .sticker-world-board{flex:0 0 auto;height:clamp(180px,34vh,360px);min-height:180px;box-sizing:border-box;}
 #sticker-world .sticker-world-board:focus-visible{outline:3px solid var(--ring);outline-offset:-4px;}
-#sticker-world .world-sticker.selected{outline:3px solid var(--accent);outline-offset:1px;border-radius:14px;}
+#sticker-world .world-sticker.selected{outline:3px solid var(--accent);outline-offset:1px;border-radius:14px;z-index:2;}
 #sticker-world .world-sticker .pokemon-sticker{--pokemon-size:clamp(64px,calc(var(--u)*7),120px);width:var(--pokemon-size);}
 #sticker-world .world-sticker .pokemon-sticker.transfer-sticker{--pokemon-size:clamp(64px,calc(var(--u)*8),120px);}
-#sticker-world .world-position{position:absolute;z-index:2;transform:translate(-50%,-50%);pointer-events:none;
+#sticker-world .world-position{position:absolute;z-index:3;transform:translate(-50%,-50%);pointer-events:none;
   display:grid;place-items:center;width:32px;height:32px;border:3px dashed var(--ink);border-radius:50%;
   background:var(--card);color:var(--ink);font-size:24px;font-weight:900;line-height:1;opacity:.8;}
 #sticker-world .sticker-world-hint{min-height:36px;font-size:14px;line-height:1.5;text-align:center;}
@@ -3450,6 +3450,54 @@ dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
   #review.review-working .review-work-actions{padding:0;gap:4px;}
   #review.review-working .review-work-actions .btn{min-height:56px;height:56px;padding:4px;font-size:14px;}
   #review.review-working .review-numeric-workspace{margin-top:8px;}
+}
+/* A level's visible short-course progress and its main action share one goal. */
+.level-entry .levelcard{min-height:72px;}
+.level-next-action{display:block;margin-top:6px;font-size:max(16px,calc(var(--u)*1.4));line-height:1.5;color:var(--ink);overflow-wrap:anywhere;}
+.level-entry .level-normal-course{flex-basis:100%;min-width:0;margin:0;border:2px solid var(--card-edge);border-radius:14px;background:var(--paper-2);color:var(--ink);}
+.level-normal-course>summary{min-height:64px;padding:16px;box-sizing:border-box;font-size:max(16px,calc(var(--u)*1.3));font-weight:800;cursor:pointer;}
+.level-normal-course>p,.level-normal-course>small{margin:10px 14px;line-height:1.6;font-size:15px;}
+.level-normal-course>small{display:block;}
+.level-normal-course>.btn{display:flex;width:calc(100% - 24px);margin:12px;min-height:64px;white-space:normal;font-size:18px;line-height:1.5;}
+/* The preview remains a counted full-course entrance on short screens too. */
+#first-steps>.reward-sheet{overflow-y:auto;overscroll-behavior:contain;justify-content:safe center;}
+#first-steps>.reward-sheet>*{flex-shrink:0;}
+/* Short landscape keeps the real picture and 64px answer keys beside each
+   other. Larger pictures scroll inside their own bounded workspace. */
+@media(max-height:450px) and (min-width:500px){
+ #stage:has(#play:not([hidden])){padding:4px 8px}
+ #play{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 268px;grid-template-rows:48px auto minmax(60px,1fr);gap:4px}
+ #play>.topbar{grid-column:1/-1;grid-row:1;min-height:48px;height:48px;align-items:flex-start}
+ #play>.topbar>.btn-round{width:44px;min-width:44px;height:44px;min-height:44px;padding:4px}
+ #play>.topbar h2{font-size:15px;line-height:22px;margin-top:2px}
+ #play>.topbar .pips{align-self:flex-start;margin-top:8px}
+ #play>.round-status{position:absolute;top:26px;left:52px;right:140px;min-height:18px;padding:0;border:0;background:none;font-size:10px;line-height:18px;pointer-events:none}
+ #play>.round-status>span{display:none}
+ #play>.session-count{position:absolute;top:26px;right:0;max-width:136px;font-size:12px;line-height:18px;min-height:0;margin:0;pointer-events:none}
+ #play>.prompt{grid-column:1;grid-row:2;display:grid;grid-template-columns:minmax(0,1fr) 44px 44px;gap:4px;padding:4px;min-width:0}
+ #play>.prompt>.mascot{display:none}
+ #play>.prompt .txtwrap{display:contents}
+ #play>.prompt .txt{grid-column:1/-1;grid-row:1;font-size:16px;line-height:1.25}
+ #play>.prompt>.btn-round{width:44px;min-width:44px;height:44px;min-height:44px;padding:4px}
+ #play>.prompt>.btn-round:not(.showbtn){grid-column:2;grid-row:2}
+ #play>.prompt>.showbtn{grid-column:3;grid-row:2}
+ #play>.prompt .feedback{grid-column:1;grid-row:2;display:block;font-size:14px;line-height:1.35;padding:3px 4px;border-radius:10px}
+ #play>.prompt .feedback[hidden]{display:none}
+ #play>.playfield{grid-column:1;grid-row:3;min-height:60px;overflow:auto;overscroll-behavior:contain;overflow-anchor:none;padding:2px;justify-content:safe center;align-items:safe center}
+ #play>.choices{grid-column:2;grid-row:2/4;align-self:center;max-width:100%;gap:4px;padding:0;max-height:100%;overflow:auto}
+ #play>.choices.pad:not(.answer-complete){display:grid;grid-template-columns:repeat(4,64px);gap:4px;align-content:center}
+ #play>.choices.pad .padkey{width:64px;min-width:64px;height:64px;min-height:64px;font-size:28px;padding:4px}
+ #play>.choices.three-pad .three-undo,#play>.choices.three-pad .three-submit{height:64px;min-height:64px;width:64px;min-width:64px;font-size:13px;padding:3px}
+ #play>.choices.three-pad .teachbtn{grid-column:1/-1;min-height:44px;height:44px;width:100%;flex-direction:row}
+ #play:has(.choices:empty)>.prompt,#play:has(.choices:empty)>.playfield{grid-column:1/-1}
+ #play:has(.choices:empty)>.choices{display:none}
+ #play .three-builder{gap:4px}
+ #play .three-sum{padding:2px;border-width:1px;font-size:20px;gap:4px}
+ #play .three-sum-slot{min-width:48px;min-height:48px;width:48px;height:48px}
+ #play .three-note{font-size:14px;line-height:1.2}
+ #play.answer-review>.choices{grid-row:2;align-self:start}
+ #play.answer-review>.answer-controls{grid-column:2;grid-row:3;align-self:end;flex-direction:column;gap:4px;padding:0}
+ #play.answer-review>.answer-controls .answer-next{min-height:64px;width:100%;font-size:22px}
 }
 </style>
 </head>
@@ -6771,6 +6819,7 @@ const Session = (() => {
   let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, showBtn, backBtn, moodEl, feedbackEl;
   let answerControls, nextBtn, answerSpeech = '', advancePending = null;
   let autoAdvanceOverride = null, blockAnswerUntil = 0;
+  let lastAnswerGesture = null, lastTouchPointer = null, surfaceVersion = 0;
   let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
@@ -6980,6 +7029,39 @@ const Session = (() => {
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn, showBtn),
       countEl = el('div.session-count',{'aria-live':'polite'}), fieldEl, choicesEl, answerControls);
     UI.register('play', node);
+    const explicitField = target => target && target.closest && target.closest('.three-sum-slot');
+    const answerAction = target => target && target.closest && target.closest('.playfield button,.playfield [role="button"],.choices button,.choices [role="button"],.answer-next');
+    const nativeGesture = e => {
+      if (!e.isTrusted) return;
+      const control = answerAction(e.target), active = UI.currentName() === 'play';
+      const previous = lastAnswerGesture, elapsed = previous ? e.timeStamp - previous.at : Infinity;
+      if (!active && elapsed >= 1200) return;
+      if (explicitField(e.target)){ lastAnswerGesture = null; return; }
+      if (e.type === 'click' && e.detail === 0) return;
+      const touch = e.pointerType === 'touch' || e.sourceCapabilities?.firesTouchEvents
+        || lastTouchPointer && e.timeStamp - lastTouchPointer.at < 100
+          && Math.hypot(e.clientX-lastTouchPointer.x,e.clientY-lastTouchPointer.y) < 4;
+      const same = previous && elapsed < 1200
+        && Math.hypot(e.clientX-previous.x,e.clientY-previous.y) < 20;
+      const handoff = previous && (previous.numeric || wrongThisQ > previous.wrong || previous.epoch !== epoch || previous.surface !== surfaceVersion);
+      if (same && (e.detail > 1 || touch && handoff && elapsed < 450)){
+        e.preventDefault();e.stopImmediatePropagation();return;
+      }
+      if (e.type === 'click' && active && control) lastAnswerGesture = {
+        at:e.timeStamp,x:e.clientX,y:e.clientY,epoch,surface:surfaceVersion,wrong:wrongThisQ,
+        numeric:control.matches('.padkey,.answer-submit,.answer-next,.three-undo')
+      };
+    };
+    document.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch') lastTouchPointer = {at:e.timeStamp,x:e.clientX,y:e.clientY};
+      nativeGesture(e);
+    }, true);
+    document.addEventListener('click', nativeGesture, true);
+    node.addEventListener('keydown', e => {
+      if (e.repeat && (e.key === 'Enter' || e.key === ' ') && answerAction(e.target)){
+        e.preventDefault();e.stopImmediatePropagation();
+      }
+    }, true);
     // has a finger been on this question yet — the together-tool must not wipe the child's own work
     const touch = e => {
       // The second tap of a double tap on Next must not land on the new answer
@@ -7170,6 +7252,10 @@ const Session = (() => {
     const saved = Store.savedSession();
     if (!saved || !enginePendingSummary()) return false;
     if (levelReturn && (levelReturn.id !== saved.id || levelReturn.origin.round !== Store.round())) levelReturn = null;
+    if (saved.mode === 'level' && UI.currentName() === 'levels'
+        && Levels.game === Games.byId[saved.gameId]){
+      levelReturn = {id:saved.id, origin:Levels.captureReturn(saved.levelIndex)};
+    }
     build(); killTimers(); blockAnswerUntil = 0;
     runId=saved.id; runRound=Store.round(); mode=saved.mode; curGame=saved.gameId ? Games.byId[saved.gameId] : null;
     curLevelIdx=saved.levelIndex; idx=saved.index; mistakes=saved.mistakes; firstTryRight=saved.firstTryRight; swiftCount=saved.swiftCount;
@@ -7478,6 +7564,7 @@ const Session = (() => {
   }
 
   function begin(){
+    lastAnswerGesture = null;
     const previous = Store.savedSession();
     blockAnswerUntil = 0;
     disarmQuit();
@@ -7596,8 +7683,8 @@ const Session = (() => {
           diagnosis, never the behaviour. */
       wrong(target, given){ if (!stale() && !restoringDraft) onWrong(target, given); },
       /** delayed work that dies with the question */
-      later(fn, ms){ if (restoringDraft) return null; return later(fn, ms); },
-      get locked(){ return locked; },
+      later(fn, ms){ if (stale() || restoringDraft) return null; return later(fn, ms); },
+      get locked(){ return locked || stale(); },
 
       /** A fixed 0–10 keypad.
 
@@ -7618,6 +7705,7 @@ const Session = (() => {
         askedAt = performance.now();     // a story animation is not thinking time
         curAnswer = answer;
         newSurface();
+        const surface = surfaceVersion;
         choicesEl.classList.add('pad');
         choicesEl.dataset.built = '1';
         /* No hintBtns: the engine's fallback dims one more wrong answer on every
@@ -7631,7 +7719,7 @@ const Session = (() => {
           const b = el('button.choice.padkey', { type: 'button', text: String(v) });
           const val = v;
           b.addEventListener('click', () => {
-            if (locked || stale()) return;
+            if (locked || stale() || surface !== surfaceVersion) return;
             markResponse();
             if (val === answer){
               if (settled) return;
@@ -7679,6 +7767,7 @@ const Session = (() => {
         askedAt = performance.now();
         curAnswer = answer;
         newSurface();
+        const surface = surfaceVersion;
         choicesEl.dataset.built = '1';
         hintBtns = [];
         let settled = false;              // one accepted answer per set of buttons
@@ -7689,7 +7778,7 @@ const Session = (() => {
           if (content && content.nodeType) b.append(content); else b.textContent = content;
           const hit = o.match ? o.match(val, answer) : val === answer;
           b.addEventListener('click', () => {
-            if (locked || stale()) return;
+            if (locked || stale() || surface !== surfaceVersion) return;
             markResponse();
             if (hit){
               /* A five-year-old taps twice. The picked button was never disabled —
@@ -7738,6 +7827,7 @@ const Session = (() => {
      on a board where nothing works. Mistakes keep accumulating across the blanks,
      so a child who needed showing on the first one is shown the next one quickly. */
   function newSurface(){
+    surfaceVersion++;
     answerBtn = null; answerText = null; hintStrongFns = []; taught = false;
   }
 
@@ -13447,7 +13537,7 @@ const FirstSteps = (() => {
   function startOne(game, levelIndex, independent, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
     build(); active = { game, levelIndex, opts:withOrigin(game, levelIndex, opts) };
-    Session.startFirst(game, levelIndex, independent || Store.introduced(game.id, levelIndex)
+    Session.startFirst(game, levelIndex, independent || game.intro === false || Store.introduced(game.id, levelIndex)
       ? Store.shortStatus(game.id, levelIndex).phase : 'afterShow');
   }
   function startGold(game, levelIndex, opts){
@@ -13455,6 +13545,13 @@ const FirstSteps = (() => {
     build(); active = {game, levelIndex, opts:withOrigin(game, levelIndex, opts)};
     // The engine settles any completed checkpoint before starting a fresh goal.
     Session.startFirst(game, levelIndex, 'independent', {gold:true});
+  }
+  function resume(choice, game, levelIndex, opts){
+    if (!game || !game.levels[levelIndex] || !choice || choice.kind !== 'session' || choice.mode !== 'first'
+        || choice.gameId !== game.id || choice.levelIndex !== levelIndex){ active = null; return false; }
+    build(); active = {game,levelIndex,opts:withOrigin(game,levelIndex,opts)};
+    if (Session.resume(choice)) return true;
+    active = null; return false;
   }
   function open(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
@@ -13543,7 +13640,7 @@ const FirstSteps = (() => {
     }
     Sound.say(finishSpeech, { delay: 200 });
   }
-  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, longCourse, build, open, startOne, startGold, finish, get active(){ return active; } };
+  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, longCourse, build, open, startOne, startGold, resume, finish, get active(){ return active; } };
 })();
 
 const ProgressAlbum = (() => {
@@ -13834,7 +13931,7 @@ const StickerWorld = (() => {
   ];
   let node, board, palette, hint, selectedBar, picker, pickerSummary, filterBar, empty, actions;
   let placeButton, removeButton, undoButton, doneButton, selected = null, draft = null, undo = null;
-  let filter = 'recent', bookOrigin = null;
+  let filter = 'recent', bookOrigin = null, pendingDraft = false;
 
   function owned(){
     return Store.ownedStickerKeys().filter(k => {
@@ -13861,18 +13958,55 @@ const StickerWorld = (() => {
   }
   // A percentage describes the centre of the card. Its actual artwork, name and
   // round badge must all fit, including when a saved island opens on a phone.
-  function safePosition(k, x, y){
-    const w = board.clientWidth, h = board.clientHeight;
-    if (!w || !h) return { x, y };
+  function cardSize(k){
     let art = Array.from(board.querySelectorAll('.world-sticker')).find(n => n.dataset.worldKey === k), probe;
     if (!art){
       probe = stickerButton(k); probe.tabIndex = -1; probe.style.visibility = 'hidden';
       board.append(probe); art = probe;
     }
-    const edgeX = Math.min(50, (art.offsetWidth / 2 + 5) / w * 100);
-    const edgeY = Math.min(50, (art.offsetHeight / 2 + 5) / h * 100);
+    const size = {width:art.offsetWidth, height:art.offsetHeight};
     if (probe) probe.remove();
+    return size;
+  }
+  function safePosition(k, x, y, size){
+    const w = board.clientWidth, h = board.clientHeight;
+    if (!w || !h) return { x, y };
+    const card = size || cardSize(k);
+    const edgeX = Math.min(50, (card.width / 2 + 5) / w * 100);
+    const edgeY = Math.min(50, (card.height / 2 + 5) / h * 100);
     return { x: clamp(x, edgeX, 100 - edgeX), y: clamp(y, edgeY, 100 - edgeY) };
+  }
+  const samePoint = (a, b) => Math.abs(a.x - b.x) < .01 && Math.abs(a.y - b.y) < .01;
+  function initialPosition(k){
+    const w = board.clientWidth, h = board.clientHeight;
+    if (!w || !h) return null;
+    const size = cardSize(k), items = Store.stickerWorld().items, keys = owned();
+    const rect = (p, card) => ({left:p.x / 100 * w - card.width / 2,
+      top:p.y / 100 * h - card.height / 2, width:card.width, height:card.height});
+    const occupied = Object.keys(items).filter(key => keys.includes(key)).map(key => {
+      const card = cardSize(key); return rect(safePosition(key, items[key].x, items[key].y, card), card);
+    });
+    // A fixed candidate set bounds the work even when every free space is full.
+    // Only the new preview moves; existing saved arrangements remain untouched.
+    const candidates = [{x:50,y:50}];
+    for (let row = 0; row <= 6; row++) for (let col = 0; col <= 6; col++) candidates.push({x:col / 6 * 100,y:row / 6 * 100});
+    let best = null;
+    candidates.forEach(candidate => {
+      const p = safePosition(k, candidate.x, candidate.y, size), box = rect(p, size);
+      const overlap = occupied.reduce((sum, other) => sum
+        + Math.max(0, Math.min(box.left + box.width + 3, other.left + other.width + 3) - Math.max(box.left - 3, other.left - 3))
+        * Math.max(0, Math.min(box.top + box.height + 3, other.top + other.height + 3) - Math.max(box.top - 3, other.top - 3)), 0);
+      const distance = Math.pow((p.x - 50) * w / 100, 2) + Math.pow((p.y - 50) * h / 100, 2);
+      if (!best || overlap < best.overlap - .01 || Math.abs(overlap - best.overlap) < .01 && distance < best.distance - .01)
+        best = {p, overlap, distance};
+    });
+    return best.p;
+  }
+  function prepareDraft(){
+    if (!pendingDraft || !selected || !draft) return;
+    const position = initialPosition(selected);
+    // The untouched automatic preview follows the available space on rotation.
+    if (position) draft = position;
   }
   function fitPlaced(){
     if (!board || !board.clientWidth || !board.clientHeight) return;
@@ -13882,17 +14016,17 @@ const StickerWorld = (() => {
       if (!p) return;
       const safe = safePosition(k, p.x, p.y);
       n.style.left = safe.x + '%'; n.style.top = safe.y + '%';
-      if (Math.abs(safe.x - p.x) > .01 || Math.abs(safe.y - p.y) > .01) Store.putWorldSticker(k, safe.x, safe.y);
     });
+    prepareDraft();
     moveCursor();
   }
   function moveCursor(){
     const cursor = board.querySelector('.world-position');
     if (!cursor || !selected || !draft) return;
-    draft = safePosition(selected, draft.x, draft.y);
+    const position = safePosition(selected, draft.x, draft.y);
     const placed = Store.stickerWorld().items[selected];
-    cursor.hidden = !!placed && Math.abs(placed.x - draft.x) < .01 && Math.abs(placed.y - draft.y) < .01;
-    cursor.style.left = draft.x + '%'; cursor.style.top = draft.y + '%';
+    cursor.hidden = !!placed && samePoint(safePosition(selected, placed.x, placed.y), position);
+    cursor.style.left = position.x + '%'; cursor.style.top = position.y + '%';
     board.setAttribute('aria-label', itemName(selected) + 'の おきばしょ。やじるしで うごかして、エンターで おく');
   }
   function paintBoard(){
@@ -13961,19 +14095,27 @@ const StickerWorld = (() => {
   }
   function choose(k){
     if (!owned().includes(k)) return;
-    selected = k; draft = Store.stickerWorld().items[k] || { x: 50, y: 50 };
+    const placed = Store.stickerWorld().items[k];
+    selected = k; draft = placed ? {x:placed.x,y:placed.y} : {x:50,y:50}; pendingDraft = !placed;
     picker.open = false; paintBoard(); updateSelection();
     say(itemName(k) + '。しまを タップするか、やじるしで ばしょを えらぼう');
     Sound.sfx.tap();
   }
   function place(x, y){
     if (!selected || !owned().includes(selected)) return;
-    const before = Store.stickerWorld().items[selected] || null, p = safePosition(selected, x, y);
-    if (before && Math.abs(before.x - p.x) < .01 && Math.abs(before.y - p.y) < .01){
+    const before = Store.stickerWorld().items[selected] || null, requested = {x,y};
+    if (before && samePoint(before, requested)){
       say('ここに かざってあるよ。できあがりなら「できあがり」を おしてね'); return;
     }
+    const p = safePosition(selected, x, y);
+    // A horizontal key does not rewrite a vertically clamped logical position.
+    if (before){
+      if (Math.abs(before.x - x) < .01) p.x = before.x;
+      if (Math.abs(before.y - y) < .01) p.y = before.y;
+    }
+    if (before && samePoint(before, p)) return;
     if (!Store.putWorldSticker(selected, p.x, p.y)) return;
-    undo = { key: selected, before }; draft = p;
+    undo = { key: selected, before }; draft = p; pendingDraft = false;
     Sound.sfx.place(); paintBoard(); paintPalette(); updateSelection();
     say('おけたね。うごかしたり、ひとつ もどしたり できるよ');
   }
@@ -13984,7 +14126,7 @@ const StickerWorld = (() => {
     else if (owned().includes(previous.key)){
       if (previous.before) Store.putWorldSticker(previous.key, previous.before.x, previous.before.y);
       else Store.removeWorldSticker(previous.key);
-      selected = previous.key; draft = previous.before || { x: 50, y: 50 };
+      selected = previous.key; draft = previous.before ? {x:previous.before.x,y:previous.before.y} : {x:50,y:50}; pendingDraft = !previous.before;
     }
     paintBoard(); paintPalette(); updateSelection(); say('ひとつ もどしたよ');
   }
@@ -13994,9 +14136,17 @@ const StickerWorld = (() => {
       'aria-describedby': 'world-instructions',
       onkeydown(e){
         if (e.target !== board || !selected || !draft) return;
+        prepareDraft();
         const step = e.shiftKey ? 10 : 5;
         const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
-        if (delta){ e.preventDefault(); draft = safePosition(selected, draft.x + delta[0], draft.y + delta[1]); moveCursor(); }
+        if (delta){
+          e.preventDefault(); const position = safePosition(selected, draft.x, draft.y);
+          const next = safePosition(selected, position.x + delta[0], position.y + delta[1]);
+          if (!samePoint(position, next)) pendingDraft = false;
+          if (delta[0] && Math.abs(next.x - position.x) >= .01) draft = {x:next.x,y:draft.y};
+          if (delta[1] && Math.abs(next.y - position.y) >= .01) draft = {x:draft.x,y:next.y};
+          moveCursor();
+        }
         else if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); place(draft.x, draft.y); }
       }
     });
@@ -14010,16 +14160,16 @@ const StickerWorld = (() => {
       })));
     pickerSummary = el('summary');
     picker = el('details.world-picker', { ontoggle(){ if (picker.open) scrollSelected(); } }, pickerSummary, filterBar, palette, empty);
-    placeButton = el('button.btn.btn-accent.world-place', { type: 'button', onclick(){ if (draft) place(draft.x, draft.y); } });
+    placeButton = el('button.btn.btn-accent.world-place', { type: 'button', onclick(){ prepareDraft(); if (draft) place(draft.x, draft.y); } });
     removeButton = el('button.btn.world-remove', { type: 'button', text: '📦 しまう', onclick(){
       const before = selected && Store.stickerWorld().items[selected];
       if (!before || !Store.removeWorldSticker(selected)) return;
-      undo = { key: selected, before }; draft = { x: 50, y: 50 };
+      undo = { key: selected, before }; draft = { x: 50, y: 50 }; pendingDraft = true;
       paintBoard(); paintPalette(); updateSelection(); say('シールを しまったよ。また かざれるよ');
     } });
     undoButton = el('button.btn.world-undo', { type: 'button', text: '↶ ひとつ もどす', onclick: undoEdit });
     doneButton = el('button.btn.world-done', { type: 'button', text: '✨ できあがり', onclick(){
-      selected = null; draft = null; picker.open = false; paintBoard(); updateSelection();
+      selected = null; draft = null; pendingDraft = false; picker.open = false; paintBoard(); updateSelection();
       say('すてきな しまに なったね。また いつでも かざれるよ');
     } });
     actions = el('div.world-edit-actions', null, placeButton, removeButton, undoButton, doneButton);
@@ -14061,7 +14211,7 @@ const StickerWorld = (() => {
   }
   function render(){
     build();
-    if (selected && !owned().includes(selected)){ selected = null; draft = null; undo = null; }
+    if (selected && !owned().includes(selected)){ selected = null; draft = null; undo = null; pendingDraft = false; }
     paintBoard(); paintPalette(); updateSelection();
     hint.textContent = selected ? 'しまを タップ。やじるしと エンターでも おけるよ'
       : '「シールを えらぶ」から、すきな シールを えらぼう';
@@ -14075,7 +14225,8 @@ const StickerWorld = (() => {
     if (item) item = Store.worldKey(item);
     undo = null;
     if (item && owned().includes(item)){
-      selected = item; draft = Store.stickerWorld().items[item] || { x: 50, y: 50 }; filter = 'all';
+      const placed = Store.stickerWorld().items[item];
+      selected = item; draft = placed ? {x:placed.x,y:placed.y} : {x:50,y:50}; pendingDraft = !placed; filter = 'all';
     }
     render(); UI.show('sticker-world');
     picker.open = !selected;
@@ -16420,23 +16571,45 @@ const Levels = (() => {
     titleEl.textContent = g.ico + '　' + g.name;
     clear(chestEl); chestEl.append(Treasures.card(g.world));
     clear(listEl);
+    const round = Store.round(), pending = Session.pendingSummaries().filter(p=>p.kind==='session');
+    const activate = (control, action) => {
+      if (!control.isConnected || control.disabled || UI.currentName()!=='levels') return;
+      if (Store.round() !== round){ render(g,{homeOrigin:null}); UI.show('levels'); return; }
+      Sound.sfx.tap(); action();
+    };
     g.levels.forEach((lv, i) => {
       const stars = Store.stars(g.id, i);
       const unlocked = Store.levelUnlocked(g.id, i);
       const goldKey = g.id + ':' + i + ':g';
       const gold = Store.hasSticker(goldKey);
+      const info = ShortProgress.describe(g.id,i);
+      const saved = pending.find(p=>p.gameId===g.id && p.levelIndex===i);
+      const shortSaved = saved && saved.mode==='first' ? saved : null;
+      const courseSaved = saved && saved.mode==='level' ? saved : null;
+      const n = lv.n || 8;
+      const kind = courseSaved && !courseSaved.remaining ? 'course'
+        : shortSaved || info && info.visible ? 'short'
+        : g.intro !== false && !Store.introduced(g.id,i) ? 'preview' : 'course';
+      const courseLabel = courseSaved ? courseSaved.remaining ? 'コースの つづき　あと '+courseSaved.remaining+'もん'
+        : 'コースの けっかを みる' : n+'もんの コース';
+      const label = kind==='short' ? shortSaved ? shortSaved.remaining===0 ? 'けっかを みる'
+        : shortSaved.remaining===1 ? 'つづきの 1もん' : 'つづきから　あと '+shortSaved.remaining+'もん' : info.nextLabel
+        : kind==='preview' ? 'あそびかたを えらぶ' : courseLabel;
+      const startShort = () => shortSaved ? FirstSteps.resume(shortSaved,g,i) : ShortProgress.start(g,i);
+      const startCourse = () => courseSaved ? Session.resume(courseSaved) : Session.startLevel(g,i);
       const card = el('button.levelcard' + (unlocked ? '' : '.locked') + (gold ? '.gold' : ''), {
-        type: 'button', dataset:{levelIndex:String(i), levelAction:'play'}, style: { '--lc': g.color },
+        type: 'button', dataset:{levelIndex:String(i), levelAction:'play',levelKind:kind}, style: { '--lc': g.color },
         title: lv.t + (gold ? '　きんの シールを ゲット' : '　きんの シールは まだ'),
-        onclick(){
-          Sound.sfx.tap();
+        onclick(){ activate(this,()=>{
           if (!unlocked){ Sound.say('前のレベルをクリアすると、遊べるよ。', { delay: 120 }); return; }
-          if (g.intro !== false && !Store.introduced(g.id, i)) FirstSteps.open(g, i);
-          else Session.startLevel(g, i);
-        }
+          if (kind==='short') startShort();
+          else if (kind==='preview') FirstSteps.open(g,i);
+          else startCourse();
+        }); }
       },
         el('div.num', { text: unlocked ? String(i + 1) : '🔒' }),
-        el('div.body', null, el('div.t', { text: lv.t }), el('div.d', { text: lv.d })),
+        el('div.body', null, el('div.t', { text: lv.t }), el('div.d', { text: lv.d }),
+          unlocked ? el('b.level-next-action',{text:label}) : null),
         // ★★★ is "all right first time"; this is "and without counting"
         Store.isSwift(g.id, i) ? el('span.swiftmark', { title: 'すぐ こたえられた', text: '⚡️' }) : null,
         UI.stars(stars),
@@ -16446,14 +16619,23 @@ const Levels = (() => {
       const entry = el('div.level-entry', null, card);
       if (unlocked && g.intro !== false) entry.append(el('button.btn.first-retry', {
         type: 'button', dataset:{levelIndex:String(i), levelAction:'preview'}, 'aria-label': lv.t + 'の やりかたを みる', title: 'もういちど やりかたを みる',
-        onclick(){ Sound.sfx.tap(); FirstSteps.open(g, i); }
+        onclick(){ activate(this,()=>FirstSteps.open(g,i)); }
       }, '👀'));
       const short = Store.shortStatus(g.id, i);
       const progress = ShortProgress.render(g.id, i, {compact:true});
       if (progress) entry.append(progress);
+      if (unlocked && kind==='short'){
+        const course = FirstSteps.longCourse(g,i);
+        course.classList.add('level-normal-course');
+        $('summary',course).textContent=courseSaved ? n+'もんコースの つづき' : 'まとめて '+n+'もん あそぶとき';
+        const original=$('button',course);
+        original.replaceWith(el('button.btn.btn-accent',{type:'button',text:courseLabel,
+          dataset:{levelIndex:String(i),levelAction:'course'},onclick(){activate(this,startCourse);}}));
+        entry.append(course);
+      }
       if (unlocked && (short.canStartGold || short.goldActive)) entry.append(el('button.btn.gold-short-start', {
         type:'button', dataset:{levelIndex:String(i), levelAction:'gold'}, 'aria-label':lv.t + 'で ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel,
-        onclick(){ Sound.sfx.tap(); ShortProgress.start(g, i, {gold:true}); }
+        onclick(){ activate(this,()=>shortSaved && short.goldActive ? FirstSteps.resume(shortSaved,g,i) : ShortProgress.start(g,i,{gold:true})); }
       }, '✨ ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel));
       listEl.append(entry);
     });
@@ -16461,13 +16643,17 @@ const Levels = (() => {
   }
   function captureReturn(levelIndex){
     const focused = document.activeElement;
+    const course = listEl.querySelector('.levelcard[data-level-index="'+levelIndex+'"]')?.closest('.level-entry')?.querySelector('.level-normal-course');
     return {round:Store.round(), gameId:game.id, levelIndex, scroll:listEl.scrollTop, homeOrigin,
+      courseOpen:!!(course && course.open),
       action:focused && focused.dataset.levelIndex === String(levelIndex) ? focused.dataset.levelAction : 'preview'};
   }
   function returnToList(saved){
     const g = saved && saved.round === Store.round() && Games.byId[saved.gameId];
     if (!g || !g.levels[saved.levelIndex]){ Home.returnToMap(null); return; }
     render(g, {homeOrigin:saved.homeOrigin});
+    const course = listEl.querySelector('.levelcard[data-level-index="'+saved.levelIndex+'"]')?.closest('.level-entry')?.querySelector('.level-normal-course');
+    if (course) course.open=!!saved.courseOpen;
     UI.show('levels', {focus:false}); listEl.scrollTop = saved.scroll;
     requestAnimationFrame(() => {
       if (UI.currentName() !== 'levels' || saved.round !== Store.round()) return;

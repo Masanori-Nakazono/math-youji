@@ -319,7 +319,7 @@ const FirstSteps = (() => {
   function startOne(game, levelIndex, independent, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
     build(); active = { game, levelIndex, opts:withOrigin(game, levelIndex, opts) };
-    Session.startFirst(game, levelIndex, independent || Store.introduced(game.id, levelIndex)
+    Session.startFirst(game, levelIndex, independent || game.intro === false || Store.introduced(game.id, levelIndex)
       ? Store.shortStatus(game.id, levelIndex).phase : 'afterShow');
   }
   function startGold(game, levelIndex, opts){
@@ -327,6 +327,13 @@ const FirstSteps = (() => {
     build(); active = {game, levelIndex, opts:withOrigin(game, levelIndex, opts)};
     // The engine settles any completed checkpoint before starting a fresh goal.
     Session.startFirst(game, levelIndex, 'independent', {gold:true});
+  }
+  function resume(choice, game, levelIndex, opts){
+    if (!game || !game.levels[levelIndex] || !choice || choice.kind !== 'session' || choice.mode !== 'first'
+        || choice.gameId !== game.id || choice.levelIndex !== levelIndex){ active = null; return false; }
+    build(); active = {game,levelIndex,opts:withOrigin(game,levelIndex,opts)};
+    if (Session.resume(choice)) return true;
+    active = null; return false;
   }
   function open(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
@@ -415,7 +422,7 @@ const FirstSteps = (() => {
     }
     Sound.say(finishSpeech, { delay: 200 });
   }
-  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, longCourse, build, open, startOne, startGold, finish, get active(){ return active; } };
+  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, longCourse, build, open, startOne, startGold, resume, finish, get active(){ return active; } };
 })();
 
 const ProgressAlbum = (() => {
@@ -706,7 +713,7 @@ const StickerWorld = (() => {
   ];
   let node, board, palette, hint, selectedBar, picker, pickerSummary, filterBar, empty, actions;
   let placeButton, removeButton, undoButton, doneButton, selected = null, draft = null, undo = null;
-  let filter = 'recent', bookOrigin = null;
+  let filter = 'recent', bookOrigin = null, pendingDraft = false;
 
   function owned(){
     return Store.ownedStickerKeys().filter(k => {
@@ -733,18 +740,55 @@ const StickerWorld = (() => {
   }
   // A percentage describes the centre of the card. Its actual artwork, name and
   // round badge must all fit, including when a saved island opens on a phone.
-  function safePosition(k, x, y){
-    const w = board.clientWidth, h = board.clientHeight;
-    if (!w || !h) return { x, y };
+  function cardSize(k){
     let art = Array.from(board.querySelectorAll('.world-sticker')).find(n => n.dataset.worldKey === k), probe;
     if (!art){
       probe = stickerButton(k); probe.tabIndex = -1; probe.style.visibility = 'hidden';
       board.append(probe); art = probe;
     }
-    const edgeX = Math.min(50, (art.offsetWidth / 2 + 5) / w * 100);
-    const edgeY = Math.min(50, (art.offsetHeight / 2 + 5) / h * 100);
+    const size = {width:art.offsetWidth, height:art.offsetHeight};
     if (probe) probe.remove();
+    return size;
+  }
+  function safePosition(k, x, y, size){
+    const w = board.clientWidth, h = board.clientHeight;
+    if (!w || !h) return { x, y };
+    const card = size || cardSize(k);
+    const edgeX = Math.min(50, (card.width / 2 + 5) / w * 100);
+    const edgeY = Math.min(50, (card.height / 2 + 5) / h * 100);
     return { x: clamp(x, edgeX, 100 - edgeX), y: clamp(y, edgeY, 100 - edgeY) };
+  }
+  const samePoint = (a, b) => Math.abs(a.x - b.x) < .01 && Math.abs(a.y - b.y) < .01;
+  function initialPosition(k){
+    const w = board.clientWidth, h = board.clientHeight;
+    if (!w || !h) return null;
+    const size = cardSize(k), items = Store.stickerWorld().items, keys = owned();
+    const rect = (p, card) => ({left:p.x / 100 * w - card.width / 2,
+      top:p.y / 100 * h - card.height / 2, width:card.width, height:card.height});
+    const occupied = Object.keys(items).filter(key => keys.includes(key)).map(key => {
+      const card = cardSize(key); return rect(safePosition(key, items[key].x, items[key].y, card), card);
+    });
+    // A fixed candidate set bounds the work even when every free space is full.
+    // Only the new preview moves; existing saved arrangements remain untouched.
+    const candidates = [{x:50,y:50}];
+    for (let row = 0; row <= 6; row++) for (let col = 0; col <= 6; col++) candidates.push({x:col / 6 * 100,y:row / 6 * 100});
+    let best = null;
+    candidates.forEach(candidate => {
+      const p = safePosition(k, candidate.x, candidate.y, size), box = rect(p, size);
+      const overlap = occupied.reduce((sum, other) => sum
+        + Math.max(0, Math.min(box.left + box.width + 3, other.left + other.width + 3) - Math.max(box.left - 3, other.left - 3))
+        * Math.max(0, Math.min(box.top + box.height + 3, other.top + other.height + 3) - Math.max(box.top - 3, other.top - 3)), 0);
+      const distance = Math.pow((p.x - 50) * w / 100, 2) + Math.pow((p.y - 50) * h / 100, 2);
+      if (!best || overlap < best.overlap - .01 || Math.abs(overlap - best.overlap) < .01 && distance < best.distance - .01)
+        best = {p, overlap, distance};
+    });
+    return best.p;
+  }
+  function prepareDraft(){
+    if (!pendingDraft || !selected || !draft) return;
+    const position = initialPosition(selected);
+    // The untouched automatic preview follows the available space on rotation.
+    if (position) draft = position;
   }
   function fitPlaced(){
     if (!board || !board.clientWidth || !board.clientHeight) return;
@@ -754,17 +798,17 @@ const StickerWorld = (() => {
       if (!p) return;
       const safe = safePosition(k, p.x, p.y);
       n.style.left = safe.x + '%'; n.style.top = safe.y + '%';
-      if (Math.abs(safe.x - p.x) > .01 || Math.abs(safe.y - p.y) > .01) Store.putWorldSticker(k, safe.x, safe.y);
     });
+    prepareDraft();
     moveCursor();
   }
   function moveCursor(){
     const cursor = board.querySelector('.world-position');
     if (!cursor || !selected || !draft) return;
-    draft = safePosition(selected, draft.x, draft.y);
+    const position = safePosition(selected, draft.x, draft.y);
     const placed = Store.stickerWorld().items[selected];
-    cursor.hidden = !!placed && Math.abs(placed.x - draft.x) < .01 && Math.abs(placed.y - draft.y) < .01;
-    cursor.style.left = draft.x + '%'; cursor.style.top = draft.y + '%';
+    cursor.hidden = !!placed && samePoint(safePosition(selected, placed.x, placed.y), position);
+    cursor.style.left = position.x + '%'; cursor.style.top = position.y + '%';
     board.setAttribute('aria-label', itemName(selected) + 'の おきばしょ。やじるしで うごかして、エンターで おく');
   }
   function paintBoard(){
@@ -833,19 +877,27 @@ const StickerWorld = (() => {
   }
   function choose(k){
     if (!owned().includes(k)) return;
-    selected = k; draft = Store.stickerWorld().items[k] || { x: 50, y: 50 };
+    const placed = Store.stickerWorld().items[k];
+    selected = k; draft = placed ? {x:placed.x,y:placed.y} : {x:50,y:50}; pendingDraft = !placed;
     picker.open = false; paintBoard(); updateSelection();
     say(itemName(k) + '。しまを タップするか、やじるしで ばしょを えらぼう');
     Sound.sfx.tap();
   }
   function place(x, y){
     if (!selected || !owned().includes(selected)) return;
-    const before = Store.stickerWorld().items[selected] || null, p = safePosition(selected, x, y);
-    if (before && Math.abs(before.x - p.x) < .01 && Math.abs(before.y - p.y) < .01){
+    const before = Store.stickerWorld().items[selected] || null, requested = {x,y};
+    if (before && samePoint(before, requested)){
       say('ここに かざってあるよ。できあがりなら「できあがり」を おしてね'); return;
     }
+    const p = safePosition(selected, x, y);
+    // A horizontal key does not rewrite a vertically clamped logical position.
+    if (before){
+      if (Math.abs(before.x - x) < .01) p.x = before.x;
+      if (Math.abs(before.y - y) < .01) p.y = before.y;
+    }
+    if (before && samePoint(before, p)) return;
     if (!Store.putWorldSticker(selected, p.x, p.y)) return;
-    undo = { key: selected, before }; draft = p;
+    undo = { key: selected, before }; draft = p; pendingDraft = false;
     Sound.sfx.place(); paintBoard(); paintPalette(); updateSelection();
     say('おけたね。うごかしたり、ひとつ もどしたり できるよ');
   }
@@ -856,7 +908,7 @@ const StickerWorld = (() => {
     else if (owned().includes(previous.key)){
       if (previous.before) Store.putWorldSticker(previous.key, previous.before.x, previous.before.y);
       else Store.removeWorldSticker(previous.key);
-      selected = previous.key; draft = previous.before || { x: 50, y: 50 };
+      selected = previous.key; draft = previous.before ? {x:previous.before.x,y:previous.before.y} : {x:50,y:50}; pendingDraft = !previous.before;
     }
     paintBoard(); paintPalette(); updateSelection(); say('ひとつ もどしたよ');
   }
@@ -866,9 +918,17 @@ const StickerWorld = (() => {
       'aria-describedby': 'world-instructions',
       onkeydown(e){
         if (e.target !== board || !selected || !draft) return;
+        prepareDraft();
         const step = e.shiftKey ? 10 : 5;
         const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
-        if (delta){ e.preventDefault(); draft = safePosition(selected, draft.x + delta[0], draft.y + delta[1]); moveCursor(); }
+        if (delta){
+          e.preventDefault(); const position = safePosition(selected, draft.x, draft.y);
+          const next = safePosition(selected, position.x + delta[0], position.y + delta[1]);
+          if (!samePoint(position, next)) pendingDraft = false;
+          if (delta[0] && Math.abs(next.x - position.x) >= .01) draft = {x:next.x,y:draft.y};
+          if (delta[1] && Math.abs(next.y - position.y) >= .01) draft = {x:draft.x,y:next.y};
+          moveCursor();
+        }
         else if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); place(draft.x, draft.y); }
       }
     });
@@ -882,16 +942,16 @@ const StickerWorld = (() => {
       })));
     pickerSummary = el('summary');
     picker = el('details.world-picker', { ontoggle(){ if (picker.open) scrollSelected(); } }, pickerSummary, filterBar, palette, empty);
-    placeButton = el('button.btn.btn-accent.world-place', { type: 'button', onclick(){ if (draft) place(draft.x, draft.y); } });
+    placeButton = el('button.btn.btn-accent.world-place', { type: 'button', onclick(){ prepareDraft(); if (draft) place(draft.x, draft.y); } });
     removeButton = el('button.btn.world-remove', { type: 'button', text: '📦 しまう', onclick(){
       const before = selected && Store.stickerWorld().items[selected];
       if (!before || !Store.removeWorldSticker(selected)) return;
-      undo = { key: selected, before }; draft = { x: 50, y: 50 };
+      undo = { key: selected, before }; draft = { x: 50, y: 50 }; pendingDraft = true;
       paintBoard(); paintPalette(); updateSelection(); say('シールを しまったよ。また かざれるよ');
     } });
     undoButton = el('button.btn.world-undo', { type: 'button', text: '↶ ひとつ もどす', onclick: undoEdit });
     doneButton = el('button.btn.world-done', { type: 'button', text: '✨ できあがり', onclick(){
-      selected = null; draft = null; picker.open = false; paintBoard(); updateSelection();
+      selected = null; draft = null; pendingDraft = false; picker.open = false; paintBoard(); updateSelection();
       say('すてきな しまに なったね。また いつでも かざれるよ');
     } });
     actions = el('div.world-edit-actions', null, placeButton, removeButton, undoButton, doneButton);
@@ -933,7 +993,7 @@ const StickerWorld = (() => {
   }
   function render(){
     build();
-    if (selected && !owned().includes(selected)){ selected = null; draft = null; undo = null; }
+    if (selected && !owned().includes(selected)){ selected = null; draft = null; undo = null; pendingDraft = false; }
     paintBoard(); paintPalette(); updateSelection();
     hint.textContent = selected ? 'しまを タップ。やじるしと エンターでも おけるよ'
       : '「シールを えらぶ」から、すきな シールを えらぼう';
@@ -947,7 +1007,8 @@ const StickerWorld = (() => {
     if (item) item = Store.worldKey(item);
     undo = null;
     if (item && owned().includes(item)){
-      selected = item; draft = Store.stickerWorld().items[item] || { x: 50, y: 50 }; filter = 'all';
+      const placed = Store.stickerWorld().items[item];
+      selected = item; draft = placed ? {x:placed.x,y:placed.y} : {x:50,y:50}; pendingDraft = !placed; filter = 'all';
     }
     render(); UI.show('sticker-world');
     picker.open = !selected;
