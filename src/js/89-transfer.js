@@ -20,10 +20,12 @@ const TransferAdventure = (() => {
       get reward(){ return stickerFor('transfer:5'); }, goal: 'ひきざんの おはなしを つくろう' }
   ];
   let node, body, heading, back, speech = '', run = null, question = null, exitArmed = false;
+  let workspaceReady = false, renderVersion = 0;
   const key = id => 'transfer:' + id;
   const missionFor = k => /^transfer:[0-5]$/.test(k) ? missions[Number(k.split(':')[1])] : null;
   function saveVisit(){
     if (!run || !question) return;
+    captureWorkspace();
     const next=question.done ? run.step+1 : run.step;
     Store.setPref('transferSession',JSON.parse(JSON.stringify({at:Date.now(),run:{id:run.id,step:next,results:run.results},q:question.done?null:question})));
   }
@@ -32,14 +34,54 @@ const TransferAdventure = (() => {
     return s ? {kind:'transfer',at:s.at,title:missions[s.run.id].title,done:s.run.step,remaining:QUESTIONS-s.run.step} : null;
   }
   function resume(){
-    const s=Store.data.transferSession;
+    const s=normalizeTransferSession(Store.data.transferSession);
     if (!s || !unlocked()) return false;
-    const saved=JSON.parse(JSON.stringify(s)); build(); UI.show('transfer'); run=saved.run; question=saved.q;
+    const saved=JSON.parse(JSON.stringify(s)); workspaceReady=false;
+    build(); UI.show('transfer'); run=saved.run; question=saved.q;
     if(run.step===QUESTIONS) finish();
     else if(question){exitArmed=false;renderQuestion();say(prompt());}
     else nextQuestion();
     return true;
   }
+
+  function workspace(){
+    return normalizeTransferWorkspace(question && question.workspace, question && question.supported)
+      || {v:1,scrollTop:0,focusKey:null,hintVisible:!!(question && question.supported)};
+  }
+  function captureWorkspace(source){
+    if (!run || !question || question.done) return;
+    const view = workspace();
+    if (workspaceReady && !exitArmed && body && UI.currentName() === 'transfer'){
+      view.scrollTop = body.scrollTop;
+      const control = source && body.contains(source) ? source : document.activeElement;
+      if (control && body.contains(control) && control.dataset.work) view.focusKey = control.dataset.work;
+    }
+    question.workspace = view;
+    return view;
+  }
+  function workingControl(focusKey){
+    if (!focusKey) return null;
+    let control = $$('[data-work]', body).find(b => b.dataset.work === focusKey && !b.disabled);
+    if (!control && /^piece:/.test(focusKey)){
+      const side = focusKey.split(':')[1];
+      control = $$('[data-work]', body).find(b => b.dataset.work.startsWith('piece:' + side + ':') && !b.disabled)
+        || $('.transfer-piece:not(:disabled)', body);
+    }
+    if (!control && ['increase','decrease'].includes(focusKey)) control = $('.transfer-controls button:not(:disabled)', body);
+    return control;
+  }
+  function startStage(){
+    const view = workspace();
+    question.workspace = {v:1,scrollTop:0,focusKey:null,hintVisible:view.hintVisible};
+    workspaceReady = false;
+    renderQuestion();
+  }
+  function saveWorkingVisit(){
+    if (!run || !question || question.done || UI.currentName() !== 'transfer') return;
+    saveVisit(); Store.flush();
+  }
+  window.addEventListener('pagehide', saveWorkingVisit);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveWorkingVisit(); });
 
   function progress(){
     const slots = Progress.gateSlots('pre').concat(Progress.gateSlots('g1'));
@@ -90,22 +132,25 @@ const TransferAdventure = (() => {
         + '問（' + (r.independent + r.revised + r.supported) + '問中）' })));
   }
   function say(text){ speech = text; Sound.say(text, { delay: 80 }); }
-  function button(text, fn, className){
-    return el('button.btn.' + (className || 'btn-ghost'), { type: 'button', text,
-      onclick(){ exitArmed = false; Sound.sfx.tap(); fn(); } });
+  function button(text, fn, className, focusKey){
+    const b = el('button.btn.' + (className || 'btn-ghost'), { type: 'button', text,
+      onclick(event){ exitArmed = false; Sound.sfx.tap(); fn(event); } });
+    if (focusKey) b.dataset.work = focusKey;
+    return b;
   }
   function build(){
     if (node) return;
     body = el('div.transfer-body');
+    body.addEventListener('scroll', () => { if (workspaceReady && !exitArmed && run && question && !question.done) saveVisit(); }, {passive:true});
     heading = el('h2');
     back = el('button.btn.btn-ghost.btn-round', { type: 'button', text: '←' });
     back.setAttribute('aria-label', 'もどる');
     back.addEventListener('click', () => {
       if (run && !exitArmed){
+        saveVisit();
         exitArmed = true;
         let note = $('.transfer-exit', body);
         if (!note){ note = el('p.transfer-exit', { role: 'status' }); body.prepend(note); }
-        saveVisit();
         note.textContent = 'ここで やすむ？ ← を もういちど おすと もどるよ。つづきは のこるよ。';
         say('ここで休む？続きは残るよ。戻るをもう一度押してね。');
       } else if (run){ run = null; menu(); }
@@ -115,6 +160,8 @@ const TransferAdventure = (() => {
     UI.register('transfer', node);
   }
   function menu(){
+    UI.clearResultActions(node);
+    workspaceReady = false; renderVersion++;
     exitArmed = false; run = null; clear(body);
     heading.textContent = 'さんすうの ぼうけん';
     body.append(el('div.transfer-intro', null, el('span.transfer-eyebrow', { text: 'ぜんぶ クリアした きみへ' }),
@@ -157,6 +204,8 @@ const TransferAdventure = (() => {
       supported: false, mistakes: 0, done: false, subject: m.thing };
     if (m.kind === 'split') question.left = total;
     if (m.kind === 'sub') { question.a = total; question.b = ri(2, total - 2); }
+    question.workspace = {v:1,scrollTop:0,focusKey:null,hintVisible:false};
+    workspaceReady = false;
     exitArmed = false;
     renderQuestion(); say(prompt());
   }
@@ -173,12 +222,21 @@ const TransferAdventure = (() => {
   function objects(n, symbol){
     return Array.from({ length: n }, () => el('span.transfer-object', { text: symbol, 'aria-hidden': 'true' }));
   }
-  function feedback(text){
-    $('.transfer-feedback', body).textContent = text; say(text);
+  function feedback(text, includeHint=false){
+    const message = text + (includeHint && workspace().hintVisible ? ' ' + hintText() : '');
+    const field = $('.transfer-feedback', body);
+    field.setAttribute('role','status'); field.setAttribute('aria-live','polite');
+    field.textContent = message; say(message);
   }
-  function renderQuestion(){
-    const focusLabel = body.contains(document.activeElement) ? document.activeElement.getAttribute('aria-label') : null;
-    clear(body); body.scrollTop = 0;
+  function renderQuestion(options={}){
+    UI.clearResultActions(node);
+    const view = captureWorkspace(options.source) || workspace();
+    const priorControl = options.source || workingControl(view.focusKey);
+    const anchorY = workspaceReady && priorControl && body.contains(priorControl)
+      ? priorControl.getBoundingClientRect().top : null;
+    const version = ++renderVersion, currentRun = run;
+    workspaceReady = false;
+    clear(body);
     const m = missions[run.id], q = question;
     heading.textContent = m.title;
     body.append(el('div.transfer-progress', { text: '●'.repeat(run.step) + '○'.repeat(QUESTIONS - run.step), 'aria-label': (run.step + 1) + 'もんめ／５もん' }),
@@ -193,9 +251,10 @@ const TransferAdventure = (() => {
       if (q.previous !== null) scene.append(el('p.transfer-memory', { text: 'さっきは ' + q.previous + ' と ' + (q.total - q.previous) + '。いれかえるだけではない わけかたに しよう。' }));
       const plates = el('div.transfer-plates');
       [q.left, q.total - q.left].forEach((n, side) => {
-        const items = el('div.transfer-items', null, Array.from({ length: n }, () => el('button.transfer-piece', {
+        const items = el('div.transfer-items', null, Array.from({ length: n }, (_, i) => el('button.transfer-piece', {
           type: 'button', text: m.thing, 'aria-label': (side === 0 ? 'くまさん' : 'うさぎさん') + 'に １つ うつす',
-          onclick(){ if (q.done) return; exitArmed = false; q.left += side === 0 ? -1 : 1; Sound.sfx.tap(); renderQuestion(); }
+          dataset:{work:'piece:' + side + ':' + i},
+          onclick(event){ if (q.done) return; exitArmed = false; q.left += side === 0 ? -1 : 1; Sound.sfx.tap(); renderQuestion({source:event.currentTarget}); }
         })));
         plates.append(el('div.transfer-plate', null,
           el('strong', { text: (side === 0 ? '🐰 うさぎさん' : '🐻 くまさん') + '　' + n + m.unit }), items));
@@ -207,7 +266,8 @@ const TransferAdventure = (() => {
         scene.append(el('div.transfer-subjects', null, el('span', { text: 'だれの おはなし？' }),
           subjects.map((s, i) => el('button.btn.btn-ghost', { type: 'button', text: s,
             'aria-label': (m.kind === 'add' ? ['あひる', 'うさぎ', 'ひよこ'] : ['ちょうちょ', 'とり', 'はち'])[i] + 'の おはなし',
-            'aria-pressed': String(q.subject === s), onclick(){ q.subject = s; renderQuestion(); } }))));
+            'aria-pressed': String(q.subject === s), dataset:{work:'subject:' + i},
+            onclick(event){ q.subject = s; renderQuestion({source:event.currentTarget}); } }))));
       }
       const count = !q.phase ? q.value : m.kind === 'add' ? q.a + q.value : q.a - q.value;
       scene.append(el('div.transfer-items', { 'aria-label': 'いま ' + count }, objects(count, q.subject)));
@@ -215,25 +275,44 @@ const TransferAdventure = (() => {
       scene.append(el('p', { text: (q.phase ? (m.kind === 'add' ? 'あそびにきた：' : 'とんでいった：') : 'はじめに：') + q.value }),
         controls(!q.phase ? 10 : m.kind === 'sub' ? q.a : 10 - q.a));
     }
-    body.append(scene, el('p.transfer-feedback', { role: 'status', 'aria-live': 'polite' }),
-      el('div.transfer-actions', null, button('👀 ヒント', hint),
-        button('できた！ たしかめる', check, 'btn-accent.transfer-check')));
-    if (focusLabel){
-      const replacement = $$('button', body).find(b => b.getAttribute('aria-label') === focusLabel && !b.disabled);
-      if (replacement) replacement.focus({ preventScroll: true });
-    }
+    const helpVisible = view.hintVisible && q.supported;
+    body.append(scene, el('p.transfer-feedback', helpVisible
+      ? {role:'note',text:hintText()} : {role:'status','aria-live':'polite'}),
+      el('div.transfer-actions', null, button('👀 ヒント', hint, null, 'hint'),
+        button('できた！ たしかめる', check, 'btn-accent.transfer-check', 'check'),
+        helpVisible ? button('いっしょに つくる', example, 'btn-ghost.transfer-example', 'example') : null));
+    let restoredScroll = view.scrollTop;
+    const restoreView = () => {
+      if (version !== renderVersion || run !== currentRun || question !== q || q.done) return;
+      body.scrollTop = restoredScroll;
+      const target = workingControl(view.focusKey);
+      if (target){
+        target.focus({preventScroll:true});
+        if (anchorY !== null) body.scrollTop += target.getBoundingClientRect().top - anchorY;
+        else {
+          const r = target.getBoundingClientRect(), pane = body.getBoundingClientRect();
+          if (r.top < pane.top || r.bottom > pane.bottom) target.scrollIntoView({block:'nearest'});
+        }
+      }
+      restoredScroll = body.scrollTop;
+      workspaceReady = true;
+      captureWorkspace(target);
+      saveVisit();
+    };
+    restoreView();
+    requestAnimationFrame(restoreView);
     saveVisit();
   }
   function controls(max){
     return el('div.transfer-controls', null,
       el('button.btn.btn-ghost', { type: 'button', text: '−１', 'aria-label': '１つ もどす', disabled: question.value === 0,
-        onclick(){ if (question.done) return; exitArmed = false; question.value--; renderQuestion(); } }),
+        dataset:{work:'decrease'},
+        onclick(event){ if (question.done) return; exitArmed = false; question.value--; renderQuestion({source:event.currentTarget}); } }),
       el('button.btn.btn-ghost', { type: 'button', text: '＋１', 'aria-label': '１つ うごかす', disabled: question.value >= max,
-        onclick(){ if (question.done) return; exitArmed = false; question.value++; renderQuestion(); } }));
+        dataset:{work:'increase'},
+        onclick(event){ if (question.done) return; exitArmed = false; question.value++; renderQuestion({source:event.currentTarget}); } }));
   }
-  function hint(){
-    question.supported = true;
-    saveVisit();
+  function hintText(){
     const m = missions[run.id], q = question;
     let text;
     if (m.kind === 'fill') text = 'はじめの ' + q.a + ' から、' + q.total + ' まで、１つずつ ふやしてみよう。';
@@ -242,19 +321,25 @@ const TransferAdventure = (() => {
       : 'どちらも からっぽに せず、さっきと ちがう かずに してみよう。';
     else text = !q.phase ? 'しきの はじめの ' + q.a + ' が、さいしょに いる かずだよ。'
       : (m.kind === 'add' ? '＋は あそびにくる かず。' : '−は とんでいく かず。') + q.b + ' かい、＋１を おしてみよう。';
-    feedback(text);
-    if (!$('.transfer-example', body)) $('.transfer-actions', body).append(button('いっしょに つくる', example, 'btn-ghost.transfer-example'));
+    return text;
   }
-  function example(){
+  function hint(event){
+    if (!question || question.done) return;
+    question.supported = true;
+    question.workspace = Object.assign(workspace(), {hintVisible:true});
+    renderQuestion({source:event && event.currentTarget});
+    feedback(hintText());
+  }
+  function example(event){
     question.supported = true;
     const m = missions[run.id], q = question;
     if (m.kind === 'split'){
       q.left = Array.from({ length: q.total - 1 }, (_, i) => i + 1).find(n => q.previous === null
         || Math.min(n, q.total - n) !== Math.min(q.previous, q.total - q.previous));
     } else q.value = m.kind === 'fill' ? q.total - q.a : q.phase ? q.b : q.a;
-    renderQuestion();
+    renderQuestion({source:event && event.currentTarget});
     feedback(m.kind === 'split' ? q.left + ' と ' + (q.total - q.left) + ' に わけたよ。ならびを みて、たしかめよう。'
-      : q.value + ' うごかしたよ。ならびを みて、たしかめよう。');
+      : q.value + ' うごかしたよ。ならびを みて、たしかめよう。', true);
   }
   function check(){
     const m = missions[run.id], q = question;
@@ -271,7 +356,7 @@ const TransferAdventure = (() => {
         : q.left === 0 || q.left === q.total ? 'ふたりとも １ついじょう もらえるように してみよう。'
           : 'それは さっきと おなじ くみあわせだね。べつの かずに わけてみよう。';
       if (correct && q.previous === null){
-        q.previous = q.left; renderQuestion(); feedback('ひとつ できたね！ こんどは べつの わけかたを つくろう。'); return;
+        q.previous = q.left; startStage(); feedback('ひとつ できたね！ こんどは べつの わけかたを つくろう。', true); return;
       }
     } else {
       correct = q.value === (q.phase ? q.b : q.a);
@@ -280,7 +365,7 @@ const TransferAdventure = (() => {
         + (m.kind === 'add' ? ' あそびにきたよ。' : ' とんでいったよ。')
         + q.a + (m.kind === 'add' ? ' ＋ ' : ' − ') + q.b + ' ＝ ' + (m.kind === 'add' ? q.a + q.b : q.a - q.b)
         + '。おはなしが できたね！' : 'しきの ' + (q.phase ? 'ふたつめ' : 'はじめ') + 'の かずを みて、うごかしてみよう。';
-      if (correct && !q.phase){ q.phase = 1; q.value = 0; renderQuestion(); say(prompt()); return; }
+      if (correct && !q.phase){ q.phase = 1; q.value = 0; startStage(); say(prompt()); return; }
     }
     if (!correct){
       q.mistakes++; feedback(message);
@@ -289,13 +374,16 @@ const TransferAdventure = (() => {
       return;
     }
     q.done = true;
+    workspaceReady = false;
     run.results.push(q.supported ? 'supported' : q.mistakes ? 'revised' : 'independent');
     Store.countToday(1);
     saveVisit();
     $$('.transfer-scene button', body).forEach(b => { b.disabled = true; });
     feedback(message);
     const actions = clear($('.transfer-actions', body));
+    const completedStep = run.step;
     actions.append(button(run.step === QUESTIONS - 1 ? 'けっかを みる ✦' : 'つぎへ ▶', () => {
+      if (!run || question !== q || !q.done || run.step !== completedStep) return;
       if (++run.step === QUESTIONS) finish(); else nextQuestion();
     }, 'btn-accent.transfer-next'));
   }
@@ -326,6 +414,8 @@ const TransferAdventure = (() => {
         button('ぼうけんを えらぶ', menu),
         TextbookReview.unlocked() ? button('ほんを うらがえす', () => TextbookReview.open(), 'btn-accent') : null,
         Store.round() === 1 && Rounds.unlocked() ? button('２しゅうめへ', () => Rounds.go(2), 'btn-accent') : null)));
+    const actions = $('.transfer-result .transfer-actions', body), choices = Array.from(actions.children);
+    UI.resultActions(node, actions, {end:choices[1], primary:choices[0]});
     if (fresh) UI.confetti(45);
     say(fresh ? m.reward + 'の、特別なシールをもらったよ！自分の島に飾れるよ。'
       : passed ? '５問中' + record.independent + '問、じぶんでできたね！'

@@ -22,6 +22,25 @@ function transferSessionValid(s){
     && (q.previous===null || integer(q.previous,10)) && typeof q.supported==='boolean'
     && q.done===false && typeof q.subject==='string' && q.subject.length<=8;
 }
+/* Working position is optional presentation state, separate from evidence of
+   independent work. A damaged position must not erase an unfinished answer. */
+function normalizeTransferWorkspace(value, supported){
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.v !== 1
+    || !Number.isFinite(value.scrollTop) || value.scrollTop < 0 || value.scrollTop > 100000
+    || !(value.focusKey === null || typeof value.focusKey === 'string'
+      && /^(?:increase|decrease|hint|example|check|subject:[0-2]|piece:[01]:[0-9])$/.test(value.focusKey))
+    || typeof value.hintVisible !== 'boolean' || value.hintVisible && !supported) return null;
+  return {v:1,scrollTop:value.scrollTop,focusKey:value.focusKey,hintVisible:value.hintVisible};
+}
+function normalizeTransferSession(value){
+  if (!transferSessionValid(value)) return null;
+  const saved = JSON.parse(JSON.stringify(value));
+  if (saved.q){
+    const workspace = normalizeTransferWorkspace(saved.q.workspace, saved.q.supported);
+    if (workspace) saved.q.workspace = workspace; else delete saved.q.workspace;
+  }
+  return saved;
+}
 const reviewRecordValid = (k, v) => !!v && typeof v === 'object' && !Array.isArray(v)
   && (/^r2:(?:[0-9]|1[0-9])$/.test(k) || /^r2chapter:[0-4]$/.test(k))
   && Number.isInteger(v.day) && v.day >= 0 && Number.isSafeInteger(v.at) && v.at >= 0
@@ -427,8 +446,10 @@ const Store = (() => {
         for (const [k, v] of Object.entries(record.reviewRecords)){
           if (!reviewRecordValid(k, v)){ delete record.reviewRecords[k]; bent = true; }
         }
-        if (record.transferSession !== null && !transferSessionValid(record.transferSession)){
-          record.transferSession=null; bent=true;
+        if (record.transferSession !== null){
+          const visit = normalizeTransferSession(record.transferSession);
+          if (JSON.stringify(visit) !== JSON.stringify(record.transferSession)) bent = true;
+          record.transferSession = visit;
         }
         if (record.savedSession !== null){
           const visit = normalizeSavedSession(record.savedSession);
@@ -604,8 +625,9 @@ const Store = (() => {
       };
     }
     if (data.transferSession !== undefined && data.transferSession !== null){
-      if (!transferSessionValid(data.transferSession)){if (!startup) return null;}
-      else out.transferSession=JSON.parse(JSON.stringify(data.transferSession));
+      const visit = normalizeTransferSession(data.transferSession);
+      if (!visit){if (!startup) return null;}
+      else out.transferSession = visit;
     }
     if (data.savedSession !== undefined && data.savedSession !== null){
       const visit = normalizeSavedSession(data.savedSession);
@@ -760,7 +782,7 @@ const Store = (() => {
     /* Merging a historical backup must not resurrect a visit finished since it
        was exported. Only replacement restores the backup's interrupted visit. */
     out.savedSession = normalizeSavedSession(base.savedSession);
-    out.transferSession = transferSessionValid(base.transferSession) ? JSON.parse(JSON.stringify(base.transferSession)) : null;
+    out.transferSession = normalizeTransferSession(base.transferSession);
     out.reviewSession = normalizeReviewSession(base.reviewSession);
     // A course is one coherent snapshot, never a sum of two copies of a backup.
     out.shortCourses = {};

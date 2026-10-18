@@ -28,6 +28,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
   const s=await state(page);assert.equal(s.gold,true);assert.equal(s.stars,3);assert.equal(s.plays,1);
   assert.deepEqual(await page.locator('#first-finish .short-rewards .pokemon-sticker').evaluateAll(ns=>ns.map(n=>n.dataset.stickerKey)),['count:0','count:0:g']);
   assert.equal(await page.locator('#first-finish .short-rewards .pokemon-name').count(),2);
+  await page.locator('#first-finish .result-more > summary').click();
   await page.getByRole('button',{name:'しまに はる',exact:true}).click();assert.equal(await page.evaluate(()=>KazuApp.UI.currentName()),'sticker-world');
   assert.equal(await page.locator('.world-palette-sticker.selected [data-sticker-key="count:0:g"]').count(),1);
  });
@@ -70,6 +71,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
  });
  await scenario('gold rewards and retry controls fit a phone and a tablet',async page=>{
   await ordinary(page);await page.locator('.gold-short-start').click();await fixtureAnswer(page,'11111111');await day(page,1);await fixtureAnswer(page,'11');await start(page);await solve(page);
+  await page.locator('#first-finish .result-more > summary').click();
   for(const width of [320,390,1024]){await page.setViewportSize({width,height:width===1024?768:740});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.equal(await page.getByRole('button',{name:'しまに はる',exact:true}).isVisible(),true);await page.locator('#first-finish').screenshot({path:`/tmp/math-youji-short-gold-${width}.png`,animations:'disabled'});}
  });
  assert.deepEqual(errors,[]);console.log('PASS '+passed+' short-gold browser scenarios; no browser exceptions');

@@ -88,7 +88,11 @@ const server = http.createServer((req, res) => {
         [...document.querySelectorAll('#play .plate, #play .choice')]
           .find(p => Number(p.dataset.count || p.textContent) !== answer).click();
         document.querySelector('#play .showbtn').click();
-        return {item:T.item, question:K.Store.savedSession().question,
+        // A hint can register an empty optional board draft after its evidence
+        // checkpoint. This test compares scoring; test-question-drafts covers
+        // the child's actual work, including hint boards, across reload.
+        const {draft, ...question} = K.Store.savedSession().question;
+        return {item:T.item, question,
           seed:K.Store.savedSession().plan[0].seed,
           choices:[...document.querySelectorAll('#play .plate, #play .choice')].map(p => p.dataset.count || p.textContent)};
       });
@@ -96,7 +100,8 @@ const server = http.createServer((req, res) => {
       await reload(page);
       const after = await page.evaluate(() => {
         const K = KazuApp; K.Session.resume();
-        return {item:K.Session._test.item, question:K.Store.savedSession().question,
+        const {draft, ...question} = K.Store.savedSession().question;
+        return {item:K.Session._test.item, question,
           seed:K.Store.savedSession().plan[0].seed,
           choices:[...document.querySelectorAll('#play .plate, #play .choice')].map(p => p.dataset.count || p.textContent)};
       });

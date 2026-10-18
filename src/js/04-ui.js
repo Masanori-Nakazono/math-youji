@@ -5,6 +5,7 @@
 
 const UI = (() => {
   const screens = {};
+  const resultHandlers = new WeakMap();
   let stage = null, fx = null, current = null;
 
   function init(){
@@ -49,6 +50,52 @@ const UI = (() => {
     return n;
   }
   const currentName = () => current;
+
+  /* Keep the actual result controls (and their handlers) in one visible dock.
+     Rewards can scroll independently; auxiliary choices do not crowd out rest. */
+  function clearResultActions(screen){
+    if (!screen) return;
+    Array.from(screen.children).filter(n => n.classList.contains('result-dock')).forEach(n => n.remove());
+    screen.classList.remove('has-result-dock');
+  }
+  function resultActions(screen, actions, opts){
+    const o = opts || {}, choices = Array.from(actions.children), buttons = choices.filter(n => n.tagName === 'BUTTON');
+    const end = o.end, primary = o.primary && o.primary !== end ? o.primary : buttons.find(b => b !== end);
+    clearResultActions(screen);
+    clear(actions); actions.classList.add('result-dock');
+    actions.setAttribute('role', 'group'); actions.setAttribute('aria-label', 'つぎの あそびと おわりかた');
+    const row = el('div.result-dock-row');
+    if (primary){ primary.dataset.resultAction = 'continue'; }
+    if (end){ end.dataset.resultAction = 'end'; }
+    const leadingEnd = end && end.classList.contains('btn-accent');
+    (leadingEnd ? [end, primary] : [primary, end]).filter(Boolean).forEach(b => row.append(b));
+    actions.append(row);
+    const rest = choices.filter(b => b !== end && b !== primary);
+    if (rest.length){
+      const summary = el('summary', {text:'ほかの あそび ▾'});
+      const more = el('details.result-more', null, summary, el('div.result-options', null, rest));
+      more.addEventListener('toggle', () => { summary.textContent = more.open ? 'とじる ▴' : 'ほかの あそび ▾'; });
+      more.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && more.open){ e.preventDefault(); more.open = false; summary.focus({preventScroll:true}); }
+      });
+      actions.append(more);
+    }
+    // A double activation on a control that has just navigated away must never
+    // start another run, count a second completion, or place another reward.
+    let activated = false;
+    const previousHandler = resultHandlers.get(actions);
+    if (previousHandler) actions.removeEventListener('click', previousHandler, true);
+    const activate = e => {
+      const button = e.target.closest('button');
+      if (!button || !actions.contains(button)) return;
+      if (button.disabled) return;
+      if (activated || screen.hidden || current !== screen.id){ e.preventDefault(); e.stopImmediatePropagation(); return; }
+      activated = true;
+    };
+    resultHandlers.set(actions, activate); actions.addEventListener('click', activate, true);
+    screen.classList.add('has-result-dock'); screen.append(actions);
+    return actions;
+  }
 
   /* ---------- feedback ---------- */
   const CRAYONS = ['--c-red','--c-orange','--c-yellow','--c-green','--c-blue','--c-purple','--c-pink'];
@@ -343,6 +390,6 @@ const UI = (() => {
     return { bindItem, bindTarget, clearSel, select, get selected(){ return selected; } };
   }
 
-  return { init, register, show, currentName, confetti, bigMark, stars, makeDragDrop, screens,
+  return { init, register, show, currentName, resultActions, clearResultActions, confetti, bigMark, stars, makeDragDrop, screens,
            fitPlayfield, watchFit };
 })();

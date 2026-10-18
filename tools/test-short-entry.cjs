@@ -93,6 +93,7 @@ const server = http.createServer((req,res) => {
         await solve(page);assert.equal((await state(page)).status.answered,1);
         assert.equal((await state(page)).stars,0);assert.equal((await state(page)).plays,0);
         if(entrance==='book'){
+          await page.locator('#first-finish .result-more > summary').click();
           await page.locator('#first-finish .first-choose').click();
           assert.equal(await page.evaluate(()=>KazuApp.UI.currentName()),'book');
         }
@@ -141,10 +142,12 @@ const server = http.createServer((req,res) => {
     await scenario('choosing another activity never marks the day ended and an ended day stays ended',async page=>{
       await page.evaluate(()=>KazuApp.Store.markIntroduced('count',0));await mission(page);
       await page.locator('#sticker-mission .sticker-mission-go').click();await solve(page);
+      await page.locator('#first-finish .result-more > summary').click();
       await page.locator('#first-finish .first-choose').click();
       assert.equal(await page.evaluate(()=>KazuApp.UI.currentName()),'home');assert.equal((await state(page)).ended,false);
       assert.equal(await page.locator('#home .home-more').evaluate(n=>n.open),true);
       await page.evaluate(()=>{KazuApp.Home.endToday();KazuApp.FirstSteps.startOne(KazuApp.Games.byId.count,0,true);});await solve(page);
+      await page.locator('#first-finish .result-more > summary').click();
       await page.locator('#first-finish .first-choose').click();assert.equal((await state(page)).ended,true);
       await page.evaluate(()=>KazuApp.Home.render());assert.equal(await page.locator('#home .home-more').evaluate(n=>n.open),false);
       assert.equal(await page.locator('#home .home-primary').isVisible(),false);
@@ -161,6 +164,7 @@ const server = http.createServer((req,res) => {
       const saved=await page.locator('#book .book').evaluate(n=>n.scrollTop);assert.ok(saved>0);
       await target.click();await page.locator('#book-detail .book-play').click();await solve(page);
       assert.equal((await state(page)).status.goldStatus.independentRun,1);assert.equal((await state(page)).stars,2);
+      await page.locator('#first-finish .result-more > summary').click();
       await page.locator('#first-finish .first-choose').click();
       assert.equal(await page.evaluate(()=>KazuApp.UI.currentName()),'book');
       assert.equal(await page.locator('#book [data-filter="gold"]').getAttribute('aria-pressed'),'true');
@@ -173,6 +177,7 @@ const server = http.createServer((req,res) => {
       await fixture(page,'11111111');await page.evaluate(()=>window.__entryDay=1);await fixture(page,'11');
       await book(page);await page.locator('#book-detail .book-play').click();await solve(page);
       assert.equal((await state(page)).status.confirmed,true);
+      await page.locator('#first-finish .result-more > summary').click();
       await page.locator('#first-finish .first-choose').click();
       assert.equal(await page.evaluate(()=>KazuApp.UI.currentName()),'book');
       assert.equal(await page.locator('#book [data-book-key="count:0"]').evaluate(n=>n.classList.contains('got')),true);

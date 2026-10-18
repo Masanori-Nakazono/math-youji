@@ -2520,7 +2520,12 @@
       d.primary = ((q('#result .result-actions .primary .bl') || {}).textContent) || '';
       d.drill = qa('#result .result-actions .bl').some(b => b.textContent === 'とっくん する');
       d.tried = !!q('#result .tried') && !q('#result .bigstars') && !q('#result .result-sub');
-      d.tall = qa('#result .result-actions .btn').every(b => b.getBoundingClientRect().height >= 63.5);
+      const more = q('#result .result-more');
+      if (more) more.open = true;
+      // This synchronous suite observes screenIn's initial .985 transform.
+      // Check the layout size here; real rendered hit targets are also tested
+      // after animation in test-result-actions.cjs at four viewport sizes.
+      d.tall = qa('#result .result-actions .btn').every(b => b.offsetHeight >= 64);
       d.spoken = log.join(' ');
       log.length = 0;
       const speak = q('#result > .speakbtn');

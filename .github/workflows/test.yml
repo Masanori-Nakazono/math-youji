@@ -67,6 +67,14 @@ jobs:
           NAVIGATION_RETURN_HTML=dist/kazu-no-bouken.html node tools/test-navigation-return.cjs
           NAVIGATION_RETURN_HTML=dist/artifact.html node tools/test-navigation-return.cjs
 
+      - name: Verify visible result actions, repeat activity and stable adventures
+        run: |
+          RESULT_ACTIONS_HTML=dist/kazu-no-bouken.html node tools/test-result-actions.cjs
+          RESULT_ACTIONS_HTML=dist/artifact.html node tools/test-result-actions.cjs
+          node tools/test-album-recency.cjs
+          TRANSFER_WORKSPACE_HTML=dist/kazu-no-bouken.html node tools/test-transfer-workspace.cjs
+          TRANSFER_WORKSPACE_HTML=dist/artifact.html node tools/test-transfer-workspace.cjs
+
       - name: Verify one-question learning and later-day mastery checks
         run: |
           node tools/test-short-store.cjs

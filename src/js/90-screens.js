@@ -752,7 +752,7 @@ const Result = (() => {
     }
     if (r.milestone){
       inner.append(el('button.result-milestone', { type: 'button',
-        onclick(){ Sound.sfx.tap(); ProgressAlbum.open(); } },
+        onclick(event){ Sound.sfx.tap(); ProgressAlbum.open({key:'play:' + r.milestone.gameId + ':' + r.milestone.levelIndex, fromResult:event.currentTarget}); } },
         el('span', { text: '📒', 'aria-hidden': 'true' }),
         el('span', { text: (r.milestone.label ? r.milestone.label + '　' : '')
           + Store.milestoneText(r.milestone.kind) })));
@@ -892,6 +892,8 @@ const Result = (() => {
     inner.append(actions);
     if (TextbookReview.unlocked()) actions.append(act('', '📖', 'ほんを うらがえす', () => TextbookReview.open()));
     if (Store.round() === 1 && Rounds.unlocked()) actions.append(act('', '🚀', '２しゅうめへ', () => Rounds.go(2)));
+    UI.resultActions(node, actions, {end:homeBtn,
+      primary:$('.primary', actions) !== homeBtn ? $('.primary', actions) : null});
     UI.show('result', { replace: true });
     const news = (coloured.length ? 'シールに、色がついたね！' : '')
       + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '')

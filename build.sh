@@ -35,7 +35,7 @@ node --check "$TMP/bundle.js"
 # ---- 1. Artifact build: body-level content only (host supplies doctype/head/body)
 {
   cat src/head.html
-  echo '<style>'; cat src/styles.css src/sticker-world.css src/mission-resume.css src/progress-album.css; echo '</style>'
+  echo '<style>'; cat src/styles.css src/sticker-world.css src/mission-resume.css src/progress-album.css src/result-actions.css; echo '</style>'
   cat src/body.html
   echo '<script>'; sed 's|</script>|<\\/script>|g' "$TMP/bundle.js"; echo '</script>'
 } > dist/artifact.html
@@ -62,7 +62,7 @@ HEAD
     "$(base64 < src/icon-180.png | tr -d '\n')"
   cat src/head.html
   echo '<style>html,body{margin:0;padding:0}img{max-width:100%}[hidden]{display:none!important}</style>'
-  echo '<style>'; cat src/styles.css src/sticker-world.css src/mission-resume.css src/progress-album.css; echo '</style>'
+  echo '<style>'; cat src/styles.css src/sticker-world.css src/mission-resume.css src/progress-album.css src/result-actions.css; echo '</style>'
   echo '</head>'
   echo '<body>'
   cat src/body.html

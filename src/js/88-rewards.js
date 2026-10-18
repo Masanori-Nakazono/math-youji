@@ -401,6 +401,8 @@ const FirstSteps = (() => {
     if (milestone && milestone.label) info.append(el('small', { text: '📒 ' + milestone.label }));
     if (short) info.append(el('details.first-home-mission', null,
       el('summary', { text: '🏡 おうちで あそぶ（やりたい ときに）' }), Missions.resultCard(game.id)));
+    const end = Array.from(actions.children).find(b => /きょうは ここまで/.test(b.textContent));
+    UI.resultActions(result, actions, {end, primary:phase === 'show' ? actions.firstElementChild : $('.first-next', actions)});
     UI.show('first-finish', { replace: true });
     finishSpeech = doneText + '。' + (short && status.lastResult === 'confirmed'
       ? '別の日もできたね。シールが完成したよ。' : short && status.waiting ? '確かめは、また別の日にしよう。' : '')
@@ -418,7 +420,7 @@ const FirstSteps = (() => {
 
 const ProgressAlbum = (() => {
   const FILTERS = [ ['recent', 'さいきん'], ['play', 'あそび'], ['adventure', 'ぼうけん'], ['book', 'ほん'] ];
-  let node, cards, filters, count, selected = 'recent';
+  let node, cards, filters, count, selected = 'recent', origin = null;
   /* day is a local calendar date encoded as a UTC day number by Store. Reading
      its UTC components preserves that actual date even after changing zones. */
   function date(day){
@@ -436,8 +438,8 @@ const ProgressAlbum = (() => {
     const groups = new Map();
     const add = (key, type, title, icon, entry) => {
       if (!validDay(entry.day)) return;
-      if (!groups.has(key)) groups.set(key, {key, type, title, icon, entries:[]});
-      groups.get(key).entries.push(entry);
+      if (!groups.has(key)) groups.set(key, {key, type, title, icon, entries:[], activity:[]});
+      groups.get(key)[entry.activity ? 'activity' : 'entries'].push(entry);
     };
     [1, 2].forEach(round => {
       const source = Store.roundData(round);
@@ -449,6 +451,16 @@ const ProgressAlbum = (() => {
         add('play:' + match[1] + ':' + match[2], 'play', g.name + '　' + lv.t, g.ico,
           {round, day:m.day, rank:Store.milestoneRank(match[3]), text:Store.milestoneText(match[3]),
             label:typeof m.label === 'string' ? m.label : ''});
+      });
+      // last is an actual observation day, including a familiar question met in
+      // daily practice or a short visit. It proves activity, not independence,
+      // a completed course, or a series of historical attempts.
+      Object.entries(source.last || {}).forEach(([key, day]) => {
+        const match = /^([a-z0-9]+):(\d+)$/.exec(key);
+        const game = match && Games.byId[match[1]], level = game && game.levels[Number(match[2])];
+        if (!level) return;
+        add('play:' + key, 'play', game.name + '　' + level.t, game.ico,
+          {round, day, activity:true});
       });
       Object.entries(source.transferRecords || {}).forEach(([key, r]) => {
         const mission = TransferAdventure.missionFor('transfer:' + key);
@@ -470,17 +482,24 @@ const ProgressAlbum = (() => {
     });
     return Array.from(groups.values()).map(group => {
       group.entries.sort((a, b) => a.day - b.day || a.round - b.round || a.rank - b.rank);
-      group.latest = group.entries[group.entries.length - 1];
+      group.activity.sort((a, b) => a.round - b.round);
+      group.latest = group.entries[group.entries.length - 1] || null;
+      group.firstDay = group.entries.length ? group.entries[0].day : null;
+      group.activityDay = group.activity.length ? Math.max(...group.activity.map(e => e.day)) : null;
+      group.sortDay = Math.max(group.latest ? group.latest.day : 0, group.activityDay === null ? 0 : group.activityDay);
       return group;
-    }).sort((a, b) => b.latest.day - a.latest.day || a.title.localeCompare(b.title, 'ja'));
+    }).sort((a, b) => b.sortDay - a.sortDay || a.title.localeCompare(b.title, 'ja'));
   }
   function entrySpeech(entry){
     return date(entry.day).speech + '。' + roundText(entry.round) + '。'
       + (entry.label ? entry.label + '。' : '') + entry.text + '。';
   }
+  function activitySpeech(entry){
+    return roundText(entry.round) + '。さいごに あそんだひは、' + date(entry.day).speech + '。';
+  }
   function card(group){
-    const latest = group.latest, d = date(latest.day);
-    const rounds = Array.from(new Set(group.entries.map(e => e.round))).sort().map(roundText);
+    const latest = group.latest, d = date(group.activityDay === null ? latest.day : group.activityDay);
+    const rounds = Array.from(new Set(group.entries.concat(group.activity).map(e => e.round))).sort().map(roundText);
     const history = el('div.album-history');
     group.entries.forEach(entry => {
       const ed = date(entry.day);
@@ -489,21 +508,35 @@ const ProgressAlbum = (() => {
         entry.label ? el('small.album-entry-label', {text:entry.label}) : null,
         el('p', {text:entry.text})));
     });
+    const activity = group.activity.map(entry => {
+      const day = date(entry.day);
+      return el('div.album-last-played', {dataset:{round:entry.round}},
+        el('b', {text:'さいごに あそんだひ'}),
+        el('span', null, el('time', {datetime:day.iso, text:day.text}), '　' + roundText(entry.round)));
+    });
     return el('details.album-card', {dataset:{albumKey:group.key, albumType:group.type}, ontoggle(event){
       $('.album-expand', event.currentTarget).textContent = event.currentTarget.open ? 'きろくを とじる ▴' : 'きろくを みる ▾';
     }},
       el('summary.album-summary', null,
         el('span.album-icon', {text:group.icon, 'aria-hidden':'true'}),
         el('span.album-card-copy', null, el('b', {text:group.title}),
-          el('span.album-latest', {text:latest.note || latest.text}),
-          el('span.album-date', null, el('time', {datetime:d.iso, text:d.text}),
+          el('span.album-latest', null, latest
+            ? [group.activityDay !== null ? el('small.album-past-label', {text:'これまでの きろく'}) : null,
+              el('span', {text:latest.note || latest.text})]
+            : 'あそんだ きろくが あるよ'),
+          el('span.album-date', null, group.activityDay !== null ? el('span.album-date-label', {text:'さいごに あそんだひ'}) : null,
+            el('time', {datetime:d.iso, text:d.text}),
             rounds.map(text => el('span.album-round', {text}))),
           el('span.album-expand', {text:'きろくを みる ▾'}))),
       el('div.album-card-body', null,
         el('button.album-read.btn.btn-ghost', {type:'button', text:'🔊 きろくを よむ',
           'aria-label':group.title + 'の きろくを よむ', onclick(){
-            Sound.sfx.tap(); Sound.say(group.title + '。' + group.entries.map(entrySpeech).join(''), {delay:80});
+            Sound.sfx.tap(); Sound.say(group.title + '。' + group.entries.map(entrySpeech).join('')
+              + group.activity.map(activitySpeech).join(''), {delay:80});
           }}),
+        group.type === 'play' && group.firstDay !== null ? el('p.album-first-date', null,
+          'はじめての きろく　', el('time', {datetime:date(group.firstDay).iso, text:date(group.firstDay).text})) : null,
+        activity,
         history,
         group.type !== 'play' ? el('p.album-record-note', {text:'それぞれの しゅうの、さいごに あそんだ きろくだよ'}) : null));
   }
@@ -531,15 +564,52 @@ const ProgressAlbum = (() => {
     node = el('div#progress-album', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){ Sound.sfx.tap(); back(); } }, '←'),
         el('h2', { text: 'できたアルバム' }),
         speakBtn(() => 'できたことを、いっしょに見てみよう。')),
       el('p.album-intro', { text: 'ちいさな「できた」を あつめたよ' }), filters, count, cards);
     return UI.register('progress-album', node);
   }
-  function open(){
+  function captureResult(button){
+    const screen = button && button.closest && button.closest('#result');
+    if (!screen || !button.isConnected || UI.currentName() !== 'result') return null;
+    const scroll = [];
+    for (let n = button.parentElement; n; n = n.parentElement){
+      scroll.push({node:n, top:n.scrollTop, left:n.scrollLeft});
+      if (n === screen) break;
+    }
+    return {screen, button, scroll, round:Store.round()};
+  }
+  function back(){
+    const saved = origin; origin = null;
+    if (!saved || saved.round !== Store.round() || !saved.button.isConnected
+        || saved.button.closest('#result') !== saved.screen){
+      Home.render(); UI.show('home', {replace:true}); return;
+    }
+    // Reuse the completed result verbatim. Result.show would repeat effects and
+    // rebuild buttons; this return must neither grade nor award anything.
+    UI.show('result', {replace:true, keepScroll:true, focus:false});
+    const restore = () => {
+      if (UI.currentName() !== 'result' || saved.round !== Store.round() || !saved.button.isConnected) return;
+      saved.scroll.forEach(s => { s.node.scrollTop = s.top; s.node.scrollLeft = s.left; });
+      saved.button.focus({preventScroll:true});
+    };
+    restore(); requestAnimationFrame(restore);
+  }
+  function open(options){
+    const opts = options || {};
+    origin = captureResult(opts.fromResult);
     build(); selected = 'recent'; const n = render();
     UI.show('progress-album');
+    const target = typeof opts.key === 'string' && $$('.album-card', cards).find(card => card.dataset.albumKey === opts.key);
+    if (target){
+      target.open = true; target.classList.add('album-highlight');
+      requestAnimationFrame(() => {
+        if (UI.currentName() !== 'progress-album' || node.hidden || !target.isConnected) return;
+        const summary = $('summary', target);
+        summary.scrollIntoView({block:'start', behavior:'auto'}); summary.focus({preventScroll:true});
+      });
+    }
     Sound.say(n ? 'できたことを、いっしょに見てみよう。あそびを選ぶと、記録が見られるよ。'
       : 'まだ空っぽだよ。まずは見るだけでもいいよ。', { delay: 150 });
   }

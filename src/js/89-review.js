@@ -158,6 +158,7 @@ const TextbookReview = (() => {
     else say('準備ができた単元から、本で復習しよう。単元の中では、順番に進めるよ。');
   }
   function menu(){
+    UI.clearResultActions(node);
     closeSupport();run=null;q=null;exitArmed=false;clear(body);heading.textContent='うらの さんすう';
     const pending=pendingSummary();
     exitBtn.setAttribute('aria-label','ちずに もどる');
@@ -279,6 +280,7 @@ const TextbookReview = (() => {
     el('div.review-objects',{role:'img','aria-label':({animal:'くま',flower:'おはな',umbrella:'かさ'})[kind]+' '+n+'こ'},items(n,kind)));}
   function action(fn){if(q.done) return;exitArmed=false;Sound.sfx.tap();fn();renderQuestion(true);}
   function renderQuestion(restore=false){
+    UI.clearResultActions(node);
     checkpoint();
     exitBtn.setAttribute('aria-label','もくじに もどる');
     const focus=restore&&document.activeElement&&document.activeElement.getAttribute('data-focus');
@@ -550,6 +552,8 @@ const TextbookReview = (() => {
         has&&!pending?button('じぶんの しまに かざる',()=>StickerWorld.open(done.key)):null,
         button('もういちど あそぶ',()=>start(done.id,done.chapter,done.kind==='check'&&due(done.key))),button('ほんの もくじへ',menu),
         button('きょうは ここまで',()=>Home.endToday()))));
+    const actions = $('.review-result .review-actions', body), choices = Array.from(actions.children);
+    UI.resultActions(node, actions, {end:choices[choices.length - 1], primary:choices[0]});
     if(fresh||confirmed)UI.confetti(40);focusHeading();say((fresh?stickerFor(done.key)+'の シール。':'')+note);
   }
   return {open,unlocked,progress,earned,homeCard,collection,parentSummary,lessons,chapters,generate,lessonOpen,chapterOpen,preparation,chapterReady,rewardKeys,pendingSummary,resume,

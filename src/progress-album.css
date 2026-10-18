@@ -12,9 +12,11 @@
 #progress-album .album-icon{font-size:36px;flex:0 0 42px;text-align:center;}
 #progress-album .album-card-copy{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere;}
 #progress-album .album-card-copy b{font-size:max(16px,calc(var(--u)*1.2));line-height:1.5;}
-#progress-album .album-latest{font-size:max(16px,calc(var(--u)*1.15));line-height:1.45;}
+#progress-album .album-latest{display:grid;gap:3px;font-size:max(16px,calc(var(--u)*1.15));line-height:1.45;}
+#progress-album .album-past-label{font-size:14px;color:var(--ink-soft);}
 #progress-album .album-date{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:14px;color:var(--ink-soft);line-height:1.5;}
 #progress-album .album-date time,#progress-album .album-round{white-space:nowrap;}
+#progress-album .album-date-label{flex-basis:100%;}
 #progress-album .album-expand{font-size:14px;font-weight:800;}
 #progress-album .album-card-body{display:grid;gap:10px;padding:0 12px 12px;}
 #progress-album .album-card-body .album-read{min-height:48px;max-width:100%;white-space:normal;font-size:16px;}
@@ -25,6 +27,10 @@
 #progress-album .album-entry-label{font-size:14px;line-height:1.5;overflow-wrap:anywhere;}
 #progress-album .album-entry p{margin:0;font-size:16px;line-height:1.65;overflow-wrap:anywhere;}
 #progress-album .album-record-note{margin:0;font-size:14px;line-height:1.5;color:var(--ink-soft);}
+#progress-album .album-first-date{margin:0;font-size:14px;line-height:1.5;color:var(--ink-soft);}
+#progress-album .album-last-played{display:grid;gap:4px;padding:8px;border-radius:10px;background:var(--paper-2);font-size:14px;line-height:1.5;}
+#progress-album .album-last-played b,#progress-album .album-last-played span{font-size:14px;}
+#progress-album .album-highlight{border-color:var(--accent-ink);box-shadow:inset 0 0 0 2px var(--accent);}
 #progress-album .album-empty{font-size:16px;line-height:1.6;}
 #progress-album .album-summary:focus-visible,#progress-album .album-filter:focus-visible{outline:3px solid var(--c-blue);outline-offset:3px;}
 @media(max-width:370px){#progress-album .album-filters{grid-template-columns:repeat(2,minmax(0,1fr));}}
