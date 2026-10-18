@@ -1,0 +1,59 @@
+/* The island stays a canvas; choosing and editing do not compete for one row. */
+#sticker-world .world-workspace{
+  flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;
+  gap:10px;padding:0 3px 18px;scroll-padding-top:90px;
+}
+#sticker-world .world-selected{
+  position:sticky;top:0;z-index:4;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  gap:8px;min-height:74px;padding:6px 8px;border:2px solid var(--card-edge);border-radius:14px;
+  background:var(--card);box-sizing:border-box;box-shadow:var(--shadow-sm);
+}
+#sticker-world .world-selection{display:flex;align-items:center;gap:8px;min-width:0;}
+#sticker-world .world-selection>.pokemon-sticker{--pokemon-size:60px;--medal-size:60px;width:60px;padding:2px;border:0;flex:none;}
+#sticker-world .world-selection>.pokemon-sticker .pokemon-image{height:44px;}
+#sticker-world .world-selection .pokemon-name{display:none;}
+#sticker-world .world-selection-name{display:flex;flex-direction:column;gap:3px;min-width:0;line-height:1.35;}
+#sticker-world .world-selection-name small{font-size:11px;color:var(--ink-soft);}
+#sticker-world .world-selection-name b{font-size:16px;overflow-wrap:anywhere;}
+#sticker-world .world-selection-empty{font-size:16px;line-height:1.5;}
+#sticker-world .world-choose{flex:none;min-width:88px;max-width:112px;min-height:48px;padding:6px 9px;font-size:14px;line-height:1.4;}
+#sticker-world .sticker-world-board{flex:0 0 auto;height:clamp(180px,34vh,360px);min-height:180px;box-sizing:border-box;}
+#sticker-world .sticker-world-board:focus-visible{outline:3px solid var(--ring);outline-offset:-4px;}
+#sticker-world .world-sticker.selected{outline:3px solid var(--accent);outline-offset:1px;border-radius:14px;}
+#sticker-world .world-sticker .pokemon-sticker{--pokemon-size:clamp(64px,calc(var(--u)*7),120px);width:var(--pokemon-size);}
+#sticker-world .world-sticker .pokemon-sticker.transfer-sticker{--pokemon-size:clamp(64px,calc(var(--u)*8),120px);}
+#sticker-world .world-position{position:absolute;z-index:2;transform:translate(-50%,-50%);pointer-events:none;
+  display:grid;place-items:center;width:32px;height:32px;border:3px dashed var(--ink);border-radius:50%;
+  background:var(--card);color:var(--ink);font-size:24px;font-weight:900;line-height:1;opacity:.8;}
+#sticker-world .sticker-world-hint{min-height:36px;font-size:14px;line-height:1.5;text-align:center;}
+#sticker-world .world-edit-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:none;}
+#sticker-world .world-edit-actions .btn{min-width:0;min-height:48px;padding:7px 6px;font-size:15px;line-height:1.4;}
+#sticker-world .world-edit-actions .btn:disabled{opacity:.5;cursor:default;box-shadow:none;}
+#sticker-world .world-picker,#sticker-world .world-other-tools{flex:none;min-width:0;border:2px solid var(--card-edge);
+  border-radius:14px;background:var(--paper-2);padding:0 8px 8px;}
+#sticker-world .world-picker>summary,#sticker-world .world-other-tools>summary{min-height:48px;box-sizing:border-box;
+  padding:12px 3px;font-size:16px;font-weight:800;line-height:1.5;cursor:pointer;}
+#sticker-world details:not([open]){padding-bottom:0;}
+#sticker-world .world-picker-filters{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}
+#sticker-world .world-picker-filters .btn{min-height:48px;flex:1 1 75px;min-width:0;padding:5px 6px;font-size:13px;line-height:1.4;}
+#sticker-world .world-picker-filters .btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-crayon);}
+#sticker-world .sticker-world-palette{position:relative;display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));
+  align-content:start;gap:7px;min-height:0;max-height:310px;overflow-x:hidden;overflow-y:auto;padding:5px 4px 9px;box-sizing:border-box;}
+#sticker-world .world-palette-sticker,#sticker-world .world-palette-treasure{width:100%;min-width:0;min-height:84px;
+  padding:3px;box-sizing:border-box;}
+#sticker-world .world-palette-sticker .pokemon-sticker{--pokemon-size:72px;--medal-size:72px;width:100%;padding:2px;pointer-events:none;}
+#sticker-world .world-palette-sticker .pokemon-image{height:54px;}
+#sticker-world .world-palette-sticker .pokemon-name{font-size:11px;line-height:1.3;}
+#sticker-world .world-palette-sticker:focus-visible,#sticker-world .world-palette-sticker.selected{outline:3px solid var(--accent);outline-offset:-1px;border-radius:12px;}
+#sticker-world .world-picker-empty{font-size:15px;line-height:1.7;padding:4px 8px;}
+#sticker-world .sticker-world-tools .world-background,#sticker-world .world-job-open{min-height:48px;font-size:15px;padding:7px 10px;}
+#sticker-world .sticker-world-tools>span{width:100%;font-size:15px;}
+@media(min-width:700px){
+  #sticker-world .world-workspace{padding-inline:8%;}
+  #sticker-world .world-selection-name b{font-size:20px;}
+  #sticker-world .world-edit-actions{grid-template-columns:repeat(4,minmax(0,1fr));}
+  #sticker-world .sticker-world-palette{grid-template-columns:repeat(auto-fill,minmax(100px,1fr));}
+  #sticker-world .world-palette-sticker .pokemon-sticker{--pokemon-size:86px;--medal-size:86px;}
+  #sticker-world .world-palette-sticker .pokemon-image{height:64px;}
+  #sticker-world .world-palette-sticker .pokemon-name{font-size:13px;}
+}

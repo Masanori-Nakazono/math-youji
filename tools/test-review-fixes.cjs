@@ -126,7 +126,7 @@ const server = http.createServer((req, res) => {
       const initialLength = T.planLength;
       for (let guard = 0; K.UI.currentName() === 'play' && guard < 20; guard++){ T.forceCorrect(); T.flushTimers(); }
       K.Home.render();
-      const label = () => document.querySelector('#home .dailies > .daily:not(.recommended):not(.reviewmission):not(.focusset) .t').textContent;
+      const label = () => document.querySelector('#home .dailies > .daily:not(.recommended):not(.reviewmission):not(.mission-resume):not(.focusset) .t').textContent;
       const before = { count: S.todayCount(), practice: S.data.practice.slice(), done: S.practiceDoneToday(), label: label() };
       K.Session.startDaily(10); T.forceCorrect(); T.flushTimers();
       const back = document.querySelector('#play .backbtn'); back.click(); back.click();

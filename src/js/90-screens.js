@@ -146,7 +146,7 @@ const G1Preparation = (() => {
 
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
-  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl, roundsEl;
+  let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, missionResumeEl, voiceWarnEl, shelfEl, dailiesEl, questsEl, roundsEl;
   let primaryEl, choicesEl, moreEl, diagnosticEl;
   let contentEl, todayEl, todayHeading, endedEl, moreContent, moreSummary;
   let parentBtn;
@@ -178,6 +178,7 @@ const Home = (() => {
     dailyEl  = el('button.daily', { type: 'button', onclick(){ Sound.sfx.tap(); Session.startDaily(10); } });
     recommendEl = el('button.daily.recommended', { type:'button' });
     reviewEl = el('button.daily.reviewmission', { type: 'button', hidden: true });
+    missionResumeEl = el('button.daily.mission-resume', { type: 'button', hidden: true });
     voiceWarnEl = el('div.voice-warning', {
       hidden: true, role: 'status', 'aria-live': 'polite'
     });
@@ -208,7 +209,7 @@ const Home = (() => {
        padlocked cards in the 1ねんせい world carry the message now. */
     primaryEl = el('button.daily.home-primary', { type: 'button' });
     choicesEl = el('div.home-choices');
-    dailiesEl = el('div.dailies', null, recommendEl, dailyEl, reviewEl, focusEl);
+    dailiesEl = el('div.dailies', null, recommendEl, dailyEl, missionResumeEl, reviewEl, focusEl);
     questsEl = el('div.home-quests');
     roundsEl = el('div.home-rounds');
     diagnosticEl = el('button.daily.diagnostic', { type: 'button',
@@ -290,7 +291,10 @@ const Home = (() => {
       el('p.day-ending-bye', {text:'また あした あそぼう'}),
       el('div.day-ending-actions', null,
         el('button.btn.btn-ghost', {type:'button', text:'📒 できたアルバム', onclick(){ Sound.sfx.tap(); ProgressAlbum.open(); }}),
-        el('button.btn.btn-ghost', {type:'button', text:'🏡 じぶんの しま', onclick(){ Sound.sfx.tap(); StickerWorld.open(); }})));
+        el('button.btn.btn-ghost', {type:'button', text:'🏡 じぶんの しま', onclick(){ Sound.sfx.tap(); StickerWorld.open(); }})),
+      summary.total ? el('details.day-ending-mission', null,
+        el('summary', { text:'🏡 おうちで あそぶ（やりたい ときに）' }),
+        Missions.resultCard((summary.entries.find(e => e.gameId) || {}).gameId)) : null);
   }
   function endToday(){
     Store.endToday(); Store.flush();
@@ -427,15 +431,19 @@ const Home = (() => {
         if (ok){ voiceWarnEl.hidden = true; voiceWarnEl.textContent = ''; }
       });
     }
-    const review = Missions.yesterdayReview();
+    const homeMission = Missions.pending();
+    missionResumeEl.hidden = !homeMission;
+    if (homeMission) banner(missionResumeEl, '🏡', 'ミッションの つづき',
+      Missions.dateLabel(homeMission) + '・' + homeMission.text, () => Missions.open(homeMission));
+    const review = Missions.recentReview();
     reviewEl.hidden = !review;
     if (review){
       clear(reviewEl);
       reviewEl.append(
         el('div.ico', { text: BANNER_ICON.review, 'aria-hidden': 'true' }),
         el('div.grow', null,
-          el('div.t', { text: 'きのうの ミッション' }),
-          el('div.s', { text: 'どんな ふうに できたか おはなししよう' })),
+          el('div.t', { text: 'できたことの おはなし' }),
+          el('div.s', { text: Missions.dateLabel(review) + '・' + review.text })),
         el('div.go', { text: '▶' }));
       reviewEl.onclick = () => Missions.openReview(review);
     }
@@ -723,6 +731,14 @@ const Result = (() => {
     const rewardArt = x => {
       // Older debug fixtures may contain only the old display string.
       const key = x.key || PokemonStickers.keyForName(x.emoji);
+      const ownedKey = key && Store.worldKey(key);
+      if (ownedKey && Store.hasOwnedSticker(ownedKey)){
+        return el('button.result-sticker-place' + (x.pending ? '.pending' : ''), {
+          type: 'button', 'aria-label': PokemonStickers.reward(ownedKey).name + 'の シールを しまに はる',
+          dataset: { stickerKey: ownedKey },
+          onclick(){ Sound.sfx.tap(); StickerWorld.open(ownedKey); }
+        }, PokemonStickers.artwork(ownedKey), el('span', { text: '🏡 しまに はる' }));
+      }
       return key ? el('span' + (x.pending ? '.pending' : ''), null, PokemonStickers.artwork(key))
         : el('span', { text: x.emoji });
     };

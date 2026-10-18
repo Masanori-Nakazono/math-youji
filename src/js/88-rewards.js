@@ -389,6 +389,8 @@ const FirstSteps = (() => {
       () => startGold(game, levelIndex, origin)));
     actions.append(longCourse(game, levelIndex, origin));
     if (milestone && milestone.label) info.append(el('small', { text: '📒 ' + milestone.label }));
+    if (short) info.append(el('details.first-home-mission', null,
+      el('summary', { text: '🏡 おうちで あそぶ（やりたい ときに）' }), Missions.resultCard(game.id)));
     UI.show('first-finish', { replace: true });
     finishSpeech = doneText + '。' + (short && status.lastResult === 'confirmed'
       ? '別の日もできたね。シールが完成したよ。' : short && status.waiting ? '確かめは、また別の日にしよう。' : '')
@@ -527,7 +529,9 @@ const StickerWorld = (() => {
     { id: 'sea', label: 'うみ', icon: '🌊' },
     { id: 'sky', label: 'そら', icon: '☁️' }
   ];
-  let node, board, palette, hint, selected = null;
+  let node, board, palette, hint, selectedBar, picker, pickerSummary, filterBar, empty, actions;
+  let placeButton, removeButton, undoButton, doneButton, selected = null, draft = null, undo = null;
+  let filter = 'recent';
 
   function owned(){
     return Store.ownedStickerKeys().filter(k => {
@@ -544,45 +548,52 @@ const StickerWorld = (() => {
     if (k.replace(/^lap2:/,'').startsWith('transfer:')) art.classList.add('transfer-sticker');
     return art;
   };
-  function build(){
-    if (node) return node;
-    board = el('div.sticker-world-board', { role: 'application', 'aria-label': 'じぶんの しま' });
-    palette = el('div.sticker-world-palette');
-    hint = el('div.sticker-world-hint');
-    board.onclick = e => {
-      if (e.target.closest('.world-sticker')) return;
-      if (!selected){
-        Sound.say('下から、置きたいシールや宝物をえらんでね。', { delay: 40 });
-        return;
-      }
-      const r = board.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width * 100, y = (e.clientY - r.top) / r.height * 100;
-      if (Store.putWorldSticker(selected, x, y)){
-        Sound.sfx.place();
-        render();
-        Sound.say('おけたね。ほかのばしょにも、うごかせるよ。', { delay: 80 });
-      }
-    };
-    node = el('div#sticker-world', null,
-      el('div.topbar', null,
-        el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
-        el('h2', { text: 'じぶんの しま' }),
-        speakBtn(() => '集めたシールや宝物を、好きな場所に置けるよ。下から選んで、島をタップしよう。')),
-      el('div.sticker-world-tools', null,
-        el('span', { text: 'ばしょを えらぶ' }),
-        BACKGROUNDS.map(bg => el('button.world-background', { type: 'button', dataset: { background: bg.id },
-          onclick(){ Store.setStickerWorldBackground(bg.id); Sound.sfx.tap(); render(); }
-        }, bg.icon + ' ' + bg.label)),
-        el('button.btn.btn-accent.world-job-open', { type: 'button',
-          onclick(){ Sound.sfx.tap(); IslandJobs.open(); } }, '⛵️ しまの おしごと')),
-      board, hint, palette);
-    return UI.register('sticker-world', node);
+  function say(text){ hint.textContent = text; Sound.say(text, { delay: 60 }); }
+  function stickerButton(k){
+    return el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : '') + (selected === k ? '.selected' : ''), {
+      type: 'button', dataset: { worldKey: k }, 'aria-label': itemName(k) + 'を うごかす',
+      title: itemName(k) + 'を うごかす',
+      onclick(e){ e.stopPropagation(); choose(k); board.focus({ preventScroll: true }); }
+    }, itemArt(k));
   }
-  function render(){
-    build();
+  // A percentage describes the centre of the card. Its actual artwork, name and
+  // round badge must all fit, including when a saved island opens on a phone.
+  function safePosition(k, x, y){
+    const w = board.clientWidth, h = board.clientHeight;
+    if (!w || !h) return { x, y };
+    let art = Array.from(board.querySelectorAll('.world-sticker')).find(n => n.dataset.worldKey === k), probe;
+    if (!art){
+      probe = stickerButton(k); probe.tabIndex = -1; probe.style.visibility = 'hidden';
+      board.append(probe); art = probe;
+    }
+    const edgeX = Math.min(50, (art.offsetWidth / 2 + 5) / w * 100);
+    const edgeY = Math.min(50, (art.offsetHeight / 2 + 5) / h * 100);
+    if (probe) probe.remove();
+    return { x: clamp(x, edgeX, 100 - edgeX), y: clamp(y, edgeY, 100 - edgeY) };
+  }
+  function fitPlaced(){
+    if (!board || !board.clientWidth || !board.clientHeight) return;
+    const items = Store.stickerWorld().items;
+    board.querySelectorAll('.world-sticker').forEach(n => {
+      const k = n.dataset.worldKey, p = items[k];
+      if (!p) return;
+      const safe = safePosition(k, p.x, p.y);
+      n.style.left = safe.x + '%'; n.style.top = safe.y + '%';
+      if (Math.abs(safe.x - p.x) > .01 || Math.abs(safe.y - p.y) > .01) Store.putWorldSticker(k, safe.x, safe.y);
+    });
+    moveCursor();
+  }
+  function moveCursor(){
+    const cursor = board.querySelector('.world-position');
+    if (!cursor || !selected || !draft) return;
+    draft = safePosition(selected, draft.x, draft.y);
+    const placed = Store.stickerWorld().items[selected];
+    cursor.hidden = !!placed && Math.abs(placed.x - draft.x) < .01 && Math.abs(placed.y - draft.y) < .01;
+    cursor.style.left = draft.x + '%'; cursor.style.top = draft.y + '%';
+    board.setAttribute('aria-label', itemName(selected) + 'の おきばしょ。やじるしで うごかして、エンターで おく');
+  }
+  function paintBoard(){
     const world = Store.stickerWorld(), keys = owned();
-    if (selected && keys.indexOf(selected) < 0) selected = null;
     board.className = 'sticker-world-board ' + world.background;
     clear(board);
     board.append(el('span.world-starter.sun', { text: '☀️', 'aria-hidden': 'true' }),
@@ -591,27 +602,172 @@ const StickerWorld = (() => {
       board.append(el('span.world-job.boat', { text: '⛵️', title: 'つくった ふね' }));
     if (Store.islandJob('snack') && Store.islandJob('snack').completed)
       board.append(el('span.world-job.snack', { text: '🧺', title: 'つくった おやつ' }));
-    Object.keys(world.items).filter(k => keys.indexOf(k) >= 0).forEach(k => {
-      const p = world.items[k];
-      board.append(el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : ''), { type: 'button',
-        'aria-label': itemName(k) + 'を うごかす', title: itemName(k) + 'を うごかす', style: { left: p.x + '%', top: p.y + '%' },
-        onclick(e){ e.stopPropagation(); selected = k; render(); Sound.sfx.tap(); }
-      }, itemArt(k)));
+    Object.keys(world.items).filter(k => keys.includes(k)).forEach(k => {
+      const p = world.items[k], n = stickerButton(k);
+      n.style.left = p.x + '%'; n.style.top = p.y + '%'; board.append(n);
     });
+    if (selected && draft) board.append(el('span.world-position', { 'aria-hidden': 'true', text: '＋' }));
+    else board.setAttribute('aria-label', 'じぶんの しま。うごかす シールを えらべるよ');
     $$('.world-background', node).forEach(b => b.classList.toggle('selected', b.dataset.background === world.background));
+    fitPlaced();
+  }
+  function updateSelection(){
+    clear(selectedBar);
+    selectedBar.append(selected
+      ? el('div.world-selection', null, itemArt(selected), el('div.world-selection-name', null,
+        el('small', { text: 'えらんだ シール' }), el('b', { text: itemName(selected) }),
+        Store.ownedStickerPending(selected) ? el('small', { text: 'かりの シール' }) : null))
+      : el('b.world-selection-empty', { text: 'すきな シールを かざろう' }));
+    selectedBar.append(el('button.btn.world-choose', { type: 'button', text: selected ? 'えらびなおす' : 'シールを えらぶ',
+      onclick(){ picker.open = true; picker.scrollIntoView({ block: 'start', behavior: 'auto' });
+        const target = palette.querySelector('.selected') || palette.querySelector('button');
+        if (target) target.focus({ preventScroll: true }); scrollSelected(); }
+    }));
+    placeButton.hidden = removeButton.hidden = doneButton.hidden = !selected;
+    removeButton.disabled = !selected || !Store.stickerWorld().items[selected];
+    placeButton.textContent = selected && Store.stickerWorld().items[selected] ? 'ここに うごかす' : 'ここに おく';
+    undoButton.hidden = !undo; actions.hidden = !selected && !undo;
+    $$('.world-palette-sticker', palette).forEach(n => {
+      const active = n.dataset.worldKey === selected;
+      n.classList.toggle('selected', active); n.setAttribute('aria-pressed', String(active));
+    });
+  }
+  function scrollSelected(){
+    if (!picker.open) return;
+    const tile = palette.querySelector('.selected');
+    if (tile) palette.scrollTop = Math.max(0, tile.offsetTop - 6);
+  }
+  function paintPalette(){
+    const world = Store.stickerWorld(), keys = owned();
+    // Each lap appends new stickers to its own acquisition list. Keepsakes have
+    // no acquisition timestamp, so the recent filter does not invent their age.
+    const recent = Store.data.stickers.slice().reverse().map(k => Store.worldKey(k)).filter(k => keys.includes(k)).slice(0, 6);
+    const all = keys.slice().reverse();
+    const visible = filter === 'recent' ? recent : filter === 'unplaced' ? all.filter(k => !world.items[k]) : all;
     clear(palette);
-    keys.forEach(k => palette.append(el('button.world-palette-sticker' + (isTreasure(k) ? '.world-palette-treasure' : '') + (selected === k ? '.selected' : ''), {
-      type: 'button', title: itemName(k) + 'を おく', 'aria-label': itemName(k) + 'を おく', 'aria-pressed': String(selected === k),
-      onclick(){ selected = k; Sound.sfx.tap(); render(); Sound.say('島の置きたい場所をタップしてね。', { delay: 60 }); }
+    visible.forEach(k => palette.append(el('button.world-palette-sticker' + (isTreasure(k) ? '.world-palette-treasure' : '') + (selected === k ? '.selected' : ''), {
+      type: 'button', dataset: { worldKey: k }, title: itemName(k) + 'を おく',
+      'aria-label': itemName(k) + 'を おく', 'aria-pressed': String(selected === k),
+      onclick(){ choose(k); board.focus({ preventScroll: true }); board.scrollIntoView({ block: 'center', behavior: 'auto' }); }
     }, itemArt(k))));
-    hint.textContent = keys.length
-      ? (selected ? '🌟　しまの おきたい ばしょを タップしてね' : '下の シールや たからものを えらんで、しまに おこう')
-      : 'さいしょの シールを もらったら、ここに おけるよ';
+    empty.hidden = visible.length > 0;
+    empty.textContent = !keys.length ? 'さいしょの シールを もらったら、ここに おけるよ'
+      : filter === 'unplaced' ? 'どの シールも しまに かざってあるよ。「ぜんぶ」から えらびなおせるよ' : 'ここには まだ シールが ないよ';
+    pickerSummary.textContent = '🎨 シールを えらぶ（' + keys.length + 'まい）';
+    $$('button', filterBar).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.filter === filter)));
+  }
+  function choose(k){
+    if (!owned().includes(k)) return;
+    selected = k; draft = Store.stickerWorld().items[k] || { x: 50, y: 50 };
+    picker.open = false; paintBoard(); updateSelection();
+    say(itemName(k) + '。しまを タップするか、やじるしで ばしょを えらぼう');
+    Sound.sfx.tap();
+  }
+  function place(x, y){
+    if (!selected || !owned().includes(selected)) return;
+    const before = Store.stickerWorld().items[selected] || null, p = safePosition(selected, x, y);
+    if (before && Math.abs(before.x - p.x) < .01 && Math.abs(before.y - p.y) < .01){
+      say('ここに かざってあるよ。できあがりなら「できあがり」を おしてね'); return;
+    }
+    if (!Store.putWorldSticker(selected, p.x, p.y)) return;
+    undo = { key: selected, before }; draft = p;
+    Sound.sfx.place(); paintBoard(); paintPalette(); updateSelection();
+    say('おけたね。うごかしたり、ひとつ もどしたり できるよ');
+  }
+  function undoEdit(){
+    if (!undo) return;
+    const previous = undo; undo = null;
+    if (previous.background) Store.setStickerWorldBackground(previous.background);
+    else if (owned().includes(previous.key)){
+      if (previous.before) Store.putWorldSticker(previous.key, previous.before.x, previous.before.y);
+      else Store.removeWorldSticker(previous.key);
+      selected = previous.key; draft = previous.before || { x: 50, y: 50 };
+    }
+    paintBoard(); paintPalette(); updateSelection(); say('ひとつ もどしたよ');
+  }
+  function build(){
+    if (node) return node;
+    board = el('div.sticker-world-board', { role: 'application', tabindex: '0', 'aria-label': 'じぶんの しま',
+      'aria-describedby': 'world-instructions',
+      onkeydown(e){
+        if (e.target !== board || !selected || !draft) return;
+        const step = e.shiftKey ? 10 : 5;
+        const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+        if (delta){ e.preventDefault(); draft = safePosition(selected, draft.x + delta[0], draft.y + delta[1]); moveCursor(); }
+        else if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); place(draft.x, draft.y); }
+      }
+    });
+    palette = el('div.sticker-world-palette', { 'aria-label': 'かざれる シール' });
+    hint = el('div#world-instructions.sticker-world-hint', { role: 'status', 'aria-live': 'polite' });
+    selectedBar = el('div.world-selected');
+    empty = el('p.world-picker-empty'); filterBar = el('div.world-picker-filters', { 'aria-label': 'シールの えらびかた' });
+    [{ id: 'recent', label: 'さいきん もらった' }, { id: 'unplaced', label: 'まだ かざっていない' }, { id: 'all', label: 'ぜんぶ' }].forEach(f =>
+      filterBar.append(el('button.btn', { type: 'button', text: f.label, dataset: { filter: f.id },
+        onclick(){ filter = f.id; paintPalette(); palette.scrollTop = 0; Sound.sfx.tap(); }
+      })));
+    pickerSummary = el('summary');
+    picker = el('details.world-picker', { ontoggle(){ if (picker.open) scrollSelected(); } }, pickerSummary, filterBar, palette, empty);
+    placeButton = el('button.btn.btn-accent.world-place', { type: 'button', onclick(){ if (draft) place(draft.x, draft.y); } });
+    removeButton = el('button.btn.world-remove', { type: 'button', text: '📦 しまう', onclick(){
+      const before = selected && Store.stickerWorld().items[selected];
+      if (!before || !Store.removeWorldSticker(selected)) return;
+      undo = { key: selected, before }; draft = { x: 50, y: 50 };
+      paintBoard(); paintPalette(); updateSelection(); say('シールを しまったよ。また かざれるよ');
+    } });
+    undoButton = el('button.btn.world-undo', { type: 'button', text: '↶ ひとつ もどす', onclick: undoEdit });
+    doneButton = el('button.btn.world-done', { type: 'button', text: '✨ できあがり', onclick(){
+      selected = null; draft = null; picker.open = false; paintBoard(); updateSelection();
+      say('すてきな しまに なったね。また いつでも かざれるよ');
+    } });
+    actions = el('div.world-edit-actions', null, placeButton, removeButton, undoButton, doneButton);
+    board.onclick = e => {
+      if (e.target.closest('.world-sticker')) return;
+      if (!selected){
+        say('「シールを えらぶ」から、かざしたい シールを えらんでね');
+        return;
+      }
+      const r = board.getBoundingClientRect();
+      place((e.clientX - r.left - board.clientLeft) / board.clientWidth * 100,
+        (e.clientY - r.top - board.clientTop) / board.clientHeight * 100);
+    };
+    node = el('div#sticker-world', null,
+      el('div.topbar', null,
+        el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+        el('h2', { text: 'じぶんの しま' }),
+        speakBtn(() => '集めたシールや宝物を、好きな場所に置けるよ。シールを選んで、島をタップしよう。矢印で動かして、エンターでも置けるよ。')),
+      el('div.world-workspace', null, selectedBar, board, hint, actions, picker,
+      el('details.world-other-tools', null, el('summary', { text: '🌳 ばしょ・しまの おしごと' }),
+      el('div.sticker-world-tools', null,
+        el('span', { text: 'ばしょを えらぶ' }),
+        BACKGROUNDS.map(bg => el('button.world-background', { type: 'button', dataset: { background: bg.id },
+          onclick(){
+            const before = Store.stickerWorld().background;
+            if (before !== bg.id){ undo = { background: before }; Store.setStickerWorldBackground(bg.id); }
+            Sound.sfx.tap(); paintBoard(); updateSelection();
+          }
+        }, bg.icon + ' ' + bg.label)),
+        el('button.btn.btn-accent.world-job-open', { type: 'button',
+          onclick(){ Sound.sfx.tap(); IslandJobs.open(); } }, '⛵️ しまの おしごと')))));
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(fitPlaced).observe(board);
+    return UI.register('sticker-world', node);
+  }
+  function render(){
+    build();
+    if (selected && !owned().includes(selected)){ selected = null; draft = null; undo = null; }
+    paintBoard(); paintPalette(); updateSelection();
+    hint.textContent = selected ? 'しまを タップ。やじるしと エンターでも おけるよ'
+      : '「シールを えらぶ」から、すきな シールを えらぼう';
   }
   function open(item){
     if (item) item = Store.worldKey(item);
-    if (item && owned().includes(item)) selected = item;
+    undo = null;
+    if (item && owned().includes(item)){
+      selected = item; draft = Store.stickerWorld().items[item] || { x: 50, y: 50 }; filter = 'all';
+    }
     render(); UI.show('sticker-world');
+    picker.open = !selected;
+    requestAnimationFrame(() => { if (!node.hidden){ fitPlaced(); scrollSelected(); } });
     Sound.say(item && selected === item ? itemName(item) + 'を、島の好きな場所に置いてね。'
       : '自分の島だよ。集めたシールや宝物を、好きな場所に置けるよ。', { delay: 150 });
   }

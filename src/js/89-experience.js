@@ -213,44 +213,91 @@ const Missions = (() => {
     return Store.mission(day);
   }
 
-  function yesterdayReview(){
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
-      + '-' + String(d.getDate()).padStart(2, '0');
-    const m = Store.mission(key);
-    return m && m.done && !m.reviewed ? m : null;
+  function dateParts(day){
+    const m = typeof day === 'string' && day.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    const date = new Date(y, mo - 1, d);
+    return date.getFullYear() === y && date.getMonth() === mo - 1 && date.getDate() === d ? [y, mo, d] : null;
   }
+  function dateLabel(mission){
+    const p = dateParts(typeof mission === 'string' ? mission : mission && mission.day);
+    return p ? p[0] + 'ねん ' + p[1] + 'がつ ' + p[2] + 'にち' : 'ひづけのない';
+  }
+  function recent(){
+    return Object.values(Store.data.missions || {}).filter(m => m && dateParts(m.day) && m.day <= today());
+  }
+  function pending(){
+    return recent().filter(m => !m.done).sort((a, b) => b.day.localeCompare(a.day))[0] || null;
+  }
+  function recentReview(){
+    return recent().filter(m => m.done && !m.reviewed).sort((a, b) =>
+      (b.doneDay || 0) - (a.doneDay || 0) || b.day.localeCompare(a.day))[0] || null;
+  }
+  // Keep the old API for portable copies and callers; a rest day no longer loses the conversation.
+  const yesterdayReview = recentReview;
 
-  let node, titleEl, promptEl, noteEl, doneBtn;
+  let node, titleEl, dateEl, artEl, promptEl, noteEl, doneBtn, laterBtn, holdHelpEl, speech = '';
+  function goHome(){
+    stopHold();
+    Home.render();
+    UI.show('home', { replace: true });
+  }
+  // Small, offline pictures identify the objects to look for without giving a numerical answer.
+  function illustration(mission){
+    const image = svg('svg', {viewBox:'0 0 160 88', 'aria-hidden':'true', focusable:'false'});
+    const stroke = {stroke:'var(--ink)', 'stroke-width':3, 'stroke-linecap':'round', 'stroke-linejoin':'round'};
+    if (/スプーン|フォーク|おさら|おはし|コップ/.test(mission.text)){
+      image.append(svg('ellipse', {...stroke, cx:65, cy:48, rx:43, ry:26, fill:'var(--c-blue)'}),
+        svg('ellipse', {...stroke, cx:65, cy:48, rx:29, ry:16, fill:'var(--card)'}),
+        svg('path', {...stroke, d:'M126 37 V76', fill:'none'}),
+        svg('ellipse', {...stroke, cx:126, cy:25, rx:10, ry:15, fill:'var(--c-yellow)'}));
+    } else if (mission.gameId === 'clock'){
+      image.append(svg('circle', {...stroke, cx:80, cy:44, r:35, fill:'var(--card)'}),
+        svg('path', {...stroke, d:'M80 20 V44 L96 50', fill:'none'}),
+        svg('circle', {cx:80, cy:44, r:3, fill:'var(--ink)'}));
+    } else if (/カレンダー|すうじ/.test(mission.text)){
+      image.append(svg('rect', {...stroke, x:38, y:12, width:84, height:66, rx:8, fill:'var(--card)'}),
+        svg('path', {...stroke, d:'M38 32 H122 M56 6 V20 M104 6 V20', fill:'none'}));
+      [54,80,106].forEach(x => [45,63].forEach(y => image.append(svg('rect', {x:x-5, y:y-4, width:10, height:8, rx:2, fill:'var(--c-blue)'}))));
+    } else if (/えんぴつ/.test(mission.text)){
+      image.append(svg('path', {...stroke, d:'M32 59 L111 14 L124 37 L45 82 L25 82 Z', fill:'var(--c-yellow)'}),
+        svg('path', {...stroke, d:'M32 59 L45 82 M109 16 L122 38', fill:'none'}));
+    } else {
+      image.append(svg('rect', {...stroke, x:17, y:33, width:45, height:43, rx:5, fill:'var(--c-blue)'}),
+        svg('circle', {...stroke, cx:83, cy:30, r:22, fill:'var(--c-yellow)'}),
+        svg('path', {...stroke, d:'M122 30 L148 76 H96 Z', fill:'var(--c-pink)'}));
+    }
+    return image;
+  }
   function build(){
     if (node) return node;
-    titleEl = el('h2', { text: 'きょうの さんすう ミッション' });
+    titleEl = el('h2', { text: 'おうちの ミッション' });
+    dateEl = el('p.mission-date');
+    artEl = el('div.mission-illustration', {'aria-hidden':'true'});
     promptEl = el('div.mission-main');
     noteEl = el('div.mission-note');
-    doneBtn = el('button.btn.btn-accent', { type: 'button' });
+    holdHelpEl = el('p#mission-hold-help.mission-hold-help', {
+      text:'おうちのひとへ：ボタン、または スペース・エンターを 2びょう おしてね'
+    });
+    doneBtn = el('button.btn.btn-accent.mission-done', { type: 'button' });
+    laterBtn = el('button.btn.mission-later', {type:'button', text:'あとで', onclick:goHome});
     node = el('div#mission', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', {
           'aria-label': 'もどる',
-          onclick(){ Home.render(); UI.show('home', { replace: true }); }
+          onclick:goHome
         }, '←'),
-        titleEl),
-      el('div.mission-sheet', null, mascotSVG('happy', 'talk'), promptEl, noteEl,
-        el('div.mission-actions', null, doneBtn,
-          el('button.btn', {
-            text: 'あとで',
-            onclick(){ Home.render(); UI.show('home', { replace: true }); }
-          }))));
+        titleEl,
+        el('button.btn.btn-round.mission-speak', {type:'button', 'aria-label':'ミッションを よむ',
+          onclick(){ Sound.say(speech, {delay:60}); }}, '🔊')),
+      el('div.mission-sheet', null, dateEl, artEl, promptEl, noteEl,
+        el('div.mission-actions', null, doneBtn, laterBtn), holdHelpEl));
+    window.addEventListener('blur', stopHold);
     return UI.register('mission', node);
   }
 
-  /* The adult's「できた」. It went through the full adult gate — two 2-digit ×
-     1-digit sums in a row, and five seconds' wait after a slip — which is the lock
-     on「記録をすべて消す」, for the lightest thing an adult does all day, often with
-     a pan in the other hand. So it was mostly never pressed, and the next day's
-     「どうやったか」never came. A two-second press says an adult was there; a tap
-     only says how. */
+  // A two-second adult confirmation is the same with a finger, Space or Enter.
   const HOLD_MS = 2000;
   let holdTimer = null, holdDone = null, held = false;
   function stopHold(){
@@ -258,70 +305,101 @@ const Missions = (() => {
     if (doneBtn) doneBtn.classList.remove('holding');
   }
   function holdToConfirm(onDone){
+    stopHold(); held = false;
     doneBtn.classList.add('holdbtn');
+    doneBtn.setAttribute('aria-describedby', 'mission-hold-help');
     doneBtn.style.setProperty('--hold', HOLD_MS + 'ms');
-    doneBtn.onpointerdown = e => {
-      e.preventDefault();
-      stopHold();
+    const start = () => {
+      if (holdTimer !== null) return;
+      held = false;
       doneBtn.classList.add('holding');
-      holdDone = () => { stopHold(); held = true; onDone(); };
+      holdDone = () => {
+        if (UI.currentName() !== 'mission' || node.hidden){ stopHold(); return; }
+        stopHold(); held = true; onDone();
+      };
       holdTimer = setTimeout(holdDone, HOLD_MS);
     };
+    doneBtn.onpointerdown = e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      start();
+    };
     doneBtn.onpointerup = doneBtn.onpointerleave = doneBtn.onpointercancel = stopHold;
+    doneBtn.onkeydown = e => {
+      if (e.key !== ' ' && e.key !== 'Enter') return;
+      e.preventDefault();
+      if (!e.repeat) start();
+    };
+    doneBtn.onkeyup = e => {
+      if (e.key !== ' ' && e.key !== 'Enter') return;
+      e.preventDefault(); stopHold();
+    };
+    doneBtn.onblur = stopHold;
     doneBtn.onclick = () => {
-      if (held){ held = false; return; }             // the click that ends a finished press
-      Sound.say('おうちの人が、2秒長押ししてね。', { delay: 60 });
+      if (held){ held = false; return; }
+      Sound.say('おうちの人が、ボタンか、スペース、エンターを2秒長押ししてね。', { delay: 60 });
     };
   }
   function plainButton(onclick){
-    stopHold();
+    stopHold(); held = false;
     doneBtn.classList.remove('holdbtn');
+    doneBtn.removeAttribute('aria-describedby');
     doneBtn.onpointerdown = doneBtn.onpointerup = doneBtn.onpointerleave = doneBtn.onpointercancel = null;
+    doneBtn.onkeydown = doneBtn.onkeyup = doneBtn.onblur = null;
     doneBtn.onclick = onclick;
   }
 
-  function open(mission){
+  function showMission(mission, review){
     build();
-    titleEl.textContent = 'きょうの さんすう ミッション';
+    titleEl.textContent = review ? 'できたことの おはなし' : 'おうちの ミッション';
+    dateEl.textContent = dateLabel(mission) + ' のミッション';
+    clear(artEl).append(illustration(mission));
     promptEl.textContent = mission.text;
-    noteEl.textContent = mission.prompt;
-    doneBtn.textContent = 'おうちのひとが ながおし（2びょう）';
+    noteEl.textContent = review ? 'どんな ふうに できたか、おうちのひとに おはなししよう' : mission.prompt;
+    laterBtn.textContent = review ? 'また あとで' : 'あとで';
+    holdHelpEl.hidden = review;
+    speech = dateEl.textContent + '。' + mission.text + '。' + noteEl.textContent;
+  }
+  function open(mission){
+    if (!mission) return;
+    if (mission.done){ openReview(mission); return; }
+    showMission(mission, false);
+    doneBtn.replaceChildren(el('span', {text:'おうちのひとが ながおし'}),
+      el('span.mission-hold-duration', {text:'（2びょう）'}));
     holdToConfirm(() => {
       Store.completeMission(mission.day);
       Sound.sfx.finish();
-      Home.render();
-      UI.show('home', { replace: true });
+      goHome();
     });
     UI.show('mission');
-    Sound.say(mission.text + '。' + mission.prompt, { delay: 250 });
+    Sound.say(speech, { delay: 250 });
   }
 
   function openReview(mission){
-    build();
-    titleEl.textContent = 'きのうの ミッション';
-    promptEl.textContent = mission.text;
-    noteEl.textContent = 'どんな ふうに できたか、おうちのひとに おはなししよう';
+    if (!mission || !mission.done) return;
+    showMission(mission, true);
     doneBtn.textContent = 'おはなし できた！';
     plainButton(() => {
       Store.reviewMission(mission.day);
       Sound.sfx.correct();
-      Home.render();
-      UI.show('home', { replace: true });
+      goHome();
     });
     UI.show('mission');
-    Sound.say('昨日のミッション、どんなふうにできたかお話ししよう。', { delay: 250 });
+    Sound.say(speech, { delay: 250 });
   }
 
   function resultCard(gameId){
-    const m = forGame(gameId || 'count');
-    const b = el('button.result-mission', { type: 'button', onclick(){ open(m); } },
-      el('b', { text: 'きょうの さんすう ミッション' }),
-      el('span', { text: m.text }),
-      el('small', { text: m.done ? 'できました！' : 'おうちのひとと やってみよう' }));
-    return b;
+    const m = pending() || Store.mission(today());
+    return el('button.result-mission', { type: 'button', onclick(){
+      // Merely finishing a question never adds a task to the Home screen.
+      open(pending() || Store.mission(today()) || forGame(gameId || 'count'));
+    } },
+      el('b', { text: m && m.done ? 'できたことの おはなし' : 'おうちで やってみる' }),
+      el('span', { text: m ? m.text : 'みのまわりの もので あそぼう' }),
+      el('small', { text: m ? dateLabel(m) + '・やりたい ときに' : 'おうちのひとと、やりたい ときに' }));
   }
 
-  return { forGame, yesterdayReview, open, openReview, resultCard,
+  return { forGame, pending, recentReview, dateLabel, yesterdayReview, open, openReview, resultCard,
            /** test seam: end a press that has started, without waiting two seconds */
            _test: { finishHold(){ if (holdDone) holdDone(); } } };
 })();

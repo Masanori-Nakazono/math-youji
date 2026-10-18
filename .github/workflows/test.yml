@@ -83,6 +83,14 @@ jobs:
       - name: Verify parent guidance follows recent learning
         run: node tools/test-parent-guidance.cjs
 
+      - name: Verify editable answers, island decoration and resumable home missions
+        run: |
+          INPUT_REVISION_HTML=dist/kazu-no-bouken.html node tools/test-input-revision.cjs
+          node tools/test-island-editor.cjs
+          MISSION_RESUME_HTML=dist/kazu-no-bouken.html node tools/test-mission-resume.cjs
+          INPUT_REVISION_HTML=dist/artifact.html node tools/test-input-revision.cjs
+          MISSION_RESUME_HTML=dist/artifact.html node tools/test-mission-resume.cjs
+
       - name: Verify island treasure chests and saved keepsakes
         run: node tools/test-treasures.cjs
 

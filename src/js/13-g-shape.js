@@ -787,7 +787,7 @@ function setClock(api, hand){
   clock.addEventListener('pointercancel', release);
   paint();
 
-  const check = el('button.btn.btn-accent', { text: 'これで いい？',
+  const check = el('button.btn.btn-accent.answer-submit', { type: 'button', text: 'これで いい？',
     onclick(){
       if (api.locked) return;
       if (cur === target) api.correct(); else { api.wrong(check); }

@@ -138,7 +138,7 @@ const server=http.createServer((req,res)=>{
       await p.evaluate(()=>{KazuApp.Store.markIntroduced('count',0);KazuApp.Session.startLevel(KazuApp.Games.byId.count,0);});
       for(let i=0;i<8;i++)await solveCount(p);
       await p.getByRole('button',{name:'きょうは ここまで',exact:true}).click();await assertEnded(p,8);
-      await p.locator('#home .home-more > summary').click();await p.locator('#home .dailies .daily:not(.recommended):not(.reviewmission):not(.focusset)').click();
+      await p.locator('#home .home-more > summary').click();await p.locator('#home .dailies .daily:not(.recommended):not(.reviewmission):not(.mission-resume):not(.focusset)').click();
       for(let i=0;i<10;i++)await solveCount(p);
       await p.getByRole('button',{name:'きょうは おしまい',exact:true}).click();await assertEnded(p,18);
       assert.equal(await p.evaluate(()=>KazuApp.Store.practiceDoneToday()),true);

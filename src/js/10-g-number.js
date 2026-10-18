@@ -124,7 +124,7 @@ function giveQuestion(api, lo, hi){
     el('div.b', { text: '🧺' }), basketItems, basketCount);
   board.append(basket);
   api.field.append(board);
-  const doneBtn = el('button.btn.btn-accent', { text: 'できた！' });
+  const doneBtn = el('button.btn.btn-accent.answer-submit', { type: 'button', text: 'できた！' });
   api.choices.append(doneBtn);
   const refresh = () => {
     basketCount.textContent = String(picked.size);
@@ -353,7 +353,9 @@ function numToQty(api, lo, hi){        // numeral shown → pick the matching gr
   api.item('n2q:' + n, 'すうじ ' + n + ' → その かず');
   api.answer(n);                   // so a plate one too many reads as「1つ多く」
   api.setPrompt(`${thing.e} が ${numTag(n)}こ あるのは どれ？`, `${thing.n}が${koKana(n)}、あるのは、どれ？`);
-  const big = el('div', { style: { fontFamily: 'var(--fs-num)', fontWeight: 800, fontSize: 'calc(var(--u)*11)', lineHeight: 1, color: 'var(--c-red)' }, text: String(n) });
+  // Font glyph hit areas can extend beyond line-height:1, even when the element
+  // itself fits. A display-only numeral must never intercept an answer below it.
+  const big = el('div.numeral-display', { style: { fontFamily: 'var(--fs-num)', fontWeight: 800, fontSize: 'calc(var(--u)*11)', lineHeight: 1, color: 'var(--c-red)' }, text: String(n) });
   api.field.append(big);
   const opts = shuffle([n].concat(distractors(n, 2, Math.max(1, lo - 1), Math.min(12, hi + 2), 2)));
   clear(api.choices);

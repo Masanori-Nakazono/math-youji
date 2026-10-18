@@ -47,6 +47,18 @@
   }
   /** tap answers until the question is accepted; false when nothing is tappable */
   function answerOnce(){
+    // A constructed answer is now a draft until the child presses できた. Drive
+    // the visible term editors and submit, rather than expecting the third key
+    // to grade automatically.
+    if (q('#play .three-builder')){
+      const slots = qa('#play .three-sum-slot');
+      [5, 2, 3].forEach((value, i) => {
+        slots[i].click();
+        qa('#play .padkey').find(key => key.textContent === String(value)).click();
+      });
+      q('#play .three-submit').click();
+      return true;
+    }
     // 「まえから Nこ」は the first N animals as a set; random tapping is not a
     // meaningful driver and can keep clearing the set forever by chance.
     const ordinalCount = (q('#play .prompt .txt') && q('#play .prompt .txt').textContent || '')
@@ -1096,7 +1108,7 @@
     return true;
   }
 
-  /* ---------- 30. missions persist completion and next-day reflection ---------- */
+  /* ---------- 30. missions persist completion and reflection after a break ---------- */
   (function missions(){
     K.Store.reset();
     const d = new Date(); d.setDate(d.getDate() - 1);
@@ -1121,11 +1133,11 @@
     K.Store.recordMission({ day: oldDay, id: 'old-mission', gameId: 'count',
       text: 'ふるい', prompt: 'ふるい' });
     K.Store.completeMission(oldDay);
-    const onlyYesterday = K.Missions.yesterdayReview();
-    check('a completed real-world mission returns for a next-day reflection',
+    const afterBreak = K.Missions.recentReview();
+    check('a completed real-world mission returns for reflection even after a rest day',
       gated && adultAnswer && review && review.id === 'test-mission'
-        && K.Store.mission(day).reviewed && onlyYesterday === null,
-      'gated=' + gated + ' review=' + (review && review.id) + ' oldIgnored=' + (onlyYesterday === null));
+        && K.Store.mission(day).reviewed && afterBreak && afterBreak.id === 'old-mission',
+      'gated=' + gated + ' review=' + (review && review.id) + ' afterBreak=' + (afterBreak && afterBreak.id));
     K.Store.reset();
   })();
 

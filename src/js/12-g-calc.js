@@ -395,34 +395,78 @@ function threeMakeTen(api){
   api.item('three10', '3つの かずで 10を つくる');
   api.setPrompt('3つの すうじを えらんで <b>10</b> を つくろう',
                 '三つの数字を選んで、10を作ろう。');
-  const picked = [];
-  let accepting = true;
-  const readout = el('div.three-sum', { text: '? ＋ ? ＋ ? ＝ 10' });
-  api.field.append(readout);
+  const picked = [], history = [], keys = [];
+  let active = 0, submittedWrong = 0;
+  api.answer(10);
+  const readout = el('div.three-sum', { 'aria-label': '3つの かずで 10' });
+  const slots = [0, 1, 2].map(i => el('button.three-sum-slot', {
+    type: 'button',
+    onclick(){ if (!api.locked){ active = i; redraw(); Sound.sfx.tap(); } }
+  }));
+  slots.forEach((slot, i) => {
+    if (i) readout.append(el('span', { text: '＋', 'aria-hidden': 'true' }));
+    readout.append(slot);
+  });
+  readout.append(el('span', { text: '＝10', 'aria-hidden': 'true' }));
+  const note = el('div.three-note', { 'aria-live': 'polite' });
+  const undo = el('button.btn.three-undo', { type: 'button', text: '↶ ひとつ もどす',
+    onclick(){
+      if (api.locked || !history.length) return;
+      const before = history.pop();
+      picked.splice(0, picked.length, ...before.picked); active = before.active;
+      redraw(); Sound.sfx.tap();
+    }
+  });
+  const submit = el('button.btn.btn-accent.answer-submit.three-submit', {
+    type: 'button', text: 'できた！', onclick(){ send(); }
+  });
+  api.field.append(el('div.three-builder', null, readout, note));
   const redraw = () => {
-    const vals = picked.concat(['?', '?', '?']).slice(0, 3);
-    readout.textContent = vals.join(' ＋ ') + ' ＝ 10';
+    slots.forEach((slot, i) => {
+      slot.textContent = picked[i] == null ? '？' : String(picked[i]);
+      slot.disabled = api.locked || i > picked.length;
+      slot.classList.toggle('selected', i === active);
+      slot.setAttribute('aria-pressed', String(i === active));
+      slot.setAttribute('aria-label', `${i + 1}つめの かず ${picked[i] == null ? 'まだ' : picked[i]}。えらびなおす`);
+    });
+    keys.forEach(key => { key.disabled = api.locked || active == null; });
+    undo.disabled = api.locked || !history.length;
+    submit.disabled = api.locked || picked.length !== 3;
+    note.textContent = api.locked ? '3つの かずで 10に なったね'
+      : active == null ? 'かえたい かずを おせるよ' : `${active + 1}つめの かずを えらぼう`;
   };
+  function send(){
+    if (api.locked || picked.length !== 3) return;
+    const sum = picked.reduce((a, x) => a + x, 0);
+    if (sum === 10){
+      api.answer(picked.join(' ＋ ') + ' ＝ 10');
+      submit.classList.add('choice', 'correct');
+      api.correct({ delay: 1400 }); redraw();
+    } else {
+      active = 0; redraw();
+      api.wrong(submit, sum);
+      // Later attempts belong to the engine's hint/demonstration ladder. Do not
+      // interrupt that narration with the first attempt's correction prompt.
+      if (++submittedWrong === 1) Sound.say(`合わせると${numKana(sum)}だね。かずを押すと、選び直せるよ。`, { delay: 280 });
+    }
+  }
   for (let v = 0; v <= 9; v++){
     const b = el('button.choice.padkey', { type: 'button', text: String(v) });
     b.addEventListener('click', () => {
-      if (api.locked || !accepting) return;
-      picked.push(v); redraw(); Sound.sfx.tap();
-      if (picked.length < 3) return;
-      accepting = false;
-      const sum = picked.reduce((a, x) => a + x, 0);
-      if (sum === 10){
-        b.classList.add('correct');
-        api.correct({ delay: 1400 });
-      } else {
-        api.wrong(b);
-        Sound.say(`合わせると${numKana(sum)}だね。10になるように変えてみよう。`, { delay: 280 });
-        api.later(() => { picked.length = 0; redraw(); accepting = true; }, 650);
-      }
+      if (api.locked || active == null) return;
+      history.push({ picked: picked.slice(), active });
+      picked[active] = v;
+      active = active < 2 ? active + 1 : null;
+      redraw(); Sound.sfx.tap();
     });
+    keys.push(b);
     api.choices.append(b);
   }
-  api.choices.classList.add('pad');
+  // Ten digit keys leave two spaces in the phone's three-row keypad. Put the
+  // edit/submit actions there, preserving room for both the expression and help.
+  api.choices.append(undo, submit);
+  redraw();
+  api.choices.classList.add('pad', 'three-pad');
   const key = v => $$('.padkey', api.choices).find(k => k.textContent === String(v));
   api.coach({
     text: 'まず 5を えらんで、のこりの 5を 2つに わけよう',
@@ -434,8 +478,8 @@ function threeMakeTen(api){
     }
   });
   api.onShow(() => {
-    picked.length = 0; redraw(); accepting = true;
-    [5, 2, 3].forEach(v => { const k = key(v); if (k) k.click(); });
+    picked.splice(0, picked.length, 5, 2, 3); active = null;
+    redraw(); send();
   });
 }
 
