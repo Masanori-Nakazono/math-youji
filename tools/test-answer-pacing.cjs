@@ -8,7 +8,11 @@ const { chromium } = require('playwright');
 const root = path.resolve(__dirname, '..');
 function store(initial) {
   const values = new Map(initial ? [['kazu-no-bouken.v1', JSON.stringify(initial)]] : []);
-  const context = { Date, localStorage: {getItem:k=>values.get(k)||null, setItem:(k,v)=>values.set(k,v)},
+  // Every export gets a different timestamp, including on fast local machines.
+  // Atomic rejection protects the stored record, not the export's savedAt time.
+  let tick=Date.parse('2026-10-18T03:00:00Z');
+  class Clock extends Date {constructor(...args){super(...(args.length?args:[tick++]));}static now(){return tick++;}}
+  const context = { Date:Clock, localStorage: {getItem:k=>values.get(k)||null, setItem:(k,v)=>values.set(k,v)},
     setTimeout(){return 1;}, clearTimeout(){}, addEventListener(){}, document:{hidden:false}, location:{origin:'test://pacing'},
     clamp:(n,a,b)=>Math.max(a,Math.min(b,n)) };
   vm.runInNewContext(['02-store.js','06-miss.js'].map(f=>fs.readFileSync(path.join(root,'src/js',f),'utf8')).join('\n')+'\nglobalThis.S=Store;',context);
@@ -27,8 +31,8 @@ function checkPreferences() {
   assert.equal(S.importText(JSON.stringify(legacy),'replace').ok,true); assert.equal(S.data.autoAdvance,false);
   for(const bad of [null,1,'true',{},[]]){
     const backup=JSON.parse(exported); backup.data.autoAdvance=bad;
-    const before=S.exportText(); assert.equal(S.importText(JSON.stringify(backup),'replace').ok,false);
-    assert.equal(S.exportText(),before); assert.equal(store(backup.data).data.autoAdvance,false);
+    const before=JSON.parse(S.exportText()).data; assert.equal(S.importText(JSON.stringify(backup),'replace').ok,false);
+    assert.deepEqual(JSON.parse(S.exportText()).data,before); assert.equal(store(backup.data).data.autoAdvance,false);
   }
   S.setPref('autoAdvance',true);S.reset();assert.equal(S.data.autoAdvance,false);
   console.log('PASS pacing preference survives reload/replacement, stays shared across laps, and validates legacy/malformed backups');
