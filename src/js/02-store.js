@@ -240,6 +240,41 @@ const Store = (() => {
     return JSON.parse(JSON.stringify({at:s.at,run:{id:r.id??null,chapter:r.chapter??null,kind:r.kind,step:r.step,total:r.total,outcomes:r.outcomes,key:r.key},q:savedQ}));
   }
 
+  // Drafts are optional: an old or malformed draft never discards the visit's
+  // already-earned answers or its evidence of mistakes and support.
+  function normalizeQuestionDraft(draft){
+    const object = v => !!v && Object.prototype.toString.call(v) === '[object Object]';
+    const safeKey = k => !['__proto__', 'prototype', 'constructor'].includes(k);
+    let nodes = 0;
+    function value(v, depth){
+      if (++nodes > 2400 || depth > 9) throw new Error('draft bounds');
+      if (v === null || typeof v === 'boolean') return v;
+      if (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1000000) return v;
+      if (typeof v === 'string' && v.length <= 320) return v;
+      if (Array.isArray(v) && v.length <= 512) return v.map(x => value(x, depth + 1));
+      if (object(v) && Object.keys(v).length <= 40){
+        const out = {};
+        for (const k of Object.keys(v)){
+          if (!safeKey(k) || k.length > 60) throw new Error('draft key');
+          out[k] = value(v[k], depth + 1);
+        }
+        return out;
+      }
+      throw new Error('draft value');
+    }
+    try{
+      if (!object(draft) || draft.v !== 1 || typeof draft.item !== 'string' || !draft.item || draft.item.length > 240
+          || typeof draft.touched !== 'boolean' || !Array.isArray(draft.parts) || draft.parts.length > 24
+          || new Set(draft.parts.map(p => p && p.id)).size !== draft.parts.length) return null;
+      const parts = draft.parts.map(p => {
+        if (!object(p) || typeof p.id !== 'string' || !/^[a-zA-Z0-9:_-]{1,60}$/.test(p.id) || !safeKey(p.id)) throw new Error('draft part');
+        return {id:p.id, data:value(p.data, 0)};
+      });
+      const out = {v:1, item:draft.item, touched:draft.touched, parts};
+      return JSON.stringify(out).length <= 32768 ? out : null;
+    }catch(e){ return null; }
+  }
+
   /* A resumable visit contains only data, never game functions, timers or DOM.
      Games register after Store starts, so the runner checks that these IDs still
      exist before restoring a visit. Keep this shape check independent of them. */
@@ -316,6 +351,10 @@ const Store = (() => {
       wrongThisQ:s.question.wrongThisQ, helped:s.question.helped,
       taughtQ:s.question.taughtQ, missType:s.question.missType
     };
+    if (out.question && s.question.draft !== undefined){
+      const draft = normalizeQuestionDraft(s.question.draft);
+      if (draft) out.question.draft = draft;
+    }
     try{ return JSON.parse(JSON.stringify(out)); }catch(e){ return null; }
   }
 

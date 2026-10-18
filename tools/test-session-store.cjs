@@ -61,6 +61,42 @@ assert.equal(JSON.parse(loaded.storage.get('kazu-no-bouken.v1')).savedSession.id
 assert.deepEqual(clone(load(raw(S)).store.savedSession()), clone(S.savedSession()));
 passed('saved visits clone all input/output references and survive pagehide and startup');
 
+const draftStore = load().store, draftVisit = visit('draft-values');
+draftVisit.question.draft = {v:1, item:'count:countL:3', touched:true,
+  parts:[{id:'count', data:{order:[2, 0], stage:'counting', selected:null}}]};
+assert.equal(draftStore.saveSession(draftVisit), true);
+draftVisit.question.draft.parts[0].data.order.push(1);
+assert.deepEqual(clone(draftStore.savedSession().question.draft.parts[0].data.order), [2, 0]);
+const exportedDraft = draftStore.exportText(), draftReload = load(raw(draftStore)).store;
+assert.deepEqual(clone(draftReload.savedSession()), clone(draftStore.savedSession()));
+draftStore.reset(); assert.equal(draftStore.importText(exportedDraft, 'replace').ok, true);
+assert.deepEqual(clone(draftStore.savedSession()), clone(draftReload.savedSession()));
+passed('optional question drafts clone their values and survive reload and backup replacement');
+
+const badDrafts = [
+  {...draftVisit.question.draft, v:2},
+  {...draftVisit.question.draft, item:''},
+  {...draftVisit.question.draft, touched:'yes'},
+  {...draftVisit.question.draft, parts:[{id:'__proto__', data:{}}]},
+  {...draftVisit.question.draft, parts:[{id:'x', data:JSON.parse('{"__proto__":{"polluted":true}}')}]},
+  {...draftVisit.question.draft, parts:[{id:'x', data:{n:Infinity}}]},
+  {...draftVisit.question.draft, parts:[{id:'x', data:{text:'a'.repeat(321)}}]},
+  {...draftVisit.question.draft, parts:[{id:'x', data:{items:Array(513).fill(0)}}]},
+  {...draftVisit.question.draft, parts:[{id:'x', data:{}},{id:'x',data:{}}]},
+  {...draftVisit.question.draft, parts:Array.from({length:25},(_,i)=>({id:'p'+i,data:{}}))}
+];
+let deepDraft = {}; for (let i=0; i<12; i++) deepDraft = {child:deepDraft};
+badDrafts.push({...draftVisit.question.draft, parts:[{id:'x',data:deepDraft}]});
+for (const bad of badDrafts){
+  const v = visit('bad-draft'); v.question.draft = bad;
+  assert.equal(draftStore.saveSession(v), true, 'optional invalid data does not lose a valid visit');
+  const saved = draftStore.savedSession();
+  assert.equal(saved.question.draft, undefined); assert.equal(saved.question.wrongThisQ, 1);
+  assert.equal(saved.question.helped, true); assert.equal(saved.firstTryRight, 1);
+}
+assert.equal({}.polluted, undefined);
+passed('bounded draft validation discards malformed optional state without losing grading evidence');
+
 const modes = load().store;
 for (const mode of ['level', 'daily', 'focus', 'adventure', 'first', 'diagnostic']){
   const checkpoint = visit('mode-' + mode);

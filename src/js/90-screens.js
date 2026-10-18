@@ -312,6 +312,29 @@ const Home = (() => {
     });
     Sound.say('別の遊びを選べるよ。地図や、ほしいシールから選んでみよう。', {delay:120});
   }
+  // A map visit is transient navigation, separate from the learning checkpoint.
+  // Re-render first so a return after midnight still shows today's information.
+  function captureMap(gameId){
+    return {round:Store.round(), gameId, scroll:contentEl.scrollTop,
+      details:Array.from(node.querySelectorAll('details')).map(d => ({key:d.className, open:d.open}))};
+  }
+  function returnToMap(saved){
+    render();
+    const valid = saved && saved.round === Store.round();
+    UI.show('home', {replace:true, focus:!valid});
+    if (!valid) return;
+    Array.from(node.querySelectorAll('details')).forEach(d => {
+      const state = saved.details.find(s => s.key === d.className);
+      if (state) d.open = state.open;
+    });
+    contentEl.scrollTop = saved.scroll;
+    requestAnimationFrame(() => {
+      if (UI.currentName() !== 'home' || saved.round !== Store.round()) return;
+      contentEl.scrollTop = saved.scroll;
+      const card = Array.from(worldsEl.querySelectorAll('.gamecard')).find(c => c.dataset.gameId === saved.gameId);
+      (card || moreSummary).focus({preventScroll:true});
+    });
+  }
   function banner(button, icon, title, detail, action){
     clear(button).append(el('span.ico', { text:icon, 'aria-hidden':'true' }),
       el('span.grow', null, el('span.t', { text:title }), el('span.s', { text:detail })),
@@ -335,7 +358,7 @@ const Home = (() => {
     const st = el('div.st');
     for (let i = 0; i < 3; i++) st.append(starSVG(i < done));
     return el('button.gamecard' + (collected ? '.collected' : ''), {
-      type: 'button', title: g.name + '　★ ' + earned + '/' + max
+      type: 'button', dataset:{gameId:g.id}, title: g.name + '　★ ' + earned + '/' + max
         + (collected ? '　シール ぜんぶ ゲット' : '　まだ シールが あるよ'),
       onclick(){
         Sound.sfx.tap();
@@ -357,7 +380,7 @@ const Home = (() => {
      with named routes to the relevant lessons. */
   function lockedCard(g){
     return el('button.gamecard.locked', {
-      type: 'button', title: g.name + '　' + Progress.unlockHint(g),
+      type: 'button', dataset:{gameId:g.id}, title: g.name + '　' + Progress.unlockHint(g),
       onclick(){
         Sound.sfx.tap();
         G1Preparation.open(g);
@@ -536,12 +559,13 @@ const Home = (() => {
     });
     renderEnding();
   }
-  return { build, render, endToday, choosePlay };
+  return { build, render, endToday, choosePlay, captureMap, returnToMap };
 })();
 
 /* ---------------------------------------------------------- LEVELS */
 const Levels = (() => {
   let node, titleEl, listEl, chestEl, game = null;
+  let homeOrigin = null;
   function build(){
     if (node) return node;
     titleEl = el('h2');
@@ -550,7 +574,7 @@ const Levels = (() => {
     node = el('div#levels', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){ Sound.sfx.tap(); Home.returnToMap(homeOrigin); } }, '←'),
         titleEl, speakBtn(() => speech())),
       chestEl, listEl);
     return UI.register('levels', node);
@@ -558,8 +582,9 @@ const Levels = (() => {
   function speech(){
     return game ? game.name + '。レベルを選んでね。金色で囲まれたレベルは、金のシールをもらっているよ。鍵のついたレベルは、前のレベルをクリアすると遊べるよ。' : '';
   }
-  function render(g){
+  function render(g, opts){
     build();
+    homeOrigin = opts ? opts.homeOrigin || null : UI.currentName() === 'home' ? Home.captureMap(g.id) : null;
     game = g;
     titleEl.textContent = g.ico + '　' + g.name;
     clear(chestEl); chestEl.append(Treasures.card(g.world));
@@ -570,7 +595,7 @@ const Levels = (() => {
       const goldKey = g.id + ':' + i + ':g';
       const gold = Store.hasSticker(goldKey);
       const card = el('button.levelcard' + (unlocked ? '' : '.locked') + (gold ? '.gold' : ''), {
-        type: 'button', style: { '--lc': g.color },
+        type: 'button', dataset:{levelIndex:String(i), levelAction:'play'}, style: { '--lc': g.color },
         title: lv.t + (gold ? '　きんの シールを ゲット' : '　きんの シールは まだ'),
         onclick(){
           Sound.sfx.tap();
@@ -589,21 +614,40 @@ const Levels = (() => {
         }, PokemonStickers.artwork(goldKey, { rarity: false })) : null);
       const entry = el('div.level-entry', null, card);
       if (unlocked && g.intro !== false) entry.append(el('button.btn.first-retry', {
-        type: 'button', 'aria-label': lv.t + 'の やりかたを みる', title: 'もういちど やりかたを みる',
+        type: 'button', dataset:{levelIndex:String(i), levelAction:'preview'}, 'aria-label': lv.t + 'の やりかたを みる', title: 'もういちど やりかたを みる',
         onclick(){ Sound.sfx.tap(); FirstSteps.open(g, i); }
       }, '👀'));
       const short = Store.shortStatus(g.id, i);
       const progress = ShortProgress.render(g.id, i, {compact:true});
       if (progress) entry.append(progress);
       if (unlocked && (short.canStartGold || short.goldActive)) entry.append(el('button.btn.gold-short-start', {
-        type:'button', 'aria-label':lv.t + 'で ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel,
+        type:'button', dataset:{levelIndex:String(i), levelAction:'gold'}, 'aria-label':lv.t + 'で ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel,
         onclick(){ Sound.sfx.tap(); ShortProgress.start(g, i, {gold:true}); }
       }, '✨ ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel));
       listEl.append(entry);
     });
 
   }
-  return { build, render, speech, get game(){ return game; } };
+  function captureReturn(levelIndex){
+    const focused = document.activeElement;
+    return {round:Store.round(), gameId:game.id, levelIndex, scroll:listEl.scrollTop, homeOrigin,
+      action:focused && focused.dataset.levelIndex === String(levelIndex) ? focused.dataset.levelAction : 'preview'};
+  }
+  function returnToList(saved){
+    const g = saved && saved.round === Store.round() && Games.byId[saved.gameId];
+    if (!g || !g.levels[saved.levelIndex]){ Home.returnToMap(null); return; }
+    render(g, {homeOrigin:saved.homeOrigin});
+    UI.show('levels', {focus:false}); listEl.scrollTop = saved.scroll;
+    requestAnimationFrame(() => {
+      if (UI.currentName() !== 'levels' || saved.round !== Store.round()) return;
+      listEl.scrollTop = saved.scroll;
+      const controls = Array.from(listEl.querySelectorAll('button[data-level-index]'));
+      const control = controls.find(c => c.dataset.levelIndex === String(saved.levelIndex) && c.dataset.levelAction === saved.action)
+        || controls.find(c => c.dataset.levelIndex === String(saved.levelIndex));
+      (control || titleEl).focus({preventScroll:true});
+    });
+  }
+  return { build, render, speech, captureReturn, returnToList, get game(){ return game; } };
 })();
 
 /* ---------------------------------------------------------- RESULT */

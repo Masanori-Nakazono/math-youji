@@ -22,6 +22,19 @@
 
 const Coach = (() => {
   let handEl = null;
+  function draftId(api, kind, nodes, from){
+    const paths = nodes.map(node => {
+      const path = [];
+      for (let n = node; n && n !== api.field; n = n.parentElement){
+        if (!n.parentElement) break;
+        path.unshift(Array.prototype.indexOf.call(n.parentElement.children, n));
+      }
+      return path.join('.');
+    }).join('|') + ':' + (from || 0);
+    let h = 0;
+    for (const c of paths) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return kind + ':' + h.toString(36);
+  }
 
   function hand(){
     if (!handEl || !handEl.isConnected){
@@ -100,6 +113,7 @@ const Coach = (() => {
       tag(node, n);
       Sound.sfx.count(Math.min(n - 1, 10));
       Sound.say(numKana(n), { delay: 0, rate: 1.08 });
+      api.saveDraft();
       if (counted.size === list.length && o.onDone) api.later(() => o.onDone(n), 450);
     }
     list.forEach(node => {
@@ -107,6 +121,16 @@ const Coach = (() => {
       node.dataset.coach = '1';
       node.classList.add('coachable');
       tappable(node, e => { if (e && e.stopPropagation) e.stopPropagation(); mark(node); });
+    });
+    api.persist({ id:draftId(api, 'countTool', list, o.from),
+      read(){ return list.every(node => node.isConnected) ? {order:Array.from(counted).map(node => list.indexOf(node))} : undefined; },
+      restore(d){
+        if (!d || !draftIndices(d.order, list.length)) return false;
+        counted.clear(); n = o.from || 0;
+        list.forEach(node => { node.classList.remove('coachcounted'); const t = $('.ctag', node); if (t) t.remove(); });
+        d.order.forEach(i => { counted.add(list[i]); n++; list[i].classList.add('coachcounted'); tag(list[i], n); });
+        return true;
+      }
     });
     return {
       mark,
@@ -132,6 +156,7 @@ const Coach = (() => {
       n++;
       Sound.sfx.count(Math.min(n - 1, 10));
       Sound.say(numKana(n), { delay: 0, rate: 1.08 });
+      api.saveDraft();
       if (holes.every(c => c.firstChild) && o.onDone) api.later(() => api.afterSpeech(() => {
         if (!api.locked) o.onDone(n);
       }), 450);
@@ -141,6 +166,19 @@ const Coach = (() => {
       c.dataset.coach = '1';
       c.classList.add('coachhole');
       tappable(c, () => fill(c));
+    });
+    api.persist({ id:draftId(api, 'fillTool', holes, o.from),
+      read(){ return holes.every(cell => cell.isConnected) ? {filled:holes.flatMap((cell, i) => cell.firstChild ? [i] : [])} : undefined; },
+      restore(d){
+        if (!d || !draftIndices(d.filled, holes.length)) return false;
+        holes.forEach((cell, i) => {
+          clear(cell);
+          if (d.filled.includes(i)){ cell.classList.remove('hole', 'coachhole'); cell.append(el('div.dot.b')); }
+          else cell.classList.add('hole', 'coachhole');
+        });
+        n = (o.from || 0) + d.filled.length;
+        return true;
+      }
     });
     return {
       fill,

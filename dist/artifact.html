@@ -3304,6 +3304,36 @@ dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
   #mission .mission-actions .btn{flex:0 0 auto;width:100%;}
   #mission .mission-illustration{width:132px;height:73px;}
 }
+/* Compact, expandable records. All rules stay inside this optional album. */
+#progress-album .album-intro{font-size:max(16px,calc(var(--u)*1.25));}
+#progress-album .album-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;flex:none;}
+#progress-album .album-filter{min-width:0;min-height:48px;border:2px solid var(--card-edge);border-radius:14px;
+  padding:8px 5px;background:var(--card);color:var(--ink);font:inherit;font-size:max(16px,calc(var(--u)*1.25));font-weight:800;cursor:pointer;}
+#progress-album .album-filter[aria-pressed="true"]{background:var(--accent);color:var(--on-crayon);border-color:var(--accent-ink);}
+#progress-album .album-count{margin:0;text-align:center;font-size:max(14px,calc(var(--u)*1.05));flex:none;}
+#progress-album .album-cards{grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));grid-auto-rows:max-content;align-items:start;overflow-x:hidden;}
+#progress-album .album-card{display:block;min-width:0;padding:0;cursor:auto;overflow:hidden;}
+#progress-album .album-summary{display:flex;align-items:center;gap:10px;min-height:96px;padding:12px;cursor:pointer;list-style:none;}
+#progress-album .album-summary::-webkit-details-marker{display:none;}
+#progress-album .album-icon{font-size:36px;flex:0 0 42px;text-align:center;}
+#progress-album .album-card-copy{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere;}
+#progress-album .album-card-copy b{font-size:max(16px,calc(var(--u)*1.2));line-height:1.5;}
+#progress-album .album-latest{font-size:max(16px,calc(var(--u)*1.15));line-height:1.45;}
+#progress-album .album-date{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:14px;color:var(--ink-soft);line-height:1.5;}
+#progress-album .album-date time,#progress-album .album-round{white-space:nowrap;}
+#progress-album .album-expand{font-size:14px;font-weight:800;}
+#progress-album .album-card-body{display:grid;gap:10px;padding:0 12px 12px;}
+#progress-album .album-card-body .album-read{min-height:48px;max-width:100%;white-space:normal;font-size:16px;}
+#progress-album .album-history{display:grid;gap:10px;}
+#progress-album .album-entry{display:grid;gap:4px;border-top:1px solid var(--card-edge);padding-top:10px;}
+#progress-album .album-entry .album-entry-date{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;font-size:14px;color:var(--ink-soft);}
+#progress-album .album-entry .album-entry-date span{font-size:14px;}
+#progress-album .album-entry-label{font-size:14px;line-height:1.5;overflow-wrap:anywhere;}
+#progress-album .album-entry p{margin:0;font-size:16px;line-height:1.65;overflow-wrap:anywhere;}
+#progress-album .album-record-note{margin:0;font-size:14px;line-height:1.5;color:var(--ink-soft);}
+#progress-album .album-empty{font-size:16px;line-height:1.6;}
+#progress-album .album-summary:focus-visible,#progress-album .album-filter:focus-visible{outline:3px solid var(--c-blue);outline-offset:3px;}
+@media(max-width:370px){#progress-album .album-filters{grid-template-columns:repeat(2,minmax(0,1fr));}}
 </style>
 <div id="stage"></div>
 <div id="fx" aria-hidden="true"></div>
@@ -4321,6 +4351,41 @@ const Store = (() => {
     return JSON.parse(JSON.stringify({at:s.at,run:{id:r.id??null,chapter:r.chapter??null,kind:r.kind,step:r.step,total:r.total,outcomes:r.outcomes,key:r.key},q:savedQ}));
   }
 
+  // Drafts are optional: an old or malformed draft never discards the visit's
+  // already-earned answers or its evidence of mistakes and support.
+  function normalizeQuestionDraft(draft){
+    const object = v => !!v && Object.prototype.toString.call(v) === '[object Object]';
+    const safeKey = k => !['__proto__', 'prototype', 'constructor'].includes(k);
+    let nodes = 0;
+    function value(v, depth){
+      if (++nodes > 2400 || depth > 9) throw new Error('draft bounds');
+      if (v === null || typeof v === 'boolean') return v;
+      if (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1000000) return v;
+      if (typeof v === 'string' && v.length <= 320) return v;
+      if (Array.isArray(v) && v.length <= 512) return v.map(x => value(x, depth + 1));
+      if (object(v) && Object.keys(v).length <= 40){
+        const out = {};
+        for (const k of Object.keys(v)){
+          if (!safeKey(k) || k.length > 60) throw new Error('draft key');
+          out[k] = value(v[k], depth + 1);
+        }
+        return out;
+      }
+      throw new Error('draft value');
+    }
+    try{
+      if (!object(draft) || draft.v !== 1 || typeof draft.item !== 'string' || !draft.item || draft.item.length > 240
+          || typeof draft.touched !== 'boolean' || !Array.isArray(draft.parts) || draft.parts.length > 24
+          || new Set(draft.parts.map(p => p && p.id)).size !== draft.parts.length) return null;
+      const parts = draft.parts.map(p => {
+        if (!object(p) || typeof p.id !== 'string' || !/^[a-zA-Z0-9:_-]{1,60}$/.test(p.id) || !safeKey(p.id)) throw new Error('draft part');
+        return {id:p.id, data:value(p.data, 0)};
+      });
+      const out = {v:1, item:draft.item, touched:draft.touched, parts};
+      return JSON.stringify(out).length <= 32768 ? out : null;
+    }catch(e){ return null; }
+  }
+
   /* A resumable visit contains only data, never game functions, timers or DOM.
      Games register after Store starts, so the runner checks that these IDs still
      exist before restoring a visit. Keep this shape check independent of them. */
@@ -4397,6 +4462,10 @@ const Store = (() => {
       wrongThisQ:s.question.wrongThisQ, helped:s.question.helped,
       taughtQ:s.question.taughtQ, missType:s.question.missType
     };
+    if (out.question && s.question.draft !== undefined){
+      const draft = normalizeQuestionDraft(s.question.draft);
+      if (draft) out.question.draft = draft;
+    }
     try{ return JSON.parse(JSON.stringify(out)); }catch(e){ return null; }
   }
 
@@ -6046,7 +6115,7 @@ const UI = (() => {
     void n.offsetWidth;
     n.classList.add('enter');
     current = name;
-    n.scrollTop = 0;
+    if (!o.keepScroll) n.scrollTop = 0;
     const sc = $('.home-content, .worlds, .sheet, .levels, .book', n);
     if (sc) sc.scrollTop = o.keepScroll ? sc.scrollTop : 0;
     /* A visual transition is otherwise silent to screen readers and leaves
@@ -6236,6 +6305,7 @@ const UI = (() => {
     function clearSel(){
       if (selected){ selected.classList.remove('sel'); selected.setAttribute('aria-pressed', 'false'); }
       selected = null;
+      if (opts.onChange) opts.onChange();
     }
     function setOver(t){
       if (overEl === t) return;
@@ -6326,6 +6396,7 @@ const UI = (() => {
         it.setAttribute('aria-pressed', 'false');
         if (selected === it) clearSel();
       }
+      if (opts.onChange) opts.onChange();
     }
     function bindItem(it){
       it.setAttribute('aria-pressed', 'false');
@@ -6350,6 +6421,7 @@ const UI = (() => {
     function select(it){
       if (unavailable(it)) return;
       clearSel(); selected = it; it.classList.add('sel'); it.setAttribute('aria-pressed', 'true');
+      if (opts.onChange) opts.onChange();
     }
     return { bindItem, bindTarget, clearSel, select, get selected(){ return selected; } };
   }
@@ -6511,6 +6583,9 @@ const Session = (() => {
   let rewardTarget = null, adventureTarget = null;
   let firstTarget = null, firstPhase = null, visitMilestone = null;
   let runId = '', runRound = 1, results = [], resumeQuestion = null;
+  // Navigation stays in memory and belongs to one run, never to its score or backup.
+  let levelReturn = null;
+  let draftAdapters = new Map(), restoringDraft = false;
   let overviewNode, overviewBody, countEl, overviewOn = true, breaksOn = true;
   let hintBtns = [], hintExtras = [], hintShown = false, lastSpeech = '';
   /* Most questions keep their hint back until a second mistake, so the child
@@ -6749,7 +6824,18 @@ const Session = (() => {
   function clearFeedback(){ feedbackEl.hidden = true; clear(feedbackEl); }
 
   function checkpoint(nextIndex = idx, question){
-    if (!runId || Store.round() !== runRound || !plan.length) return;
+    if (restoringDraft || !runId || Store.round() !== runRound || !plan.length) return;
+    const currentQuestion = {wrongThisQ, helped, taughtQ, missType};
+    if (question === undefined && demo !== 'show' && curItem && draftAdapters.size){
+      const parts = [];
+      for (const [id, adapter] of draftAdapters){
+        try{
+          const data = adapter.read();
+          if (data !== undefined) parts.push({id, data});
+        }catch(e){ /* A failed optional draft must not lose the scored visit. */ }
+      }
+      if (parts.length) currentQuestion.draft = {v:1, item:curItem, touched, parts};
+    }
     const target = t => t ? { gameId:t.game.id, levelIndex:t.levelIndex, want:t.want || null } : null;
     Store.saveSession({ v:1, id:runId, at:Date.now(), mode, title:titleEl.textContent,
       gameId:curGame ? curGame.id : null, levelIndex:curLevelIdx, index:nextIndex,
@@ -6761,8 +6847,54 @@ const Session = (() => {
       checkTally, announced:Array.from(announced), rewardKey:rewardTarget ? rewardTarget.key : null,
       adventureTarget:target(adventureTarget), firstTarget:target(firstTarget), firstPhase,
       visitMilestone, question:question === undefined
-        ? {wrongThisQ, helped, taughtQ, missType} : question });
+        ? currentQuestion : question });
   }
+
+  function restoreDraft(draft, step){
+    if (!draft || !draft.touched || draft.item !== curItem || demo === 'show') return false;
+    const oldSay = Sound.say, oldSfx = Sound.sfxOn;
+    const restored = new Set(), attempted = new Set();
+    let restoredHelp = false;
+    restoringDraft = true;
+    Sound.say = () => {}; Sound.sfxOn = false;
+    try{
+      const restoreKnown = () => {
+        for (const part of draft.parts){
+          const adapter = draftAdapters.get(part.id);
+          if (!adapter || attempted.has(part.id)) continue;
+          attempted.add(part.id);
+          try{ if (adapter.restore(part.data) !== false) restored.add(part.id); }catch(e){ /* Ignore invalid game data. */ }
+        }
+      };
+      withRandomSeed(step.seed, restoreKnown);
+      if (helped || wrongThisQ >= hintAfter){ hint(); restoredHelp = true; }
+      // A hint may register a counting tool belonging to the restored stage.
+      restoreKnown();
+      if (restored.size){
+        // Keep the epoch: newly built controls still belong to this question.
+        // Cancel only animations that would overwrite its restored stage.
+        timers.forEach((v, id) => clearTimeout(id)); timers.clear(); endWalk();
+      }
+      for (const part of draft.parts){
+        const adapter = draftAdapters.get(part.id);
+        if (restored.has(part.id) && adapter && adapter.afterHelp){
+          try{ adapter.afterHelp(part.data); }catch(e){}
+        }
+      }
+      if (restored.size) touched = draft.touched;
+    }finally{
+      Sound.say = oldSay; Sound.sfxOn = oldSfx; restoringDraft = false;
+    }
+    // The child hears the current question once, after its whole board is ready.
+    if (restored.size || restoredHelp) Sound.say(lastSpeech + (hintShown ? hintSpeech : ''), {delay:180});
+    return restored.size > 0 || restoredHelp;
+  }
+
+  function saveBeforeLeaving(){
+    if (!restoringDraft && UI.currentName() === 'play' && !locked){ checkpoint(); Store.flush(); }
+  }
+  window.addEventListener('pagehide', saveBeforeLeaving);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveBeforeLeaving(); });
 
   function enginePendingSummary(){
     const saved = Store.savedSession();
@@ -6818,6 +6950,7 @@ const Session = (() => {
     if(latest && latest.kind==='transfer') return TransferAdventure.resume();
     const saved = Store.savedSession();
     if (!saved || !enginePendingSummary()) return false;
+    if (levelReturn && (levelReturn.id !== saved.id || levelReturn.origin.round !== Store.round())) levelReturn = null;
     build(); killTimers(); blockAnswerUntil = 0;
     runId=saved.id; runRound=Store.round(); mode=saved.mode; curGame=saved.gameId ? Games.byId[saved.gameId] : null;
     curLevelIdx=saved.levelIndex; idx=saved.index; mistakes=saved.mistakes; firstTryRight=saved.firstTryRight; swiftCount=saved.swiftCount;
@@ -6896,6 +7029,10 @@ const Session = (() => {
         prior && prior.game === firstTarget.game && prior.levelIndex === firstTarget.levelIndex ? prior.opts : null);
       return;
     }
+    if (mode === 'level' && levelReturn && levelReturn.id === runId
+        && levelReturn.origin.round === Store.round() && levelReturn.origin.gameId === curGame.id){
+      Levels.returnToList(levelReturn.origin); return;
+    }
     if (mode === 'level') Levels.render(curGame); else Home.render();
     UI.show(mode === 'level' ? 'levels' : 'home', { replace: true });
   }
@@ -6903,6 +7040,8 @@ const Session = (() => {
   /* ---------- public entry points ---------- */
   function startLevel(game, levelIndex, opts){
     if(settleCompleted()) return;
+    const origin = UI.currentName() === 'levels' && Levels.game === game ? Levels.captureReturn(levelIndex)
+      : opts && opts.returnToLevels || null;
     build();
     killTimers();
     mode = 'level'; curGame = game; curLevelIdx = levelIndex;
@@ -6920,6 +7059,7 @@ const Session = (() => {
     plan.unshift(...checkSteps(game.id + ':' + levelIndex, 1));
     titleEl.textContent = game.name + '　' + lv.t;
     begin();
+    levelReturn = origin && origin.round === Store.round() && origin.gameId === game.id ? {id:runId, origin} : null;
   }
 
   function startDaily(count){
@@ -7131,7 +7271,8 @@ const Session = (() => {
     shaky = []; sessionOutcomes = []; visitMilestone = null;
     checkTally = {}; announced = new Set();
     renderPips();
-    const unfinished = previous && (previous.index > 0 || previous.question && (previous.question.wrongThisQ || previous.question.helped));
+    const unfinished = previous && (previous.index > 0 || previous.question && (previous.question.wrongThisQ || previous.question.helped
+      || previous.question.draft && previous.question.draft.touched));
     if (overviewOn && (mode !== 'first' || unfinished)){
       if (!unfinished) checkpoint(0,null);
       showOverview(false,unfinished ? previous : null); return;
@@ -7156,7 +7297,7 @@ const Session = (() => {
         promptTxt.innerHTML = html;
         lastSpeech = speech != null ? speech : String(html).replace(/<[^>]*>/g, '');
         spokenAt = 0;
-        Sound.say(lastSpeech, { delay: 220, onend(){ if (!stale()) spokenAt = performance.now(); } });
+        if (!restoringDraft) Sound.say(lastSpeech, { delay: 220, onend(){ if (!stale()) spokenAt = performance.now(); } });
       },
       // A completed step can replace its instructions without erasing the fact
       // that this question used help, or resetting mistakes and scoring.
@@ -7168,8 +7309,16 @@ const Session = (() => {
         // Let an ongoing demonstration finish its callback: first-time lessons
         // use it to continue into the next step. The question still keeps help.
       },
-      say(t, o){ if (stale()) return; lastSpeech = t; Sound.say(t, o); },
-      afterSpeech(fn){ return Sound.afterSpeech(() => { if (!stale()) fn(); }); },
+      say(t, o){ if (stale()) return; lastSpeech = t; if (!restoringDraft) Sound.say(t, o); },
+      afterSpeech(fn){ if (restoringDraft) return () => {}; return Sound.afterSpeech(() => { if (!stale()) fn(); }); },
+      // Each game owns plain values and a render-only restore function. Multiple
+      // adapters let a shared board and its later stage keep their own state.
+      persist(adapter){
+        if (stale() || !adapter || typeof adapter.read !== 'function' || typeof adapter.restore !== 'function') return;
+        draftAdapters.set(adapter.id || 'main', adapter);
+      },
+      saveDraft(){ if (!stale() && !locked && !restoringDraft) checkpoint(); },
+      get restoring(){ return restoringDraft; },
       /** Name the fact this question asks. `label` is what the result screen and
           the parent page will call it. Optional: a game that names nothing simply
           keeps the old purely-random behaviour. */
@@ -7212,7 +7361,7 @@ const Session = (() => {
         coach = Object.assign({}, coach || {}, c);
         if (c.after) hintAfter = Math.max(1, c.after);
         // a together-question hands its tool over as soon as it has one, before any finger
-        if (demo === 'together' && c.tool && !touched && !hintShown) later(togetherHint, 30);
+        if (!restoringDraft && demo === 'together' && c.tool && !touched && !hintShown) later(togetherHint, 30);
       },
       /** Show (and take) the correct action, for the bottom rung of the ladder.
           `buildChoices` / `buildPad` questions need nothing: the engine presses the
@@ -7221,14 +7370,14 @@ const Session = (() => {
           Optional: without it the engine still ends the question rather than
           leaving the child pressing wrong things forever. */
       onShow(fn){ if (!stale()) showFn = fn; },
-      correct(o){ if (!stale()) onCorrect(o || {}); },
+      correct(o){ if (!stale() && !restoringDraft) onCorrect(o || {}); },
       /** `given` is what the child actually chose: a value the engine can read
           against the answer, or a tag a generator supplies for something the item
           key cannot say ('looks', 'rev'). Optional — omitting it only costs the
           diagnosis, never the behaviour. */
-      wrong(target, given){ if (!stale()) onWrong(target, given); },
+      wrong(target, given){ if (!stale() && !restoringDraft) onWrong(target, given); },
       /** delayed work that dies with the question */
-      later(fn, ms){ return later(fn, ms); },
+      later(fn, ms){ if (restoringDraft) return null; return later(fn, ms); },
       get locked(){ return locked; },
 
       /** A fixed 0–10 keypad.
@@ -7374,6 +7523,7 @@ const Session = (() => {
   }
 
   function resetSurface(){
+    draftAdapters = new Map();
     locked = false; hintBtns = []; hintExtras = []; hintShown = false;
     hintAfter = 2; extrasShown = false;
     coach = null; hintSpeech = ''; walked = false; endWalk();
@@ -7382,7 +7532,7 @@ const Session = (() => {
     curItem = null; curLabel = null; curAnswer = null; missType = null;
     hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false; taughtQ = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
-    choicesEl.classList.remove('pad', 'answer-complete');
+    choicesEl.classList.remove('pad', 'three-pad', 'answer-complete');
     answerSpeech = '';
     showBtn.disabled = false;
     speakBtn.setAttribute('aria-label', 'もういちど きく');
@@ -7459,7 +7609,7 @@ const Session = (() => {
     if (resumeQuestion){
       wrongThisQ=resumeQuestion.wrongThisQ; helped=resumeQuestion.helped;
       taughtQ=resumeQuestion.taughtQ; missType=resumeQuestion.missType;
-      if (helped || wrongThisQ >= hintAfter) hint();
+      if (!restoreDraft(resumeQuestion.draft, step) && (helped || wrongThisQ >= hintAfter)) hint();
       resumeQuestion=null;
     }
     countEl.textContent = (idx+1)+'／'+plan.length+'もん'+(step.intro ? '　みほん・いっしょに'
@@ -8169,6 +8319,19 @@ const COUNTED = /^(?:count[LS]|give|q2n|n2q|teen|teensplit|teensum|teenrest|dec|
 
 const Coach = (() => {
   let handEl = null;
+  function draftId(api, kind, nodes, from){
+    const paths = nodes.map(node => {
+      const path = [];
+      for (let n = node; n && n !== api.field; n = n.parentElement){
+        if (!n.parentElement) break;
+        path.unshift(Array.prototype.indexOf.call(n.parentElement.children, n));
+      }
+      return path.join('.');
+    }).join('|') + ':' + (from || 0);
+    let h = 0;
+    for (const c of paths) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return kind + ':' + h.toString(36);
+  }
 
   function hand(){
     if (!handEl || !handEl.isConnected){
@@ -8247,6 +8410,7 @@ const Coach = (() => {
       tag(node, n);
       Sound.sfx.count(Math.min(n - 1, 10));
       Sound.say(numKana(n), { delay: 0, rate: 1.08 });
+      api.saveDraft();
       if (counted.size === list.length && o.onDone) api.later(() => o.onDone(n), 450);
     }
     list.forEach(node => {
@@ -8254,6 +8418,16 @@ const Coach = (() => {
       node.dataset.coach = '1';
       node.classList.add('coachable');
       tappable(node, e => { if (e && e.stopPropagation) e.stopPropagation(); mark(node); });
+    });
+    api.persist({ id:draftId(api, 'countTool', list, o.from),
+      read(){ return list.every(node => node.isConnected) ? {order:Array.from(counted).map(node => list.indexOf(node))} : undefined; },
+      restore(d){
+        if (!d || !draftIndices(d.order, list.length)) return false;
+        counted.clear(); n = o.from || 0;
+        list.forEach(node => { node.classList.remove('coachcounted'); const t = $('.ctag', node); if (t) t.remove(); });
+        d.order.forEach(i => { counted.add(list[i]); n++; list[i].classList.add('coachcounted'); tag(list[i], n); });
+        return true;
+      }
     });
     return {
       mark,
@@ -8279,6 +8453,7 @@ const Coach = (() => {
       n++;
       Sound.sfx.count(Math.min(n - 1, 10));
       Sound.say(numKana(n), { delay: 0, rate: 1.08 });
+      api.saveDraft();
       if (holes.every(c => c.firstChild) && o.onDone) api.later(() => api.afterSpeech(() => {
         if (!api.locked) o.onDone(n);
       }), 450);
@@ -8288,6 +8463,19 @@ const Coach = (() => {
       c.dataset.coach = '1';
       c.classList.add('coachhole');
       tappable(c, () => fill(c));
+    });
+    api.persist({ id:draftId(api, 'fillTool', holes, o.from),
+      read(){ return holes.every(cell => cell.isConnected) ? {filled:holes.flatMap((cell, i) => cell.firstChild ? [i] : [])} : undefined; },
+      restore(d){
+        if (!d || !draftIndices(d.filled, holes.length)) return false;
+        holes.forEach((cell, i) => {
+          clear(cell);
+          if (d.filled.includes(i)){ cell.classList.remove('hole', 'coachhole'); cell.append(el('div.dot.b')); }
+          else cell.classList.add('hole', 'coachhole');
+        });
+        n = (o.from || 0) + d.filled.length;
+        return true;
+      }
     });
     return {
       fill,
@@ -8352,6 +8540,26 @@ const THINGS = [
 /* 「やってくる／いなくなる」が自然に言えるものだけを、動く文章題に出す。 */
 const MOVING_THINGS = THINGS.filter(thing => thing.moving);
 
+/* Drafts only describe the child's construction. The engine owns grading and
+   binds these values to the seeded question; never replay input to restore it. */
+function draftIndices(value, count){
+  return Array.isArray(value) && value.length <= count
+    && value.every(n => Number.isInteger(n) && n >= 0 && n < count)
+    && new Set(value).size === value.length;
+}
+function draftCounted(objs){
+  return objs.map((o, i) => ({ i, n: Number(($('.tag', o) || {}).textContent) }))
+    .filter(x => Number.isInteger(x.n) && x.n > 0).sort((a, b) => a.n - b.n).map(x => x.i);
+}
+function restoreCounted(objs, order){
+  objs.forEach(o => { o.classList.remove('counted'); const tag = $('.tag', o); if (tag) tag.remove(); });
+  order.forEach((i, n) => { objs[i].classList.add('counted'); objs[i].append(el('span.tag', { text: String(n + 1) })); });
+}
+function draftFinish(api, finish){
+  api.choices.append(el('button.btn.btn-accent.answer-submit', { type: 'button', text: 'できた！',
+    onclick(){ if (!api.locked) finish(); } }));
+}
+
 /* ============================================================
    1. かぞえよう — one-to-one correspondence & cardinality
    ============================================================ */
@@ -8383,6 +8591,7 @@ function countQuestion(api, lo, hi, layout){
     const old = $('.tag', o);
     if (old) old.remove();
     o.append(el('span.tag', { text: String(done) }));
+    api.saveDraft();
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done !== count) return;
@@ -8404,6 +8613,7 @@ function countQuestion(api, lo, hi, layout){
   });
 
   function ask(){
+    asked = true;
     api.clearHelp();
     api.setPrompt(`${thing.n}は ぜんぶで いくつ？`, `${thing.n}は、全部でいくつ？`);
     const n = hi <= 5 ? 3 : 4;
@@ -8415,6 +8625,7 @@ function countQuestion(api, lo, hi, layout){
     const recount = () => {
       done = 0;
       objs.forEach(o => { o.classList.remove('counted'); const t = $('.tag', o); if (t) t.remove(); });
+      api.saveDraft();
     };
     api.coach({
       text: 'もういちど ゆびで かぞえて みよう。さいごの かずが ぜんぶの かず',
@@ -8429,6 +8640,18 @@ function countQuestion(api, lo, hi, layout){
       }
     });
   }
+  api.persist({
+    id: 'count',
+    read(){ return { order: draftCounted(objs), asked }; },
+    restore(d){
+      if (!d || !draftIndices(d.order, objs.length) || typeof d.asked !== 'boolean') return false;
+      done = d.order.length; asked = d.asked || done === count;
+      restoreCounted(objs, d.order);
+      if (asked) ask();
+      return true;
+    },
+    afterHelp(d){ if (d && draftIndices(d.order, objs.length)){ done = d.order.length; restoreCounted(objs, d.order); } }
+  });
 }
 
 function giveQuestion(api, lo, hi){
@@ -8463,6 +8686,7 @@ function giveQuestion(api, lo, hi){
     if (picked.has(i)){ picked.delete(i); o.classList.remove('picked'); Sound.sfx.tap(); }
     else { picked.add(i); o.classList.add('picked'); Sound.sfx.count(picked.size - 1); Sound.say(numKana(picked.size), { delay: 0, rate: 1.08 }); }
     refresh();
+    api.saveDraft();
   };
   objs.forEach(o => tappable(o, () => toggle(o)));
   doneBtn.addEventListener('click', () => {
@@ -8494,6 +8718,17 @@ function giveQuestion(api, lo, hi){
     objs.forEach(o => { if (picked.has(o.dataset.i)) toggle(o); });
     objs.slice(0, target).forEach(o => toggle(o));
     doneBtn.click();
+  });
+  api.persist({
+    id: 'give',
+    read(){ return { picked: Array.from(picked, Number) }; },
+    restore(d){
+      if (!d || !draftIndices(d.picked, objs.length)) return false;
+      picked.clear();
+      d.picked.forEach(i => picked.add(String(i)));
+      objs.forEach((o, i) => o.classList.toggle('picked', picked.has(String(i))));
+      refresh(); return true;
+    }
   });
 }
 
@@ -8823,6 +9058,7 @@ function lineFill(api, lo, hi, gaps){
         cells[target].classList.add('filled');
         Sound.sfx.place();
         qi++;
+        api.saveDraft();
         if (qi < holes.length){
           api.later(askNext, 620);
           return false;            // more holes to go: keep this question open
@@ -8838,6 +9074,20 @@ function lineFill(api, lo, hi, gaps){
     });
   }
   askNext();
+  api.persist({
+    id: 'sequence',
+    read(){ return { qi }; },
+    restore(d){
+      if (!d || !Number.isInteger(d.qi) || d.qi < 0 || d.qi >= holes.length) return false;
+      qi = d.qi;
+      holes.forEach((v, i) => {
+        cells[v].textContent = i < qi ? String(v) : '?';
+        cells[v].classList.toggle('gap', i >= qi);
+        cells[v].classList.toggle('filled', i < qi);
+      });
+      askNext(); return true;
+    }
+  });
 }
 
 function nextBefore(api, hi){
@@ -9019,7 +9269,7 @@ function traceQuestion(api, digits){
     // again from its original start. Prefer continuation where a loop overlaps.
     const restart = near > START_TOL && progress > 0 && dist(p[0], p[1], st[0][0], st[0][1]) <= START_TOL;
     if (near <= START_TOL || restart){
-      if (restart){ progress = 0; redraw(); startMark(); }
+      if (restart){ progress = 0; redraw(); startMark(); api.saveDraft(); }
       drawing = true;
       clearTimeout(idleTimer);
       box.setPointerCapture && box.setPointerCapture(e.pointerId);
@@ -9046,10 +9296,12 @@ function traceQuestion(api, digits){
     const p = pt(e); if (!p) return;
     const st = strokes[si];
     const look = Math.min(st.length - 1, progress + 26);
+    const before = progress;
     for (let i = Math.max(progress, 1); i <= look; i++){
       if (dist(p[0], p[1], st[i][0], st[i][1]) <= TOL) progress = Math.max(progress, i + 1);
     }
     redraw();
+    if (progress !== before) api.saveDraft();
     armIdle();
     if (progress >= st.length - 2) completeStroke();
   }
@@ -9061,6 +9313,7 @@ function traceQuestion(api, digits){
     clear(gLive);
     Sound.sfx.place();
     si++; progress = 0;
+    api.saveDraft();
     if (si >= strokes.length){
       clear(gMark);
       api.later(() => api.correct(), 220);
@@ -9090,6 +9343,29 @@ function traceQuestion(api, digits){
   startMark();
   redraw();
   armIdle();
+  api.persist({
+    id: 'trace',
+    read(){ return { si, progress, strays, nudged, guide: !!$('.trace-ghost', box) }; },
+    restore(d){
+      if (!d || !Number.isInteger(d.si) || d.si < 0 || d.si > strokes.length
+        || !Number.isInteger(d.progress) || d.progress < 0
+        || d.progress > (d.si < strokes.length ? strokes[d.si].length : 0)
+        || !Number.isInteger(d.strays) || d.strays < 0 || d.strays > 100000
+        || typeof d.nudged !== 'boolean' || typeof d.guide !== 'boolean') return false;
+      clearTimeout(idleTimer); drawing = false;
+      si = d.si; progress = d.progress; strays = d.strays; nudged = d.nudged;
+      clear(gDone); clear(gMark);
+      strokes.slice(0, si).forEach(st => gDone.append(svg('path', { d: toPath(st), class: 'trace-done', fill: 'none',
+        'stroke-width': 13, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })));
+      startMark(); redraw();
+      if (d.guide) showGuide();
+      if (si === strokes.length){
+        cue.textContent = 'ぜんぶ なぞれたね。できたを おそう';
+        draftFinish(api, () => api.correct());
+      }
+      return true;
+    }
+  });
 }
 
 Games.add({
@@ -9404,7 +9680,7 @@ function ordinalVsCount(api, n){
     tappable(item, () => {
       if (api.locked) return;
       if (countMode){
-        if (marked.has(i)){ marked.delete(i); item.classList.remove('marked'); if (answerButtons) answerButtons[i].classList.remove('picked'); Sound.sfx.tap(); return; }
+        if (marked.has(i)){ marked.delete(i); item.classList.remove('marked'); if (answerButtons) answerButtons[i].classList.remove('picked'); Sound.sfx.tap(); api.saveDraft(); return; }
         marked.add(i); item.classList.add('marked'); if (answerButtons) answerButtons[i].classList.add('picked'); Sound.sfx.count(marked.size - 1);
         if (marked.size === k){
           const ok = Array.from(marked).every(v => v < k);
@@ -9416,6 +9692,7 @@ function ordinalVsCount(api, n){
             marked.clear();
           }
         }
+        api.saveDraft();
       } else {
         if (i === k - 1){ item.classList.add('correct'); if (answerButtons) answerButtons[i].classList.add('correct'); api.correct(); }
         else {
@@ -9434,6 +9711,11 @@ function ordinalVsCount(api, n){
   });
   ordinalBoard(api, q, el('div.dirmark', null, 'まえから', arrowSVG('right')), true);
   answerButtons = ordinalAnswers(api, critters, i => $$('.qi', q)[i].click());
+  if (countMode) api.persist({ id:'ordinalSet', read(){ return {marked:Array.from(marked)}; }, restore(d){
+    if (!d || !draftIndices(d.marked, n) || d.marked.length >= k) return false;
+    d.marked.forEach(i => { marked.add(i); $$('.qi', q)[i].classList.add('marked'); if (answerButtons) answerButtons[i].classList.add('picked'); });
+    return true;
+  } });
   api.coach({
     text: countMode ? `「${k}こ」は まえから ${k}ひき ぜんぶ` : `「${k}ばんめ」は その 1ぴき だけ`,
     say: countMode ? `${koKana(k)}は、前から${k}匹、全部だよ。` : `${banmeKana(k)}は、その一匹だけだよ。`,
@@ -9733,6 +10015,7 @@ function orderBySize(api){
         Sound.sfx.count(step - 1);
         if (step === n){ $$('.mrow', wrap).forEach(r => r.classList.add('correct')); api.correct(); }
         else { api.clearHelp(); api.coach(sizeCoach); }
+        api.saveDraft();
       } else {
         row.classList.add('wrong');
         api.later(() => row.classList.remove('wrong'), 460);
@@ -9756,6 +10039,15 @@ function orderBySize(api){
     }
   };
   api.coach(sizeCoach);
+  api.persist({ id:'sizeOrder', read(){ return {step}; }, restore(d){
+    if (!d || !Number.isInteger(d.step) || d.step < 0 || d.step >= n) return false;
+    step = d.step;
+    $$('.mrow', wrap).forEach(row => {
+      const index = wanted.indexOf(parseFloat($('.stickbar', row).style.width));
+      if (index < step){ row.classList.add('picked'); row.prepend(el('div.ordno', {text:String(index + 1)})); }
+    });
+    api.clearHelp(); api.coach(sizeCoach); return true;
+  } });
   api.onShow(() => {
     wanted.slice(step).forEach(len => {
       const r = $$('.mrow', wrap).find(x => !x.classList.contains('picked')
@@ -9944,6 +10236,7 @@ function makeTwoWays(api){
           return;
         }
         made.push(a);
+        api.saveDraft();
         b.classList.add('correct');
         draw();
         Sound.say(`${numKana(a)}と${numKana(whole-a)}。`, { delay: 120 });
@@ -9978,6 +10271,19 @@ function makeTwoWays(api){
     press(picks[0]);
     if (picks[1] != null) api.later(() => api.afterSpeech(() => press(picks[1])), 450);
   });
+  api.persist({
+    id: 'bondWays',
+    read(){ return { made: made.slice() }; },
+    restore(d){
+      if (!d || !Array.isArray(d.made) || d.made.length > 2
+        || !d.made.every(x => Number.isInteger(x) && x > 0 && x < whole)
+        || new Set(d.made.map(x => Math.min(x, whole - x))).size !== d.made.length) return false;
+      made.splice(0, made.length, ...d.made); draw();
+      if (made.length < 2) build();
+      else { clear(api.choices); draftFinish(api, () => api.correct({ quiet: true })); }
+      return true;
+    }
+  });
 }
 
 Games.add({
@@ -10011,34 +10317,33 @@ function fillToTen(api){
   }
   let count = start;
   const readout = el('div.hintline', { text: 'いま ' + count + 'こ' });
+  const askAdded = () => {
+    const add = 10 - start;
+    api.clearHelp();
+    api.setPrompt(`${numTag(start)} に <b>いくつ たした？</b>`, `${numKana(start)}に、いくつ足した？`);
+    readout.textContent = 'あかい まるが たした かず';
+    api.buildChoices(shuffle([add].concat(distractors(add, 2, 1, 9))), add, { correctOpts: { delay: 900 } });
+    const added = cells.slice(start);
+    const countAdded = Coach.once(() => Coach.countable(api, added));
+    api.coach({
+      text: 'たした あかい まるだけを タップして かぞえよう',
+      say: '足した赤い丸だけを、タップして数えよう。',
+      tool(){ countAdded(); Coach.pulse(added); },
+      walk(){ return countAdded().steps(); }
+    });
+  };
   cells.forEach((cell, i) => {
     if (i < start) return;
     cell.addEventListener('click', () => {
       if (api.locked || cell.firstChild) return;
       cell.append(el('div.dot.b'));
       count++;
+      api.saveDraft();
       Sound.sfx.count(count - 1);
       Sound.say(numKana(count), { delay: 0, rate: 1.08 });
       readout.textContent = 'いま ' + count + 'こ';
       if (count === 10){
-        api.later(() => api.afterSpeech(() => {
-          const add = 10 - start;
-          api.clearHelp();
-          api.setPrompt(`${numTag(start)} に <b>いくつ たした？</b>`,
-                        `${numKana(start)}に、いくつ足した？`);
-          readout.textContent = 'あかい まるが たした かず';
-          api.buildChoices(shuffle([add].concat(distractors(add, 2, 1, 9))), add, {
-            correctOpts: { delay: 900 }
-          });
-          const added = cells.slice(start);
-          const countAdded = Coach.once(() => Coach.countable(api, added));
-          api.coach({
-            text: 'たした あかい まるだけを タップして かぞえよう',
-            say: '足した赤い丸だけを、タップして数えよう。',
-            tool(){ countAdded(); Coach.pulse(added); },
-            walk(){ return countAdded().steps(); }
-          });
-        }), 300);
+        api.later(() => api.afterSpeech(askAdded), 300);
       }
     });
   });
@@ -10052,6 +10357,18 @@ function fillToTen(api){
   api.onShow(() => {
     cells.filter(c => !c.firstChild).forEach(c => c.click());
     api.later(() => api.afterSpeech(() => { const b = $('.choice.correct') || $$('.choice', api.choices).find(x => x.textContent === String(10 - start)); if (b) b.click(); }), 650);
+  });
+  api.persist({
+    id: 'fillTen',
+    read(){ return { filled: cells.map((c, i) => i >= start && c.firstChild ? i : -1).filter(i => i >= 0) }; },
+    restore(d){
+      if (!d || !draftIndices(d.filled, 10) || d.filled.some(i => i < start)) return false;
+      cells.slice(start).forEach(c => clear(c));
+      d.filled.forEach(i => cells[i].append(el('div.dot.b')));
+      count = start + d.filled.length; readout.textContent = 'いま ' + count + 'こ';
+      if (count === 10) askAdded();
+      return true;
+    }
   });
 }
 
@@ -10125,7 +10442,7 @@ function pairHunt(api){
       if (api.locked || c.classList.contains('correct')) return;
       if (picked.indexOf(c) >= 0){
         picked.splice(picked.indexOf(c), 1); c.classList.remove('picked');
-        c.style.borderColor = ''; Sound.sfx.tap(); return;
+        c.style.borderColor = ''; Sound.sfx.tap(); api.saveDraft(); return;
       }
       picked.push(c); c.style.borderColor = 'var(--accent)'; Sound.sfx.tap();
       if (picked.length === 2){
@@ -10138,6 +10455,7 @@ function pairHunt(api){
           picked.length = 0;
         }
       }
+      api.saveDraft();
     });
     row.append(c);
   });
@@ -10165,6 +10483,18 @@ function pairHunt(api){
     const c2 = cs.find(c => c !== c1 && Number(c.textContent) === b);
     [c1, c2].forEach(c => { if (c) c.click(); });
   });
+  api.persist({
+    id: 'tenPair',
+    read(){ return { picked: picked.map(c => Array.from(row.children).indexOf(c)) }; },
+    restore(d){
+      if (!d || !draftIndices(d.picked, cards.length) || d.picked.length > 1) return false;
+      picked.length = 0;
+      const cs = $$('.choice', row);
+      cs.forEach(c => { c.classList.remove('picked'); c.style.borderColor = ''; });
+      d.picked.forEach(i => { picked.push(cs[i]); cs[i].style.borderColor = 'var(--accent)'; });
+      return true;
+    }
+  });
 }
 
 /** Build ten from three numbers. Multiple answers are accepted; the app evaluates
@@ -10179,7 +10509,7 @@ function threeMakeTen(api){
   const readout = el('div.three-sum', { 'aria-label': '3つの かずで 10' });
   const slots = [0, 1, 2].map(i => el('button.three-sum-slot', {
     type: 'button',
-    onclick(){ if (!api.locked){ active = i; redraw(); Sound.sfx.tap(); } }
+    onclick(){ if (!api.locked){ active = i; redraw(); Sound.sfx.tap(); api.saveDraft(); } }
   }));
   slots.forEach((slot, i) => {
     if (i) readout.append(el('span', { text: '＋', 'aria-hidden': 'true' }));
@@ -10193,6 +10523,7 @@ function threeMakeTen(api){
       const before = history.pop();
       picked.splice(0, picked.length, ...before.picked); active = before.active;
       redraw(); Sound.sfx.tap();
+      api.saveDraft();
     }
   });
   const submit = el('button.btn.btn-accent.answer-submit.three-submit', {
@@ -10226,6 +10557,7 @@ function threeMakeTen(api){
       // Later attempts belong to the engine's hint/demonstration ladder. Do not
       // interrupt that narration with the first attempt's correction prompt.
       if (++submittedWrong === 1) Sound.say(`合わせると${numKana(sum)}だね。かずを押すと、選び直せるよ。`, { delay: 280 });
+      api.saveDraft();
     }
   }
   for (let v = 0; v <= 9; v++){
@@ -10236,6 +10568,7 @@ function threeMakeTen(api){
       picked[active] = v;
       active = active < 2 ? active + 1 : null;
       redraw(); Sound.sfx.tap();
+      api.saveDraft();
     });
     keys.push(b);
     api.choices.append(b);
@@ -10258,6 +10591,21 @@ function threeMakeTen(api){
   api.onShow(() => {
     picked.splice(0, picked.length, 5, 2, 3); active = null;
     redraw(); send();
+  });
+  api.persist({
+    id: 'threeTen',
+    read(){ return { picked: picked.slice(), active, history: history.slice(-100).map(x => ({ picked: x.picked.slice(), active: x.active })), submittedWrong }; },
+    restore(d){
+      const terms = xs => Array.isArray(xs) && xs.length <= 3 && xs.every(x => Number.isInteger(x) && x >= 0 && x <= 9);
+      const cursor = (x, xs) => x === null ? xs.length === 3 : Number.isInteger(x) && x >= 0 && x <= Math.min(2, xs.length);
+      if (!d || !terms(d.picked) || !cursor(d.active, d.picked)
+        || !Array.isArray(d.history) || d.history.length > 100
+        || !d.history.every(x => x && terms(x.picked) && cursor(x.active, x.picked))
+        || !Number.isInteger(d.submittedWrong) || d.submittedWrong < 0 || d.submittedWrong > 100000) return false;
+      picked.splice(0, picked.length, ...d.picked); active = d.active; submittedWrong = d.submittedWrong;
+      history.splice(0, history.length, ...d.history.map(x => ({ picked: x.picked.slice(), active: x.active })));
+      redraw(); return true;
+    }
   });
 }
 
@@ -10560,6 +10908,7 @@ function findAllShapes(api){
       if (c.hit){
         b.classList.add('picked'); found++; Sound.sfx.count(found - 1); drawTally();
         if (found === nTarget){ $$('.shapebtn.picked', grid).forEach(x => x.classList.add('correct')); api.correct(); }
+        api.saveDraft();
       } else {
         b.classList.add('wrong'); api.later(() => b.classList.remove('wrong'), 460); api.wrong(b);
       }
@@ -10569,6 +10918,13 @@ function findAllShapes(api){
   });
   drawTally();
   api.field.append(grid, tally, el('div.hintline', { text: 'むきが かわっても おなじ かたちだよ' }));
+  api.persist({ id:'foundShapes', read(){ return {picked:$$('.shapebtn', grid).flatMap((b, i) => b.classList.contains('picked') ? [i] : [])}; }, restore(d){
+    const buttons = $$('.shapebtn', grid);
+    if (!d || !draftIndices(d.picked, buttons.length) || d.picked.some(i => buttons[i].dataset.hit !== '1')) return false;
+    d.picked.forEach(i => buttons[i].classList.add('picked')); found = d.picked.length; drawTally();
+    if (found === nTarget) draftFinish(api, () => api.correct());
+    return true;
+  } });
   api.onShow(() => {
     $$('.shapebtn', grid).forEach(b => {
       if (b.dataset.hit === '1' && !b.classList.contains('picked')) b.click();
@@ -10762,6 +11118,7 @@ function shapePuzzle(api){
   const colors = shuffle(SHAPE_COLORS);
   let filled = 0;
   const dd = UI.makeDragDrop({
+    onChange(){ api.saveDraft(); },
     /* The piece in the child's hand is drawn at exactly the size of the hole it is
        going into. The tray tile has to be a tap-sized box whatever the piece, so
        tile size can never mean hole size; the thing being dragged can. */
@@ -10794,6 +11151,7 @@ function shapePuzzle(api){
         poly.setAttribute('stroke-width', '1.6');
         poly.classList.remove('glow', 'slot-focus');
         poly.dataset.filled = slot.dataset.filled = '1';
+        slot.dataset.tile = item.dataset.idx;
         slot.disabled = true;
         item.classList.add('used');
         filled++;
@@ -10830,6 +11188,29 @@ function shapePuzzle(api){
     tray.append(t);
   });
   api.field.append(el('div.hintline', { text: 'ゆびで はめて みよう' }));
+  const restorePuzzleSelection = d => {
+    dd.clearSel();
+    if (d && d.selected !== null){ const tile = $$('.shapetile', tray).find(t => Number(t.dataset.idx) === d.selected); if (tile && !tile.classList.contains('used')) dd.select(tile); }
+  };
+  api.persist({ id:'shapePuzzle', read(){ return {
+    placed:slots.flatMap((slot, i) => slot.dataset.filled === '1' ? [{slot:i, tile:Number(slot.dataset.tile)}] : []),
+    selected:dd.selected && !dd.selected.classList.contains('used') ? Number(dd.selected.dataset.idx) : null
+  }; }, restore(d){
+    if (!d || !Array.isArray(d.placed) || d.placed.length > slots.length
+        || !draftIndices(d.placed.map(p => p && p.slot), slots.length) || !draftIndices(d.placed.map(p => p && p.tile), slots.length)
+        || d.placed.some(p => slots[p.slot].dataset.sig !== signature(pz.pieces[p.tile].pts))
+        || !(d.selected === null || Number.isInteger(d.selected) && d.selected >= 0 && d.selected < slots.length && !d.placed.some(p => p.tile === d.selected))) return false;
+    const tiles = $$('.shapetile', tray);
+    d.placed.forEach(p => {
+      const slot = slots[p.slot], item = tiles.find(t => Number(t.dataset.idx) === p.tile), poly = slot._shape;
+      poly.setAttribute('fill', item.dataset.color); poly.setAttribute('stroke', edge(item.dataset.color)); poly.setAttribute('stroke-dasharray', '');
+      poly.dataset.filled = slot.dataset.filled = '1'; slot.dataset.tile = String(p.tile); slot.disabled = true;
+      item.classList.add('used'); item.disabled = true;
+    });
+    filled = d.placed.length; restorePuzzleSelection(d);
+    if (filled === slots.length) draftFinish(api, () => api.correct());
+    return true;
+  }, afterHelp:restorePuzzleSelection });
   /* Glowing the one hole a piece fits finished the puzzle for the child. The piece is
      picked up and every open hole with as many corners is marked: which way round it
      goes is still theirs to see (ちょうちょ's four triangles all light up). */
@@ -10925,15 +11306,18 @@ function sortGame(api, catset, nBins, byColor){
     else sample(catset[k].items, perBin).forEach(e => picks.push({ e, k }));
   });
   let placed = 0;
+  const placedOrder = [];
   const totalItems = picks.length;
 
   const dd = UI.makeDragDrop({
+    onChange(){ api.saveDraft(); },
     onDrop(item, target){
       if (api.locked) return;
       if (item.dataset.cat === target.dataset.cat){
         const copy = item.firstElementChild ? item.firstElementChild.cloneNode(true) : el('span', { text: item.textContent });
         $('.hold', target).append(el('span.item', null, copy));
         item.classList.add('gone');
+        placedOrder.push($$('.tile', tray).indexOf(item));
         placed++;
         Sound.sfx.place();
         if (placed === totalItems) api.later(() => api.correct(), 300);
@@ -10966,6 +11350,18 @@ function sortGame(api, catset, nBins, byColor){
     tray.append(t);
   });
   api.field.append(el('div.hintline', { text: 'ゆびで はこに いれてね' }));
+  const restoreSortSelection = d => { dd.clearSel(); if (d && d.selected !== null){ const tile = $$('.tile', tray)[d.selected]; if (tile && !tile.classList.contains('gone')) dd.select(tile); } };
+  api.persist({ id:'sorting', read(){ return {order:placedOrder.slice(), selected:dd.selected && !dd.selected.classList.contains('gone') ? $$('.tile', tray).indexOf(dd.selected) : null}; }, restore(d){
+    const tiles = $$('.tile', tray);
+    if (!d || !draftIndices(d.order, tiles.length) || !(d.selected === null || Number.isInteger(d.selected) && d.selected >= 0 && d.selected < tiles.length && !d.order.includes(d.selected))) return false;
+    d.order.forEach(i => {
+      const tile = tiles[i], copy = tile.firstElementChild ? tile.firstElementChild.cloneNode(true) : el('span', {text:tile.textContent});
+      $('.hold', binMap[tile.dataset.cat]).append(el('span.item', null, copy)); tile.classList.add('gone'); tile.disabled = true;
+    });
+    placedOrder.push(...d.order); placed = d.order.length; restoreSortSelection(d);
+    if (placed === totalItems) draftFinish(api, () => api.correct());
+    return true;
+  }, afterHelp:restoreSortSelection });
   // the piece in hand and the pictures on the boxes — not a glow on the right box
   api.coach({
     text: byColor ? 'いろを よく みて はこを えらぼう' : 'なんの なかまかな？ はこの えを みてね',
@@ -11043,6 +11439,7 @@ function patternQuestion(api, unitKind, blanks){
         cars[at].classList.add('filled');
         Sound.sfx.place();
         hi++;
+        api.saveDraft();
         if (hi < holes.length){ api.later(askHole, 560); return false; }
         return true;
       }
@@ -11062,6 +11459,13 @@ function patternQuestion(api, unitKind, blanks){
     });
   }
   askHole();
+  api.persist({ id:'patternHoles', read(){ return {hi}; }, restore(d){
+    if (!d || !Number.isInteger(d.hi) || d.hi < 0 || d.hi > holes.length) return false;
+    hi = d.hi;
+    holes.slice(0, hi).forEach(at => { cars[at].textContent = seq[at]; cars[at].classList.remove('blank', 'now'); cars[at].classList.add('filled'); });
+    if (hi < holes.length) askHole(); else { clear(api.choices); draftFinish(api, () => api.correct()); }
+    return true;
+  } });
 }
 
 /** Let the child author the repeating unit, then show the rule they created. */
@@ -11079,6 +11483,7 @@ function createPattern(api){
       if (api.locked) return;
       if (chosen.indexOf(v) >= 0) return;     // a child's double tap is one choice
       chosen.push(v);
+      api.saveDraft();
       const cars = $$('.car', train);
       cars.forEach((c, i) => {
         if (i >= chosen.length && chosen.length < 2) return;
@@ -11104,6 +11509,14 @@ function createPattern(api){
     walk(){ return $$('.choice:not(.picked)', api.choices).slice(0, 2 - chosen.length).map(b => ({ at: b, ms: 900 })); }
   };
   api.coach(patternCoach);
+  api.persist({ id:'patternCreation', read(){ return {chosen:chosen.slice()}; }, restore(d){
+    if (!d || !Array.isArray(d.chosen) || d.chosen.length > 2 || new Set(d.chosen).size !== d.chosen.length || d.chosen.some(v => !opts.includes(v))) return false;
+    chosen.push(...d.chosen);
+    $$('.car', train).forEach((c, i) => { if (chosen.length && (chosen.length === 2 || i < chosen.length)){ c.classList.remove('empty'); c.textContent = chosen[i % chosen.length]; } });
+    $$('.choice', api.choices).forEach(b => { if (chosen.includes(b.textContent)) b.classList.add('picked'); });
+    if (chosen.length === 2){ clear(api.choices); api.setPrompt('できた きまりを こえに だして いってみよう', 'できた決まりを、声に出して言ってみよう。'); draftFinish(api, () => api.correct({quiet:true, delay:1300})); }
+    api.clearHelp(); api.coach(patternCoach); return true;
+  } });
   api.onShow(() => {
     $$('.choice:not(.picked)', api.choices).slice(0, 2 - chosen.length).forEach(b => b.click());
   });
@@ -11282,7 +11695,7 @@ function setClock(api, hand){
       v = Math.round(ang / (Math.PI * 2) * 12);
       if (v === 0) v = 12;
     }
-    if (v !== cur){ cur = v; Sound.sfx.tap(); paint(); }
+    if (v !== cur){ cur = v; Sound.sfx.tap(); paint(); api.saveDraft(); }
   }
   clock.addEventListener('pointerdown', e => {
     if (api.locked) return;
@@ -11307,24 +11720,28 @@ function setClock(api, hand){
     ? [
         el('button.btn.clock-adjust', {
           type: 'button', text: 'ながい はりを 12に',
-          onclick(){ if (!api.locked){ cur = 0; Sound.sfx.tap(); paint(); } }
+          onclick(){ if (!api.locked){ cur = 0; Sound.sfx.tap(); paint(); api.saveDraft(); } }
         }),
         el('button.btn.clock-adjust', {
           type: 'button', text: 'ながい はりを 6に',
-          onclick(){ if (!api.locked){ cur = 30; Sound.sfx.tap(); paint(); } }
+          onclick(){ if (!api.locked){ cur = 30; Sound.sfx.tap(); paint(); api.saveDraft(); } }
         })
       ]
     : [
         el('button.btn.clock-adjust', {
           type: 'button', text: '1じ もどす',
-          onclick(){ if (!api.locked){ cur = cur === 1 ? 12 : cur - 1; Sound.sfx.tap(); paint(); } }
+          onclick(){ if (!api.locked){ cur = cur === 1 ? 12 : cur - 1; Sound.sfx.tap(); paint(); api.saveDraft(); } }
         }),
         el('button.btn.clock-adjust', {
           type: 'button', text: '1じ すすめる',
-          onclick(){ if (!api.locked){ cur = cur === 12 ? 1 : cur + 1; Sound.sfx.tap(); paint(); } }
+          onclick(){ if (!api.locked){ cur = cur === 12 ? 1 : cur + 1; Sound.sfx.tap(); paint(); api.saveDraft(); } }
         })
       ];
   api.choices.append(...controls, check);
+  api.persist({ id:'clockHand', read(){ return {cur}; }, restore(d){
+    if (!d || !Number.isInteger(d.cur) || (minuteMode ? d.cur < 0 || d.cur > 55 || d.cur % 5 !== 0 : d.cur < 1 || d.cur > 12)) return false;
+    cur = d.cur; paint(); return true;
+  } });
   api.coach({
     text: minuteMode ? '「はん」の とき、ながい はりは 6を さすよ' : 'みじかい はりが ' + targetHour + ' を さすように まわそう',
     say: minuteMode ? 'はん、の時、長い針は6を指すよ。' : `短い針が、${numKana(targetHour)}を指すように、回そう。`,
@@ -11340,7 +11757,7 @@ function setClock(api, hand){
       for (let g = 0; g < 13 && v !== goal; g++){
         v = minuteMode ? (v + 5) % 60 : v % 12 + 1;
         const vv = v;
-        steps.push({ at: minuteMode ? minuteHand : hourHand, act(){ cur = vv; Sound.sfx.tap(); paint(); }, ms: 380 });
+        steps.push({ at: minuteMode ? minuteHand : hourHand, act(){ cur = vv; Sound.sfx.tap(); paint(); api.saveDraft(); }, ms: 380 });
       }
       steps.push({ at: check, say: 'できたら、これでいい、を押そう。', ms: 1900 });
       return steps;
@@ -11429,6 +11846,7 @@ function collectSame(api){
     done++;
     o.classList.add('counted');
     o.append(el('span.tag', { text: String(done) }));
+    api.saveDraft();
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done === n) api.later(() => api.afterSpeech(ask), 640);
@@ -11457,6 +11875,16 @@ function collectSame(api){
     tool(){ const left = remaining()[0]; if (left) left.classList.add('glow'); },
     // the hand gathers them: showing the rule is putting it to use
     walk(){ return remaining().map(o => ({ at: o, act(){ o.click(); }, ms: 800 })); }
+  });
+  api.persist({
+    id: 'collectSet',
+    read(){ return { order: draftCounted(objs) }; },
+    restore(d){
+      if (!d || !draftIndices(d.order, objs.length) || d.order.some(i => objs[i].dataset.hit !== '1')) return false;
+      done = d.order.length; restoreCounted(objs, d.order);
+      if (done === n) ask();
+      return true;
+    }
   });
 }
 
@@ -11591,18 +12019,20 @@ function ownGroup(api){
   api.field.append(field);
 
   let chosen = null, done = 0;
+  const choose = k => {
+    chosen = k;
+    api.clearHelp(); api.coach(groupCoach); clear(api.choices);
+    const cat = CATS[k];
+    api.setPrompt(`<b>${cat.lbl}</b> を ぜんぶ あつめよう`, `${cat.lbl}を、全部集めよう。`);
+    objs.forEach(o => tappable(o, () => tap(o)));
+    api.saveDraft();
+  };
   keys.forEach(k => {
     const b = el('button.choice.pic', { type: 'button', text: CATS[k].lbl });
     b.addEventListener('click', () => {
       if (api.locked || chosen) return;
-      chosen = k;
-      api.clearHelp();
-      api.coach(groupCoach);
+      choose(k);
       Sound.sfx.tap();
-      clear(api.choices);
-      const cat = CATS[k];
-      api.setPrompt(`<b>${cat.lbl}</b> を ぜんぶ あつめよう`, `${cat.lbl}を、全部集めよう。`);
-      objs.forEach(o => tappable(o, () => tap(o)));
     });
     api.choices.append(b);
   });
@@ -11619,6 +12049,7 @@ function ownGroup(api){
     done++;
     o.classList.add('counted');
     o.append(el('span.tag', { text: String(done) }));
+    api.saveDraft();
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done === per){
@@ -11642,6 +12073,22 @@ function ownGroup(api){
   api.onShow(() => {
     if (!chosen){ const b = $('.choice', api.choices); if (b) b.click(); }
     left().forEach(o => o.click());
+  });
+  api.persist({
+    id: 'ownSet',
+    read(){ return { chosen, order: draftCounted(objs) }; },
+    restore(d){
+      if (!d || !(d.chosen === null || keys.includes(d.chosen)) || !draftIndices(d.order, objs.length)
+        || d.order.some(i => objs[i].dataset.cat !== d.chosen) || d.order.length > per) return false;
+      if (d.chosen) choose(d.chosen);
+      done = d.order.length; restoreCounted(objs, d.order);
+      if (done === per){
+        api.setPrompt(`${CATS[chosen].lbl} の なかまが <b>${per}</b>こ あつまったね！`,
+          `${CATS[chosen].lbl}の仲間が、${koKana(per)}集まったね。`);
+        draftFinish(api, () => api.correct({ quiet: true }));
+      }
+      return true;
+    }
   });
 }
 
@@ -11710,6 +12157,7 @@ function pairUp(api, na, nb, onSettled, opts){
     // one below" guidance has finished. Keep its supported-answer record.
     if (api.clearHelp) api.clearHelp();
     onSettled(made);
+    api.saveDraft();
   }
 
   function tap(it){
@@ -11721,6 +12169,7 @@ function pairUp(api, na, nb, onSettled, opts){
       marked = it;
       it.classList.add('marked');
       Sound.sfx.tap();
+      api.saveDraft();
       return;
     }
     made.pairs++;
@@ -11730,6 +12179,7 @@ function pairUp(api, na, nb, onSettled, opts){
       x.append(el('span.tag', { text: String(made.pairs) }));
     });
     marked = null;
+    api.saveDraft();
     Sound.sfx.count(made.pairs - 1);
     Sound.say(numKana(made.pairs), { delay: 0, rate: 1.08 });
     if (made.pairs === Math.min(na, nb)) api.later(() => api.afterSpeech(settle), 620);
@@ -11764,6 +12214,44 @@ function pairUp(api, na, nb, onSettled, opts){
         steps.push({ at: as[i], act(){ tap(as[i]); }, ms: 520 }, { at: bs[i], act(){ tap(bs[i]); }, ms: 760 });
       }
       return steps;
+    }
+  });
+  api.persist({
+    id: 'pairBoard',
+    read(){
+      const as = itemsOf(rowA), bs = itemsOf(rowB);
+      const pair = (row, n) => row.findIndex(x => Number(($('.tag', x) || {}).textContent) === n);
+      return { pairs: Array.from({ length: made.pairs }, (_, i) => [pair(as, i + 1), pair(bs, i + 1)]),
+        marked: marked ? { side: marked.dataset.side, index: (marked.dataset.side === 'a' ? as : bs).indexOf(marked) } : null,
+        extra: made.readDraft ? made.readDraft() : null };
+    },
+    restore(d){
+      if (!d || !Array.isArray(d.pairs) || d.pairs.length > Math.min(na, nb)
+        || !d.pairs.every(p => Array.isArray(p) && p.length === 2)
+        || !draftIndices(d.pairs.map(p => p[0]), na) || !draftIndices(d.pairs.map(p => p[1]), nb)) return false;
+      if (d.marked !== null && (!d.marked || !['a', 'b'].includes(d.marked.side)
+        || !Number.isInteger(d.marked.index) || d.marked.index < 0
+        || d.marked.index >= (d.marked.side === 'a' ? na : nb)
+        || d.pairs.some(p => p[d.marked.side === 'a' ? 0 : 1] === d.marked.index))) return false;
+      if (d.extra !== null && (!(opts && opts.validateDraft && opts.validateDraft(d.extra))
+        || d.pairs.length !== Math.min(na, nb))) return false;
+      made.pairs = d.pairs.length;
+      const as = itemsOf(rowA), bs = itemsOf(rowB);
+      d.pairs.forEach((p, i) => [as[p[0]], bs[p[1]]].forEach(x => {
+        x.classList.add('paired'); x.append(el('span.tag', { text: String(i + 1) }));
+      }));
+      if (d.marked){ marked = (d.marked.side === 'a' ? as : bs)[d.marked.index]; marked.classList.add('marked'); }
+      if (made.pairs === Math.min(na, nb)){
+        settle();
+        if (d.extra !== null && made.restoreDraft) made.restoreDraft(d.extra);
+      }
+      return true;
+    },
+    afterHelp(d){
+      if (settled || !d) return;
+      if (marked) marked.classList.remove('marked');
+      marked = d.marked ? itemsOf(d.marked.side === 'a' ? rowA : rowB)[d.marked.index] : null;
+      if (marked) marked.classList.add('marked');
     }
   });
   return made;
@@ -11856,14 +12344,17 @@ function pairMakeSame(api){
       api.setPrompt(`${shortThing.e} を たして <b>おなじ かず</b>に しよう`,
                     `${shortThing.n}を足して、同じ数にしよう。`);
       let added = 0;
+      const fillSlot = slot => {
+        slot.dataset.filled = '1'; slot.classList.remove('tappable'); slot.textContent = shortThing.e;
+      };
       for (let i = 0; i < need + 2; i++){
         const slot = el('div.cell.tappable.pairslot');
+        slot.dataset.slot = String(i);
         tappable(slot, () => {
           if (api.locked || slot.dataset.filled === '1') return;
-          slot.dataset.filled = '1';
-          slot.classList.remove('tappable');
-          slot.textContent = shortThing.e;
+          fillSlot(slot);
           added++;
+          api.saveDraft();
           Sound.sfx.place();
           if (added === need){
             $$('.pairslot', short).forEach(s => { if (s.dataset.filled !== '1') s.remove(); });
@@ -11878,6 +12369,17 @@ function pairMakeSame(api){
         });
         made.append(short, slot);
       }
+      made.readDraft = () => ({ filled: $$('.pairslot', short).filter(s => s.dataset.filled === '1').map(s => Number(s.dataset.slot)) });
+      made.restoreDraft = d => {
+        const slots = $$('.pairslot', short);
+        d.filled.forEach(i => fillSlot(slots[i])); added = d.filled.length;
+        if (added === need){
+          slots.filter(s => s.dataset.filled !== '1').forEach(s => s.remove()); made.reflow(short);
+          api.setPrompt(`どちらも <b>${Math.max(A, B)}</b>こ。おなじに なったね！`,
+            `どちらも${koKana(Math.max(A, B))}。同じになったね。`);
+          draftFinish(api, () => api.correct({ quiet: true }));
+        }
+      };
       api.coach({
         text: 'あまって いる ぶんだけ たそう',
         say: '余っている分だけ、足そう。',
@@ -11913,7 +12415,9 @@ function pairMakeSame(api){
         walk(){ return cnt().steps(); }
       });
     }
-  }, { extra: byTapping ? 2 : 0 });
+  }, { extra: byTapping ? 2 : 0,
+    validateDraft(d){ return byTapping && d && draftIndices(d.filled, big - small + 2) && d.filled.length <= big - small; }
+  });
 }
 
 Games.add({
@@ -12144,43 +12648,49 @@ function plusOrMinus(api){
     String(a), el('span.op.opbox', { text: '?' }), String(b),
     el('span.op', { text: '＝' }), el('span.box', { text: '?' }));
   api.field.append(eq);
+  let calculating = false;
+  const calculate = () => {
+    calculating = true;
+    $('.opbox', eq).textContent = plus ? '＋' : '−';
+    $('.opbox', eq).classList.add('filled');
+    api.clearHelp();
+    api.setPrompt(st.q, st.q);
+    let solved = false;
+    api.buildPad(ans, revealed(() => { solved = true; fillBlank($('.box', eq), ans); eq.hidden = false; }));
+    const picture = Coach.once(() => {
+      const frames = el('div.frameset');
+      // The words and the manipulatives each need room above a phone's
+      // keypad. Keep the original story available, one view at a time.
+      const summary = el('summary.btn.btn-ghost', { text: '📖 おはなしを みる' });
+      const recap = el('details.story-recap', null, summary);
+      card.before(recap); recap.append(card); eq.hidden = true;
+      recap.addEventListener('toggle', () => {
+        frames.hidden = recap.open; eq.hidden = !solved;
+        summary.textContent = recap.open ? 'まるの ヒントに もどる' : '📖 おはなしを みる';
+      });
+      const frame = partFrame(a + (plus ? b : 0), a);
+      if (plus){
+        $$('.cell', frame).slice(a).forEach(c => { c.classList.remove('hole'); c.append(el('div.dot.b')); });
+      } else {
+        $$('.cell', frame).slice(a - b).forEach(c => c.classList.add('coachgone'));
+      }
+      frames.append(frame); api.field.append(frames);
+      return { frame, count: Coach.countable(api, $$('.cell', frame).filter(c => !c.classList.contains('coachgone'))) };
+    });
+    api.coach({
+      text: plus ? 'あおと あかを あわせて かぞえよう' : 'のこりの まるを かぞえよう',
+      say: plus ? '初めの丸と、増えた赤い丸を、合わせて数えよう。' : '食べた、あげた分を除いて、残りの丸を数えよう。',
+      tool(){ picture(); },
+      walk(){ return picture().count.steps(); }
+    });
+  };
   api.buildChoices(['＋', '−'], plus ? '＋' : '−', {
     onPick(v){
+      calculating = true;
       $('.opbox', eq).textContent = v;
       $('.opbox', eq).classList.add('filled');
-      Sound.sfx.place();
-      api.later(() => {
-        api.clearHelp();
-        api.setPrompt(st.q, st.q);
-        let solved = false;
-        api.buildPad(ans, revealed(() => { solved = true; fillBlank($('.box', eq), ans); eq.hidden = false; }));
-        const picture = Coach.once(() => {
-          const frames = el('div.frameset');
-          // The words and the manipulatives each need room above a phone's
-          // keypad. Keep the original story available, one view at a time.
-          const summary = el('summary.btn.btn-ghost', { text: '📖 おはなしを みる' });
-          const recap = el('details.story-recap', null, summary);
-          card.before(recap); recap.append(card); eq.hidden = true;
-          recap.addEventListener('toggle', () => {
-            frames.hidden = recap.open; eq.hidden = !solved;
-            summary.textContent = recap.open ? 'まるの ヒントに もどる' : '📖 おはなしを みる';
-          });
-          const frame = partFrame(a + (plus ? b : 0), a);
-          if (plus){
-            $$('.cell', frame).slice(a).forEach(c => { c.classList.remove('hole'); c.append(el('div.dot.b')); });
-          } else {
-            $$('.cell', frame).slice(a - b).forEach(c => c.classList.add('coachgone'));
-          }
-          frames.append(frame); api.field.append(frames);
-          return { frame, count: Coach.countable(api, $$('.cell', frame).filter(c => !c.classList.contains('coachgone'))) };
-        });
-        api.coach({
-          text: plus ? 'あおと あかを あわせて かぞえよう' : 'のこりの まるを かぞえよう',
-          say: plus ? '初めの丸と、増えた赤い丸を、合わせて数えよう。' : '食べた、あげた分を除いて、残りの丸を数えよう。',
-          tool(){ picture(); },
-          walk(){ return picture().count.steps(); }
-        });
-      }, 420);
+      api.saveDraft(); Sound.sfx.place();
+      api.later(calculate, 420);
       return false;                    // the operation was only half the question
     }
   });
@@ -12202,6 +12712,15 @@ function plusOrMinus(api){
       markVerb();
       return [{ at: () => $('mark', card), say: plus ? '増えたお話。' : '減ったお話。', ms: 1700 },
               { at: () => $('.opbox', eq), say: plus ? 'だから、たす。' : 'だから、ひく。', ms: 1700 }];
+    }
+  });
+  api.persist({
+    id: 'wordOperation',
+    read(){ return { calculating }; },
+    restore(d){
+      if (!d || typeof d.calculating !== 'boolean') return false;
+      if (d.calculating) calculate();
+      return true;
     }
   });
 }
@@ -12554,6 +13073,10 @@ const Adventures = (() => {
 
 const FirstSteps = (() => {
   let node, detail, choices, result, active = null, finishSpeech = '';
+  function withOrigin(game, levelIndex, opts){
+    return UI.currentName() === 'levels' && Levels.game === game
+      ? Object.assign({}, opts, {returnToLevels:Levels.captureReturn(levelIndex)}) : opts || null;
+  }
   function target(){
     const rec = Diagnostic.current();
     const g = rec && Games.byId[rec.gameId];
@@ -12635,7 +13158,7 @@ const FirstSteps = (() => {
   function startPlan(t, opts){
     if (!t) return;
     if (t.kind === 'support'){
-      build(); active = {game:t.game, levelIndex:t.levelIndex, opts:opts || null};
+      build(); active = {game:t.game, levelIndex:t.levelIndex, opts:withOrigin(t.game, t.levelIndex, opts)};
       Session.startFirst(t.game, t.levelIndex, 'afterShow');
     } else startOne(t.game, t.levelIndex, t.kind ? t.kind !== 'new' : undefined, opts);
   }
@@ -12684,7 +13207,13 @@ const FirstSteps = (() => {
     node = el('div#first-steps', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){
+            Sound.sfx.tap();
+            const origin = active && active.opts;
+            if (origin && origin.returnToBook) Book.returnToBook();
+            else if (origin && origin.returnToLevels) Levels.returnToList(origin.returnToLevels);
+            else { Home.render(); UI.show('home', { replace: true }); }
+          } }, '←'),
         el('h2', { text: 'はじめてコース' }), speakBtn(() => 'まず、見るだけでもいいよ。ひとつやったら、そこで終われるよ。')),
       el('div.reward-sheet', null, mascotSVG('happy', 'talk'), detail, choices));
     UI.register('first-steps', node);
@@ -12698,19 +13227,19 @@ const FirstSteps = (() => {
   }
   function startOne(game, levelIndex, independent, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = { game, levelIndex, opts:opts || null };
+    build(); active = { game, levelIndex, opts:withOrigin(game, levelIndex, opts) };
     Session.startFirst(game, levelIndex, independent || Store.introduced(game.id, levelIndex)
       ? Store.shortStatus(game.id, levelIndex).phase : 'afterShow');
   }
   function startGold(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = {game, levelIndex, opts:opts || null};
+    build(); active = {game, levelIndex, opts:withOrigin(game, levelIndex, opts)};
     // The engine settles any completed checkpoint before starting a fresh goal.
     Session.startFirst(game, levelIndex, 'independent', {gold:true});
   }
   function open(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = { game, levelIndex, opts: opts || null };
+    build(); active = { game, levelIndex, opts:withOrigin(game, levelIndex, opts) };
     detail.textContent = game.ico + '　' + game.name + '　《' + game.levels[levelIndex].t + '》';
     const previous = Store.milestones().find(m => m.gameId === game.id && m.levelIndex < levelIndex);
     if (previous) detail.append(el('small', { text: '📒 まえは「' + Store.milestoneText(previous.kind) + '」' }));
@@ -12797,35 +13326,130 @@ const FirstSteps = (() => {
 })();
 
 const ProgressAlbum = (() => {
-  let node, cards;
+  const FILTERS = [ ['recent', 'さいきん'], ['play', 'あそび'], ['adventure', 'ぼうけん'], ['book', 'ほん'] ];
+  let node, cards, filters, count, selected = 'recent';
+  /* day is a local calendar date encoded as a UTC day number by Store. Reading
+     its UTC components preserves that actual date even after changing zones. */
+  function date(day){
+    const d = new Date(day * 86400000), year = d.getUTCFullYear(), month = d.getUTCMonth() + 1, n = d.getUTCDate();
+    return { iso: year + '-' + String(month).padStart(2, '0') + '-' + String(n).padStart(2, '0'),
+      text: year + '/' + month + '/' + n, speech: year + '年' + month + '月' + n + '日' };
+  }
+  const validDay = day => Number.isSafeInteger(day) && day >= 0 && Number.isFinite(new Date(day * 86400000).getTime());
+  const roundText = round => round + 'しゅうめ';
+  function outcomes(r){
+    return [ ['independent', 'さいしょから ひとりで'], ['revised', 'こたえなおして'], ['supported', 'ヒント・みほんと'] ]
+      .filter(([key]) => r[key] > 0).map(([key, label]) => label + ' ' + r[key] + 'もん').join(' ／ ');
+  }
+  function collect(){
+    const groups = new Map();
+    const add = (key, type, title, icon, entry) => {
+      if (!validDay(entry.day)) return;
+      if (!groups.has(key)) groups.set(key, {key, type, title, icon, entries:[]});
+      groups.get(key).entries.push(entry);
+    };
+    [1, 2].forEach(round => {
+      const source = Store.roundData(round);
+      if (!source) return;
+      Object.entries(source.milestones || {}).forEach(([key, m]) => {
+        const match = /^([a-z0-9]+):(\d+):(viewed|together|supported|revised|independent)$/.exec(key);
+        const g = match && Games.byId[match[1]], lv = g && g.levels[Number(match[2])];
+        if (!lv || !m) return;
+        add('play:' + match[1] + ':' + match[2], 'play', g.name + '　' + lv.t, g.ico,
+          {round, day:m.day, rank:Store.milestoneRank(match[3]), text:Store.milestoneText(match[3]),
+            label:typeof m.label === 'string' ? m.label : ''});
+      });
+      Object.entries(source.transferRecords || {}).forEach(([key, r]) => {
+        const mission = TransferAdventure.missionFor('transfer:' + key);
+        if (!mission || !r) return;
+        add('adventure:' + key, 'adventure', mission.title, mission.icon,
+          {round, day:r.day, rank:0, text:outcomes(r), label:'さいごの きろく',
+            note:(r.independent + r.revised + r.supported) + 'もん やりとげたね'});
+      });
+      Object.entries(source.reviewRecords || {}).forEach(([key, r]) => {
+        const match = /^(r2|r2chapter):(\d+)$/.exec(key);
+        const item = match && (match[1] === 'r2' ? TextbookReview.lessons : TextbookReview.chapters)[Number(match[2])];
+        if (!item || !r) return;
+        const kind = {lesson:'レッスン', check:'べつのひの たしかめ', chapter:'まとめ'}[r.kind];
+        if (!kind) return;
+        add('book:' + key, 'book', item.title + (match[1] === 'r2chapter' ? 'の まとめ' : ''), '📘',
+          {round, day:r.day, rank:0, text:outcomes(r), label:'さいごの きろく・' + kind,
+            note:(r.independent + r.revised + r.supported) + 'もん あそんだね'});
+      });
+    });
+    return Array.from(groups.values()).map(group => {
+      group.entries.sort((a, b) => a.day - b.day || a.round - b.round || a.rank - b.rank);
+      group.latest = group.entries[group.entries.length - 1];
+      return group;
+    }).sort((a, b) => b.latest.day - a.latest.day || a.title.localeCompare(b.title, 'ja'));
+  }
+  function entrySpeech(entry){
+    return date(entry.day).speech + '。' + roundText(entry.round) + '。'
+      + (entry.label ? entry.label + '。' : '') + entry.text + '。';
+  }
+  function card(group){
+    const latest = group.latest, d = date(latest.day);
+    const rounds = Array.from(new Set(group.entries.map(e => e.round))).sort().map(roundText);
+    const history = el('div.album-history');
+    group.entries.forEach(entry => {
+      const ed = date(entry.day);
+      history.append(el('div.album-entry', {dataset:{round:entry.round}},
+        el('div.album-entry-date', null, el('time', {datetime:ed.iso, text:ed.text}), el('span', {text:roundText(entry.round)})),
+        entry.label ? el('small.album-entry-label', {text:entry.label}) : null,
+        el('p', {text:entry.text})));
+    });
+    return el('details.album-card', {dataset:{albumKey:group.key, albumType:group.type}, ontoggle(event){
+      $('.album-expand', event.currentTarget).textContent = event.currentTarget.open ? 'きろくを とじる ▴' : 'きろくを みる ▾';
+    }},
+      el('summary.album-summary', null,
+        el('span.album-icon', {text:group.icon, 'aria-hidden':'true'}),
+        el('span.album-card-copy', null, el('b', {text:group.title}),
+          el('span.album-latest', {text:latest.note || latest.text}),
+          el('span.album-date', null, el('time', {datetime:d.iso, text:d.text}),
+            rounds.map(text => el('span.album-round', {text}))),
+          el('span.album-expand', {text:'きろくを みる ▾'}))),
+      el('div.album-card-body', null,
+        el('button.album-read.btn.btn-ghost', {type:'button', text:'🔊 きろくを よむ',
+          'aria-label':group.title + 'の きろくを よむ', onclick(){
+            Sound.sfx.tap(); Sound.say(group.title + '。' + group.entries.map(entrySpeech).join(''), {delay:80});
+          }}),
+        history,
+        group.type !== 'play' ? el('p.album-record-note', {text:'それぞれの しゅうの、さいごに あそんだ きろくだよ'}) : null));
+  }
+  function render(){
+    const all = collect(), entries = selected === 'recent' ? all : all.filter(e => e.type === selected);
+    $$('button', filters).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.albumFilter === selected)));
+    count.textContent = entries.length ? entries.length + 'この あそびの きろく' : 'この きろくは まだ ないよ';
+    clear(cards); cards.scrollTop = 0;
+    if (!entries.length) cards.append(el('div.album-empty', {text:all.length
+      ? 'ここは まだ からっぽ。ほかの きろくも みられるよ'
+      : 'まだ からっぽ。 まずは みるだけでも いいよ 👀'}));
+    entries.forEach(group => cards.append(card(group)));
+    return entries.length;
+  }
   function build(){
     if (node) return node;
     cards = el('div.album-cards');
+    count = el('p.album-count', {role:'status', 'aria-live':'polite'});
+    filters = el('div.album-filters', {role:'group', 'aria-label':'きろくの しゅるい'});
+    FILTERS.forEach(([key, label]) => filters.append(el('button.album-filter', {type:'button', text:label,
+      dataset:{albumFilter:key}, 'aria-pressed':String(key === selected), onclick(){
+        Sound.sfx.tap(); selected = key; const n = render();
+        Sound.say(label + '。' + (n ? n + 'このあそびの記録があるよ。' : 'この記録はまだないよ。'), {delay:80});
+      }})));
     node = el('div#progress-album', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
         el('h2', { text: 'できたアルバム' }),
         speakBtn(() => 'できたことを、いっしょに見てみよう。')),
-      el('p.album-intro', { text: 'ちいさな「できた」を あつめたよ' }), cards);
+      el('p.album-intro', { text: 'ちいさな「できた」を あつめたよ' }), filters, count, cards);
     return UI.register('progress-album', node);
   }
   function open(){
-    build(); clear(cards);
-    const entries = Store.milestones();
-    if (!entries.length) cards.append(el('div.album-empty', { text: 'まだ からっぽ。 まずは みるだけでも いいよ 👀' }));
-    entries.forEach(m => {
-      const g = Games.byId[m.gameId], lv = g && g.levels[m.levelIndex];
-      if (!lv) return;
-      cards.append(el('button.album-card', { type: 'button',
-        onclick(){ Sound.sfx.tap(); Sound.say(g.name + '。' + (m.label || lv.t) + '。'
-          + Store.milestoneText(m.kind), { delay: 80 }); } },
-        el('span.album-icon', { text: g.ico, 'aria-hidden': 'true' }),
-        el('div', null, el('b', { text: g.name + '　' + (m.label || lv.t) }),
-          el('span', { text: Store.milestoneText(m.kind) }))));
-    });
+    build(); selected = 'recent'; const n = render();
     UI.show('progress-album');
-    Sound.say(entries.length ? 'できたことを、いっしょに見てみよう。'
+    Sound.say(n ? 'できたことを、いっしょに見てみよう。あそびを選ぶと、記録が見られるよ。'
       : 'まだ空っぽだよ。まずは見るだけでもいいよ。', { delay: 150 });
   }
   return { build, open };
@@ -14989,6 +15613,29 @@ const Home = (() => {
     });
     Sound.say('別の遊びを選べるよ。地図や、ほしいシールから選んでみよう。', {delay:120});
   }
+  // A map visit is transient navigation, separate from the learning checkpoint.
+  // Re-render first so a return after midnight still shows today's information.
+  function captureMap(gameId){
+    return {round:Store.round(), gameId, scroll:contentEl.scrollTop,
+      details:Array.from(node.querySelectorAll('details')).map(d => ({key:d.className, open:d.open}))};
+  }
+  function returnToMap(saved){
+    render();
+    const valid = saved && saved.round === Store.round();
+    UI.show('home', {replace:true, focus:!valid});
+    if (!valid) return;
+    Array.from(node.querySelectorAll('details')).forEach(d => {
+      const state = saved.details.find(s => s.key === d.className);
+      if (state) d.open = state.open;
+    });
+    contentEl.scrollTop = saved.scroll;
+    requestAnimationFrame(() => {
+      if (UI.currentName() !== 'home' || saved.round !== Store.round()) return;
+      contentEl.scrollTop = saved.scroll;
+      const card = Array.from(worldsEl.querySelectorAll('.gamecard')).find(c => c.dataset.gameId === saved.gameId);
+      (card || moreSummary).focus({preventScroll:true});
+    });
+  }
   function banner(button, icon, title, detail, action){
     clear(button).append(el('span.ico', { text:icon, 'aria-hidden':'true' }),
       el('span.grow', null, el('span.t', { text:title }), el('span.s', { text:detail })),
@@ -15012,7 +15659,7 @@ const Home = (() => {
     const st = el('div.st');
     for (let i = 0; i < 3; i++) st.append(starSVG(i < done));
     return el('button.gamecard' + (collected ? '.collected' : ''), {
-      type: 'button', title: g.name + '　★ ' + earned + '/' + max
+      type: 'button', dataset:{gameId:g.id}, title: g.name + '　★ ' + earned + '/' + max
         + (collected ? '　シール ぜんぶ ゲット' : '　まだ シールが あるよ'),
       onclick(){
         Sound.sfx.tap();
@@ -15034,7 +15681,7 @@ const Home = (() => {
      with named routes to the relevant lessons. */
   function lockedCard(g){
     return el('button.gamecard.locked', {
-      type: 'button', title: g.name + '　' + Progress.unlockHint(g),
+      type: 'button', dataset:{gameId:g.id}, title: g.name + '　' + Progress.unlockHint(g),
       onclick(){
         Sound.sfx.tap();
         G1Preparation.open(g);
@@ -15213,12 +15860,13 @@ const Home = (() => {
     });
     renderEnding();
   }
-  return { build, render, endToday, choosePlay };
+  return { build, render, endToday, choosePlay, captureMap, returnToMap };
 })();
 
 /* ---------------------------------------------------------- LEVELS */
 const Levels = (() => {
   let node, titleEl, listEl, chestEl, game = null;
+  let homeOrigin = null;
   function build(){
     if (node) return node;
     titleEl = el('h2');
@@ -15227,7 +15875,7 @@ const Levels = (() => {
     node = el('div#levels', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){ Sound.sfx.tap(); Home.returnToMap(homeOrigin); } }, '←'),
         titleEl, speakBtn(() => speech())),
       chestEl, listEl);
     return UI.register('levels', node);
@@ -15235,8 +15883,9 @@ const Levels = (() => {
   function speech(){
     return game ? game.name + '。レベルを選んでね。金色で囲まれたレベルは、金のシールをもらっているよ。鍵のついたレベルは、前のレベルをクリアすると遊べるよ。' : '';
   }
-  function render(g){
+  function render(g, opts){
     build();
+    homeOrigin = opts ? opts.homeOrigin || null : UI.currentName() === 'home' ? Home.captureMap(g.id) : null;
     game = g;
     titleEl.textContent = g.ico + '　' + g.name;
     clear(chestEl); chestEl.append(Treasures.card(g.world));
@@ -15247,7 +15896,7 @@ const Levels = (() => {
       const goldKey = g.id + ':' + i + ':g';
       const gold = Store.hasSticker(goldKey);
       const card = el('button.levelcard' + (unlocked ? '' : '.locked') + (gold ? '.gold' : ''), {
-        type: 'button', style: { '--lc': g.color },
+        type: 'button', dataset:{levelIndex:String(i), levelAction:'play'}, style: { '--lc': g.color },
         title: lv.t + (gold ? '　きんの シールを ゲット' : '　きんの シールは まだ'),
         onclick(){
           Sound.sfx.tap();
@@ -15266,21 +15915,40 @@ const Levels = (() => {
         }, PokemonStickers.artwork(goldKey, { rarity: false })) : null);
       const entry = el('div.level-entry', null, card);
       if (unlocked && g.intro !== false) entry.append(el('button.btn.first-retry', {
-        type: 'button', 'aria-label': lv.t + 'の やりかたを みる', title: 'もういちど やりかたを みる',
+        type: 'button', dataset:{levelIndex:String(i), levelAction:'preview'}, 'aria-label': lv.t + 'の やりかたを みる', title: 'もういちど やりかたを みる',
         onclick(){ Sound.sfx.tap(); FirstSteps.open(g, i); }
       }, '👀'));
       const short = Store.shortStatus(g.id, i);
       const progress = ShortProgress.render(g.id, i, {compact:true});
       if (progress) entry.append(progress);
       if (unlocked && (short.canStartGold || short.goldActive)) entry.append(el('button.btn.gold-short-start', {
-        type:'button', 'aria-label':lv.t + 'で ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel,
+        type:'button', dataset:{levelIndex:String(i), levelAction:'gold'}, 'aria-label':lv.t + 'で ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel,
         onclick(){ Sound.sfx.tap(); ShortProgress.start(g, i, {gold:true}); }
       }, '✨ ' + ShortProgress.describe(g.id, i, {gold:true}).nextLabel));
       listEl.append(entry);
     });
 
   }
-  return { build, render, speech, get game(){ return game; } };
+  function captureReturn(levelIndex){
+    const focused = document.activeElement;
+    return {round:Store.round(), gameId:game.id, levelIndex, scroll:listEl.scrollTop, homeOrigin,
+      action:focused && focused.dataset.levelIndex === String(levelIndex) ? focused.dataset.levelAction : 'preview'};
+  }
+  function returnToList(saved){
+    const g = saved && saved.round === Store.round() && Games.byId[saved.gameId];
+    if (!g || !g.levels[saved.levelIndex]){ Home.returnToMap(null); return; }
+    render(g, {homeOrigin:saved.homeOrigin});
+    UI.show('levels', {focus:false}); listEl.scrollTop = saved.scroll;
+    requestAnimationFrame(() => {
+      if (UI.currentName() !== 'levels' || saved.round !== Store.round()) return;
+      listEl.scrollTop = saved.scroll;
+      const controls = Array.from(listEl.querySelectorAll('button[data-level-index]'));
+      const control = controls.find(c => c.dataset.levelIndex === String(saved.levelIndex) && c.dataset.levelAction === saved.action)
+        || controls.find(c => c.dataset.levelIndex === String(saved.levelIndex));
+      (control || titleEl).focus({preventScroll:true});
+    });
+  }
+  return { build, render, speech, captureReturn, returnToList, get game(){ return game; } };
 })();
 
 /* ---------------------------------------------------------- RESULT */

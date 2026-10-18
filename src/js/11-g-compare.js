@@ -297,7 +297,7 @@ function ordinalVsCount(api, n){
     tappable(item, () => {
       if (api.locked) return;
       if (countMode){
-        if (marked.has(i)){ marked.delete(i); item.classList.remove('marked'); if (answerButtons) answerButtons[i].classList.remove('picked'); Sound.sfx.tap(); return; }
+        if (marked.has(i)){ marked.delete(i); item.classList.remove('marked'); if (answerButtons) answerButtons[i].classList.remove('picked'); Sound.sfx.tap(); api.saveDraft(); return; }
         marked.add(i); item.classList.add('marked'); if (answerButtons) answerButtons[i].classList.add('picked'); Sound.sfx.count(marked.size - 1);
         if (marked.size === k){
           const ok = Array.from(marked).every(v => v < k);
@@ -309,6 +309,7 @@ function ordinalVsCount(api, n){
             marked.clear();
           }
         }
+        api.saveDraft();
       } else {
         if (i === k - 1){ item.classList.add('correct'); if (answerButtons) answerButtons[i].classList.add('correct'); api.correct(); }
         else {
@@ -327,6 +328,11 @@ function ordinalVsCount(api, n){
   });
   ordinalBoard(api, q, el('div.dirmark', null, 'まえから', arrowSVG('right')), true);
   answerButtons = ordinalAnswers(api, critters, i => $$('.qi', q)[i].click());
+  if (countMode) api.persist({ id:'ordinalSet', read(){ return {marked:Array.from(marked)}; }, restore(d){
+    if (!d || !draftIndices(d.marked, n) || d.marked.length >= k) return false;
+    d.marked.forEach(i => { marked.add(i); $$('.qi', q)[i].classList.add('marked'); if (answerButtons) answerButtons[i].classList.add('picked'); });
+    return true;
+  } });
   api.coach({
     text: countMode ? `「${k}こ」は まえから ${k}ひき ぜんぶ` : `「${k}ばんめ」は その 1ぴき だけ`,
     say: countMode ? `${koKana(k)}は、前から${k}匹、全部だよ。` : `${banmeKana(k)}は、その一匹だけだよ。`,
@@ -626,6 +632,7 @@ function orderBySize(api){
         Sound.sfx.count(step - 1);
         if (step === n){ $$('.mrow', wrap).forEach(r => r.classList.add('correct')); api.correct(); }
         else { api.clearHelp(); api.coach(sizeCoach); }
+        api.saveDraft();
       } else {
         row.classList.add('wrong');
         api.later(() => row.classList.remove('wrong'), 460);
@@ -649,6 +656,15 @@ function orderBySize(api){
     }
   };
   api.coach(sizeCoach);
+  api.persist({ id:'sizeOrder', read(){ return {step}; }, restore(d){
+    if (!d || !Number.isInteger(d.step) || d.step < 0 || d.step >= n) return false;
+    step = d.step;
+    $$('.mrow', wrap).forEach(row => {
+      const index = wanted.indexOf(parseFloat($('.stickbar', row).style.width));
+      if (index < step){ row.classList.add('picked'); row.prepend(el('div.ordno', {text:String(index + 1)})); }
+    });
+    api.clearHelp(); api.coach(sizeCoach); return true;
+  } });
   api.onShow(() => {
     wanted.slice(step).forEach(len => {
       const r = $$('.mrow', wrap).find(x => !x.classList.contains('picked')

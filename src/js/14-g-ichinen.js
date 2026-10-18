@@ -67,6 +67,7 @@ function collectSame(api){
     done++;
     o.classList.add('counted');
     o.append(el('span.tag', { text: String(done) }));
+    api.saveDraft();
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done === n) api.later(() => api.afterSpeech(ask), 640);
@@ -95,6 +96,16 @@ function collectSame(api){
     tool(){ const left = remaining()[0]; if (left) left.classList.add('glow'); },
     // the hand gathers them: showing the rule is putting it to use
     walk(){ return remaining().map(o => ({ at: o, act(){ o.click(); }, ms: 800 })); }
+  });
+  api.persist({
+    id: 'collectSet',
+    read(){ return { order: draftCounted(objs) }; },
+    restore(d){
+      if (!d || !draftIndices(d.order, objs.length) || d.order.some(i => objs[i].dataset.hit !== '1')) return false;
+      done = d.order.length; restoreCounted(objs, d.order);
+      if (done === n) ask();
+      return true;
+    }
   });
 }
 
@@ -229,18 +240,20 @@ function ownGroup(api){
   api.field.append(field);
 
   let chosen = null, done = 0;
+  const choose = k => {
+    chosen = k;
+    api.clearHelp(); api.coach(groupCoach); clear(api.choices);
+    const cat = CATS[k];
+    api.setPrompt(`<b>${cat.lbl}</b> を ぜんぶ あつめよう`, `${cat.lbl}を、全部集めよう。`);
+    objs.forEach(o => tappable(o, () => tap(o)));
+    api.saveDraft();
+  };
   keys.forEach(k => {
     const b = el('button.choice.pic', { type: 'button', text: CATS[k].lbl });
     b.addEventListener('click', () => {
       if (api.locked || chosen) return;
-      chosen = k;
-      api.clearHelp();
-      api.coach(groupCoach);
+      choose(k);
       Sound.sfx.tap();
-      clear(api.choices);
-      const cat = CATS[k];
-      api.setPrompt(`<b>${cat.lbl}</b> を ぜんぶ あつめよう`, `${cat.lbl}を、全部集めよう。`);
-      objs.forEach(o => tappable(o, () => tap(o)));
     });
     api.choices.append(b);
   });
@@ -257,6 +270,7 @@ function ownGroup(api){
     done++;
     o.classList.add('counted');
     o.append(el('span.tag', { text: String(done) }));
+    api.saveDraft();
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done === per){
@@ -280,6 +294,22 @@ function ownGroup(api){
   api.onShow(() => {
     if (!chosen){ const b = $('.choice', api.choices); if (b) b.click(); }
     left().forEach(o => o.click());
+  });
+  api.persist({
+    id: 'ownSet',
+    read(){ return { chosen, order: draftCounted(objs) }; },
+    restore(d){
+      if (!d || !(d.chosen === null || keys.includes(d.chosen)) || !draftIndices(d.order, objs.length)
+        || d.order.some(i => objs[i].dataset.cat !== d.chosen) || d.order.length > per) return false;
+      if (d.chosen) choose(d.chosen);
+      done = d.order.length; restoreCounted(objs, d.order);
+      if (done === per){
+        api.setPrompt(`${CATS[chosen].lbl} の なかまが <b>${per}</b>こ あつまったね！`,
+          `${CATS[chosen].lbl}の仲間が、${koKana(per)}集まったね。`);
+        draftFinish(api, () => api.correct({ quiet: true }));
+      }
+      return true;
+    }
   });
 }
 
@@ -348,6 +378,7 @@ function pairUp(api, na, nb, onSettled, opts){
     // one below" guidance has finished. Keep its supported-answer record.
     if (api.clearHelp) api.clearHelp();
     onSettled(made);
+    api.saveDraft();
   }
 
   function tap(it){
@@ -359,6 +390,7 @@ function pairUp(api, na, nb, onSettled, opts){
       marked = it;
       it.classList.add('marked');
       Sound.sfx.tap();
+      api.saveDraft();
       return;
     }
     made.pairs++;
@@ -368,6 +400,7 @@ function pairUp(api, na, nb, onSettled, opts){
       x.append(el('span.tag', { text: String(made.pairs) }));
     });
     marked = null;
+    api.saveDraft();
     Sound.sfx.count(made.pairs - 1);
     Sound.say(numKana(made.pairs), { delay: 0, rate: 1.08 });
     if (made.pairs === Math.min(na, nb)) api.later(() => api.afterSpeech(settle), 620);
@@ -402,6 +435,44 @@ function pairUp(api, na, nb, onSettled, opts){
         steps.push({ at: as[i], act(){ tap(as[i]); }, ms: 520 }, { at: bs[i], act(){ tap(bs[i]); }, ms: 760 });
       }
       return steps;
+    }
+  });
+  api.persist({
+    id: 'pairBoard',
+    read(){
+      const as = itemsOf(rowA), bs = itemsOf(rowB);
+      const pair = (row, n) => row.findIndex(x => Number(($('.tag', x) || {}).textContent) === n);
+      return { pairs: Array.from({ length: made.pairs }, (_, i) => [pair(as, i + 1), pair(bs, i + 1)]),
+        marked: marked ? { side: marked.dataset.side, index: (marked.dataset.side === 'a' ? as : bs).indexOf(marked) } : null,
+        extra: made.readDraft ? made.readDraft() : null };
+    },
+    restore(d){
+      if (!d || !Array.isArray(d.pairs) || d.pairs.length > Math.min(na, nb)
+        || !d.pairs.every(p => Array.isArray(p) && p.length === 2)
+        || !draftIndices(d.pairs.map(p => p[0]), na) || !draftIndices(d.pairs.map(p => p[1]), nb)) return false;
+      if (d.marked !== null && (!d.marked || !['a', 'b'].includes(d.marked.side)
+        || !Number.isInteger(d.marked.index) || d.marked.index < 0
+        || d.marked.index >= (d.marked.side === 'a' ? na : nb)
+        || d.pairs.some(p => p[d.marked.side === 'a' ? 0 : 1] === d.marked.index))) return false;
+      if (d.extra !== null && (!(opts && opts.validateDraft && opts.validateDraft(d.extra))
+        || d.pairs.length !== Math.min(na, nb))) return false;
+      made.pairs = d.pairs.length;
+      const as = itemsOf(rowA), bs = itemsOf(rowB);
+      d.pairs.forEach((p, i) => [as[p[0]], bs[p[1]]].forEach(x => {
+        x.classList.add('paired'); x.append(el('span.tag', { text: String(i + 1) }));
+      }));
+      if (d.marked){ marked = (d.marked.side === 'a' ? as : bs)[d.marked.index]; marked.classList.add('marked'); }
+      if (made.pairs === Math.min(na, nb)){
+        settle();
+        if (d.extra !== null && made.restoreDraft) made.restoreDraft(d.extra);
+      }
+      return true;
+    },
+    afterHelp(d){
+      if (settled || !d) return;
+      if (marked) marked.classList.remove('marked');
+      marked = d.marked ? itemsOf(d.marked.side === 'a' ? rowA : rowB)[d.marked.index] : null;
+      if (marked) marked.classList.add('marked');
     }
   });
   return made;
@@ -494,14 +565,17 @@ function pairMakeSame(api){
       api.setPrompt(`${shortThing.e} を たして <b>おなじ かず</b>に しよう`,
                     `${shortThing.n}を足して、同じ数にしよう。`);
       let added = 0;
+      const fillSlot = slot => {
+        slot.dataset.filled = '1'; slot.classList.remove('tappable'); slot.textContent = shortThing.e;
+      };
       for (let i = 0; i < need + 2; i++){
         const slot = el('div.cell.tappable.pairslot');
+        slot.dataset.slot = String(i);
         tappable(slot, () => {
           if (api.locked || slot.dataset.filled === '1') return;
-          slot.dataset.filled = '1';
-          slot.classList.remove('tappable');
-          slot.textContent = shortThing.e;
+          fillSlot(slot);
           added++;
+          api.saveDraft();
           Sound.sfx.place();
           if (added === need){
             $$('.pairslot', short).forEach(s => { if (s.dataset.filled !== '1') s.remove(); });
@@ -516,6 +590,17 @@ function pairMakeSame(api){
         });
         made.append(short, slot);
       }
+      made.readDraft = () => ({ filled: $$('.pairslot', short).filter(s => s.dataset.filled === '1').map(s => Number(s.dataset.slot)) });
+      made.restoreDraft = d => {
+        const slots = $$('.pairslot', short);
+        d.filled.forEach(i => fillSlot(slots[i])); added = d.filled.length;
+        if (added === need){
+          slots.filter(s => s.dataset.filled !== '1').forEach(s => s.remove()); made.reflow(short);
+          api.setPrompt(`どちらも <b>${Math.max(A, B)}</b>こ。おなじに なったね！`,
+            `どちらも${koKana(Math.max(A, B))}。同じになったね。`);
+          draftFinish(api, () => api.correct({ quiet: true }));
+        }
+      };
       api.coach({
         text: 'あまって いる ぶんだけ たそう',
         say: '余っている分だけ、足そう。',
@@ -551,7 +636,9 @@ function pairMakeSame(api){
         walk(){ return cnt().steps(); }
       });
     }
-  }, { extra: byTapping ? 2 : 0 });
+  }, { extra: byTapping ? 2 : 0,
+    validateDraft(d){ return byTapping && d && draftIndices(d.filled, big - small + 2) && d.filled.length <= big - small; }
+  });
 }
 
 Games.add({
@@ -782,43 +869,49 @@ function plusOrMinus(api){
     String(a), el('span.op.opbox', { text: '?' }), String(b),
     el('span.op', { text: '＝' }), el('span.box', { text: '?' }));
   api.field.append(eq);
+  let calculating = false;
+  const calculate = () => {
+    calculating = true;
+    $('.opbox', eq).textContent = plus ? '＋' : '−';
+    $('.opbox', eq).classList.add('filled');
+    api.clearHelp();
+    api.setPrompt(st.q, st.q);
+    let solved = false;
+    api.buildPad(ans, revealed(() => { solved = true; fillBlank($('.box', eq), ans); eq.hidden = false; }));
+    const picture = Coach.once(() => {
+      const frames = el('div.frameset');
+      // The words and the manipulatives each need room above a phone's
+      // keypad. Keep the original story available, one view at a time.
+      const summary = el('summary.btn.btn-ghost', { text: '📖 おはなしを みる' });
+      const recap = el('details.story-recap', null, summary);
+      card.before(recap); recap.append(card); eq.hidden = true;
+      recap.addEventListener('toggle', () => {
+        frames.hidden = recap.open; eq.hidden = !solved;
+        summary.textContent = recap.open ? 'まるの ヒントに もどる' : '📖 おはなしを みる';
+      });
+      const frame = partFrame(a + (plus ? b : 0), a);
+      if (plus){
+        $$('.cell', frame).slice(a).forEach(c => { c.classList.remove('hole'); c.append(el('div.dot.b')); });
+      } else {
+        $$('.cell', frame).slice(a - b).forEach(c => c.classList.add('coachgone'));
+      }
+      frames.append(frame); api.field.append(frames);
+      return { frame, count: Coach.countable(api, $$('.cell', frame).filter(c => !c.classList.contains('coachgone'))) };
+    });
+    api.coach({
+      text: plus ? 'あおと あかを あわせて かぞえよう' : 'のこりの まるを かぞえよう',
+      say: plus ? '初めの丸と、増えた赤い丸を、合わせて数えよう。' : '食べた、あげた分を除いて、残りの丸を数えよう。',
+      tool(){ picture(); },
+      walk(){ return picture().count.steps(); }
+    });
+  };
   api.buildChoices(['＋', '−'], plus ? '＋' : '−', {
     onPick(v){
+      calculating = true;
       $('.opbox', eq).textContent = v;
       $('.opbox', eq).classList.add('filled');
-      Sound.sfx.place();
-      api.later(() => {
-        api.clearHelp();
-        api.setPrompt(st.q, st.q);
-        let solved = false;
-        api.buildPad(ans, revealed(() => { solved = true; fillBlank($('.box', eq), ans); eq.hidden = false; }));
-        const picture = Coach.once(() => {
-          const frames = el('div.frameset');
-          // The words and the manipulatives each need room above a phone's
-          // keypad. Keep the original story available, one view at a time.
-          const summary = el('summary.btn.btn-ghost', { text: '📖 おはなしを みる' });
-          const recap = el('details.story-recap', null, summary);
-          card.before(recap); recap.append(card); eq.hidden = true;
-          recap.addEventListener('toggle', () => {
-            frames.hidden = recap.open; eq.hidden = !solved;
-            summary.textContent = recap.open ? 'まるの ヒントに もどる' : '📖 おはなしを みる';
-          });
-          const frame = partFrame(a + (plus ? b : 0), a);
-          if (plus){
-            $$('.cell', frame).slice(a).forEach(c => { c.classList.remove('hole'); c.append(el('div.dot.b')); });
-          } else {
-            $$('.cell', frame).slice(a - b).forEach(c => c.classList.add('coachgone'));
-          }
-          frames.append(frame); api.field.append(frames);
-          return { frame, count: Coach.countable(api, $$('.cell', frame).filter(c => !c.classList.contains('coachgone'))) };
-        });
-        api.coach({
-          text: plus ? 'あおと あかを あわせて かぞえよう' : 'のこりの まるを かぞえよう',
-          say: plus ? '初めの丸と、増えた赤い丸を、合わせて数えよう。' : '食べた、あげた分を除いて、残りの丸を数えよう。',
-          tool(){ picture(); },
-          walk(){ return picture().count.steps(); }
-        });
-      }, 420);
+      api.saveDraft(); Sound.sfx.place();
+      api.later(calculate, 420);
       return false;                    // the operation was only half the question
     }
   });
@@ -840,6 +933,15 @@ function plusOrMinus(api){
       markVerb();
       return [{ at: () => $('mark', card), say: plus ? '増えたお話。' : '減ったお話。', ms: 1700 },
               { at: () => $('.opbox', eq), say: plus ? 'だから、たす。' : 'だから、ひく。', ms: 1700 }];
+    }
+  });
+  api.persist({
+    id: 'wordOperation',
+    read(){ return { calculating }; },
+    restore(d){
+      if (!d || typeof d.calculating !== 'boolean') return false;
+      if (d.calculating) calculate();
+      return true;
     }
   });
 }

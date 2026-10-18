@@ -32,7 +32,7 @@ const UI = (() => {
     void n.offsetWidth;
     n.classList.add('enter');
     current = name;
-    n.scrollTop = 0;
+    if (!o.keepScroll) n.scrollTop = 0;
     const sc = $('.home-content, .worlds, .sheet, .levels, .book', n);
     if (sc) sc.scrollTop = o.keepScroll ? sc.scrollTop : 0;
     /* A visual transition is otherwise silent to screen readers and leaves
@@ -222,6 +222,7 @@ const UI = (() => {
     function clearSel(){
       if (selected){ selected.classList.remove('sel'); selected.setAttribute('aria-pressed', 'false'); }
       selected = null;
+      if (opts.onChange) opts.onChange();
     }
     function setOver(t){
       if (overEl === t) return;
@@ -312,6 +313,7 @@ const UI = (() => {
         it.setAttribute('aria-pressed', 'false');
         if (selected === it) clearSel();
       }
+      if (opts.onChange) opts.onChange();
     }
     function bindItem(it){
       it.setAttribute('aria-pressed', 'false');
@@ -336,6 +338,7 @@ const UI = (() => {
     function select(it){
       if (unavailable(it)) return;
       clearSel(); selected = it; it.classList.add('sel'); it.setAttribute('aria-pressed', 'true');
+      if (opts.onChange) opts.onChange();
     }
     return { bindItem, bindTarget, clearSel, select, get selected(){ return selected; } };
   }

@@ -3249,7 +3249,11 @@
       const kinds = K.Store.milestones().map(m => m.kind);
       d.honestAlbum = kinds.includes('viewed') && kinds.includes('together') && !kinds.includes('independent');
       K.ProgressAlbum.open();
-      d.visibleAlbum = K.UI.currentName() === 'progress-album' && qa('#progress-album .album-card').length === 2;
+      const album = q('#progress-album .album-card[data-album-key="play:bond:0"]');
+      const entries = album ? Array.from(album.querySelectorAll('.album-entry')) : [];
+      d.visibleAlbum = K.UI.currentName() === 'progress-album' && qa('#progress-album .album-card').length === 1
+        && entries.length === 2 && entries.some(e => /みた/.test(e.textContent))
+        && entries.some(e => /いっしょに/.test(e.textContent));
     } finally { K.Sound.say = say; K.UI.show('home'); K.Store.reset(); }
     check('first course stops after a view or one answer without granting a level clear, and the album keeps them distinct',
       Object.values(d).every(Boolean), JSON.stringify(d));

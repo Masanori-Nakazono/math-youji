@@ -150,6 +150,9 @@ const Session = (() => {
   let rewardTarget = null, adventureTarget = null;
   let firstTarget = null, firstPhase = null, visitMilestone = null;
   let runId = '', runRound = 1, results = [], resumeQuestion = null;
+  // Navigation stays in memory and belongs to one run, never to its score or backup.
+  let levelReturn = null;
+  let draftAdapters = new Map(), restoringDraft = false;
   let overviewNode, overviewBody, countEl, overviewOn = true, breaksOn = true;
   let hintBtns = [], hintExtras = [], hintShown = false, lastSpeech = '';
   /* Most questions keep their hint back until a second mistake, so the child
@@ -388,7 +391,18 @@ const Session = (() => {
   function clearFeedback(){ feedbackEl.hidden = true; clear(feedbackEl); }
 
   function checkpoint(nextIndex = idx, question){
-    if (!runId || Store.round() !== runRound || !plan.length) return;
+    if (restoringDraft || !runId || Store.round() !== runRound || !plan.length) return;
+    const currentQuestion = {wrongThisQ, helped, taughtQ, missType};
+    if (question === undefined && demo !== 'show' && curItem && draftAdapters.size){
+      const parts = [];
+      for (const [id, adapter] of draftAdapters){
+        try{
+          const data = adapter.read();
+          if (data !== undefined) parts.push({id, data});
+        }catch(e){ /* A failed optional draft must not lose the scored visit. */ }
+      }
+      if (parts.length) currentQuestion.draft = {v:1, item:curItem, touched, parts};
+    }
     const target = t => t ? { gameId:t.game.id, levelIndex:t.levelIndex, want:t.want || null } : null;
     Store.saveSession({ v:1, id:runId, at:Date.now(), mode, title:titleEl.textContent,
       gameId:curGame ? curGame.id : null, levelIndex:curLevelIdx, index:nextIndex,
@@ -400,8 +414,54 @@ const Session = (() => {
       checkTally, announced:Array.from(announced), rewardKey:rewardTarget ? rewardTarget.key : null,
       adventureTarget:target(adventureTarget), firstTarget:target(firstTarget), firstPhase,
       visitMilestone, question:question === undefined
-        ? {wrongThisQ, helped, taughtQ, missType} : question });
+        ? currentQuestion : question });
   }
+
+  function restoreDraft(draft, step){
+    if (!draft || !draft.touched || draft.item !== curItem || demo === 'show') return false;
+    const oldSay = Sound.say, oldSfx = Sound.sfxOn;
+    const restored = new Set(), attempted = new Set();
+    let restoredHelp = false;
+    restoringDraft = true;
+    Sound.say = () => {}; Sound.sfxOn = false;
+    try{
+      const restoreKnown = () => {
+        for (const part of draft.parts){
+          const adapter = draftAdapters.get(part.id);
+          if (!adapter || attempted.has(part.id)) continue;
+          attempted.add(part.id);
+          try{ if (adapter.restore(part.data) !== false) restored.add(part.id); }catch(e){ /* Ignore invalid game data. */ }
+        }
+      };
+      withRandomSeed(step.seed, restoreKnown);
+      if (helped || wrongThisQ >= hintAfter){ hint(); restoredHelp = true; }
+      // A hint may register a counting tool belonging to the restored stage.
+      restoreKnown();
+      if (restored.size){
+        // Keep the epoch: newly built controls still belong to this question.
+        // Cancel only animations that would overwrite its restored stage.
+        timers.forEach((v, id) => clearTimeout(id)); timers.clear(); endWalk();
+      }
+      for (const part of draft.parts){
+        const adapter = draftAdapters.get(part.id);
+        if (restored.has(part.id) && adapter && adapter.afterHelp){
+          try{ adapter.afterHelp(part.data); }catch(e){}
+        }
+      }
+      if (restored.size) touched = draft.touched;
+    }finally{
+      Sound.say = oldSay; Sound.sfxOn = oldSfx; restoringDraft = false;
+    }
+    // The child hears the current question once, after its whole board is ready.
+    if (restored.size || restoredHelp) Sound.say(lastSpeech + (hintShown ? hintSpeech : ''), {delay:180});
+    return restored.size > 0 || restoredHelp;
+  }
+
+  function saveBeforeLeaving(){
+    if (!restoringDraft && UI.currentName() === 'play' && !locked){ checkpoint(); Store.flush(); }
+  }
+  window.addEventListener('pagehide', saveBeforeLeaving);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveBeforeLeaving(); });
 
   function enginePendingSummary(){
     const saved = Store.savedSession();
@@ -457,6 +517,7 @@ const Session = (() => {
     if(latest && latest.kind==='transfer') return TransferAdventure.resume();
     const saved = Store.savedSession();
     if (!saved || !enginePendingSummary()) return false;
+    if (levelReturn && (levelReturn.id !== saved.id || levelReturn.origin.round !== Store.round())) levelReturn = null;
     build(); killTimers(); blockAnswerUntil = 0;
     runId=saved.id; runRound=Store.round(); mode=saved.mode; curGame=saved.gameId ? Games.byId[saved.gameId] : null;
     curLevelIdx=saved.levelIndex; idx=saved.index; mistakes=saved.mistakes; firstTryRight=saved.firstTryRight; swiftCount=saved.swiftCount;
@@ -535,6 +596,10 @@ const Session = (() => {
         prior && prior.game === firstTarget.game && prior.levelIndex === firstTarget.levelIndex ? prior.opts : null);
       return;
     }
+    if (mode === 'level' && levelReturn && levelReturn.id === runId
+        && levelReturn.origin.round === Store.round() && levelReturn.origin.gameId === curGame.id){
+      Levels.returnToList(levelReturn.origin); return;
+    }
     if (mode === 'level') Levels.render(curGame); else Home.render();
     UI.show(mode === 'level' ? 'levels' : 'home', { replace: true });
   }
@@ -542,6 +607,8 @@ const Session = (() => {
   /* ---------- public entry points ---------- */
   function startLevel(game, levelIndex, opts){
     if(settleCompleted()) return;
+    const origin = UI.currentName() === 'levels' && Levels.game === game ? Levels.captureReturn(levelIndex)
+      : opts && opts.returnToLevels || null;
     build();
     killTimers();
     mode = 'level'; curGame = game; curLevelIdx = levelIndex;
@@ -559,6 +626,7 @@ const Session = (() => {
     plan.unshift(...checkSteps(game.id + ':' + levelIndex, 1));
     titleEl.textContent = game.name + '　' + lv.t;
     begin();
+    levelReturn = origin && origin.round === Store.round() && origin.gameId === game.id ? {id:runId, origin} : null;
   }
 
   function startDaily(count){
@@ -770,7 +838,8 @@ const Session = (() => {
     shaky = []; sessionOutcomes = []; visitMilestone = null;
     checkTally = {}; announced = new Set();
     renderPips();
-    const unfinished = previous && (previous.index > 0 || previous.question && (previous.question.wrongThisQ || previous.question.helped));
+    const unfinished = previous && (previous.index > 0 || previous.question && (previous.question.wrongThisQ || previous.question.helped
+      || previous.question.draft && previous.question.draft.touched));
     if (overviewOn && (mode !== 'first' || unfinished)){
       if (!unfinished) checkpoint(0,null);
       showOverview(false,unfinished ? previous : null); return;
@@ -795,7 +864,7 @@ const Session = (() => {
         promptTxt.innerHTML = html;
         lastSpeech = speech != null ? speech : String(html).replace(/<[^>]*>/g, '');
         spokenAt = 0;
-        Sound.say(lastSpeech, { delay: 220, onend(){ if (!stale()) spokenAt = performance.now(); } });
+        if (!restoringDraft) Sound.say(lastSpeech, { delay: 220, onend(){ if (!stale()) spokenAt = performance.now(); } });
       },
       // A completed step can replace its instructions without erasing the fact
       // that this question used help, or resetting mistakes and scoring.
@@ -807,8 +876,16 @@ const Session = (() => {
         // Let an ongoing demonstration finish its callback: first-time lessons
         // use it to continue into the next step. The question still keeps help.
       },
-      say(t, o){ if (stale()) return; lastSpeech = t; Sound.say(t, o); },
-      afterSpeech(fn){ return Sound.afterSpeech(() => { if (!stale()) fn(); }); },
+      say(t, o){ if (stale()) return; lastSpeech = t; if (!restoringDraft) Sound.say(t, o); },
+      afterSpeech(fn){ if (restoringDraft) return () => {}; return Sound.afterSpeech(() => { if (!stale()) fn(); }); },
+      // Each game owns plain values and a render-only restore function. Multiple
+      // adapters let a shared board and its later stage keep their own state.
+      persist(adapter){
+        if (stale() || !adapter || typeof adapter.read !== 'function' || typeof adapter.restore !== 'function') return;
+        draftAdapters.set(adapter.id || 'main', adapter);
+      },
+      saveDraft(){ if (!stale() && !locked && !restoringDraft) checkpoint(); },
+      get restoring(){ return restoringDraft; },
       /** Name the fact this question asks. `label` is what the result screen and
           the parent page will call it. Optional: a game that names nothing simply
           keeps the old purely-random behaviour. */
@@ -851,7 +928,7 @@ const Session = (() => {
         coach = Object.assign({}, coach || {}, c);
         if (c.after) hintAfter = Math.max(1, c.after);
         // a together-question hands its tool over as soon as it has one, before any finger
-        if (demo === 'together' && c.tool && !touched && !hintShown) later(togetherHint, 30);
+        if (!restoringDraft && demo === 'together' && c.tool && !touched && !hintShown) later(togetherHint, 30);
       },
       /** Show (and take) the correct action, for the bottom rung of the ladder.
           `buildChoices` / `buildPad` questions need nothing: the engine presses the
@@ -860,14 +937,14 @@ const Session = (() => {
           Optional: without it the engine still ends the question rather than
           leaving the child pressing wrong things forever. */
       onShow(fn){ if (!stale()) showFn = fn; },
-      correct(o){ if (!stale()) onCorrect(o || {}); },
+      correct(o){ if (!stale() && !restoringDraft) onCorrect(o || {}); },
       /** `given` is what the child actually chose: a value the engine can read
           against the answer, or a tag a generator supplies for something the item
           key cannot say ('looks', 'rev'). Optional — omitting it only costs the
           diagnosis, never the behaviour. */
-      wrong(target, given){ if (!stale()) onWrong(target, given); },
+      wrong(target, given){ if (!stale() && !restoringDraft) onWrong(target, given); },
       /** delayed work that dies with the question */
-      later(fn, ms){ return later(fn, ms); },
+      later(fn, ms){ if (restoringDraft) return null; return later(fn, ms); },
       get locked(){ return locked; },
 
       /** A fixed 0–10 keypad.
@@ -1013,6 +1090,7 @@ const Session = (() => {
   }
 
   function resetSurface(){
+    draftAdapters = new Map();
     locked = false; hintBtns = []; hintExtras = []; hintShown = false;
     hintAfter = 2; extrasShown = false;
     coach = null; hintSpeech = ''; walked = false; endWalk();
@@ -1021,7 +1099,7 @@ const Session = (() => {
     curItem = null; curLabel = null; curAnswer = null; missType = null;
     hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false; taughtQ = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
-    choicesEl.classList.remove('pad', 'answer-complete');
+    choicesEl.classList.remove('pad', 'three-pad', 'answer-complete');
     answerSpeech = '';
     showBtn.disabled = false;
     speakBtn.setAttribute('aria-label', 'もういちど きく');
@@ -1098,7 +1176,7 @@ const Session = (() => {
     if (resumeQuestion){
       wrongThisQ=resumeQuestion.wrongThisQ; helped=resumeQuestion.helped;
       taughtQ=resumeQuestion.taughtQ; missType=resumeQuestion.missType;
-      if (helped || wrongThisQ >= hintAfter) hint();
+      if (!restoreDraft(resumeQuestion.draft, step) && (helped || wrongThisQ >= hintAfter)) hint();
       resumeQuestion=null;
     }
     countEl.textContent = (idx+1)+'／'+plan.length+'もん'+(step.intro ? '　みほん・いっしょに'

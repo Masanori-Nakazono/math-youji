@@ -164,6 +164,10 @@ const Adventures = (() => {
 
 const FirstSteps = (() => {
   let node, detail, choices, result, active = null, finishSpeech = '';
+  function withOrigin(game, levelIndex, opts){
+    return UI.currentName() === 'levels' && Levels.game === game
+      ? Object.assign({}, opts, {returnToLevels:Levels.captureReturn(levelIndex)}) : opts || null;
+  }
   function target(){
     const rec = Diagnostic.current();
     const g = rec && Games.byId[rec.gameId];
@@ -245,7 +249,7 @@ const FirstSteps = (() => {
   function startPlan(t, opts){
     if (!t) return;
     if (t.kind === 'support'){
-      build(); active = {game:t.game, levelIndex:t.levelIndex, opts:opts || null};
+      build(); active = {game:t.game, levelIndex:t.levelIndex, opts:withOrigin(t.game, t.levelIndex, opts)};
       Session.startFirst(t.game, t.levelIndex, 'afterShow');
     } else startOne(t.game, t.levelIndex, t.kind ? t.kind !== 'new' : undefined, opts);
   }
@@ -294,7 +298,13 @@ const FirstSteps = (() => {
     node = el('div#first-steps', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){
+            Sound.sfx.tap();
+            const origin = active && active.opts;
+            if (origin && origin.returnToBook) Book.returnToBook();
+            else if (origin && origin.returnToLevels) Levels.returnToList(origin.returnToLevels);
+            else { Home.render(); UI.show('home', { replace: true }); }
+          } }, '←'),
         el('h2', { text: 'はじめてコース' }), speakBtn(() => 'まず、見るだけでもいいよ。ひとつやったら、そこで終われるよ。')),
       el('div.reward-sheet', null, mascotSVG('happy', 'talk'), detail, choices));
     UI.register('first-steps', node);
@@ -308,19 +318,19 @@ const FirstSteps = (() => {
   }
   function startOne(game, levelIndex, independent, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = { game, levelIndex, opts:opts || null };
+    build(); active = { game, levelIndex, opts:withOrigin(game, levelIndex, opts) };
     Session.startFirst(game, levelIndex, independent || Store.introduced(game.id, levelIndex)
       ? Store.shortStatus(game.id, levelIndex).phase : 'afterShow');
   }
   function startGold(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = {game, levelIndex, opts:opts || null};
+    build(); active = {game, levelIndex, opts:withOrigin(game, levelIndex, opts)};
     // The engine settles any completed checkpoint before starting a fresh goal.
     Session.startFirst(game, levelIndex, 'independent', {gold:true});
   }
   function open(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = { game, levelIndex, opts: opts || null };
+    build(); active = { game, levelIndex, opts:withOrigin(game, levelIndex, opts) };
     detail.textContent = game.ico + '　' + game.name + '　《' + game.levels[levelIndex].t + '》';
     const previous = Store.milestones().find(m => m.gameId === game.id && m.levelIndex < levelIndex);
     if (previous) detail.append(el('small', { text: '📒 まえは「' + Store.milestoneText(previous.kind) + '」' }));
@@ -407,35 +417,130 @@ const FirstSteps = (() => {
 })();
 
 const ProgressAlbum = (() => {
-  let node, cards;
+  const FILTERS = [ ['recent', 'さいきん'], ['play', 'あそび'], ['adventure', 'ぼうけん'], ['book', 'ほん'] ];
+  let node, cards, filters, count, selected = 'recent';
+  /* day is a local calendar date encoded as a UTC day number by Store. Reading
+     its UTC components preserves that actual date even after changing zones. */
+  function date(day){
+    const d = new Date(day * 86400000), year = d.getUTCFullYear(), month = d.getUTCMonth() + 1, n = d.getUTCDate();
+    return { iso: year + '-' + String(month).padStart(2, '0') + '-' + String(n).padStart(2, '0'),
+      text: year + '/' + month + '/' + n, speech: year + '年' + month + '月' + n + '日' };
+  }
+  const validDay = day => Number.isSafeInteger(day) && day >= 0 && Number.isFinite(new Date(day * 86400000).getTime());
+  const roundText = round => round + 'しゅうめ';
+  function outcomes(r){
+    return [ ['independent', 'さいしょから ひとりで'], ['revised', 'こたえなおして'], ['supported', 'ヒント・みほんと'] ]
+      .filter(([key]) => r[key] > 0).map(([key, label]) => label + ' ' + r[key] + 'もん').join(' ／ ');
+  }
+  function collect(){
+    const groups = new Map();
+    const add = (key, type, title, icon, entry) => {
+      if (!validDay(entry.day)) return;
+      if (!groups.has(key)) groups.set(key, {key, type, title, icon, entries:[]});
+      groups.get(key).entries.push(entry);
+    };
+    [1, 2].forEach(round => {
+      const source = Store.roundData(round);
+      if (!source) return;
+      Object.entries(source.milestones || {}).forEach(([key, m]) => {
+        const match = /^([a-z0-9]+):(\d+):(viewed|together|supported|revised|independent)$/.exec(key);
+        const g = match && Games.byId[match[1]], lv = g && g.levels[Number(match[2])];
+        if (!lv || !m) return;
+        add('play:' + match[1] + ':' + match[2], 'play', g.name + '　' + lv.t, g.ico,
+          {round, day:m.day, rank:Store.milestoneRank(match[3]), text:Store.milestoneText(match[3]),
+            label:typeof m.label === 'string' ? m.label : ''});
+      });
+      Object.entries(source.transferRecords || {}).forEach(([key, r]) => {
+        const mission = TransferAdventure.missionFor('transfer:' + key);
+        if (!mission || !r) return;
+        add('adventure:' + key, 'adventure', mission.title, mission.icon,
+          {round, day:r.day, rank:0, text:outcomes(r), label:'さいごの きろく',
+            note:(r.independent + r.revised + r.supported) + 'もん やりとげたね'});
+      });
+      Object.entries(source.reviewRecords || {}).forEach(([key, r]) => {
+        const match = /^(r2|r2chapter):(\d+)$/.exec(key);
+        const item = match && (match[1] === 'r2' ? TextbookReview.lessons : TextbookReview.chapters)[Number(match[2])];
+        if (!item || !r) return;
+        const kind = {lesson:'レッスン', check:'べつのひの たしかめ', chapter:'まとめ'}[r.kind];
+        if (!kind) return;
+        add('book:' + key, 'book', item.title + (match[1] === 'r2chapter' ? 'の まとめ' : ''), '📘',
+          {round, day:r.day, rank:0, text:outcomes(r), label:'さいごの きろく・' + kind,
+            note:(r.independent + r.revised + r.supported) + 'もん あそんだね'});
+      });
+    });
+    return Array.from(groups.values()).map(group => {
+      group.entries.sort((a, b) => a.day - b.day || a.round - b.round || a.rank - b.rank);
+      group.latest = group.entries[group.entries.length - 1];
+      return group;
+    }).sort((a, b) => b.latest.day - a.latest.day || a.title.localeCompare(b.title, 'ja'));
+  }
+  function entrySpeech(entry){
+    return date(entry.day).speech + '。' + roundText(entry.round) + '。'
+      + (entry.label ? entry.label + '。' : '') + entry.text + '。';
+  }
+  function card(group){
+    const latest = group.latest, d = date(latest.day);
+    const rounds = Array.from(new Set(group.entries.map(e => e.round))).sort().map(roundText);
+    const history = el('div.album-history');
+    group.entries.forEach(entry => {
+      const ed = date(entry.day);
+      history.append(el('div.album-entry', {dataset:{round:entry.round}},
+        el('div.album-entry-date', null, el('time', {datetime:ed.iso, text:ed.text}), el('span', {text:roundText(entry.round)})),
+        entry.label ? el('small.album-entry-label', {text:entry.label}) : null,
+        el('p', {text:entry.text})));
+    });
+    return el('details.album-card', {dataset:{albumKey:group.key, albumType:group.type}, ontoggle(event){
+      $('.album-expand', event.currentTarget).textContent = event.currentTarget.open ? 'きろくを とじる ▴' : 'きろくを みる ▾';
+    }},
+      el('summary.album-summary', null,
+        el('span.album-icon', {text:group.icon, 'aria-hidden':'true'}),
+        el('span.album-card-copy', null, el('b', {text:group.title}),
+          el('span.album-latest', {text:latest.note || latest.text}),
+          el('span.album-date', null, el('time', {datetime:d.iso, text:d.text}),
+            rounds.map(text => el('span.album-round', {text}))),
+          el('span.album-expand', {text:'きろくを みる ▾'}))),
+      el('div.album-card-body', null,
+        el('button.album-read.btn.btn-ghost', {type:'button', text:'🔊 きろくを よむ',
+          'aria-label':group.title + 'の きろくを よむ', onclick(){
+            Sound.sfx.tap(); Sound.say(group.title + '。' + group.entries.map(entrySpeech).join(''), {delay:80});
+          }}),
+        history,
+        group.type !== 'play' ? el('p.album-record-note', {text:'それぞれの しゅうの、さいごに あそんだ きろくだよ'}) : null));
+  }
+  function render(){
+    const all = collect(), entries = selected === 'recent' ? all : all.filter(e => e.type === selected);
+    $$('button', filters).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.albumFilter === selected)));
+    count.textContent = entries.length ? entries.length + 'この あそびの きろく' : 'この きろくは まだ ないよ';
+    clear(cards); cards.scrollTop = 0;
+    if (!entries.length) cards.append(el('div.album-empty', {text:all.length
+      ? 'ここは まだ からっぽ。ほかの きろくも みられるよ'
+      : 'まだ からっぽ。 まずは みるだけでも いいよ 👀'}));
+    entries.forEach(group => cards.append(card(group)));
+    return entries.length;
+  }
   function build(){
     if (node) return node;
     cards = el('div.album-cards');
+    count = el('p.album-count', {role:'status', 'aria-live':'polite'});
+    filters = el('div.album-filters', {role:'group', 'aria-label':'きろくの しゅるい'});
+    FILTERS.forEach(([key, label]) => filters.append(el('button.album-filter', {type:'button', text:label,
+      dataset:{albumFilter:key}, 'aria-pressed':String(key === selected), onclick(){
+        Sound.sfx.tap(); selected = key; const n = render();
+        Sound.say(label + '。' + (n ? n + 'このあそびの記録があるよ。' : 'この記録はまだないよ。'), {delay:80});
+      }})));
     node = el('div#progress-album', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
         el('h2', { text: 'できたアルバム' }),
         speakBtn(() => 'できたことを、いっしょに見てみよう。')),
-      el('p.album-intro', { text: 'ちいさな「できた」を あつめたよ' }), cards);
+      el('p.album-intro', { text: 'ちいさな「できた」を あつめたよ' }), filters, count, cards);
     return UI.register('progress-album', node);
   }
   function open(){
-    build(); clear(cards);
-    const entries = Store.milestones();
-    if (!entries.length) cards.append(el('div.album-empty', { text: 'まだ からっぽ。 まずは みるだけでも いいよ 👀' }));
-    entries.forEach(m => {
-      const g = Games.byId[m.gameId], lv = g && g.levels[m.levelIndex];
-      if (!lv) return;
-      cards.append(el('button.album-card', { type: 'button',
-        onclick(){ Sound.sfx.tap(); Sound.say(g.name + '。' + (m.label || lv.t) + '。'
-          + Store.milestoneText(m.kind), { delay: 80 }); } },
-        el('span.album-icon', { text: g.ico, 'aria-hidden': 'true' }),
-        el('div', null, el('b', { text: g.name + '　' + (m.label || lv.t) }),
-          el('span', { text: Store.milestoneText(m.kind) }))));
-    });
+    build(); selected = 'recent'; const n = render();
     UI.show('progress-album');
-    Sound.say(entries.length ? 'できたことを、いっしょに見てみよう。'
+    Sound.say(n ? 'できたことを、いっしょに見てみよう。あそびを選ぶと、記録が見られるよ。'
       : 'まだ空っぽだよ。まずは見るだけでもいいよ。', { delay: 150 });
   }
   return { build, open };

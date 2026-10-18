@@ -27,6 +27,26 @@ const THINGS = [
 /* 「やってくる／いなくなる」が自然に言えるものだけを、動く文章題に出す。 */
 const MOVING_THINGS = THINGS.filter(thing => thing.moving);
 
+/* Drafts only describe the child's construction. The engine owns grading and
+   binds these values to the seeded question; never replay input to restore it. */
+function draftIndices(value, count){
+  return Array.isArray(value) && value.length <= count
+    && value.every(n => Number.isInteger(n) && n >= 0 && n < count)
+    && new Set(value).size === value.length;
+}
+function draftCounted(objs){
+  return objs.map((o, i) => ({ i, n: Number(($('.tag', o) || {}).textContent) }))
+    .filter(x => Number.isInteger(x.n) && x.n > 0).sort((a, b) => a.n - b.n).map(x => x.i);
+}
+function restoreCounted(objs, order){
+  objs.forEach(o => { o.classList.remove('counted'); const tag = $('.tag', o); if (tag) tag.remove(); });
+  order.forEach((i, n) => { objs[i].classList.add('counted'); objs[i].append(el('span.tag', { text: String(n + 1) })); });
+}
+function draftFinish(api, finish){
+  api.choices.append(el('button.btn.btn-accent.answer-submit', { type: 'button', text: 'できた！',
+    onclick(){ if (!api.locked) finish(); } }));
+}
+
 /* ============================================================
    1. かぞえよう — one-to-one correspondence & cardinality
    ============================================================ */
@@ -58,6 +78,7 @@ function countQuestion(api, lo, hi, layout){
     const old = $('.tag', o);
     if (old) old.remove();
     o.append(el('span.tag', { text: String(done) }));
+    api.saveDraft();
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done !== count) return;
@@ -79,6 +100,7 @@ function countQuestion(api, lo, hi, layout){
   });
 
   function ask(){
+    asked = true;
     api.clearHelp();
     api.setPrompt(`${thing.n}は ぜんぶで いくつ？`, `${thing.n}は、全部でいくつ？`);
     const n = hi <= 5 ? 3 : 4;
@@ -90,6 +112,7 @@ function countQuestion(api, lo, hi, layout){
     const recount = () => {
       done = 0;
       objs.forEach(o => { o.classList.remove('counted'); const t = $('.tag', o); if (t) t.remove(); });
+      api.saveDraft();
     };
     api.coach({
       text: 'もういちど ゆびで かぞえて みよう。さいごの かずが ぜんぶの かず',
@@ -104,6 +127,18 @@ function countQuestion(api, lo, hi, layout){
       }
     });
   }
+  api.persist({
+    id: 'count',
+    read(){ return { order: draftCounted(objs), asked }; },
+    restore(d){
+      if (!d || !draftIndices(d.order, objs.length) || typeof d.asked !== 'boolean') return false;
+      done = d.order.length; asked = d.asked || done === count;
+      restoreCounted(objs, d.order);
+      if (asked) ask();
+      return true;
+    },
+    afterHelp(d){ if (d && draftIndices(d.order, objs.length)){ done = d.order.length; restoreCounted(objs, d.order); } }
+  });
 }
 
 function giveQuestion(api, lo, hi){
@@ -138,6 +173,7 @@ function giveQuestion(api, lo, hi){
     if (picked.has(i)){ picked.delete(i); o.classList.remove('picked'); Sound.sfx.tap(); }
     else { picked.add(i); o.classList.add('picked'); Sound.sfx.count(picked.size - 1); Sound.say(numKana(picked.size), { delay: 0, rate: 1.08 }); }
     refresh();
+    api.saveDraft();
   };
   objs.forEach(o => tappable(o, () => toggle(o)));
   doneBtn.addEventListener('click', () => {
@@ -169,6 +205,17 @@ function giveQuestion(api, lo, hi){
     objs.forEach(o => { if (picked.has(o.dataset.i)) toggle(o); });
     objs.slice(0, target).forEach(o => toggle(o));
     doneBtn.click();
+  });
+  api.persist({
+    id: 'give',
+    read(){ return { picked: Array.from(picked, Number) }; },
+    restore(d){
+      if (!d || !draftIndices(d.picked, objs.length)) return false;
+      picked.clear();
+      d.picked.forEach(i => picked.add(String(i)));
+      objs.forEach((o, i) => o.classList.toggle('picked', picked.has(String(i))));
+      refresh(); return true;
+    }
   });
 }
 
@@ -498,6 +545,7 @@ function lineFill(api, lo, hi, gaps){
         cells[target].classList.add('filled');
         Sound.sfx.place();
         qi++;
+        api.saveDraft();
         if (qi < holes.length){
           api.later(askNext, 620);
           return false;            // more holes to go: keep this question open
@@ -513,6 +561,20 @@ function lineFill(api, lo, hi, gaps){
     });
   }
   askNext();
+  api.persist({
+    id: 'sequence',
+    read(){ return { qi }; },
+    restore(d){
+      if (!d || !Number.isInteger(d.qi) || d.qi < 0 || d.qi >= holes.length) return false;
+      qi = d.qi;
+      holes.forEach((v, i) => {
+        cells[v].textContent = i < qi ? String(v) : '?';
+        cells[v].classList.toggle('gap', i >= qi);
+        cells[v].classList.toggle('filled', i < qi);
+      });
+      askNext(); return true;
+    }
+  });
 }
 
 function nextBefore(api, hi){
@@ -694,7 +756,7 @@ function traceQuestion(api, digits){
     // again from its original start. Prefer continuation where a loop overlaps.
     const restart = near > START_TOL && progress > 0 && dist(p[0], p[1], st[0][0], st[0][1]) <= START_TOL;
     if (near <= START_TOL || restart){
-      if (restart){ progress = 0; redraw(); startMark(); }
+      if (restart){ progress = 0; redraw(); startMark(); api.saveDraft(); }
       drawing = true;
       clearTimeout(idleTimer);
       box.setPointerCapture && box.setPointerCapture(e.pointerId);
@@ -721,10 +783,12 @@ function traceQuestion(api, digits){
     const p = pt(e); if (!p) return;
     const st = strokes[si];
     const look = Math.min(st.length - 1, progress + 26);
+    const before = progress;
     for (let i = Math.max(progress, 1); i <= look; i++){
       if (dist(p[0], p[1], st[i][0], st[i][1]) <= TOL) progress = Math.max(progress, i + 1);
     }
     redraw();
+    if (progress !== before) api.saveDraft();
     armIdle();
     if (progress >= st.length - 2) completeStroke();
   }
@@ -736,6 +800,7 @@ function traceQuestion(api, digits){
     clear(gLive);
     Sound.sfx.place();
     si++; progress = 0;
+    api.saveDraft();
     if (si >= strokes.length){
       clear(gMark);
       api.later(() => api.correct(), 220);
@@ -765,6 +830,29 @@ function traceQuestion(api, digits){
   startMark();
   redraw();
   armIdle();
+  api.persist({
+    id: 'trace',
+    read(){ return { si, progress, strays, nudged, guide: !!$('.trace-ghost', box) }; },
+    restore(d){
+      if (!d || !Number.isInteger(d.si) || d.si < 0 || d.si > strokes.length
+        || !Number.isInteger(d.progress) || d.progress < 0
+        || d.progress > (d.si < strokes.length ? strokes[d.si].length : 0)
+        || !Number.isInteger(d.strays) || d.strays < 0 || d.strays > 100000
+        || typeof d.nudged !== 'boolean' || typeof d.guide !== 'boolean') return false;
+      clearTimeout(idleTimer); drawing = false;
+      si = d.si; progress = d.progress; strays = d.strays; nudged = d.nudged;
+      clear(gDone); clear(gMark);
+      strokes.slice(0, si).forEach(st => gDone.append(svg('path', { d: toPath(st), class: 'trace-done', fill: 'none',
+        'stroke-width': 13, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })));
+      startMark(); redraw();
+      if (d.guide) showGuide();
+      if (si === strokes.length){
+        cue.textContent = 'ぜんぶ なぞれたね。できたを おそう';
+        draftFinish(api, () => api.correct());
+      }
+      return true;
+    }
+  });
 }
 
 Games.add({
