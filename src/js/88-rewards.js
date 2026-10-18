@@ -10,7 +10,7 @@
 'use strict';
 
 const StickerMissions = (() => {
-  let node, prizeEl, detailEl, goBtn, backBtn, active = null;
+  let node, prizeEl, detailEl, progressEl, courseEl, goBtn, backBtn, active = null;
 
   function available(){
     const rec = Diagnostic.current() || {};
@@ -45,6 +45,7 @@ const StickerMissions = (() => {
     const row = el('div.sticker-mission-picks');
     choices.forEach(choice => row.append(el('button.sticker-mission-pick', {
       type: 'button', title: choice.game.name + '　' + choice.level.t,
+      dataset:{missionKey:choice.key},
       onclick(){ Sound.sfx.tap(); open(choice); }
     },
       el('span.prize', null, PokemonStickers.artwork(choice.key, { rarity: false })),
@@ -59,32 +60,37 @@ const StickerMissions = (() => {
     if (node) return node;
     prizeEl = el('div.sticker-mission-prize');
     detailEl = el('div.sticker-mission-detail');
-    goBtn = el('button.btn.btn-accent', { type: 'button', text: 'あそびに いく ▶' });
+    progressEl = el('div.sticker-mission-progress');
+    courseEl = el('div.sticker-mission-course');
+    goBtn = el('button.btn.btn-accent.sticker-mission-go', { type: 'button' });
     backBtn = el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
       onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←');
     node = el('div#sticker-mission', null,
       el('div.topbar', null, backBtn, el('h2', { text: 'シールミッション' })),
-      el('div.reward-sheet', null, mascotSVG('happy', 'talk'), prizeEl, detailEl, goBtn));
+      el('div.reward-sheet', null,
+        el('div.sticker-mission-intro', null, prizeEl, detailEl), goBtn, progressEl, courseEl));
     return UI.register('sticker-mission', node);
   }
 
   function open(choice){
-    if (!choice || !choice.game || !choice.level) return;
+    if (!choice || !choice.game || !choice.level || !levelOpen(choice.game, choice.levelIndex)) return;
     build(); active = choice;
     clear(prizeEl).append(PokemonStickers.artwork(choice.key));
     clear(detailEl);
     detailEl.append(
-      el('b', { text: choice.game.name + '　《' + choice.level.t + '》' }),
-      el('span', { text: 'クリアすると「' + stickerFor(choice.key) + '」の シールが もらえるよ' }),
-      el('small', { text: 'いろが つくのは、べつの ひに たしかめてから' }));
+      el('b', { text: choice.game.ico + '　' + choice.game.name }),
+      el('span', { text: '《' + choice.level.t + '》' }),
+      el('small', { text: 'この シールへ、1もんずつで いいよ' }));
+    const progress = ShortProgress.describe(choice.game.id, choice.levelIndex, {gold:false, preview:true});
+    clear(progressEl).append(ShortProgress.render(choice.game.id, choice.levelIndex, {gold:false, preview:true}));
+    clear(courseEl).append(FirstSteps.longCourse(choice.game, choice.levelIndex, {stickerMission:choice}));
+    goBtn.textContent = progress.nextLabel;
     goBtn.onclick = () => {
       Sound.sfx.tap();
-      if (choice.game.intro !== false && !Store.introduced(choice.game.id, choice.levelIndex))
-        FirstSteps.open(choice.game, choice.levelIndex, { stickerMission: choice });
-      else Session.startLevel(choice.game, choice.levelIndex, { stickerMission: choice });
+      ShortProgress.start(choice.game, choice.levelIndex, {gold:false, stickerMission:choice});
     };
     UI.show('sticker-mission');
-    Sound.say(stickerFor(choice.key) + 'のシールを取りに行こう。' + choice.game.name + 'の、' + choice.level.t + 'をクリアすると、もらえるよ。', { delay: 180 });
+    Sound.say(stickerFor(choice.key) + 'のシールへの遊びだよ。' + progress.speech + '1問ずつでいいよ。', { delay: 180 });
   }
 
   return { available, homeCard, build, open, get active(){ return active; } };
@@ -271,6 +277,17 @@ const FirstSteps = (() => {
   const button = (icon, label, fn, accent) => el('button.btn' + (accent ? '.btn-accent' : ''),
     { type: 'button', onclick(){ Sound.sfx.tap(); fn(); } },
     el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
+  // The longer course remains a deliberate choice. Its scored question count is
+  // stable; the engine's preparation screen names any teaching/check additions.
+  function longCourse(game, levelIndex, opts){
+    const n = game.levels[levelIndex].n || 8;
+    return el('details.long-course', null,
+      el('summary', {text:'まとめて あそびたいとき'}),
+      el('p', {text:n + 'もんで レベルに チャレンジ。せいかいに あわせて、ほしや シールが のこるよ。'}),
+      el('p', {text:'1もんずつの じゅんびとは べつの コースだよ。みほんや、ほかの シールの たしかめが くわわることも あるよ。'}),
+      el('small', {text:'つぎの がめんで、ぜんぶの もんすうを みられるよ。とちゅうで やすんでも いいよ。'}),
+      button('▶', n + 'もんの コース', () => Session.startLevel(game, levelIndex, opts)));
+  }
   function build(){
     if (node) return node;
     detail = el('div.first-detail'); choices = el('div.first-actions');
@@ -295,9 +312,9 @@ const FirstSteps = (() => {
     Session.startFirst(game, levelIndex, independent || Store.introduced(game.id, levelIndex)
       ? Store.shortStatus(game.id, levelIndex).phase : 'afterShow');
   }
-  function startGold(game, levelIndex){
+  function startGold(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = {game, levelIndex, opts:null};
+    build(); active = {game, levelIndex, opts:opts || null};
     // The engine settles any completed checkpoint before starting a fresh goal.
     Session.startFirst(game, levelIndex, 'independent', {gold:true});
   }
@@ -311,12 +328,12 @@ const FirstSteps = (() => {
     choices.append(
       button('👀', 'まず みてみる', () => Session.startFirst(game, levelIndex, 'show'), true),
       button('🤝', 'みてから ひとつ', () => Session.startFirst(game, levelIndex, 'together')),
-      button('👆', 'じぶんで 1もん', () => startOne(game, levelIndex, true, active.opts)),
-      button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active.opts)));
+      button('👆', 'じぶんで 1もん', () => startOne(game, levelIndex, true, active.opts)));
     const status = Store.shortStatus(game.id, levelIndex);
     if (status.canStartGold || status.goldActive) choices.append(button('✨',
       ShortProgress.describe(game.id, levelIndex, {gold:true}).nextLabel,
-      () => ShortProgress.start(game, levelIndex, {gold:true})));
+      () => ShortProgress.start(game, levelIndex, Object.assign({}, active.opts, {gold:true}))));
+    choices.append(longCourse(game, levelIndex, active.opts));
     const progress = ShortProgress.render(game.id, levelIndex);
     if (progress) detail.append(progress);
     UI.show('first-steps');
@@ -324,6 +341,9 @@ const FirstSteps = (() => {
   }
   function finish(game, levelIndex, phase, milestone){
     build();
+    // Keep the selected prize only for this course; the book return remains useful
+    // even if the child follows a recommendation for another activity.
+    const origin = active && active.game === game && active.levelIndex === levelIndex ? active.opts : null;
     const info = $('.first-detail', result), actions = $('.first-actions', result);
     const short = phase === 'independent' || phase === 'check';
     const status = Store.shortStatus(game.id, levelIndex);
@@ -349,16 +369,25 @@ const FirstSteps = (() => {
     actions.append(button('🏠', 'きょうは ここまで', () => {
       Home.endToday();
     }, phase !== 'show'));
+    const choose = button('🗺️', 'べつの あそびを えらぶ', () => {
+      if (origin && origin.returnToBook) Book.returnToBook();
+      else Home.choosePlay();
+    });
+    choose.classList.add('first-choose'); actions.append(choose);
     if (rewards.length) actions.append(button('🏡', 'しまに はる', () => StickerWorld.open(rewards[rewards.length - 1])));
     if (phase !== 'show'){
       const next = shortPlan() || {game, levelIndex, kind:'resume'};
       const same = next.game.id === game.id && next.levelIndex === levelIndex;
-      actions.append(button(next.kind === 'support' ? '🤝' : '👆', same && next.kind === 'resume' && !status.goldActive
-        ? 'じぶんで もう 1もん' : planCopy(next).title, () => startPlan(next, same && active && active.opts)));
+      const nextOrigin = same ? origin : origin && origin.returnToBook ? {returnToBook:true} : null;
+      const nextButton = button(next.game.ico, same && next.kind === 'resume' && !status.goldActive
+        ? 'じぶんで もう 1もん' : planCopy(next).title, () => startPlan(next, nextOrigin));
+      nextButton.classList.add('first-next');
+      $('.bl', nextButton).append(el('small', {text:next.game.name + '　《' + next.game.levels[next.levelIndex].t + '》'}));
+      actions.append(nextButton);
     }
     if (phase !== 'show' && status.canStartGold) actions.append(button('✨', 'きんへ 1もんずつ',
-      () => startGold(game, levelIndex)));
-    actions.append(button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active && active.opts)));
+      () => startGold(game, levelIndex, origin)));
+    actions.append(longCourse(game, levelIndex, origin));
     if (milestone && milestone.label) info.append(el('small', { text: '📒 ' + milestone.label }));
     UI.show('first-finish', { replace: true });
     finishSpeech = doneText + '。' + (short && status.lastResult === 'confirmed'
@@ -372,7 +401,7 @@ const FirstSteps = (() => {
     }
     Sound.say(finishSpeech, { delay: 200 });
   }
-  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, build, open, startOne, startGold, finish, get active(){ return active; } };
+  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, longCourse, build, open, startOne, startGold, finish, get active(){ return active; } };
 })();
 
 const ProgressAlbum = (() => {

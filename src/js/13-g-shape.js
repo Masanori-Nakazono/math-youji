@@ -518,6 +518,7 @@ function patternQuestion(api, unitKind, blanks){
   let hi = 0;
   function askHole(){
     if (hi >= holes.length) return;
+    api.clearHelp();
     const at = holes[hi];
     cars.forEach(c => c.classList.remove('now'));
     cars[at].classList.add('blank', 'now');
@@ -536,21 +537,21 @@ function patternQuestion(api, unitKind, blanks){
         return true;
       }
     });
+    api.coach({
+      text: unit.length + 'つずつ おなじ ならびが くりかえして いるよ',
+      say: `${tsuKana(unit.length)}ずつ、同じ並びが、繰り返しているよ。`,
+      tool(){ cars.forEach((c, i) => { if (Math.floor(i / unit.length) % 2 === 0) c.classList.add('unitmark'); }); },
+      // the hand reads the train aloud in its rhythm and stops at the gap
+      walk(){
+        const at = holes[hi];
+        const steps = [];
+        for (let i = 0; i < at; i++) steps.push({ at: cars[i], say: TOKEN_NAME[seq[i]] || '', ms: 560 });
+        steps.push({ at: cars[at], say: 'つぎは？', ms: 1500 });
+        return steps;
+      }
+    });
   }
   askHole();
-  api.coach({
-    text: unit.length + 'つずつ おなじ ならびが くりかえして いるよ',
-    say: `${tsuKana(unit.length)}ずつ、同じ並びが、繰り返しているよ。`,
-    tool(){ cars.forEach((c, i) => { if (Math.floor(i / unit.length) % 2 === 0) c.classList.add('unitmark'); }); },
-    // the hand reads the train aloud in its rhythm and stops at the gap
-    walk(){
-      const at = holes[hi];
-      const steps = [];
-      for (let i = 0; i < at; i++) steps.push({ at: cars[i], say: TOKEN_NAME[seq[i]] || '', ms: 560 });
-      steps.push({ at: cars[at], say: 'つぎは？', ms: 1500 });
-      return steps;
-    }
-  });
 }
 
 /** Let the child author the repeating unit, then show the rule they created. */
@@ -575,6 +576,8 @@ function createPattern(api){
         c.textContent = chosen[i % chosen.length];
       });
       b.classList.add('picked');
+      api.clearHelp();
+      api.coach(patternCoach);
       if (chosen.length === 2){
         $$('.choice.picked', api.choices).forEach(x => x.classList.add('correct'));
         api.setPrompt('できた きまりを こえに だして いってみよう',
@@ -584,12 +587,13 @@ function createPattern(api){
     });
     api.choices.append(b);
   });
-  api.coach({
+  const patternCoach = {
     text: () => chosen.length ? chosen[0] + ' の つぎに くるものを えらぼう' : 'すきな えを 2つ えらぼう',
     say: () => chosen.length ? '次に来るものを、選ぼう。' : '好きな絵を、二つ選ぼう。',
     tool(){ Coach.pulse($$('.choice:not(.picked)', api.choices)); },
-    walk(){ return $$('.choice:not(.picked)', api.choices).slice(0, 2).map(b => ({ at: b, ms: 900 })); }
-  });
+    walk(){ return $$('.choice:not(.picked)', api.choices).slice(0, 2 - chosen.length).map(b => ({ at: b, ms: 900 })); }
+  };
+  api.coach(patternCoach);
   api.onShow(() => {
     $$('.choice:not(.picked)', api.choices).slice(0, 2 - chosen.length).forEach(b => b.click());
   });

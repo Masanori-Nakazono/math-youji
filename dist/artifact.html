@@ -205,7 +205,8 @@ body::before{
   flex-direction: column;
   gap: calc(var(--u) * .8);
 }
-.screen[hidden]{ display: none !important; }
+/* Also used inside the artifact build, whose host does not supply this rule. */
+[hidden]{ display: none !important; }
 
 .screen.enter{ animation: screenIn .34s cubic-bezier(.2,.9,.3,1.2) both; }
 @keyframes screenIn{
@@ -751,6 +752,24 @@ body::before{
 .short-progress-step.done{border-color:var(--good);background:var(--good-soft);}
 .short-progress-detail{margin:0;font-size:max(14px,calc(var(--u)*1.2));line-height:1.65;overflow-wrap:anywhere;}
 .level-entry>.short-progress{flex-basis:100%;}
+/* The chosen picture leads to the same small visit from Home and the book. */
+#sticker-mission .reward-sheet{overflow-y:auto;justify-content:safe center;gap:12px;}
+#sticker-mission .reward-sheet>*{flex-shrink:0;}
+.sticker-mission-intro{display:flex;align-items:center;justify-content:center;gap:12px;width:min(100%,560px);}
+#sticker-mission .sticker-mission-prize .pokemon-sticker{--pokemon-size:100px;}
+.sticker-mission-intro .sticker-mission-detail{width:auto;min-width:0;flex:1;padding:12px;font-size:clamp(16px,calc(var(--u)*1.5),22px);text-align:left;}
+.sticker-mission-intro .sticker-mission-detail small{font-size:14px;line-height:1.5;}
+.sticker-mission-progress,.sticker-mission-course{width:min(100%,560px);min-width:0;}
+.sticker-mission-go{min-height:56px;max-width:100%;white-space:normal;}
+.long-course{width:100%;min-width:0;box-sizing:border-box;text-align:left;border:2px solid var(--card-edge);border-radius:14px;background:var(--paper-2);padding:10px 12px;}
+.long-course summary{cursor:pointer;min-height:44px;align-content:center;font-size:max(16px,calc(var(--u)*1.3));font-weight:800;}
+.long-course p,.long-course small{display:block;font-size:max(14px,calc(var(--u)*1.1));line-height:1.65;overflow-wrap:anywhere;}
+.long-course p{margin:8px 0;}
+.long-course .btn{margin-top:10px;max-width:100%;white-space:normal;}
+.first-actions>.long-course{flex-basis:100%;}
+.first-next .bl{display:grid;gap:4px;}
+.first-next .bl small{display:block;font-size:max(14px,calc(var(--u)*1.1));line-height:1.45;font-weight:600;white-space:normal;}
+.first-next{max-width:100%;white-space:normal;}
 #progress-album{ gap:calc(var(--u)*.7); }
 .album-intro{ margin:0; text-align:center; font-size:calc(var(--u)*1.4); font-weight:800; }
 .album-cards{ flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; align-content:start;
@@ -3134,6 +3153,29 @@ dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
   #book .book-slot{min-height:174px;}
   #book .book-slot .pokemon-name{font-size:15px;}
 }
+/* Current-stage story help */
+.story-recap{max-width:100%;}
+.story-recap>summary{cursor:pointer;list-style:none;min-height:48px;display:flex;align-items:center;font-size:16px;}
+.story-recap>summary::-webkit-details-marker{display:none;}
+
+/* The completed answer stays until the child chooses the next question. */
+.answer-controls{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:4px 0;}
+.answer-controls[hidden]{display:none!important;}
+.answer-state{font-size:clamp(16px,calc(var(--u)*1.3),24px);font-weight:800;color:var(--good);}
+.answer-next{min-width:144px;min-height:64px;font-size:clamp(22px,calc(var(--u)*1.8),32px);line-height:1.2;}
+.answer-next:disabled{opacity:.55;cursor:default;}
+#play.answer-review .playfield,#play.answer-review .choices{pointer-events:none;}
+#play.answer-review .story-recap>summary{pointer-events:auto;}
+.choices.answer-complete{display:flex;gap:8px;padding:0;}
+.choices.answer-complete>:not(.answer-keep){display:none!important;}
+.choices.answer-complete .choice{min-width:48px;min-height:48px;width:auto;height:auto;max-width:100%;font-size:clamp(20px,calc(var(--u)*2.4),42px);padding:4px 12px;}
+.choices.answer-complete .choice-hear{display:none;}
+.choices.answer-complete .choice>svg{max-height:84px;width:auto;}
+@media(max-width:700px){
+  #play.answer-review{gap:4px;}
+  .answer-controls{gap:8px;}
+  .answer-next{min-width:144px;min-height:64px;}
+}
 </style>
 <div id="stage"></div>
 <div id="fx" aria-hidden="true"></div>
@@ -4010,6 +4052,7 @@ const Store = (() => {
     endedDay: null,
     name: '',
     sfx: true, voice: true, voiceId: null,
+    autoAdvance: false, // shared across laps: inspect an answer before choosing the next question
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
        the parent's override: a child who is ready but cannot get ★★★ on とけい must
        not be held behind a padlock they cannot move — the same reason a level opens
@@ -4538,7 +4581,7 @@ const Store = (() => {
       if (typeof data.name !== 'string') return null;
       out.name = data.name.slice(0, 12);
     }
-    for (const k of ['sfx', 'voice', 'orientation', 'g1Open', 'g1Reached', 'transferReached', 'secondRoundReached']){
+    for (const k of ['sfx', 'voice', 'autoAdvance', 'orientation', 'g1Open', 'g1Reached', 'transferReached', 'secondRoundReached']){
       if (data[k] !== undefined){
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];
@@ -6329,6 +6372,8 @@ function levelOpen(g, i){ return stageOpen(g) && Store.levelUnlocked(g.id, i); }
 
 const Session = (() => {
   let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, showBtn, backBtn, moodEl, feedbackEl;
+  let answerControls, nextBtn, answerSpeech = '', advancePending = null;
+  let autoAdvanceOverride = null, blockAnswerUntil = 0;
   let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
@@ -6469,6 +6514,10 @@ const Session = (() => {
     epoch++;
     timers.forEach((v, id) => clearTimeout(id));
     timers.clear();
+    advancePending = null;
+    if (nextBtn) nextBtn.disabled = true;
+    if (answerControls) answerControls.hidden = true;
+    if (node) node.classList.remove('answer-review');
     endWalk();
   }
 
@@ -6498,7 +6547,11 @@ const Session = (() => {
       'aria-label': 'もういちど きく', title: 'もういちど きく',
       // the question, and the hint if one is up: a child who missed the hint's words
       // has no other way to hear them again
-      onclick(){ Sound.sfx.tap(); if (lastSpeech || hintSpeech) Sound.say(lastSpeech + hintSpeech, { delay: 40 }); }
+      onclick(){
+        Sound.sfx.tap();
+        const text = locked && answerSpeech ? answerSpeech : lastSpeech + hintSpeech;
+        if (text) Sound.say(text, { delay: 40 });
+      }
     }, '🔊');
     /* 👀: the help a child can ask for before getting it wrong. Help that only ever
        arrives after two mistakes teaches that being wrong is how you get help. */
@@ -6513,16 +6566,28 @@ const Session = (() => {
     backBtn = el('button.btn.btn-ghost.btn-round.backbtn', {
       'aria-label': 'もどる', onclick: quit
     }, '←');
+    nextBtn = el('button.btn.btn-accent.answer-next', {
+      type: 'button', disabled: true,
+      onclick(){ if (advancePending){ Sound.sfx.tap(); advancePending(); } }
+    }, 'つぎへ ▶');
+    answerControls = el('div.answer-controls', {hidden:true},
+      el('span.answer-state', {text:'◯ できたね', role:'status'}), nextBtn);
     node = el('div#play', null,
       el('div.topbar', null,
         backBtn,
         titleEl, pipsEl),
       el('div.prompt', null, moodEl,
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn, showBtn),
-      countEl = el('div.session-count',{'aria-live':'polite'}), fieldEl, choicesEl);
+      countEl = el('div.session-count',{'aria-live':'polite'}), fieldEl, choicesEl, answerControls);
     UI.register('play', node);
     // has a finger been on this question yet — the together-tool must not wipe the child's own work
     const touch = e => {
+      // The second tap of a double tap on Next must not land on the new answer
+      // surface that has just appeared in the same place.
+      if (e.detail > 1 && performance.now() < blockAnswerUntil && e.target.closest
+          && e.target.closest('.playfield, .choices')){
+        e.preventDefault(); e.stopImmediatePropagation(); return;
+      }
       // Listening is part of reading the question, not the child's first answer.
       // This listener runs in capture phase, before the audio button can stop it.
       if (e.target.closest && e.target.closest('.choice-hear')) return;
@@ -6625,7 +6690,7 @@ const Session = (() => {
     if(latest && latest.kind==='transfer') return TransferAdventure.resume();
     const saved = Store.savedSession();
     if (!saved || !enginePendingSummary()) return false;
-    build(); killTimers();
+    build(); killTimers(); blockAnswerUntil = 0;
     runId=saved.id; runRound=Store.round(); mode=saved.mode; curGame=saved.gameId ? Games.byId[saved.gameId] : null;
     curLevelIdx=saved.levelIndex; idx=saved.index; mistakes=saved.mistakes; firstTryRight=saved.firstTryRight; swiftCount=saved.swiftCount;
     plan=saved.plan.map(p=>Object.assign({},p,{game:Games.byId[p.gameId],level:Games.byId[p.gameId].levels[p.levelIndex]}));
@@ -6927,6 +6992,7 @@ const Session = (() => {
 
   function begin(){
     const previous = Store.savedSession();
+    blockAnswerUntil = 0;
     disarmQuit();
     idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0;
     runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10); runRound=Store.round();
@@ -6969,6 +7035,8 @@ const Session = (() => {
       clearHelp(){
         if (stale()) return;
         clearFeedback(); hintSpeech = ''; hintShown = false; walked = false;
+        coach = null; hintAfter = 2;
+        hintExtras = []; hintStrongFns = []; extrasShown = false;
         // Let an ongoing demonstration finish its callback: first-time lessons
         // use it to continue into the next step. The question still keeps help.
       },
@@ -7186,7 +7254,11 @@ const Session = (() => {
     curItem = null; curLabel = null; curAnswer = null; missType = null;
     hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false; taughtQ = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
-    choicesEl.classList.remove('pad');
+    choicesEl.classList.remove('pad', 'answer-complete');
+    answerSpeech = '';
+    showBtn.disabled = false;
+    speakBtn.setAttribute('aria-label', 'もういちど きく');
+    speakBtn.title = 'もういちど きく';
     clearFeedback();
     fieldEl.className = 'playfield';
   }
@@ -7355,7 +7427,11 @@ const Session = (() => {
   /** Second rung: the hand shows the method, and only then do the choices narrow. */
   function strongHint(){
     offerTeach();
+    const stageCoach = coach;
     const narrow = () => {
+      // A walk may itself complete a stage. Its old narrowing must not act on
+      // the choices registered by the next stage of the same question.
+      if (coach !== stageCoach) return;
       runExtras();
       hintStrongFns.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
       // leave exactly one wrong answer standing beside the right one
@@ -7616,11 +7692,52 @@ const Session = (() => {
       Sound.say(praise, { delay: 320 });
     }
     if ((idx + 1) % 4 === 0) UI.confetti(22);
-    afterNarration(() => {
+    const spoken = spokenAnswerLabel(answerText);
+    answerSpeech = [curLabel, spoken != null ? '答えは、' + spoken + 'だよ。'
+      : !curLabel ? 'できたね。絵を確かめてみよう。' : ''].filter(Boolean).join('。');
+    speakBtn.setAttribute('aria-label', 'こたえを もういちど きく');
+    speakBtn.title = 'こたえを もういちど きく';
+    showBtn.disabled = true;
+    const manual = scaffold !== 'show' && !(autoAdvanceOverride === null
+      ? Store.data.autoAdvance === true : autoAdvanceOverride);
+    const mine = epoch;
+    let ready = false, moved = false;
+    const advance = () => {
+      if (!ready || moved || mine !== epoch || !locked || UI.currentName() !== 'play') return;
+      moved = true; advancePending = null; nextBtn.disabled = true;
+      answerControls.hidden = true;
+      if (manual) blockAnswerUntil = performance.now() + 300;
       idx++;
       if (idx >= plan.length) finish();
       else if (breaksOn && idx % 4 === 0 && mode !== 'first') showOverview(true);
-      else nextQuestion();
+      else {
+        nextQuestion();
+        if (manual){
+          promptTxt.setAttribute('tabindex', '-1');
+          promptTxt.focus({preventScroll:true});
+        }
+      }
+    };
+    if (manual){
+      // Keep the completed picture and selected answers. The full keypad is no
+      // longer needed, leaving room for both the picture and a large Next button.
+      node.classList.add('answer-review');
+      choicesEl.classList.add('answer-complete');
+      Array.from(choicesEl.children).forEach(n => n.classList.toggle('answer-keep',
+        n.classList.contains('correct') || !!n.querySelector('.correct')));
+      $$('button', fieldEl).concat($$('button', choicesEl)).forEach(b => { b.disabled = true; });
+      answerControls.hidden = false;
+      nextBtn.disabled = true;
+      advancePending = advance;
+      refit();
+    }
+    // Generators provide the complete reveal duration. Narration may take longer;
+    // both pacing modes wait for it before a manual or automatic transition.
+    afterNarration(() => {
+      if (mine !== epoch || UI.currentName() !== 'play') return;
+      ready = true;
+      if (manual){ nextBtn.disabled = false; nextBtn.focus({preventScroll:true}); }
+      else advance();
     }, o.delay || 950);
   }
 
@@ -7755,6 +7872,9 @@ const Session = (() => {
       intro(on){ introOn = !!on; },
       overview(on){ overviewOn=!!on; },
       breaks(on){ breaksOn=!!on; },
+      // Legacy grading suites explicitly choose their former automatic pacing;
+      // the dedicated pacing suite exercises the persisted/default child flow.
+      autoAdvance(on){ autoAdvanceOverride = on == null ? null : !!on; },
       get introStep(){ return plan[idx] ? plan[idx].intro || null : null; },
       get planIntro(){ return plan.map(p => p.intro || null); },
       get planChecks(){ return plan.map(p => p.check || null); },
@@ -8156,6 +8276,7 @@ function countQuestion(api, lo, hi, layout){
   });
 
   function ask(){
+    api.clearHelp();
     api.setPrompt(`${thing.n}は ぜんぶで いくつ？`, `${thing.n}は、全部でいくつ？`);
     const n = hi <= 5 ? 3 : 4;
     const vals = shuffle([count].concat(distractors(count, n - 1, 1, Math.max(hi + 2, 6))));
@@ -8341,6 +8462,7 @@ function flashQuestion(api, o){
   api.coach({ walk(){ return [{ at: go, act(){ go.click(); }, say: 'みる、を押すよ。', ms: o.ms + 1400 }]; } });
 
   function ask(){
+    api.clearHelp();
     /* Getting it right and never seeing the dots again is half a lesson. This game
        exists to make 7 *look* like「5と2」, so the arrangement has to come back at
        the moment the child is told they were right — that is when it gets attached
@@ -8551,7 +8673,8 @@ function lineFill(api, lo, hi, gaps){
 
   let qi = 0;
   function askNext(){
-    nums.forEach(v => cells[v].classList.remove('now'));
+    api.clearHelp();
+    nums.forEach(v => cells[v].classList.remove('now', 'near'));
     const target = holes[qi];
     cells[target].classList.add('now');
     api.setPrompt('ひかって いる ところに はいる かずは？', '光っているところに入る数は？');
@@ -8578,7 +8701,7 @@ function lineFill(api, lo, hi, gaps){
       }
     });
     api.coach({
-      text: 'ひだりの かずから かぞえて みよう',
+      text: (target - 1) + 'の つぎは？　ひだりから かぞえて みよう',
       say: `${numKana(target - 1)}の、次は？`,
       tool(){ [target - 1, target + 1].forEach(v => { if (cells[v]) cells[v].classList.add('near'); }); },
       walk(){ return Coach.readAlong(nums.map(v => cells[v]), cells[target]); }
@@ -9479,6 +9602,7 @@ function orderBySize(api){
         row.prepend(el('div.ordno', { text: String(step) }));
         Sound.sfx.count(step - 1);
         if (step === n){ $$('.mrow', wrap).forEach(r => r.classList.add('correct')); api.correct(); }
+        else { api.clearHelp(); api.coach(sizeCoach); }
       } else {
         row.classList.add('wrong');
         api.later(() => row.classList.remove('wrong'), 460);
@@ -9489,7 +9613,7 @@ function orderBySize(api){
   });
   api.field.append(wrap);
   // lighting the next bar picked it for the child; the marks let them pick it
-  api.coach({
+  const sizeCoach = {
     text: asc ? 'のこりの なかで いちばん みじかいのは？' : 'のこりの なかで いちばん ながいのは？',
     say: asc ? '残りの中で、一番短いのは、どれ？' : '残りの中で、一番長いのは、どれ？',
     tool(){ Coach.ticks(wrap); },
@@ -9500,7 +9624,8 @@ function orderBySize(api){
       return r ? [{ at: () => $('.stickbar', r), act(){ r.classList.add('nexthint'); },
                     say: asc ? 'これが、次に短い。' : 'これが、次に長い。', ms: 1700 }] : [];
     }
-  });
+  };
+  api.coach(sizeCoach);
   api.onShow(() => {
     wanted.slice(step).forEach(len => {
       const r = $$('.mrow', wrap).find(x => !x.classList.contains('picked')
@@ -9584,7 +9709,8 @@ function decompose(api, whole, pad){
   api.field.append(bond);
   const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
   const showParts = {
-    correctOpts: { delay: 1500 },
+    // Leave time to see the last red dot, including the nine-dot decomposition.
+    correctOpts: { delay: Math.max(1500, 200 + (ans - 1) * 170 + 350) },
     onPick(){
       showFrame();
       // show the two parts making the whole (scoped to this question's own nodes)
@@ -9672,6 +9798,7 @@ function makeTwoWays(api){
         bondNode(whole, a, whole - a))));
   };
   const build = () => {
+    if (made.length){ api.clearHelp(); api.coach(bondCoach); }
     clear(api.choices);
     accepting = true;
     for (let a = 1; a < whole; a++){
@@ -9703,7 +9830,7 @@ function makeTwoWays(api){
     return Array.from({ length: whole - 1 }, (_, i) => i + 1)
       .find(x => !used.has(Math.min(x, whole - x))) || 1;
   };
-  api.coach({
+  const bondCoach = {
     text: () => { const a = unused(); return a + ' と ' + (whole - a) + ' に わけることも できるよ'; },
     say: () => { const a = unused(); return `${numKana(a)}と${numKana(whole - a)}に、分けることもできるよ。`; },
     tool(){ if (!$('.tenframe', api.field)) api.field.append(el('div.frameset', null, tenFrameNode(whole, 5, { total: whole > 5 ? 10 : 5 }))); },
@@ -9712,7 +9839,8 @@ function makeTwoWays(api){
       const b = $$('.choice', api.choices).find(x => Number(x.textContent) === a);
       return b ? [{ at: b, say: `${numKana(a)}を押してみよう。`, ms: 1700 }] : [];
     }
-  });
+  };
+  api.coach(bondCoach);
   api.onShow(() => {
     const press = v => { const b = $$('.choice', api.choices).find(x => Number(x.textContent) === v); if (b) b.click(); };
     const taken = new Set(made.map(x => Math.min(x, whole - x)));
@@ -9765,18 +9893,32 @@ function fillToTen(api){
       if (count === 10){
         api.later(() => api.afterSpeech(() => {
           const add = 10 - start;
+          api.clearHelp();
           api.setPrompt(`${numTag(start)} に <b>いくつ たした？</b>`,
                         `${numKana(start)}に、いくつ足した？`);
+          readout.textContent = 'あかい まるが たした かず';
           api.buildChoices(shuffle([add].concat(distractors(add, 2, 1, 9))), add, {
             correctOpts: { delay: 900 }
+          });
+          const added = cells.slice(start);
+          const countAdded = Coach.once(() => Coach.countable(api, added));
+          api.coach({
+            text: 'たした あかい まるだけを タップして かぞえよう',
+            say: '足した赤い丸だけを、タップして数えよう。',
+            tool(){ countAdded(); Coach.pulse(added); },
+            walk(){ return countAdded().steps(); }
           });
         }), 300);
       }
     });
   });
   api.field.append(el('div.frameset', null, f), readout);
-  api.coach({ walk(){ return cells.filter(c => !c.firstChild).map(c => ({ at: c, act(){ c.click(); }, ms: 620 })); } });
-  api.onHint(() => { readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; });
+  api.coach({
+    text: () => 'いま ' + count + 'こ。あいた ところに たして 10に しよう',
+    say: () => `今は${koKana(count)}。空いたところに足して、10にしよう。`,
+    tool(){ readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; },
+    walk(){ return cells.filter(c => !c.firstChild).map(c => ({ at: c, act(){ c.click(); }, ms: 620 })); }
+  });
   api.onShow(() => {
     cells.filter(c => !c.firstChild).forEach(c => c.click());
     api.later(() => api.afterSpeech(() => { const b = $('.choice.correct') || $$('.choice', api.choices).find(x => x.textContent === String(10 - start)); if (b) b.click(); }), 650);
@@ -9813,8 +9955,9 @@ function partnerOfTen(api, pad){
       }, (i - a) * 150 + 200);
     }
   };
-  if (pad) api.buildPad(ans, revealed(fillIn, { delay: 1500 }));
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans, revealed(fillIn, { delay: 1500 }));
+  const revealDelay = Math.max(1500, 200 + (ans - 1) * 150 + 350);
+  if (pad) api.buildPad(ans, revealed(fillIn, { delay: revealDelay }));
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans, revealed(fillIn, { delay: revealDelay }));
   let walking = false;
   const fill = Coach.once(() => Coach.fillable(api, cells, { from: a,
     onDone(){ if (walking) return; Coach.pulse($$('.dot.b', f)); Sound.say('赤い丸は、いくつ？', { delay: 80 }); } }));
@@ -10711,6 +10854,7 @@ function patternQuestion(api, unitKind, blanks){
   let hi = 0;
   function askHole(){
     if (hi >= holes.length) return;
+    api.clearHelp();
     const at = holes[hi];
     cars.forEach(c => c.classList.remove('now'));
     cars[at].classList.add('blank', 'now');
@@ -10729,21 +10873,21 @@ function patternQuestion(api, unitKind, blanks){
         return true;
       }
     });
+    api.coach({
+      text: unit.length + 'つずつ おなじ ならびが くりかえして いるよ',
+      say: `${tsuKana(unit.length)}ずつ、同じ並びが、繰り返しているよ。`,
+      tool(){ cars.forEach((c, i) => { if (Math.floor(i / unit.length) % 2 === 0) c.classList.add('unitmark'); }); },
+      // the hand reads the train aloud in its rhythm and stops at the gap
+      walk(){
+        const at = holes[hi];
+        const steps = [];
+        for (let i = 0; i < at; i++) steps.push({ at: cars[i], say: TOKEN_NAME[seq[i]] || '', ms: 560 });
+        steps.push({ at: cars[at], say: 'つぎは？', ms: 1500 });
+        return steps;
+      }
+    });
   }
   askHole();
-  api.coach({
-    text: unit.length + 'つずつ おなじ ならびが くりかえして いるよ',
-    say: `${tsuKana(unit.length)}ずつ、同じ並びが、繰り返しているよ。`,
-    tool(){ cars.forEach((c, i) => { if (Math.floor(i / unit.length) % 2 === 0) c.classList.add('unitmark'); }); },
-    // the hand reads the train aloud in its rhythm and stops at the gap
-    walk(){
-      const at = holes[hi];
-      const steps = [];
-      for (let i = 0; i < at; i++) steps.push({ at: cars[i], say: TOKEN_NAME[seq[i]] || '', ms: 560 });
-      steps.push({ at: cars[at], say: 'つぎは？', ms: 1500 });
-      return steps;
-    }
-  });
 }
 
 /** Let the child author the repeating unit, then show the rule they created. */
@@ -10768,6 +10912,8 @@ function createPattern(api){
         c.textContent = chosen[i % chosen.length];
       });
       b.classList.add('picked');
+      api.clearHelp();
+      api.coach(patternCoach);
       if (chosen.length === 2){
         $$('.choice.picked', api.choices).forEach(x => x.classList.add('correct'));
         api.setPrompt('できた きまりを こえに だして いってみよう',
@@ -10777,12 +10923,13 @@ function createPattern(api){
     });
     api.choices.append(b);
   });
-  api.coach({
+  const patternCoach = {
     text: () => chosen.length ? chosen[0] + ' の つぎに くるものを えらぼう' : 'すきな えを 2つ えらぼう',
     say: () => chosen.length ? '次に来るものを、選ぼう。' : '好きな絵を、二つ選ぼう。',
     tool(){ Coach.pulse($$('.choice:not(.picked)', api.choices)); },
-    walk(){ return $$('.choice:not(.picked)', api.choices).slice(0, 2).map(b => ({ at: b, ms: 900 })); }
-  });
+    walk(){ return $$('.choice:not(.picked)', api.choices).slice(0, 2 - chosen.length).map(b => ({ at: b, ms: 900 })); }
+  };
+  api.coach(patternCoach);
   api.onShow(() => {
     $$('.choice:not(.picked)', api.choices).slice(0, 2 - chosen.length).forEach(b => b.click());
   });
@@ -11114,6 +11261,8 @@ function collectSame(api){
   }));
 
   function ask(){
+    api.clearHelp();
+    objs.forEach(o => o.classList.remove('glow'));
     api.setPrompt(`あつめた <b>${target.lbl}</b> は ぜんぶで いくつ？`,
                   `集めた${target.lbl}は、全部でいくつ？`);
     api.buildChoices(shuffle([n].concat(distractors(n, 2, 1, n + 3))), n);
@@ -11273,6 +11422,8 @@ function ownGroup(api){
     b.addEventListener('click', () => {
       if (api.locked || chosen) return;
       chosen = k;
+      api.clearHelp();
+      api.coach(groupCoach);
       Sound.sfx.tap();
       clear(api.choices);
       const cat = CATS[k];
@@ -11307,12 +11458,13 @@ function ownGroup(api){
   }
 
   const left = () => objs.filter(o => o.dataset.cat === chosen && !o.classList.contains('counted'));
-  api.coach({
+  const groupCoach = {
     text: () => chosen ? CATS[chosen].lbl + 'は ' + CATS[chosen].items.slice(0, 4).join(' ') : 'どれでも いいよ。ひとつ えらんでね',
     say: () => chosen ? `${CATS[chosen].lbl}の仲間を、探そう。` : 'どれでもいいよ。一つ選んでね。',
     tool(){ if (chosen){ const o = left()[0]; if (o) o.classList.add('glow'); } },
     walk(){ return chosen ? left().map(o => ({ at: o, act(){ o.click(); }, ms: 800 })) : []; }
-  });
+  };
+  api.coach(groupCoach);
   api.onShow(() => {
     if (!chosen){ const b = $('.choice', api.choices); if (b) b.click(); }
     left().forEach(o => o.click());
@@ -11824,8 +11976,36 @@ function plusOrMinus(api){
       $('.opbox', eq).classList.add('filled');
       Sound.sfx.place();
       api.later(() => {
+        api.clearHelp();
         api.setPrompt(st.q, st.q);
-        api.buildPad(ans, revealed(() => fillBlank($('.box', eq), ans)));
+        let solved = false;
+        api.buildPad(ans, revealed(() => { solved = true; fillBlank($('.box', eq), ans); eq.hidden = false; }));
+        const picture = Coach.once(() => {
+          const frames = el('div.frameset');
+          // The words and the manipulatives each need room above a phone's
+          // keypad. Keep the original story available, one view at a time.
+          const summary = el('summary.btn.btn-ghost', { text: '📖 おはなしを みる' });
+          const recap = el('details.story-recap', null, summary);
+          card.before(recap); recap.append(card); eq.hidden = true;
+          recap.addEventListener('toggle', () => {
+            frames.hidden = recap.open; eq.hidden = !solved;
+            summary.textContent = recap.open ? 'まるの ヒントに もどる' : '📖 おはなしを みる';
+          });
+          const frame = partFrame(a + (plus ? b : 0), a);
+          if (plus){
+            $$('.cell', frame).slice(a).forEach(c => { c.classList.remove('hole'); c.append(el('div.dot.b')); });
+          } else {
+            $$('.cell', frame).slice(a - b).forEach(c => c.classList.add('coachgone'));
+          }
+          frames.append(frame); api.field.append(frames);
+          return { frame, count: Coach.countable(api, $$('.cell', frame).filter(c => !c.classList.contains('coachgone'))) };
+        });
+        api.coach({
+          text: plus ? 'あおと あかを あわせて かぞえよう' : 'のこりの まるを かぞえよう',
+          say: plus ? '初めの丸と、増えた赤い丸を、合わせて数えよう。' : '食べた、あげた分を除いて、残りの丸を数えよう。',
+          tool(){ picture(); },
+          walk(){ return picture().count.steps(); }
+        });
       }, 420);
       return false;                    // the operation was only half the question
     }
@@ -12046,7 +12226,7 @@ const Treasures = (() => {
 'use strict';
 
 const StickerMissions = (() => {
-  let node, prizeEl, detailEl, goBtn, backBtn, active = null;
+  let node, prizeEl, detailEl, progressEl, courseEl, goBtn, backBtn, active = null;
 
   function available(){
     const rec = Diagnostic.current() || {};
@@ -12081,6 +12261,7 @@ const StickerMissions = (() => {
     const row = el('div.sticker-mission-picks');
     choices.forEach(choice => row.append(el('button.sticker-mission-pick', {
       type: 'button', title: choice.game.name + '　' + choice.level.t,
+      dataset:{missionKey:choice.key},
       onclick(){ Sound.sfx.tap(); open(choice); }
     },
       el('span.prize', null, PokemonStickers.artwork(choice.key, { rarity: false })),
@@ -12095,32 +12276,37 @@ const StickerMissions = (() => {
     if (node) return node;
     prizeEl = el('div.sticker-mission-prize');
     detailEl = el('div.sticker-mission-detail');
-    goBtn = el('button.btn.btn-accent', { type: 'button', text: 'あそびに いく ▶' });
+    progressEl = el('div.sticker-mission-progress');
+    courseEl = el('div.sticker-mission-course');
+    goBtn = el('button.btn.btn-accent.sticker-mission-go', { type: 'button' });
     backBtn = el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
       onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←');
     node = el('div#sticker-mission', null,
       el('div.topbar', null, backBtn, el('h2', { text: 'シールミッション' })),
-      el('div.reward-sheet', null, mascotSVG('happy', 'talk'), prizeEl, detailEl, goBtn));
+      el('div.reward-sheet', null,
+        el('div.sticker-mission-intro', null, prizeEl, detailEl), goBtn, progressEl, courseEl));
     return UI.register('sticker-mission', node);
   }
 
   function open(choice){
-    if (!choice || !choice.game || !choice.level) return;
+    if (!choice || !choice.game || !choice.level || !levelOpen(choice.game, choice.levelIndex)) return;
     build(); active = choice;
     clear(prizeEl).append(PokemonStickers.artwork(choice.key));
     clear(detailEl);
     detailEl.append(
-      el('b', { text: choice.game.name + '　《' + choice.level.t + '》' }),
-      el('span', { text: 'クリアすると「' + stickerFor(choice.key) + '」の シールが もらえるよ' }),
-      el('small', { text: 'いろが つくのは、べつの ひに たしかめてから' }));
+      el('b', { text: choice.game.ico + '　' + choice.game.name }),
+      el('span', { text: '《' + choice.level.t + '》' }),
+      el('small', { text: 'この シールへ、1もんずつで いいよ' }));
+    const progress = ShortProgress.describe(choice.game.id, choice.levelIndex, {gold:false, preview:true});
+    clear(progressEl).append(ShortProgress.render(choice.game.id, choice.levelIndex, {gold:false, preview:true}));
+    clear(courseEl).append(FirstSteps.longCourse(choice.game, choice.levelIndex, {stickerMission:choice}));
+    goBtn.textContent = progress.nextLabel;
     goBtn.onclick = () => {
       Sound.sfx.tap();
-      if (choice.game.intro !== false && !Store.introduced(choice.game.id, choice.levelIndex))
-        FirstSteps.open(choice.game, choice.levelIndex, { stickerMission: choice });
-      else Session.startLevel(choice.game, choice.levelIndex, { stickerMission: choice });
+      ShortProgress.start(choice.game, choice.levelIndex, {gold:false, stickerMission:choice});
     };
     UI.show('sticker-mission');
-    Sound.say(stickerFor(choice.key) + 'のシールを取りに行こう。' + choice.game.name + 'の、' + choice.level.t + 'をクリアすると、もらえるよ。', { delay: 180 });
+    Sound.say(stickerFor(choice.key) + 'のシールへの遊びだよ。' + progress.speech + '1問ずつでいいよ。', { delay: 180 });
   }
 
   return { available, homeCard, build, open, get active(){ return active; } };
@@ -12307,6 +12493,17 @@ const FirstSteps = (() => {
   const button = (icon, label, fn, accent) => el('button.btn' + (accent ? '.btn-accent' : ''),
     { type: 'button', onclick(){ Sound.sfx.tap(); fn(); } },
     el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
+  // The longer course remains a deliberate choice. Its scored question count is
+  // stable; the engine's preparation screen names any teaching/check additions.
+  function longCourse(game, levelIndex, opts){
+    const n = game.levels[levelIndex].n || 8;
+    return el('details.long-course', null,
+      el('summary', {text:'まとめて あそびたいとき'}),
+      el('p', {text:n + 'もんで レベルに チャレンジ。せいかいに あわせて、ほしや シールが のこるよ。'}),
+      el('p', {text:'1もんずつの じゅんびとは べつの コースだよ。みほんや、ほかの シールの たしかめが くわわることも あるよ。'}),
+      el('small', {text:'つぎの がめんで、ぜんぶの もんすうを みられるよ。とちゅうで やすんでも いいよ。'}),
+      button('▶', n + 'もんの コース', () => Session.startLevel(game, levelIndex, opts)));
+  }
   function build(){
     if (node) return node;
     detail = el('div.first-detail'); choices = el('div.first-actions');
@@ -12331,9 +12528,9 @@ const FirstSteps = (() => {
     Session.startFirst(game, levelIndex, independent || Store.introduced(game.id, levelIndex)
       ? Store.shortStatus(game.id, levelIndex).phase : 'afterShow');
   }
-  function startGold(game, levelIndex){
+  function startGold(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = {game, levelIndex, opts:null};
+    build(); active = {game, levelIndex, opts:opts || null};
     // The engine settles any completed checkpoint before starting a fresh goal.
     Session.startFirst(game, levelIndex, 'independent', {gold:true});
   }
@@ -12347,12 +12544,12 @@ const FirstSteps = (() => {
     choices.append(
       button('👀', 'まず みてみる', () => Session.startFirst(game, levelIndex, 'show'), true),
       button('🤝', 'みてから ひとつ', () => Session.startFirst(game, levelIndex, 'together')),
-      button('👆', 'じぶんで 1もん', () => startOne(game, levelIndex, true, active.opts)),
-      button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active.opts)));
+      button('👆', 'じぶんで 1もん', () => startOne(game, levelIndex, true, active.opts)));
     const status = Store.shortStatus(game.id, levelIndex);
     if (status.canStartGold || status.goldActive) choices.append(button('✨',
       ShortProgress.describe(game.id, levelIndex, {gold:true}).nextLabel,
-      () => ShortProgress.start(game, levelIndex, {gold:true})));
+      () => ShortProgress.start(game, levelIndex, Object.assign({}, active.opts, {gold:true}))));
+    choices.append(longCourse(game, levelIndex, active.opts));
     const progress = ShortProgress.render(game.id, levelIndex);
     if (progress) detail.append(progress);
     UI.show('first-steps');
@@ -12360,6 +12557,9 @@ const FirstSteps = (() => {
   }
   function finish(game, levelIndex, phase, milestone){
     build();
+    // Keep the selected prize only for this course; the book return remains useful
+    // even if the child follows a recommendation for another activity.
+    const origin = active && active.game === game && active.levelIndex === levelIndex ? active.opts : null;
     const info = $('.first-detail', result), actions = $('.first-actions', result);
     const short = phase === 'independent' || phase === 'check';
     const status = Store.shortStatus(game.id, levelIndex);
@@ -12385,16 +12585,25 @@ const FirstSteps = (() => {
     actions.append(button('🏠', 'きょうは ここまで', () => {
       Home.endToday();
     }, phase !== 'show'));
+    const choose = button('🗺️', 'べつの あそびを えらぶ', () => {
+      if (origin && origin.returnToBook) Book.returnToBook();
+      else Home.choosePlay();
+    });
+    choose.classList.add('first-choose'); actions.append(choose);
     if (rewards.length) actions.append(button('🏡', 'しまに はる', () => StickerWorld.open(rewards[rewards.length - 1])));
     if (phase !== 'show'){
       const next = shortPlan() || {game, levelIndex, kind:'resume'};
       const same = next.game.id === game.id && next.levelIndex === levelIndex;
-      actions.append(button(next.kind === 'support' ? '🤝' : '👆', same && next.kind === 'resume' && !status.goldActive
-        ? 'じぶんで もう 1もん' : planCopy(next).title, () => startPlan(next, same && active && active.opts)));
+      const nextOrigin = same ? origin : origin && origin.returnToBook ? {returnToBook:true} : null;
+      const nextButton = button(next.game.ico, same && next.kind === 'resume' && !status.goldActive
+        ? 'じぶんで もう 1もん' : planCopy(next).title, () => startPlan(next, nextOrigin));
+      nextButton.classList.add('first-next');
+      $('.bl', nextButton).append(el('small', {text:next.game.name + '　《' + next.game.levels[next.levelIndex].t + '》'}));
+      actions.append(nextButton);
     }
     if (phase !== 'show' && status.canStartGold) actions.append(button('✨', 'きんへ 1もんずつ',
-      () => startGold(game, levelIndex)));
-    actions.append(button('▶', 'たくさん あそぶ', () => Session.startLevel(game, levelIndex, active && active.opts)));
+      () => startGold(game, levelIndex, origin)));
+    actions.append(longCourse(game, levelIndex, origin));
     if (milestone && milestone.label) info.append(el('small', { text: '📒 ' + milestone.label }));
     UI.show('first-finish', { replace: true });
     finishSpeech = doneText + '。' + (short && status.lastResult === 'confirmed'
@@ -12408,7 +12617,7 @@ const FirstSteps = (() => {
     }
     Sound.say(finishSpeech, { delay: 200 });
   }
-  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, build, open, startOne, startGold, finish, get active(){ return active; } };
+  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, longCourse, build, open, startOne, startGold, finish, get active(){ return active; } };
 })();
 
 const ProgressAlbum = (() => {
@@ -12747,9 +12956,9 @@ const ShortProgress = (() => {
   function start(game, levelIndex, opts){
     const info = game && describe(game.id, levelIndex, Object.assign({preview:true}, opts));
     if (!info || !levelOpen(game, levelIndex)) return;
-    if (info.kind === 'support') FirstSteps.startPlan({game,levelIndex,kind:'support'});
-    else if (info.goal === 'gold' && !Store.hasSticker(info.key + ':g')) FirstSteps.startGold(game, levelIndex);
-    else FirstSteps.startOne(game, levelIndex, Store.introduced(game.id, levelIndex));
+    if (info.kind === 'support') FirstSteps.startPlan({game,levelIndex,kind:'support'}, opts);
+    else if (info.goal === 'gold' && !Store.hasSticker(info.key + ':g')) FirstSteps.startGold(game, levelIndex, opts);
+    else FirstSteps.startOne(game, levelIndex, Store.introduced(game.id, levelIndex), opts);
   }
   return {describe, render, current, start};
 })();
@@ -14357,6 +14566,17 @@ const Home = (() => {
     Sound.hush(); render(); UI.show('home', {replace:true});
     Sound.say(homeSpeech(), {delay:180});
   }
+  function choosePlay(){
+    render(); UI.show('home', {replace:true});
+    // Choosing another activity is separate from ending the day. The child has
+    // explicitly asked for the map, including after optional play on an ended day.
+    moreEl.open = true;
+    requestAnimationFrame(() => {
+      if (UI.currentName() !== 'home') return;
+      moreSummary.focus({preventScroll:true}); moreEl.scrollIntoView({block:'start'});
+    });
+    Sound.say('別の遊びを選べるよ。地図や、ほしいシールから選んでみよう。', {delay:120});
+  }
   function banner(button, icon, title, detail, action){
     clear(button).append(el('span.ico', { text:icon, 'aria-hidden':'true' }),
       el('span.grow', null, el('span.t', { text:title }), el('span.s', { text:detail })),
@@ -14577,7 +14797,7 @@ const Home = (() => {
     });
     renderEnding();
   }
-  return { build, render, endToday };
+  return { build, render, endToday, choosePlay };
 })();
 
 /* ---------------------------------------------------------- LEVELS */
@@ -14996,6 +15216,9 @@ const Book = (() => {
     });
   }
   function returnToBook(){
+    if (renderedRound !== Store.round()){ savedScroll = 0; selectedKey = null; }
+    // A visit may have earned a sticker while the catalog was hidden.
+    render();
     UI.show('book', {keepScroll:true}); body.scrollTop = savedScroll;
     const button = Array.from(grid.querySelectorAll('button')).find(n => n.dataset.bookKey === selectedKey);
     if (button) requestAnimationFrame(() => button.focus({preventScroll:true}));
@@ -15044,8 +15267,10 @@ const Book = (() => {
     // Kept as one call site so the home, level list and book share progress wording.
     const progress = ShortProgress.describe(game.id, levelIndex, {gold, preview:true});
     copy.append(ShortProgress.render(game.id, levelIndex, {gold, preview:true}));
+    const options = {gold, returnToBook:true};
     actions.append(el('button.btn.btn-accent.book-play', {type:'button', text:progress.nextLabel,
-      onclick(){ Sound.sfx.tap(); ShortProgress.start(game, levelIndex, {gold}); }}));
+      onclick(){ Sound.sfx.tap(); ShortProgress.start(game, levelIndex, options); }}));
+    actions.append(FirstSteps.longCourse(game, levelIndex, {returnToBook:true}));
     return (lesson.gold && !gold ? '金のシールは、まず普通のシールに色がついてから挑戦できるよ。' : '') + progress.speech;
   }
   function renderExtras(){
@@ -15098,7 +15323,7 @@ const Book = (() => {
     clear(count).append(el('b', {text:got + 'まい'}), ' あつめたよ　', el('span', {text:'シールを おそう'}));
     renderCatalog(); renderExtras();
   }
-  return {build, render, open, speech};
+  return {build, render, open, speech, returnToBook};
 })();
 
 /* ---- 91-parent.js ---- */
@@ -15838,6 +16063,9 @@ const Parent = (() => {
         if (currentVoiceUI && currentVoiceUI.node.isConnected) currentVoiceUI.update();
       }));
     s.append(row);
+    s.append(toggle('正解後に自動で進む', () => Store.data.autoAdvance === true,
+      v => Store.setPref('autoAdvance', v)),
+      el('p', {text:'オフでは、正解した絵と答えを見て「つぎへ」で進みます。オンでも、答えの図と読み上げが終わってから進みます。見本は自動で進みます。'}));
     s.append(voiceRow());
     const reset = el('button.btn', { text: justReset ? '消しました' : '記録をすべて消す',
       style: { borderColor: 'var(--oops)', color: 'var(--oops-ink)' } });

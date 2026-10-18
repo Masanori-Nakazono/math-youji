@@ -297,6 +297,17 @@ const Home = (() => {
     Sound.hush(); render(); UI.show('home', {replace:true});
     Sound.say(homeSpeech(), {delay:180});
   }
+  function choosePlay(){
+    render(); UI.show('home', {replace:true});
+    // Choosing another activity is separate from ending the day. The child has
+    // explicitly asked for the map, including after optional play on an ended day.
+    moreEl.open = true;
+    requestAnimationFrame(() => {
+      if (UI.currentName() !== 'home') return;
+      moreSummary.focus({preventScroll:true}); moreEl.scrollIntoView({block:'start'});
+    });
+    Sound.say('別の遊びを選べるよ。地図や、ほしいシールから選んでみよう。', {delay:120});
+  }
   function banner(button, icon, title, detail, action){
     clear(button).append(el('span.ico', { text:icon, 'aria-hidden':'true' }),
       el('span.grow', null, el('span.t', { text:title }), el('span.s', { text:detail })),
@@ -517,7 +528,7 @@ const Home = (() => {
     });
     renderEnding();
   }
-  return { build, render, endToday };
+  return { build, render, endToday, choosePlay };
 })();
 
 /* ---------------------------------------------------------- LEVELS */
@@ -936,6 +947,9 @@ const Book = (() => {
     });
   }
   function returnToBook(){
+    if (renderedRound !== Store.round()){ savedScroll = 0; selectedKey = null; }
+    // A visit may have earned a sticker while the catalog was hidden.
+    render();
     UI.show('book', {keepScroll:true}); body.scrollTop = savedScroll;
     const button = Array.from(grid.querySelectorAll('button')).find(n => n.dataset.bookKey === selectedKey);
     if (button) requestAnimationFrame(() => button.focus({preventScroll:true}));
@@ -984,8 +998,10 @@ const Book = (() => {
     // Kept as one call site so the home, level list and book share progress wording.
     const progress = ShortProgress.describe(game.id, levelIndex, {gold, preview:true});
     copy.append(ShortProgress.render(game.id, levelIndex, {gold, preview:true}));
+    const options = {gold, returnToBook:true};
     actions.append(el('button.btn.btn-accent.book-play', {type:'button', text:progress.nextLabel,
-      onclick(){ Sound.sfx.tap(); ShortProgress.start(game, levelIndex, {gold}); }}));
+      onclick(){ Sound.sfx.tap(); ShortProgress.start(game, levelIndex, options); }}));
+    actions.append(FirstSteps.longCourse(game, levelIndex, {returnToBook:true}));
     return (lesson.gold && !gold ? '金のシールは、まず普通のシールに色がついてから挑戦できるよ。' : '') + progress.speech;
   }
   function renderExtras(){
@@ -1038,5 +1054,5 @@ const Book = (() => {
     clear(count).append(el('b', {text:got + 'まい'}), ' あつめたよ　', el('span', {text:'シールを おそう'}));
     renderCatalog(); renderExtras();
   }
-  return {build, render, open, speech};
+  return {build, render, open, speech, returnToBook};
 })();

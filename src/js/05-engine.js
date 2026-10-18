@@ -139,6 +139,8 @@ function levelOpen(g, i){ return stageOpen(g) && Store.levelUnlocked(g.id, i); }
 
 const Session = (() => {
   let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, showBtn, backBtn, moodEl, feedbackEl;
+  let answerControls, nextBtn, answerSpeech = '', advancePending = null;
+  let autoAdvanceOverride = null, blockAnswerUntil = 0;
   let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
@@ -279,6 +281,10 @@ const Session = (() => {
     epoch++;
     timers.forEach((v, id) => clearTimeout(id));
     timers.clear();
+    advancePending = null;
+    if (nextBtn) nextBtn.disabled = true;
+    if (answerControls) answerControls.hidden = true;
+    if (node) node.classList.remove('answer-review');
     endWalk();
   }
 
@@ -308,7 +314,11 @@ const Session = (() => {
       'aria-label': 'もういちど きく', title: 'もういちど きく',
       // the question, and the hint if one is up: a child who missed the hint's words
       // has no other way to hear them again
-      onclick(){ Sound.sfx.tap(); if (lastSpeech || hintSpeech) Sound.say(lastSpeech + hintSpeech, { delay: 40 }); }
+      onclick(){
+        Sound.sfx.tap();
+        const text = locked && answerSpeech ? answerSpeech : lastSpeech + hintSpeech;
+        if (text) Sound.say(text, { delay: 40 });
+      }
     }, '🔊');
     /* 👀: the help a child can ask for before getting it wrong. Help that only ever
        arrives after two mistakes teaches that being wrong is how you get help. */
@@ -323,16 +333,28 @@ const Session = (() => {
     backBtn = el('button.btn.btn-ghost.btn-round.backbtn', {
       'aria-label': 'もどる', onclick: quit
     }, '←');
+    nextBtn = el('button.btn.btn-accent.answer-next', {
+      type: 'button', disabled: true,
+      onclick(){ if (advancePending){ Sound.sfx.tap(); advancePending(); } }
+    }, 'つぎへ ▶');
+    answerControls = el('div.answer-controls', {hidden:true},
+      el('span.answer-state', {text:'◯ できたね', role:'status'}), nextBtn);
     node = el('div#play', null,
       el('div.topbar', null,
         backBtn,
         titleEl, pipsEl),
       el('div.prompt', null, moodEl,
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn, showBtn),
-      countEl = el('div.session-count',{'aria-live':'polite'}), fieldEl, choicesEl);
+      countEl = el('div.session-count',{'aria-live':'polite'}), fieldEl, choicesEl, answerControls);
     UI.register('play', node);
     // has a finger been on this question yet — the together-tool must not wipe the child's own work
     const touch = e => {
+      // The second tap of a double tap on Next must not land on the new answer
+      // surface that has just appeared in the same place.
+      if (e.detail > 1 && performance.now() < blockAnswerUntil && e.target.closest
+          && e.target.closest('.playfield, .choices')){
+        e.preventDefault(); e.stopImmediatePropagation(); return;
+      }
       // Listening is part of reading the question, not the child's first answer.
       // This listener runs in capture phase, before the audio button can stop it.
       if (e.target.closest && e.target.closest('.choice-hear')) return;
@@ -435,7 +457,7 @@ const Session = (() => {
     if(latest && latest.kind==='transfer') return TransferAdventure.resume();
     const saved = Store.savedSession();
     if (!saved || !enginePendingSummary()) return false;
-    build(); killTimers();
+    build(); killTimers(); blockAnswerUntil = 0;
     runId=saved.id; runRound=Store.round(); mode=saved.mode; curGame=saved.gameId ? Games.byId[saved.gameId] : null;
     curLevelIdx=saved.levelIndex; idx=saved.index; mistakes=saved.mistakes; firstTryRight=saved.firstTryRight; swiftCount=saved.swiftCount;
     plan=saved.plan.map(p=>Object.assign({},p,{game:Games.byId[p.gameId],level:Games.byId[p.gameId].levels[p.levelIndex]}));
@@ -737,6 +759,7 @@ const Session = (() => {
 
   function begin(){
     const previous = Store.savedSession();
+    blockAnswerUntil = 0;
     disarmQuit();
     idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0;
     runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10); runRound=Store.round();
@@ -779,6 +802,8 @@ const Session = (() => {
       clearHelp(){
         if (stale()) return;
         clearFeedback(); hintSpeech = ''; hintShown = false; walked = false;
+        coach = null; hintAfter = 2;
+        hintExtras = []; hintStrongFns = []; extrasShown = false;
         // Let an ongoing demonstration finish its callback: first-time lessons
         // use it to continue into the next step. The question still keeps help.
       },
@@ -996,7 +1021,11 @@ const Session = (() => {
     curItem = null; curLabel = null; curAnswer = null; missType = null;
     hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false; taughtQ = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
-    choicesEl.classList.remove('pad');
+    choicesEl.classList.remove('pad', 'answer-complete');
+    answerSpeech = '';
+    showBtn.disabled = false;
+    speakBtn.setAttribute('aria-label', 'もういちど きく');
+    speakBtn.title = 'もういちど きく';
     clearFeedback();
     fieldEl.className = 'playfield';
   }
@@ -1165,7 +1194,11 @@ const Session = (() => {
   /** Second rung: the hand shows the method, and only then do the choices narrow. */
   function strongHint(){
     offerTeach();
+    const stageCoach = coach;
     const narrow = () => {
+      // A walk may itself complete a stage. Its old narrowing must not act on
+      // the choices registered by the next stage of the same question.
+      if (coach !== stageCoach) return;
       runExtras();
       hintStrongFns.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
       // leave exactly one wrong answer standing beside the right one
@@ -1426,11 +1459,52 @@ const Session = (() => {
       Sound.say(praise, { delay: 320 });
     }
     if ((idx + 1) % 4 === 0) UI.confetti(22);
-    afterNarration(() => {
+    const spoken = spokenAnswerLabel(answerText);
+    answerSpeech = [curLabel, spoken != null ? '答えは、' + spoken + 'だよ。'
+      : !curLabel ? 'できたね。絵を確かめてみよう。' : ''].filter(Boolean).join('。');
+    speakBtn.setAttribute('aria-label', 'こたえを もういちど きく');
+    speakBtn.title = 'こたえを もういちど きく';
+    showBtn.disabled = true;
+    const manual = scaffold !== 'show' && !(autoAdvanceOverride === null
+      ? Store.data.autoAdvance === true : autoAdvanceOverride);
+    const mine = epoch;
+    let ready = false, moved = false;
+    const advance = () => {
+      if (!ready || moved || mine !== epoch || !locked || UI.currentName() !== 'play') return;
+      moved = true; advancePending = null; nextBtn.disabled = true;
+      answerControls.hidden = true;
+      if (manual) blockAnswerUntil = performance.now() + 300;
       idx++;
       if (idx >= plan.length) finish();
       else if (breaksOn && idx % 4 === 0 && mode !== 'first') showOverview(true);
-      else nextQuestion();
+      else {
+        nextQuestion();
+        if (manual){
+          promptTxt.setAttribute('tabindex', '-1');
+          promptTxt.focus({preventScroll:true});
+        }
+      }
+    };
+    if (manual){
+      // Keep the completed picture and selected answers. The full keypad is no
+      // longer needed, leaving room for both the picture and a large Next button.
+      node.classList.add('answer-review');
+      choicesEl.classList.add('answer-complete');
+      Array.from(choicesEl.children).forEach(n => n.classList.toggle('answer-keep',
+        n.classList.contains('correct') || !!n.querySelector('.correct')));
+      $$('button', fieldEl).concat($$('button', choicesEl)).forEach(b => { b.disabled = true; });
+      answerControls.hidden = false;
+      nextBtn.disabled = true;
+      advancePending = advance;
+      refit();
+    }
+    // Generators provide the complete reveal duration. Narration may take longer;
+    // both pacing modes wait for it before a manual or automatic transition.
+    afterNarration(() => {
+      if (mine !== epoch || UI.currentName() !== 'play') return;
+      ready = true;
+      if (manual){ nextBtn.disabled = false; nextBtn.focus({preventScroll:true}); }
+      else advance();
     }, o.delay || 950);
   }
 
@@ -1565,6 +1639,9 @@ const Session = (() => {
       intro(on){ introOn = !!on; },
       overview(on){ overviewOn=!!on; },
       breaks(on){ breaksOn=!!on; },
+      // Legacy grading suites explicitly choose their former automatic pacing;
+      // the dedicated pacing suite exercises the persisted/default child flow.
+      autoAdvance(on){ autoAdvanceOverride = on == null ? null : !!on; },
       get introStep(){ return plan[idx] ? plan[idx].intro || null : null; },
       get planIntro(){ return plan.map(p => p.intro || null); },
       get planChecks(){ return plan.map(p => p.check || null); },

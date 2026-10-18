@@ -17,7 +17,7 @@
   // levels opened for the first time start with two lesson questions; those have
   // tests of their own (87–89), and everything else here counts questions exactly
   if (S.intro) S.intro(false);
-  S.overview(false); S.breaks(false);
+  S.overview(false); S.breaks(false); S.autoAdvance(true);
   const doc = document;
   const results = [];
   let uncaught = 0;
@@ -2946,20 +2946,25 @@
       d.pictures = qa('#home .sticker-mission-pick').length === choices.length && choices.length > 0;
       d.open = !!c && K.levelOpen(c.game, c.levelIndex) && !K.Store.hasSticker(c.key);
       K.StickerMissions.open(c);
-      const go = q('#sticker-mission .btn-accent');
+      const go = q('#sticker-mission .sticker-mission-go');
       go.click();
-      d.firstChoice = c.game.intro === false || K.UI.currentName() === 'first-steps';
-      if (K.UI.currentName() === 'first-steps'){
-        const direct = qa('#first-steps .first-actions .btn').find(b => /たくさん/.test(b.textContent));
-        if (direct) direct.click();
-      }
+      d.oneQuestion = S.mode === 'first' && S.planLength === 1
+        && S.planGames.every(x => x === c.game.id + ':' + c.levelIndex);
+      S.forceCorrect(); S.flushTimers();
+      d.smallVisit = K.UI.currentName() === 'first-finish' && !K.Store.hasSticker(c.key)
+        && K.Store.plays(c.game.id, c.levelIndex) === 0;
+      K.StickerMissions.open(c);
+      const longer = q('#sticker-mission .long-course');
+      d.deliberate = !!longer && !longer.open && new RegExp((c.level.n || 8) + 'もん').test(longer.textContent);
+      longer.open = true;
+      q('#sticker-mission .long-course button').click();
       d.startsTarget = S.mode === 'level' && S.planGames.every(x => x === c.game.id + ':' + c.levelIndex);
       let guard = 0;
       while (!onResult() && guard++ < 16){ S.forceCorrect(); S.flushTimers(); }
       d.earned = K.Store.hasSticker(c.key) && /えらんだ シールを ゲット/.test(q('#result').textContent);
     } finally { K.Store.reset(); }
-    check('a chosen sticker names an open level, starts that level, and celebrates the chosen prize',
-      d.pictures && d.open && d.firstChoice && d.startsTarget && d.earned, JSON.stringify(d));
+    check('a chosen sticker starts one question and offers an explicit longer course with its own prize',
+      d.pictures && d.open && d.oneQuestion && d.smallVisit && d.deliberate && d.startsTarget && d.earned, JSON.stringify(d));
   }
 
   /* ---------- 85. small adventures are short rewards, never unlocks ---------- */

@@ -99,6 +99,7 @@ const Store = (() => {
     endedDay: null,
     name: '',
     sfx: true, voice: true, voiceId: null,
+    autoAdvance: false, // shared across laps: inspect an answer before choosing the next question
     /* The 小1 world opens by itself when every sticker is on the shelf. This flag is
        the parent's override: a child who is ready but cannot get ★★★ on とけい must
        not be held behind a padlock they cannot move — the same reason a level opens
@@ -627,7 +628,7 @@ const Store = (() => {
       if (typeof data.name !== 'string') return null;
       out.name = data.name.slice(0, 12);
     }
-    for (const k of ['sfx', 'voice', 'orientation', 'g1Open', 'g1Reached', 'transferReached', 'secondRoundReached']){
+    for (const k of ['sfx', 'voice', 'autoAdvance', 'orientation', 'g1Open', 'g1Reached', 'transferReached', 'secondRoundReached']){
       if (data[k] !== undefined){
         if (typeof data[k] !== 'boolean') return null;
         out[k] = data[k];

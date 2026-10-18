@@ -734,6 +734,9 @@ const Parent = (() => {
         if (currentVoiceUI && currentVoiceUI.node.isConnected) currentVoiceUI.update();
       }));
     s.append(row);
+    s.append(toggle('正解後に自動で進む', () => Store.data.autoAdvance === true,
+      v => Store.setPref('autoAdvance', v)),
+      el('p', {text:'オフでは、正解した絵と答えを見て「つぎへ」で進みます。オンでも、答えの図と読み上げが終わってから進みます。見本は自動で進みます。'}));
     s.append(voiceRow());
     const reset = el('button.btn', { text: justReset ? '消しました' : '記録をすべて消す',
       style: { borderColor: 'var(--oops)', color: 'var(--oops-ink)' } });

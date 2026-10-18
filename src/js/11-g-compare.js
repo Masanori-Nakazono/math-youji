@@ -625,6 +625,7 @@ function orderBySize(api){
         row.prepend(el('div.ordno', { text: String(step) }));
         Sound.sfx.count(step - 1);
         if (step === n){ $$('.mrow', wrap).forEach(r => r.classList.add('correct')); api.correct(); }
+        else { api.clearHelp(); api.coach(sizeCoach); }
       } else {
         row.classList.add('wrong');
         api.later(() => row.classList.remove('wrong'), 460);
@@ -635,7 +636,7 @@ function orderBySize(api){
   });
   api.field.append(wrap);
   // lighting the next bar picked it for the child; the marks let them pick it
-  api.coach({
+  const sizeCoach = {
     text: asc ? 'のこりの なかで いちばん みじかいのは？' : 'のこりの なかで いちばん ながいのは？',
     say: asc ? '残りの中で、一番短いのは、どれ？' : '残りの中で、一番長いのは、どれ？',
     tool(){ Coach.ticks(wrap); },
@@ -646,7 +647,8 @@ function orderBySize(api){
       return r ? [{ at: () => $('.stickbar', r), act(){ r.classList.add('nexthint'); },
                     say: asc ? 'これが、次に短い。' : 'これが、次に長い。', ms: 1700 }] : [];
     }
-  });
+  };
+  api.coach(sizeCoach);
   api.onShow(() => {
     wanted.slice(step).forEach(len => {
       const r = $$('.mrow', wrap).find(x => !x.classList.contains('picked')

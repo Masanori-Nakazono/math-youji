@@ -27,7 +27,7 @@ const server = http.createServer((req, res) => {
       const K=KazuApp;
       K.Sound.hush();K.Sound.voiceOn=false;K.Sound.sfxOn=false;
       K.Sound.say=(text,opts)=>{if(opts&&opts.onend)opts.onend();};
-      K.Session._test.overview(false);K.Session._test.breaks(false);
+      K.Session._test.overview(false); K.Session._test.autoAdvance(true);K.Session._test.breaks(false);
     });
     const reload = async page => {
       await page.evaluate(()=>KazuApp.Store.flush());
@@ -258,7 +258,8 @@ const server = http.createServer((req, res) => {
           K.FirstSteps.finish(K.Games.byId.count,0,'independent',{kind:'supported',label:'ひとつずつ かぞえる'});
         });
         const stop=page.getByRole('button',{name:'きょうは ここまで',exact:true});
-        const continueButton=page.getByRole('button',{name:'いっしょに 1もん',exact:true});
+        const continueButton=page.locator('#first-finish .first-next');
+        assert.match(await continueButton.textContent(),/いっしょに 1もん.*かぞえよう/s);
         for(const button of [stop,continueButton]){
           await button.click({trial:true});
           const box=await button.boundingBox();

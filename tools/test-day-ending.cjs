@@ -77,7 +77,7 @@ const server=http.createServer((req,res)=>{
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});browser=await chromium.launch();
     const url=`http://127.0.0.1:${server.address().port}/dist/kazu-no-bouken.html`;
     const quiet=page=>page.evaluate(()=>{const K=KazuApp;K.Sound.hush();K.Sound.voiceOn=false;K.Sound.sfxOn=false;window.__said=[];
-      K.Sound.say=(t,o)=>{window.__said.push(t);if(o&&o.onend)o.onend();};K.Session._test.overview(false);K.Session._test.breaks(false);K.Session._test.intro(false);});
+      K.Sound.say=(t,o)=>{window.__said.push(t);if(o&&o.onend)o.onend();};K.Session._test.overview(false); K.Session._test.autoAdvance(true);K.Session._test.breaks(false);K.Session._test.intro(false);});
     const scenario=async(name,run)=>{
       const c=await browser.newContext({viewport:{width:1024,height:768},serviceWorkers:'block',reducedMotion:'reduce',timezoneId:'Asia/Tokyo'});
       await c.addInitScript(()=>{const RD=Date,base=RD.parse('2026-10-18T14:59:00Z');window.__advance=0;

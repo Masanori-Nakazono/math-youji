@@ -61,7 +61,8 @@ function decompose(api, whole, pad){
   api.field.append(bond);
   const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
   const showParts = {
-    correctOpts: { delay: 1500 },
+    // Leave time to see the last red dot, including the nine-dot decomposition.
+    correctOpts: { delay: Math.max(1500, 200 + (ans - 1) * 170 + 350) },
     onPick(){
       showFrame();
       // show the two parts making the whole (scoped to this question's own nodes)
@@ -149,6 +150,7 @@ function makeTwoWays(api){
         bondNode(whole, a, whole - a))));
   };
   const build = () => {
+    if (made.length){ api.clearHelp(); api.coach(bondCoach); }
     clear(api.choices);
     accepting = true;
     for (let a = 1; a < whole; a++){
@@ -180,7 +182,7 @@ function makeTwoWays(api){
     return Array.from({ length: whole - 1 }, (_, i) => i + 1)
       .find(x => !used.has(Math.min(x, whole - x))) || 1;
   };
-  api.coach({
+  const bondCoach = {
     text: () => { const a = unused(); return a + ' と ' + (whole - a) + ' に わけることも できるよ'; },
     say: () => { const a = unused(); return `${numKana(a)}と${numKana(whole - a)}に、分けることもできるよ。`; },
     tool(){ if (!$('.tenframe', api.field)) api.field.append(el('div.frameset', null, tenFrameNode(whole, 5, { total: whole > 5 ? 10 : 5 }))); },
@@ -189,7 +191,8 @@ function makeTwoWays(api){
       const b = $$('.choice', api.choices).find(x => Number(x.textContent) === a);
       return b ? [{ at: b, say: `${numKana(a)}を押してみよう。`, ms: 1700 }] : [];
     }
-  });
+  };
+  api.coach(bondCoach);
   api.onShow(() => {
     const press = v => { const b = $$('.choice', api.choices).find(x => Number(x.textContent) === v); if (b) b.click(); };
     const taken = new Set(made.map(x => Math.min(x, whole - x)));
@@ -242,18 +245,32 @@ function fillToTen(api){
       if (count === 10){
         api.later(() => api.afterSpeech(() => {
           const add = 10 - start;
+          api.clearHelp();
           api.setPrompt(`${numTag(start)} に <b>いくつ たした？</b>`,
                         `${numKana(start)}に、いくつ足した？`);
+          readout.textContent = 'あかい まるが たした かず';
           api.buildChoices(shuffle([add].concat(distractors(add, 2, 1, 9))), add, {
             correctOpts: { delay: 900 }
+          });
+          const added = cells.slice(start);
+          const countAdded = Coach.once(() => Coach.countable(api, added));
+          api.coach({
+            text: 'たした あかい まるだけを タップして かぞえよう',
+            say: '足した赤い丸だけを、タップして数えよう。',
+            tool(){ countAdded(); Coach.pulse(added); },
+            walk(){ return countAdded().steps(); }
           });
         }), 300);
       }
     });
   });
   api.field.append(el('div.frameset', null, f), readout);
-  api.coach({ walk(){ return cells.filter(c => !c.firstChild).map(c => ({ at: c, act(){ c.click(); }, ms: 620 })); } });
-  api.onHint(() => { readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; });
+  api.coach({
+    text: () => 'いま ' + count + 'こ。あいた ところに たして 10に しよう',
+    say: () => `今は${koKana(count)}。空いたところに足して、10にしよう。`,
+    tool(){ readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; },
+    walk(){ return cells.filter(c => !c.firstChild).map(c => ({ at: c, act(){ c.click(); }, ms: 620 })); }
+  });
   api.onShow(() => {
     cells.filter(c => !c.firstChild).forEach(c => c.click());
     api.later(() => api.afterSpeech(() => { const b = $('.choice.correct') || $$('.choice', api.choices).find(x => x.textContent === String(10 - start)); if (b) b.click(); }), 650);
@@ -290,8 +307,9 @@ function partnerOfTen(api, pad){
       }, (i - a) * 150 + 200);
     }
   };
-  if (pad) api.buildPad(ans, revealed(fillIn, { delay: 1500 }));
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans, revealed(fillIn, { delay: 1500 }));
+  const revealDelay = Math.max(1500, 200 + (ans - 1) * 150 + 350);
+  if (pad) api.buildPad(ans, revealed(fillIn, { delay: revealDelay }));
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans, revealed(fillIn, { delay: revealDelay }));
   let walking = false;
   const fill = Coach.once(() => Coach.fillable(api, cells, { from: a,
     onDone(){ if (walking) return; Coach.pulse($$('.dot.b', f)); Sound.say('赤い丸は、いくつ？', { delay: 80 }); } }));

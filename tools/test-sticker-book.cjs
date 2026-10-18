@@ -14,7 +14,7 @@ const server = http.createServer((req,res) => {
     await new Promise((resolve,reject) => {server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
     browser = await chromium.launch();
     const url = `http://127.0.0.1:${server.address().port}/dist/kazu-no-bouken.html`;
-    const quiet = page => page.evaluate(() => {const K=KazuApp;K.Sound.hush();K.Sound.voiceOn=false;K.Sound.sfxOn=false;K.Sound.say=(text,options)=>{if(options&&options.onend)options.onend();};K.Session._test.overview(false);K.Session._test.breaks(false);});
+    const quiet = page => page.evaluate(() => {const K=KazuApp;K.Sound.hush();K.Sound.voiceOn=false;K.Sound.sfxOn=false;K.Sound.say=(text,options)=>{if(options&&options.onend)options.onend();};K.Session._test.overview(false); K.Session._test.autoAdvance(true);K.Session._test.breaks(false);});
     const scenario = async (name,run) => {
       const context = await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce',serviceWorkers:'block',timezoneId:'Asia/Tokyo'});
       await context.addInitScript(() => {const D=Date;window.__bookDay=0;const base=D.parse('2026-10-18T03:00:00Z');window.Date=class extends D{constructor(...a){super(...(a.length?a:[base+window.__bookDay*86400000]));}static now(){return base+window.__bookDay*86400000;}};});

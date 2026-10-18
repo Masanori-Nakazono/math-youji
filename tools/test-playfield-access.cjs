@@ -21,7 +21,7 @@ const viewports=[{width:320,height:568},{width:390,height:844},{width:768,height
     await page.evaluate(()=>{
       const K=KazuApp;K.Sound.hush();K.Sound.voiceOn=false;K.Sound.sfxOn=false;
       K.Sound.say=(text,opts)=>{if(opts&&opts.onend)opts.onend();};
-      K.Session._test.intro(false);K.Session._test.overview(false);K.Session._test.breaks(false);
+      K.Session._test.intro(false);K.Session._test.overview(false); K.Session._test.autoAdvance(true);K.Session._test.breaks(false);
     });
     const settle=async()=>{
       await page.evaluate(()=>new Promise(resolve=>{

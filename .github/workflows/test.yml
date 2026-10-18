@@ -72,6 +72,14 @@ jobs:
           node tools/test-short-progress-ui.cjs
           node tools/test-sticker-book.cjs
 
+      - name: Verify current-stage coaching, consistent entrances and answer pacing
+        run: |
+          STAGE_COACH_HTML=dist/kazu-no-bouken.html node tools/test-stage-coaching.cjs
+          node tools/test-short-entry.cjs
+          node tools/test-answer-pacing.cjs
+          STAGE_COACH_HTML=dist/artifact.html node tools/test-stage-coaching.cjs
+          PACING_HTML=dist/artifact.html node tools/test-answer-pacing.cjs
+
       - name: Verify parent guidance follows recent learning
         run: node tools/test-parent-guidance.cjs
 

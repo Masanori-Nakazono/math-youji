@@ -79,6 +79,7 @@ function countQuestion(api, lo, hi, layout){
   });
 
   function ask(){
+    api.clearHelp();
     api.setPrompt(`${thing.n}は ぜんぶで いくつ？`, `${thing.n}は、全部でいくつ？`);
     const n = hi <= 5 ? 3 : 4;
     const vals = shuffle([count].concat(distractors(count, n - 1, 1, Math.max(hi + 2, 6))));
@@ -264,6 +265,7 @@ function flashQuestion(api, o){
   api.coach({ walk(){ return [{ at: go, act(){ go.click(); }, say: 'みる、を押すよ。', ms: o.ms + 1400 }]; } });
 
   function ask(){
+    api.clearHelp();
     /* Getting it right and never seeing the dots again is half a lesson. This game
        exists to make 7 *look* like「5と2」, so the arrangement has to come back at
        the moment the child is told they were right — that is when it gets attached
@@ -474,7 +476,8 @@ function lineFill(api, lo, hi, gaps){
 
   let qi = 0;
   function askNext(){
-    nums.forEach(v => cells[v].classList.remove('now'));
+    api.clearHelp();
+    nums.forEach(v => cells[v].classList.remove('now', 'near'));
     const target = holes[qi];
     cells[target].classList.add('now');
     api.setPrompt('ひかって いる ところに はいる かずは？', '光っているところに入る数は？');
@@ -501,7 +504,7 @@ function lineFill(api, lo, hi, gaps){
       }
     });
     api.coach({
-      text: 'ひだりの かずから かぞえて みよう',
+      text: (target - 1) + 'の つぎは？　ひだりから かぞえて みよう',
       say: `${numKana(target - 1)}の、次は？`,
       tool(){ [target - 1, target + 1].forEach(v => { if (cells[v]) cells[v].classList.add('near'); }); },
       walk(){ return Coach.readAlong(nums.map(v => cells[v]), cells[target]); }

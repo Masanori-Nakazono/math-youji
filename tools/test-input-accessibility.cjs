@@ -35,7 +35,7 @@ const server = http.createServer((req, res) => {
           K.Store.reset(); K.Sound.voiceOn = false; K.Sound.sfxOn = false;
           window.heard = [];
           K.Sound.say = (text, opts) => { heard.push(text); if (opts && opts.onend) opts.onend(); };
-          K.Session._test.intro(false); K.Session._test.overview(false); K.Session._test.breaks(false);
+          K.Session._test.intro(false); K.Session._test.overview(false); K.Session._test.autoAdvance(true); K.Session._test.breaks(false);
         });
         await run(page);
         console.log('PASS ' + name);

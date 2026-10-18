@@ -73,6 +73,8 @@ function collectSame(api){
   }));
 
   function ask(){
+    api.clearHelp();
+    objs.forEach(o => o.classList.remove('glow'));
     api.setPrompt(`あつめた <b>${target.lbl}</b> は ぜんぶで いくつ？`,
                   `集めた${target.lbl}は、全部でいくつ？`);
     api.buildChoices(shuffle([n].concat(distractors(n, 2, 1, n + 3))), n);
@@ -232,6 +234,8 @@ function ownGroup(api){
     b.addEventListener('click', () => {
       if (api.locked || chosen) return;
       chosen = k;
+      api.clearHelp();
+      api.coach(groupCoach);
       Sound.sfx.tap();
       clear(api.choices);
       const cat = CATS[k];
@@ -266,12 +270,13 @@ function ownGroup(api){
   }
 
   const left = () => objs.filter(o => o.dataset.cat === chosen && !o.classList.contains('counted'));
-  api.coach({
+  const groupCoach = {
     text: () => chosen ? CATS[chosen].lbl + 'は ' + CATS[chosen].items.slice(0, 4).join(' ') : 'どれでも いいよ。ひとつ えらんでね',
     say: () => chosen ? `${CATS[chosen].lbl}の仲間を、探そう。` : 'どれでもいいよ。一つ選んでね。',
     tool(){ if (chosen){ const o = left()[0]; if (o) o.classList.add('glow'); } },
     walk(){ return chosen ? left().map(o => ({ at: o, act(){ o.click(); }, ms: 800 })) : []; }
-  });
+  };
+  api.coach(groupCoach);
   api.onShow(() => {
     if (!chosen){ const b = $('.choice', api.choices); if (b) b.click(); }
     left().forEach(o => o.click());
@@ -783,8 +788,36 @@ function plusOrMinus(api){
       $('.opbox', eq).classList.add('filled');
       Sound.sfx.place();
       api.later(() => {
+        api.clearHelp();
         api.setPrompt(st.q, st.q);
-        api.buildPad(ans, revealed(() => fillBlank($('.box', eq), ans)));
+        let solved = false;
+        api.buildPad(ans, revealed(() => { solved = true; fillBlank($('.box', eq), ans); eq.hidden = false; }));
+        const picture = Coach.once(() => {
+          const frames = el('div.frameset');
+          // The words and the manipulatives each need room above a phone's
+          // keypad. Keep the original story available, one view at a time.
+          const summary = el('summary.btn.btn-ghost', { text: '📖 おはなしを みる' });
+          const recap = el('details.story-recap', null, summary);
+          card.before(recap); recap.append(card); eq.hidden = true;
+          recap.addEventListener('toggle', () => {
+            frames.hidden = recap.open; eq.hidden = !solved;
+            summary.textContent = recap.open ? 'まるの ヒントに もどる' : '📖 おはなしを みる';
+          });
+          const frame = partFrame(a + (plus ? b : 0), a);
+          if (plus){
+            $$('.cell', frame).slice(a).forEach(c => { c.classList.remove('hole'); c.append(el('div.dot.b')); });
+          } else {
+            $$('.cell', frame).slice(a - b).forEach(c => c.classList.add('coachgone'));
+          }
+          frames.append(frame); api.field.append(frames);
+          return { frame, count: Coach.countable(api, $$('.cell', frame).filter(c => !c.classList.contains('coachgone'))) };
+        });
+        api.coach({
+          text: plus ? 'あおと あかを あわせて かぞえよう' : 'のこりの まるを かぞえよう',
+          say: plus ? '初めの丸と、増えた赤い丸を、合わせて数えよう。' : '食べた、あげた分を除いて、残りの丸を数えよう。',
+          tool(){ picture(); },
+          walk(){ return picture().count.steps(); }
+        });
       }, 420);
       return false;                    // the operation was only half the question
     }

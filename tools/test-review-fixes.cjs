@@ -30,7 +30,7 @@ const server = http.createServer((req, res) => {
       const K = KazuApp;
       K.Sound.hush(); K.Sound.voiceOn = false; K.Sound.sfxOn = false;
       K.Sound.say = (text, opts) => { if (opts && opts.onend) opts.onend(); };
-      K.Store.reset(); K.Session._test.intro(false); K.Session._test.overview(false); K.Session._test.breaks(false);
+      K.Store.reset(); K.Session._test.intro(false); K.Session._test.overview(false); K.Session._test.autoAdvance(true); K.Session._test.breaks(false);
       document.querySelectorAll('.bigmark').forEach(node => node.remove());
     });
     const passed = name => console.log('PASS ' + name);

@@ -7,7 +7,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
 (async()=>{let browser,passed=0;const errors=[];try{
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});browser=await chromium.launch();
  const url=`http://127.0.0.1:${server.address().port}/dist/kazu-no-bouken.html`;
- const quiet=page=>page.evaluate(()=>{const K=KazuApp;K.Sound.hush();K.Sound.voiceOn=false;K.Sound.sfxOn=false;K.Sound.say=(t,o)=>{if(o&&o.onend)o.onend();};K.Session._test.overview(false);K.Session._test.breaks(false);});
+ const quiet=page=>page.evaluate(()=>{const K=KazuApp;K.Sound.hush();K.Sound.voiceOn=false;K.Sound.sfxOn=false;K.Sound.say=(t,o)=>{if(o&&o.onend)o.onend();};K.Session._test.overview(false); K.Session._test.autoAdvance(true);K.Session._test.breaks(false);});
  const reload=async page=>{await page.evaluate(()=>KazuApp.Store.flush());await page.reload({waitUntil:'domcontentloaded'});await quiet(page);};
  const day=(page,n)=>page.evaluate(n=>{window.__goldDay=n;sessionStorage.setItem('gold-test-day',n);},n);
  const start=page=>page.evaluate(()=>KazuApp.FirstSteps.startOne(KazuApp.Games.byId.count,0,true));

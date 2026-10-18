@@ -119,9 +119,9 @@ const ShortProgress = (() => {
   function start(game, levelIndex, opts){
     const info = game && describe(game.id, levelIndex, Object.assign({preview:true}, opts));
     if (!info || !levelOpen(game, levelIndex)) return;
-    if (info.kind === 'support') FirstSteps.startPlan({game,levelIndex,kind:'support'});
-    else if (info.goal === 'gold' && !Store.hasSticker(info.key + ':g')) FirstSteps.startGold(game, levelIndex);
-    else FirstSteps.startOne(game, levelIndex, Store.introduced(game.id, levelIndex));
+    if (info.kind === 'support') FirstSteps.startPlan({game,levelIndex,kind:'support'}, opts);
+    else if (info.goal === 'gold' && !Store.hasSticker(info.key + ':g')) FirstSteps.startGold(game, levelIndex, opts);
+    else FirstSteps.startOne(game, levelIndex, Store.introduced(game.id, levelIndex), opts);
   }
   return {describe, render, current, start};
 })();

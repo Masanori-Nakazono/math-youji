@@ -26,7 +26,7 @@ const server = http.createServer((req, res) => {
       const K = KazuApp;
       K.Sound.hush();K.Sound.voiceOn=false;K.Sound.sfxOn=false;
       K.Sound.say=(t,o)=>{if(o&&o.onend)o.onend();};
-      K.Session._test.overview(false);K.Session._test.breaks(false);
+      K.Session._test.overview(false); K.Session._test.autoAdvance(true);K.Session._test.breaks(false);
     });
     const reload = async page => {
       await page.evaluate(()=>KazuApp.Store.flush());

@@ -200,7 +200,8 @@ body::before{
   flex-direction: column;
   gap: calc(var(--u) * .8);
 }
-.screen[hidden]{ display: none !important; }
+/* Also used inside the artifact build, whose host does not supply this rule. */
+[hidden]{ display: none !important; }
 
 .screen.enter{ animation: screenIn .34s cubic-bezier(.2,.9,.3,1.2) both; }
 @keyframes screenIn{
@@ -746,6 +747,24 @@ body::before{
 .short-progress-step.done{border-color:var(--good);background:var(--good-soft);}
 .short-progress-detail{margin:0;font-size:max(14px,calc(var(--u)*1.2));line-height:1.65;overflow-wrap:anywhere;}
 .level-entry>.short-progress{flex-basis:100%;}
+/* The chosen picture leads to the same small visit from Home and the book. */
+#sticker-mission .reward-sheet{overflow-y:auto;justify-content:safe center;gap:12px;}
+#sticker-mission .reward-sheet>*{flex-shrink:0;}
+.sticker-mission-intro{display:flex;align-items:center;justify-content:center;gap:12px;width:min(100%,560px);}
+#sticker-mission .sticker-mission-prize .pokemon-sticker{--pokemon-size:100px;}
+.sticker-mission-intro .sticker-mission-detail{width:auto;min-width:0;flex:1;padding:12px;font-size:clamp(16px,calc(var(--u)*1.5),22px);text-align:left;}
+.sticker-mission-intro .sticker-mission-detail small{font-size:14px;line-height:1.5;}
+.sticker-mission-progress,.sticker-mission-course{width:min(100%,560px);min-width:0;}
+.sticker-mission-go{min-height:56px;max-width:100%;white-space:normal;}
+.long-course{width:100%;min-width:0;box-sizing:border-box;text-align:left;border:2px solid var(--card-edge);border-radius:14px;background:var(--paper-2);padding:10px 12px;}
+.long-course summary{cursor:pointer;min-height:44px;align-content:center;font-size:max(16px,calc(var(--u)*1.3));font-weight:800;}
+.long-course p,.long-course small{display:block;font-size:max(14px,calc(var(--u)*1.1));line-height:1.65;overflow-wrap:anywhere;}
+.long-course p{margin:8px 0;}
+.long-course .btn{margin-top:10px;max-width:100%;white-space:normal;}
+.first-actions>.long-course{flex-basis:100%;}
+.first-next .bl{display:grid;gap:4px;}
+.first-next .bl small{display:block;font-size:max(14px,calc(var(--u)*1.1));line-height:1.45;font-weight:600;white-space:normal;}
+.first-next{max-width:100%;white-space:normal;}
 #progress-album{ gap:calc(var(--u)*.7); }
 .album-intro{ margin:0; text-align:center; font-size:calc(var(--u)*1.4); font-weight:800; }
 .album-cards{ flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; align-content:start;
@@ -3128,4 +3147,27 @@ dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
   #book .book-catalog{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
   #book .book-slot{min-height:174px;}
   #book .book-slot .pokemon-name{font-size:15px;}
+}
+/* Current-stage story help */
+.story-recap{max-width:100%;}
+.story-recap>summary{cursor:pointer;list-style:none;min-height:48px;display:flex;align-items:center;font-size:16px;}
+.story-recap>summary::-webkit-details-marker{display:none;}
+
+/* The completed answer stays until the child chooses the next question. */
+.answer-controls{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:4px 0;}
+.answer-controls[hidden]{display:none!important;}
+.answer-state{font-size:clamp(16px,calc(var(--u)*1.3),24px);font-weight:800;color:var(--good);}
+.answer-next{min-width:144px;min-height:64px;font-size:clamp(22px,calc(var(--u)*1.8),32px);line-height:1.2;}
+.answer-next:disabled{opacity:.55;cursor:default;}
+#play.answer-review .playfield,#play.answer-review .choices{pointer-events:none;}
+#play.answer-review .story-recap>summary{pointer-events:auto;}
+.choices.answer-complete{display:flex;gap:8px;padding:0;}
+.choices.answer-complete>:not(.answer-keep){display:none!important;}
+.choices.answer-complete .choice{min-width:48px;min-height:48px;width:auto;height:auto;max-width:100%;font-size:clamp(20px,calc(var(--u)*2.4),42px);padding:4px 12px;}
+.choices.answer-complete .choice-hear{display:none;}
+.choices.answer-complete .choice>svg{max-height:84px;width:auto;}
+@media(max-width:700px){
+  #play.answer-review{gap:4px;}
+  .answer-controls{gap:8px;}
+  .answer-next{min-width:144px;min-height:64px;}
 }
