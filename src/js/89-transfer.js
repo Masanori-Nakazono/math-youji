@@ -21,6 +21,7 @@ const TransferAdventure = (() => {
   ];
   let node, body, heading, back, speech = '', run = null, question = null, exitArmed = false;
   let workspaceReady = false, renderVersion = 0;
+  let bookOrigin = null;
   const key = id => 'transfer:' + id;
   const missionFor = k => /^transfer:[0-5]$/.test(k) ? missions[Number(k.split(':')[1])] : null;
   function saveVisit(){
@@ -34,6 +35,7 @@ const TransferAdventure = (() => {
     return s ? {kind:'transfer',at:s.at,title:missions[s.run.id].title,done:s.run.step,remaining:QUESTIONS-s.run.step} : null;
   }
   function resume(){
+    if (UI.currentName() !== 'transfer' || !Book.canReturn(bookOrigin)) bookOrigin = null;
     const s=normalizeTransferSession(Store.data.transferSession);
     if (!s || !unlocked()) return false;
     const saved=JSON.parse(JSON.stringify(s)); workspaceReady=false;
@@ -118,7 +120,10 @@ const TransferAdventure = (() => {
       el('h3', { text: '✦ とくべつな ぼうけんシール' }),
       el('p', { text: '５もんのうち ４もんを、ヒントなしで さいしょから できた しるし。' }),
       el('div.transfer-collection-grid', null, missions.map((m, i) => el('button.transfer-collectible', {
-        type: 'button', onclick(){ Store.hasSticker(key(i)) ? StickerWorld.open(key(i)) : open(); }
+        type: 'button', dataset:{collectionKey:key(i)}, onclick(event){
+          const origin = Book.captureReturn(event.currentTarget, key(i));
+          Store.hasSticker(key(i)) ? StickerWorld.open(key(i), {bookOrigin:origin}) : open(i, {bookOrigin:origin});
+        }
       }, artwork(key(i), !Store.hasSticker(key(i))), el('span', { text: m.title })))));
   }
   function parentSummary(){
@@ -154,7 +159,7 @@ const TransferAdventure = (() => {
         note.textContent = 'ここで やすむ？ ← を もういちど おすと もどるよ。つづきは のこるよ。';
         say('ここで休む？続きは残るよ。戻るをもう一度押してね。');
       } else if (run){ run = null; menu(); }
-      else { Home.render(); UI.show('home', { replace: true }); }
+      else { returnFromBook(); }
     });
     node = el('div#transfer', null, el('div.topbar', null, back, heading, speakBtn(() => speech)), body);
     UI.register('transfer', node);
@@ -178,20 +183,30 @@ const TransferAdventure = (() => {
     body.append(cards);
     say('できることを使ってみよう。好きな冒険をえらんでね。５問のうち４問を、ヒントなしで初めから正しくできると、特別なシールがもらえるよ。');
   }
-  function open(){
+  function returnFromBook(){
+    const origin = bookOrigin; bookOrigin = null;
+    if (origin && Book.restoreReturn(origin)) return;
+    Home.render(); UI.show('home', {replace:true});
+  }
+  function open(id, opts){
     if (!unlocked()) return;
-    build(); UI.show('transfer'); menu();
+    const supplied = opts && opts.bookOrigin;
+    bookOrigin = supplied && Book.canReturn(supplied) ? supplied : null;
+    build(); UI.show('transfer');
+    if (Number.isInteger(id) && missions[id]) start(id); else menu();
   }
   function start(id,confirmed=false){
     if (!unlocked() || !missions[id]) return;
-    build(); UI.show('transfer');
+    if (UI.currentName() !== 'transfer' || !Book.canReturn(bookOrigin)) bookOrigin = null;
+    build(); UI.show('transfer'); UI.clearResultActions(node);
     const previous=Store.data.transferSession;
     if(previous && previous.run.step===QUESTIONS){resume();return;}
     const q=previous && previous.q;
-    if(!confirmed && previous && (previous.run.step>0 || q && (q.value || q.phase || q.previous!==null || q.supported || q.mistakes || (missions[previous.run.id].kind==='split' && q.left!==q.total)))){
+    if(!confirmed && previous && (Book.canReturn(bookOrigin) || previous.run.step>0 || q && (q.value || q.phase || q.previous!==null || q.supported || q.mistakes || (missions[previous.run.id].kind==='split' && q.left!==q.total)))){
       run=null;clear(body);heading.textContent='つづきが のこっているよ';
-      body.append(el('p',{text:missions[previous.run.id].title+'の つづきから あそべるよ。あたらしく はじめると、まえの とちゅうの ばめんは おわるよ。'}),
-        button('まえの つづきから',resume,'btn-accent'),button('あたらしく はじめる',()=>start(id,true)),button('ぼうけんを えらぶ',menu));
+      body.append(el('p',{text:missions[previous.run.id].title+'の つづきから あそべるよ。あたらしく「'+missions[id].title+'」を はじめると、まえの とちゅうの ばめんは おわるよ。'}),
+        button('まえの つづきから',resume,'btn-accent'),button('あたらしく はじめる',()=>start(id,true)),button('ぼうけんを えらぶ',menu),
+        Book.canReturn(bookOrigin) ? button('シールブックに もどる',returnFromBook) : null);
       return;
     }
     run = { id, step: 0, results: [] };
@@ -408,7 +423,7 @@ const TransferAdventure = (() => {
         : passed ? '「' + m.title + '」を じぶんで できたね。'
           : 'ヒントを つかっても だいじょうぶ。べつのひに また やってみよう。' }),
       el('div.transfer-actions', null,
-        owned ? button('じぶんの しまに かざる', () => StickerWorld.open(key(id)), 'btn-accent')
+        owned ? button('じぶんの しまに かざる', () => StickerWorld.open(key(id), {bookOrigin}), 'btn-accent')
           : button('もういちど あそぶ', () => start(id), 'btn-accent'),
         button('きょうは ここまで', () => Home.endToday()),
         button('ぼうけんを えらぶ', menu),

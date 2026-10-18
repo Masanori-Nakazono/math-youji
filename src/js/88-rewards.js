@@ -706,7 +706,7 @@ const StickerWorld = (() => {
   ];
   let node, board, palette, hint, selectedBar, picker, pickerSummary, filterBar, empty, actions;
   let placeButton, removeButton, undoButton, doneButton, selected = null, draft = null, undo = null;
-  let filter = 'recent';
+  let filter = 'recent', bookOrigin = null;
 
   function owned(){
     return Store.ownedStickerKeys().filter(k => {
@@ -908,7 +908,11 @@ const StickerWorld = (() => {
     node = el('div#sticker-world', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){
+            Sound.sfx.tap(); const origin = bookOrigin; bookOrigin = null;
+            if (origin && Book.restoreReturn(origin)) return;
+            Home.render(); UI.show('home', { replace: true });
+          } }, '←'),
         el('h2', { text: 'じぶんの しま' }),
         speakBtn(() => '集めたシールや宝物を、好きな場所に置けるよ。シールを選んで、島をタップしよう。矢印で動かして、エンターでも置けるよ。')),
       el('div.world-workspace', null, selectedBar, board, hint, actions, picker,
@@ -934,7 +938,12 @@ const StickerWorld = (() => {
     hint.textContent = selected ? 'しまを タップ。やじるしと エンターでも おけるよ'
       : '「シールを えらぶ」から、すきな シールを えらぼう';
   }
-  function open(item){
+  function open(item, opts){
+    const source = UI.currentName(), supplied = opts && opts.bookOrigin;
+    if (source === 'book' || source === 'book-detail') bookOrigin = supplied && Book.canReturn(supplied)
+      ? supplied : Book.captureReturn(document.activeElement, item);
+    else if (source === 'transfer' && supplied && Book.canReturn(supplied)) bookOrigin = supplied;
+    else if (source !== 'island-jobs' || !Book.canReturn(bookOrigin)) bookOrigin = null;
     if (item) item = Store.worldKey(item);
     undo = null;
     if (item && owned().includes(item)){

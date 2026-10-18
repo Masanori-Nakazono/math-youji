@@ -463,8 +463,7 @@ const Session = (() => {
   window.addEventListener('pagehide', saveBeforeLeaving);
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveBeforeLeaving(); });
 
-  function enginePendingSummary(){
-    const saved = Store.savedSession();
+  function enginePendingSummary(saved = Store.savedSession()){
     if (!saved) return null;
     const exists = p => p && Games.byId[p.gameId] && Games.byId[p.gameId].levels[p.levelIndex];
     if (saved.plan.some(p => !exists(p)) || (saved.gameId && !exists({gameId:saved.gameId,levelIndex:saved.levelIndex}))
@@ -478,11 +477,23 @@ const Session = (() => {
       mode:saved.mode, gameId:saved.gameId, levelIndex:saved.levelIndex };
   }
 
-  function pendingSummary(){
-    return [enginePendingSummary(),
-      typeof TextbookReview!=='undefined' && TextbookReview.pendingSummary ? TextbookReview.pendingSummary() : null,
-      typeof TransferAdventure!=='undefined' && TransferAdventure.pendingSummary ? TransferAdventure.pendingSummary() : null]
-      .filter(Boolean).sort((a,b)=>b.at-a.at)[0] || null;
+  // A choice describes one checkpoint in the current lap. Keep its revision in
+  // memory only: opening Home must never rewrite a learning record.
+  function pendingSummaries(){
+    const saved = Store.savedSession(), review = Store.reviewSession();
+    const transfer = normalizeTransferSession(Store.data.transferSession);
+    const session = enginePendingSummary(saved);
+    const entries = [session && {summary:session,saved,icon:session.gameId ? Games.byId[session.gameId].ico : '🧭'},
+      review && typeof TextbookReview!=='undefined' && {summary:TextbookReview.pendingSummary(),saved:review,icon:'📘'},
+      transfer && typeof TransferAdventure!=='undefined' && {summary:TransferAdventure.pendingSummary(),saved:transfer,
+        icon:(TransferAdventure.missionFor('transfer:'+transfer.run.id)||{}).icon || '🧭'}];
+    return entries.filter(e=>e && e.summary).map(e=>Object.assign({},e.summary,
+      {round:Store.round(),icon:e.icon,revision:JSON.stringify(e.saved)})).sort((a,b)=>b.at-a.at);
+  }
+  function pendingSummary(){ return pendingSummaries()[0] || null; }
+  function resumeUnavailable(){
+    if (typeof Home!=='undefined' && Home.resumeChanged) Home.resumeChanged();
+    return false;
   }
 
   function showOverview(resting, previous){
@@ -498,8 +509,14 @@ const Session = (() => {
     overviewBody.append(mascotSVG('happy','talk'),el('h3',{text:resting ? 'ここまで '+idx+'もん できたね' : titleEl.textContent}),
       el('p',{text:resting ? 'つづきは あと '+remaining+'もん。ここで やすんでも だいじょうぶ。'
         : 'ぜんぶで '+plan.length+'もん'+(intros || checks ? '（'+(intros ? 'みほん・いっしょに '+intros+'もん　' : '')+(checks ? 'たしかめ '+checks+'もん　' : '')+'ほんばん '+(plan.length-intros-checks)+'もん）' : '')}));
-    if (previous) overviewBody.append(el('p',{text:'まえの ぼうけんの つづきも のこっているよ。'}),
-      el('button.btn',{text:'まえの つづきから',onclick(){resume();}}));
+    if (previous){
+      const choice = {kind:'session',round:Store.round(),revision:JSON.stringify(previous)};
+      overviewBody.append(el('p.session-previous',{text:'まえの つづき：'+previous.title+'　あと '+(previous.plan.length-previous.index)+'もん'}),
+        el('button.btn',{text:'まえの つづきから',onclick(){
+          if (this.disabled || !this.isConnected || UI.currentName()!=='session-overview') return;
+          this.disabled=true; resume(choice);
+        }}));
+    }
     overviewBody.append(el('button.btn.btn-accent.session-continue',{text:resting ? 'つづける' : previous ? 'あたらしく はじめる' : 'はじめる',onclick(){
       checkpoint(idx,null); UI.show('play'); nextQuestion();
     }}),el('button.btn.btn-ghost',{text:resting ? 'ここで やすむ' : 'ホームに もどる',onclick(){
@@ -511,10 +528,15 @@ const Session = (() => {
       : '全部で、'+plan.length+'問だよ。途中で休んでも、続きから遊べるよ。',{delay:100});
   }
 
-  function resume(engineOnly){
-    const latest=engineOnly===true ? null : pendingSummary();
-    if(latest && latest.kind==='review') return TextbookReview.resume();
-    if(latest && latest.kind==='transfer') return TransferAdventure.resume();
+  function resume(target){
+    const explicit = target && typeof target==='object';
+    const choices = pendingSummaries();
+    const latest = explicit ? choices.find(c=>c.kind===target.kind && c.round===target.round && c.revision===target.revision)
+      : target===true ? choices.find(c=>c.kind==='session') : choices[0];
+    // A removed/replaced choice never falls through to a different adventure.
+    if (!latest) return explicit ? resumeUnavailable() : false;
+    if(latest.kind==='review') return TextbookReview.resume() || resumeUnavailable();
+    if(latest.kind==='transfer') return TransferAdventure.resume() || resumeUnavailable();
     const saved = Store.savedSession();
     if (!saved || !enginePendingSummary()) return false;
     if (levelReturn && (levelReturn.id !== saved.id || levelReturn.origin.round !== Store.round())) levelReturn = null;
@@ -524,8 +546,8 @@ const Session = (() => {
     plan=saved.plan.map(p=>Object.assign({},p,{game:Games.byId[p.gameId],level:Games.byId[p.gameId].levels[p.levelIndex]}));
     results=saved.results.slice(); sessionOutcomes=saved.sessionOutcomes.slice(); shaky=saved.shaky.slice(); focusKeys=saved.focusKeys.slice();
     usedItems=new Set(saved.usedItems); checkTally=saved.checkTally; announced=new Set(saved.announced); visitMilestone=saved.visitMilestone;
-    const target=t=>t ? {game:Games.byId[t.gameId],levelIndex:t.levelIndex,want:t.want||null} : null;
-    adventureTarget=target(saved.adventureTarget); firstTarget=target(saved.firstTarget); firstPhase=saved.firstPhase;
+    const restoreTarget=t=>t ? {game:Games.byId[t.gameId],levelIndex:t.levelIndex,want:t.want||null} : null;
+    adventureTarget=restoreTarget(saved.adventureTarget); firstTarget=restoreTarget(saved.firstTarget); firstPhase=saved.firstPhase;
     rewardTarget=saved.rewardKey ? {key:saved.rewardKey} : null;
     titleEl.textContent=saved.title; resumeQuestion=saved.question;
     renderPips();
@@ -1691,7 +1713,7 @@ const Session = (() => {
   }
 
   return {
-    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, build, resume, pendingSummary,
+    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, build, resume, pendingSummary, pendingSummaries,
     _test: {
       flushTimers,
       get idx(){ return idx; },

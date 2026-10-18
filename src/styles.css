@@ -2653,7 +2653,7 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .transfer-home strong{ font-size:clamp(15px,1.6vw,20px); line-height:1.4; }
 .transfer-home small{ color:var(--ink-soft); margin-top:4px; font-size:12px; line-height:1.4; }
 .shelf .strip .transfer-sticker{ --medal-size:40px; padding:3px; }
-.transfer-body{ overflow-y:auto; min-height:0; padding:12px 22px 28px; flex:1; }
+.transfer-body{ overflow-y:auto; overflow-anchor:none; min-height:0; padding:12px 22px 28px; flex:1; }
 #transfer{ color:var(--ink); }
 .transfer-intro{ text-align:center; margin:4px auto 26px; max-width:760px; }
 .transfer-eyebrow{ color:var(--ink-soft); font-size:14px; font-weight:800; }

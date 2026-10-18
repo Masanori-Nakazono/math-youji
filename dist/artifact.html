@@ -2658,7 +2658,7 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .transfer-home strong{ font-size:clamp(15px,1.6vw,20px); line-height:1.4; }
 .transfer-home small{ color:var(--ink-soft); margin-top:4px; font-size:12px; line-height:1.4; }
 .shelf .strip .transfer-sticker{ --medal-size:40px; padding:3px; }
-.transfer-body{ overflow-y:auto; min-height:0; padding:12px 22px 28px; flex:1; }
+.transfer-body{ overflow-y:auto; overflow-anchor:none; min-height:0; padding:12px 22px 28px; flex:1; }
 #transfer{ color:var(--ink); }
 .transfer-intro{ text-align:center; margin:4px auto 26px; max-width:760px; }
 .transfer-eyebrow{ color:var(--ink-soft); font-size:14px; font-weight:800; }
@@ -3374,6 +3374,68 @@ dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
 @media(max-height:400px){
   .screen.has-result-dock>.result-dock{padding-top:4px;gap:0;}
   .result-more>summary{min-height:44px;}
+}
+/* Independent checkpoints stay available without competing with the latest. */
+.resume-more{margin:0 0 14px;border:2px solid var(--card-edge);border-radius:18px;background:var(--card);min-width:0;color:var(--ink)}
+.resume-more>summary{min-height:64px;padding:16px;box-sizing:border-box;font-size:18px;font-weight:800;cursor:pointer}
+.resume-options{display:grid;gap:10px;padding:0 10px 10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+.resume-choice{display:flex;align-items:center;gap:12px;width:100%;min-width:0;min-height:88px;padding:12px;border:2px solid var(--card-edge);border-radius:14px;background:var(--paper-2);color:var(--ink);text-align:left;font:inherit;cursor:pointer}
+.resume-choice>span:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}
+.resume-choice b{display:block;font-size:18px;line-height:1.5}
+.resume-icon{flex:none;font-size:36px}
+.resume-detail{display:flex;flex-wrap:wrap;gap:0 1em;margin-top:4px;font-size:16px;line-height:1.5}
+.resume-detail>span{white-space:nowrap}
+.resume-notice{padding:12px;border-radius:12px;background:var(--paper-2);color:var(--ink);font-size:17px;line-height:1.6}
+.session-previous{font-weight:700;overflow-wrap:anywhere}
+/* Book answers stay beside their keys; question actions keep one fixed place. */
+#review.review-working{gap:6px;}
+#review.review-working .review-body{padding:8px 6px 12px;scrollbar-gutter:auto;overflow-anchor:none;}
+.review-work-actions{position:relative;flex:0 0 auto;display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:6px;width:min(100%,1020px);align-self:center;margin:0;padding:4px 0;}
+.review-work-actions>.btn-accent{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;height:64px;line-height:20px;padding:4px;}
+.review-work-status{display:block;font-size:12px;font-weight:800;line-height:14px;text-align:center;}
+.review-work-actions .btn{min-width:0;min-height:64px;padding:6px;font-size:16px;line-height:1.4;box-sizing:border-box;}
+.review-work-actions .review-pause{font-size:14px;}
+.review-numeric-workspace{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;margin-top:14px;padding:4px 0;}
+.review-numeric-workspace .review-keypad{width:100%;grid-template-columns:repeat(11,minmax(64px,1fr));gap:6px;margin:0;}
+.review-numeric-workspace .review-number{width:100%;height:64px;min-height:64px;font-size:30px;}
+.review-numeric-workspace .review-number:last-child{grid-column:auto;}
+.review-numeric-workspace .review-answer{margin:0;font-size:28px;line-height:1.5;}
+.review-numeric-workspace .review-equation{border:0;background:none;padding:0;width:100%;margin:0;}
+.review-equation .review-equation-instruction{margin:0 0 4px;font-size:13px;line-height:18px;}
+.review-numeric-workspace .review-equation-row{display:flex;justify-content:center;flex-wrap:wrap;gap:4px;margin:0;font-size:24px;}
+.review-numeric-workspace .review-operands,.review-numeric-workspace .review-equation-result{display:flex;align-items:center;justify-content:center;gap:4px;}
+.review-numeric-workspace .review-operators{display:flex;flex-direction:row;gap:4px;}
+.review-numeric-workspace .review-field,.review-numeric-workspace .review-operator{flex:0 0 64px;width:64px;min-width:64px;height:64px;min-height:64px;padding:4px;font-size:28px;}
+.review-needs-input{outline:4px solid var(--c-orange)!important;outline-offset:2px;}
+@media(max-width:600px){
+  .review-work-actions .btn{font-size:14px;}
+  .review-work-actions .review-pause{font-size:13px;}
+}
+@media(max-width:900px){
+  .review-numeric-workspace .review-keypad{width:268px;max-width:100%;grid-template-columns:repeat(4,minmax(64px,1fr));gap:4px;}
+  .review-numeric-workspace .review-equation-row{flex-direction:column;align-items:center;}
+}
+@media(max-height:450px) and (min-width:500px){
+  #review.review-working .review-numeric-workspace{display:grid;grid-template-columns:minmax(0,1fr) 268px;align-items:center;gap:8px;max-width:650px;padding:0;}
+  #review.review-working .review-numeric-workspace .review-keypad{width:268px;grid-template-columns:repeat(4,64px);gap:4px;}
+  #review.review-working .review-equation-instruction{display:none;}
+  #review.review-working .review-equation-row{display:flex;flex-direction:column;gap:4px;}
+  #review.review-working .review-operands{display:grid;grid-template-columns:64px 132px;grid-template-rows:64px 64px;gap:4px;}
+  #review.review-working .review-operands>.review-field:last-child{grid-column:2;justify-self:center;}
+  #review.review-working .review-equation-result{height:64px;}
+}
+@media(max-height:450px) and (min-width:500px){
+  #stage:has(#review.review-working:not([hidden])){padding:4px 8px;}
+  #review.review-working{position:relative;gap:2px;}
+  #review.review-working>.topbar{height:48px;min-height:48px;}
+  #review.review-working>.topbar>.btn-round{width:44px;min-width:44px;height:44px;min-height:44px;padding:4px;}
+  #review.review-working>.topbar h2{font-size:15px;align-self:flex-start;margin-top:2px;line-height:20px;}
+  #review.review-working>.round-status{position:absolute;top:25px;left:52px;right:52px;min-height:18px;padding:0;border:0;background:none;font-size:10px;line-height:18px;pointer-events:none;}
+  #review.review-working>.round-status>span{display:none;}
+  #review.review-working .review-body{padding:0;}
+  #review.review-working .review-work-actions{padding:0;gap:4px;}
+  #review.review-working .review-work-actions .btn{min-height:56px;height:56px;padding:4px;font-size:14px;}
+  #review.review-working .review-numeric-workspace{margin-top:8px;}
 }
 </style>
 <div id="stage"></div>
@@ -4408,6 +4470,15 @@ const Store = (() => {
     if(q.type==='group')savedQ.things=q.things;
     if(q.type==='sumCards')savedQ.cards=q.cards.map(c=>({a:c.a,b:c.b}));
     if(q.type==='subStory')savedQ.stories=q.stories.map(v=>({text:v.text,correct:v.correct}));
+    // Working position is optional and cannot grant access to answer support.
+    // Discard malformed UI data without discarding the question or its grading.
+    const w=q.workspace;
+    if(object(w)&&w.v===1&&Number.isFinite(w.scrollTop)&&w.scrollTop>=0&&w.scrollTop<=100000
+      &&(w.focusKey===null||typeof w.focusKey==='string'&&/^(?:field[0-2]|op[＋−]|number(?:10|[0-9])|(?:object|target|pair|order|card|story)[0-9]|piece[01][0-9])$/.test(w.focusKey))
+      &&typeof w.supportOpen==='boolean'){
+      savedQ.workspace={v:1,scrollTop:Math.round(w.scrollTop),focusKey:w.focusKey,
+        supportOpen:!!(w.supportOpen&&q.supported&&q.showHint&&!q.done)};
+    }
     return JSON.parse(JSON.stringify({at:s.at,run:{id:r.id??null,chapter:r.chapter??null,kind:r.kind,step:r.step,total:r.total,outcomes:r.outcomes,key:r.key},q:savedQ}));
   }
 
@@ -7006,8 +7077,7 @@ const Session = (() => {
   window.addEventListener('pagehide', saveBeforeLeaving);
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveBeforeLeaving(); });
 
-  function enginePendingSummary(){
-    const saved = Store.savedSession();
+  function enginePendingSummary(saved = Store.savedSession()){
     if (!saved) return null;
     const exists = p => p && Games.byId[p.gameId] && Games.byId[p.gameId].levels[p.levelIndex];
     if (saved.plan.some(p => !exists(p)) || (saved.gameId && !exists({gameId:saved.gameId,levelIndex:saved.levelIndex}))
@@ -7021,11 +7091,23 @@ const Session = (() => {
       mode:saved.mode, gameId:saved.gameId, levelIndex:saved.levelIndex };
   }
 
-  function pendingSummary(){
-    return [enginePendingSummary(),
-      typeof TextbookReview!=='undefined' && TextbookReview.pendingSummary ? TextbookReview.pendingSummary() : null,
-      typeof TransferAdventure!=='undefined' && TransferAdventure.pendingSummary ? TransferAdventure.pendingSummary() : null]
-      .filter(Boolean).sort((a,b)=>b.at-a.at)[0] || null;
+  // A choice describes one checkpoint in the current lap. Keep its revision in
+  // memory only: opening Home must never rewrite a learning record.
+  function pendingSummaries(){
+    const saved = Store.savedSession(), review = Store.reviewSession();
+    const transfer = normalizeTransferSession(Store.data.transferSession);
+    const session = enginePendingSummary(saved);
+    const entries = [session && {summary:session,saved,icon:session.gameId ? Games.byId[session.gameId].ico : '🧭'},
+      review && typeof TextbookReview!=='undefined' && {summary:TextbookReview.pendingSummary(),saved:review,icon:'📘'},
+      transfer && typeof TransferAdventure!=='undefined' && {summary:TransferAdventure.pendingSummary(),saved:transfer,
+        icon:(TransferAdventure.missionFor('transfer:'+transfer.run.id)||{}).icon || '🧭'}];
+    return entries.filter(e=>e && e.summary).map(e=>Object.assign({},e.summary,
+      {round:Store.round(),icon:e.icon,revision:JSON.stringify(e.saved)})).sort((a,b)=>b.at-a.at);
+  }
+  function pendingSummary(){ return pendingSummaries()[0] || null; }
+  function resumeUnavailable(){
+    if (typeof Home!=='undefined' && Home.resumeChanged) Home.resumeChanged();
+    return false;
   }
 
   function showOverview(resting, previous){
@@ -7041,8 +7123,14 @@ const Session = (() => {
     overviewBody.append(mascotSVG('happy','talk'),el('h3',{text:resting ? 'ここまで '+idx+'もん できたね' : titleEl.textContent}),
       el('p',{text:resting ? 'つづきは あと '+remaining+'もん。ここで やすんでも だいじょうぶ。'
         : 'ぜんぶで '+plan.length+'もん'+(intros || checks ? '（'+(intros ? 'みほん・いっしょに '+intros+'もん　' : '')+(checks ? 'たしかめ '+checks+'もん　' : '')+'ほんばん '+(plan.length-intros-checks)+'もん）' : '')}));
-    if (previous) overviewBody.append(el('p',{text:'まえの ぼうけんの つづきも のこっているよ。'}),
-      el('button.btn',{text:'まえの つづきから',onclick(){resume();}}));
+    if (previous){
+      const choice = {kind:'session',round:Store.round(),revision:JSON.stringify(previous)};
+      overviewBody.append(el('p.session-previous',{text:'まえの つづき：'+previous.title+'　あと '+(previous.plan.length-previous.index)+'もん'}),
+        el('button.btn',{text:'まえの つづきから',onclick(){
+          if (this.disabled || !this.isConnected || UI.currentName()!=='session-overview') return;
+          this.disabled=true; resume(choice);
+        }}));
+    }
     overviewBody.append(el('button.btn.btn-accent.session-continue',{text:resting ? 'つづける' : previous ? 'あたらしく はじめる' : 'はじめる',onclick(){
       checkpoint(idx,null); UI.show('play'); nextQuestion();
     }}),el('button.btn.btn-ghost',{text:resting ? 'ここで やすむ' : 'ホームに もどる',onclick(){
@@ -7054,10 +7142,15 @@ const Session = (() => {
       : '全部で、'+plan.length+'問だよ。途中で休んでも、続きから遊べるよ。',{delay:100});
   }
 
-  function resume(engineOnly){
-    const latest=engineOnly===true ? null : pendingSummary();
-    if(latest && latest.kind==='review') return TextbookReview.resume();
-    if(latest && latest.kind==='transfer') return TransferAdventure.resume();
+  function resume(target){
+    const explicit = target && typeof target==='object';
+    const choices = pendingSummaries();
+    const latest = explicit ? choices.find(c=>c.kind===target.kind && c.round===target.round && c.revision===target.revision)
+      : target===true ? choices.find(c=>c.kind==='session') : choices[0];
+    // A removed/replaced choice never falls through to a different adventure.
+    if (!latest) return explicit ? resumeUnavailable() : false;
+    if(latest.kind==='review') return TextbookReview.resume() || resumeUnavailable();
+    if(latest.kind==='transfer') return TransferAdventure.resume() || resumeUnavailable();
     const saved = Store.savedSession();
     if (!saved || !enginePendingSummary()) return false;
     if (levelReturn && (levelReturn.id !== saved.id || levelReturn.origin.round !== Store.round())) levelReturn = null;
@@ -7067,8 +7160,8 @@ const Session = (() => {
     plan=saved.plan.map(p=>Object.assign({},p,{game:Games.byId[p.gameId],level:Games.byId[p.gameId].levels[p.levelIndex]}));
     results=saved.results.slice(); sessionOutcomes=saved.sessionOutcomes.slice(); shaky=saved.shaky.slice(); focusKeys=saved.focusKeys.slice();
     usedItems=new Set(saved.usedItems); checkTally=saved.checkTally; announced=new Set(saved.announced); visitMilestone=saved.visitMilestone;
-    const target=t=>t ? {game:Games.byId[t.gameId],levelIndex:t.levelIndex,want:t.want||null} : null;
-    adventureTarget=target(saved.adventureTarget); firstTarget=target(saved.firstTarget); firstPhase=saved.firstPhase;
+    const restoreTarget=t=>t ? {game:Games.byId[t.gameId],levelIndex:t.levelIndex,want:t.want||null} : null;
+    adventureTarget=restoreTarget(saved.adventureTarget); firstTarget=restoreTarget(saved.firstTarget); firstPhase=saved.firstPhase;
     rewardTarget=saved.rewardKey ? {key:saved.rewardKey} : null;
     titleEl.textContent=saved.title; resumeQuestion=saved.question;
     renderPips();
@@ -8234,7 +8327,7 @@ const Session = (() => {
   }
 
   return {
-    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, build, resume, pendingSummary,
+    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, build, resume, pendingSummary, pendingSummaries,
     _test: {
       flushTimers,
       get idx(){ return idx; },
@@ -13725,7 +13818,7 @@ const StickerWorld = (() => {
   ];
   let node, board, palette, hint, selectedBar, picker, pickerSummary, filterBar, empty, actions;
   let placeButton, removeButton, undoButton, doneButton, selected = null, draft = null, undo = null;
-  let filter = 'recent';
+  let filter = 'recent', bookOrigin = null;
 
   function owned(){
     return Store.ownedStickerKeys().filter(k => {
@@ -13927,7 +14020,11 @@ const StickerWorld = (() => {
     node = el('div#sticker-world', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){
+            Sound.sfx.tap(); const origin = bookOrigin; bookOrigin = null;
+            if (origin && Book.restoreReturn(origin)) return;
+            Home.render(); UI.show('home', { replace: true });
+          } }, '←'),
         el('h2', { text: 'じぶんの しま' }),
         speakBtn(() => '集めたシールや宝物を、好きな場所に置けるよ。シールを選んで、島をタップしよう。矢印で動かして、エンターでも置けるよ。')),
       el('div.world-workspace', null, selectedBar, board, hint, actions, picker,
@@ -13953,7 +14050,12 @@ const StickerWorld = (() => {
     hint.textContent = selected ? 'しまを タップ。やじるしと エンターでも おけるよ'
       : '「シールを えらぶ」から、すきな シールを えらぼう';
   }
-  function open(item){
+  function open(item, opts){
+    const source = UI.currentName(), supplied = opts && opts.bookOrigin;
+    if (source === 'book' || source === 'book-detail') bookOrigin = supplied && Book.canReturn(supplied)
+      ? supplied : Book.captureReturn(document.activeElement, item);
+    else if (source === 'transfer' && supplied && Book.canReturn(supplied)) bookOrigin = supplied;
+    else if (source !== 'island-jobs' || !Book.canReturn(bookOrigin)) bookOrigin = null;
     if (item) item = Store.worldKey(item);
     undo = null;
     if (item && owned().includes(item)){
@@ -14532,8 +14634,59 @@ const TextbookReview = (() => {
     [['add',0],['add',1]],
     [['sub',1],['sub',2]]
   ];
-  let node, body, heading, exitBtn, speech='', run=null, q=null, exitArmed=false, supportOpen=false;
-  function checkpoint(){if(run&&q)Store.saveReviewSession({at:Date.now(),run,q});}
+  let node, body, heading, exitBtn, workActions, speech='', run=null, q=null, exitArmed=false, supportOpen=false;
+  let renderedQuestion=null, renderGeneration=0, lastGesture=null, lastTouchPointer=null, runRound=null;
+  function workingView(){
+    const active=document.activeElement, key=active&&body.contains(active)&&active.getAttribute('data-focus');
+    return {v:1,scrollTop:Math.max(0,Math.round(body.scrollTop)),focusKey:key||q.workspace?.focusKey||null,supportOpen:!!(supportOpen&&q.supported&&q.showHint&&!q.done)};
+  }
+  function checkpoint(capture=true){
+    if(!run||!q||runRound!==Store.round()||UI.currentName()!=='review')return;
+    if(capture&&renderedQuestion===q)q.workspace=workingView();
+    Store.saveReviewSession({at:Date.now(),run,q});
+  }
+  function restoreView(view){
+    if(!view)return;
+    body.scrollTop=view.scrollTop;
+    const target=view.focusKey&&$$('[data-focus]',body).find(b=>b.dataset.focus===view.focusKey);
+    if(!supportOpen){
+      const fallback=q.done?$('.review-next',workActions):target&&!target.disabled?target:heading;
+      if(fallback){fallback.tabIndex=fallback===heading?-1:fallback.tabIndex;fallback.focus({preventScroll:true});}
+    }
+  }
+  function hideWorkspace(){
+    if(workActions){clear(workActions);workActions.hidden=true;}
+    if(node)node.classList.remove('review-working');
+    renderedQuestion=null;runRound=null;renderGeneration++;
+  }
+  function guardControls(){
+    const owner=q, generation=renderGeneration;
+    [...$$('button',body),...$$('button',workActions)].forEach(control=>control.addEventListener('click',event=>{
+      if(!control.isConnected||q!==owner||generation!==renderGeneration||!run||runRound!==Store.round()||UI.currentName()!=='review'){
+        event.preventDefault();event.stopImmediatePropagation();
+      }
+    },true));
+  }
+  function guardGestures(){
+    // A native second tap must not land on a replacement key, Next or Rest.
+    // Programmatic activation and separate keyboard presses keep their normal meaning.
+    document.addEventListener('pointerdown',event=>{if(event.pointerType==='touch')lastTouchPointer={at:event.timeStamp,x:event.clientX,y:event.clientY};},true);
+    document.addEventListener('click',event=>{
+      if(!event.isTrusted||event.detail===0)return;
+      const control=event.target.closest&&event.target.closest('button'), active=run&&UI.currentName()==='review';
+      const recent=lastGesture&&event.timeStamp-lastGesture.at<1200;
+      if(!active&&!recent)return;
+      const field=active&&control&&control.matches('.review-field,.review-operator');
+      const touch=event.pointerType==='touch'||event.sourceCapabilities?.firesTouchEvents||lastTouchPointer&&event.timeStamp-lastTouchPointer.at<100&&Math.hypot(event.clientX-lastTouchPointer.x,event.clientY-lastTouchPointer.y)<4;
+      const same=recent&&Math.hypot(event.clientX-lastGesture.x,event.clientY-lastGesture.y)<20;
+      if(!field&&same&&(event.detail>1||touch&&lastGesture.protected&&event.timeStamp-lastGesture.at<450)){
+        event.preventDefault();event.stopImmediatePropagation();return;
+      }
+      if(active&&control){lastGesture=field?null:{at:event.timeStamp,x:event.clientX,y:event.clientY,
+        protected:control.matches('.review-number,.review-check,.review-next,.review-pause,.review-model,.review-reveal')};}
+    },true);
+    node.addEventListener('keydown',event=>{if(run&&event.repeat&&(event.key==='Enter'||event.key===' ')){event.preventDefault();event.stopImmediatePropagation();}},true);
+  }
   function pendingSummary(){
     const saved=Store.reviewSession();if(!saved)return null;
     const r=saved.run,title=r.kind==='chapter'?chapters[r.chapter].title+'の まとめ':lessons[r.id].title;
@@ -14543,13 +14696,14 @@ const TextbookReview = (() => {
     const saved=Store.reviewSession();if(!saved)return false;
     const r=saved.run;
     if(r.kind==='chapter'?!chapterReady(r.chapter):!lessonOpen(r.id)){Store.clearReviewSession();return false;}
-    build();run=r;q=saved.q;exitArmed=false;supportOpen=!!q.showHint&&!q.done;UI.show('review');renderQuestion();
-    if(!supportOpen)focusHeading();
+    build();run=r;q=saved.q;runRound=Store.round();exitArmed=false;const view=q.workspace;
+    supportOpen=!!(view&&view.supportOpen&&q.supported&&q.showHint&&!q.done);UI.show('review',{focus:false});renderQuestion();
+    if(!supportOpen&&!view)focusHeading();
     say('つづきから。'+(q.done?q.result:q.prompt));return true;
   }
   function pause(){
     if(!run)return;checkpoint();const remaining=run.total-run.outcomes.length;
-    closeSupport();run=null;q=null;Home.render();UI.show('home',{replace:true});
+    closeSupport();run=null;q=null;hideWorkspace();Home.render();UI.show('home',{replace:true});
     say('ここまで、よく取り組んだね。'+(remaining?'つぎは、あと'+remaining+'問から。':'つぎは、できた！を押してシールを確かめよう。'));
   }
   function progress(){
@@ -14651,22 +14805,27 @@ const TextbookReview = (() => {
     body=el('div.review-body');heading=el('h2');
     exitBtn=el('button.btn.btn-ghost.btn-round',{type:'button','aria-label':'ちずに もどる',text:'←',onclick(){
       Sound.sfx.tap();
-      if(run){pause();return;}
+      if(run){checkpoint();menu();say('もくじに もどったよ。つづきから また あそべるよ。');return;}
       if($('.review-result',body)){menu();}else{Home.render();UI.show('home',{replace:true});}
     }});
-    node=el('div#review',null,el('div.topbar',null,exitBtn,heading,speakBtn(()=>speech)),body);
-    UI.register('review',node);
+    workActions=el('div.review-actions.review-work-actions',{'aria-label':'もんだいの そうさ',hidden:true});
+    node=el('div#review',null,el('div.topbar',null,exitBtn,heading,speakBtn(()=>speech)),body,workActions);
+    UI.register('review',node);guardGestures();
+    body.addEventListener('scroll',()=>checkpoint(),{passive:true});
+    body.addEventListener('focusin',()=>checkpoint());
+    window.addEventListener('pagehide',()=>{checkpoint();Store.flush();});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){checkpoint();Store.flush();}});
   }
   function open(id,chapter){
     if(!unlocked()){Book.open({section:'review'});return;}
-    build();run=null;menu();UI.show('review');
+    build();lastGesture=null;run=null;menu();UI.show('review');
     if(Number.isInteger(id)&&lessonOpen(id)) start(id);
     else if(Number.isInteger(chapter)&&chapterReady(chapter)) start(null,chapter);
     else say('準備ができた単元から、本で復習しよう。単元の中では、順番に進めるよ。');
   }
   function menu(){
     UI.clearResultActions(node);
-    closeSupport();run=null;q=null;exitArmed=false;clear(body);heading.textContent='うらの さんすう';
+    closeSupport();run=null;q=null;hideWorkspace();exitArmed=false;clear(body);heading.textContent='うらの さんすう';
     const pending=pendingSummary();
     exitBtn.setAttribute('aria-label','ちずに もどる');
     body.append(el('div.review-menu-intro',null,
@@ -14701,9 +14860,9 @@ const TextbookReview = (() => {
     const saved=Store.reviewSession();
     if(saved&&!replace){
       if(saved.run.outcomes.length===saved.run.total){
-        run=saved.run;q=saved.q;finish();return;
+        run=saved.run;q=saved.q;runRound=Store.round();finish();return;
       }
-      run=null;q=null;clear(body);heading.textContent='つづきが のこっているよ';
+      run=null;q=null;hideWorkspace();clear(body);heading.textContent='つづきが のこっているよ';
       const pending=pendingSummary(),nextTitle=Number.isInteger(chapter)?chapters[chapter].title+'の まとめ':lessons[id].title;
       body.append(el('div.review-start-choice',null,
         el('h3',{text:pending.title+'　あと '+pending.remaining+'もん'}),
@@ -14716,7 +14875,7 @@ const TextbookReview = (() => {
       say('つづきが残っているよ。前の続きから遊ぶか、新しく始めるか、選ぼう。');return;
     }
     const kind=Number.isInteger(chapter)?'chapter':check?'check':'lesson';
-    run={id,chapter,kind,step:0,total:kind==='chapter'?5:check?3:8,outcomes:[],key:kind==='chapter'?chapterKey(chapter):lessons[id].key};
+    run={id,chapter,kind,step:0,total:kind==='chapter'?5:check?3:8,outcomes:[],key:kind==='chapter'?chapterKey(chapter):lessons[id].key};runRound=Store.round();
     nextQuestion();
   }
   function nextQuestion(){
@@ -14785,12 +14944,12 @@ const TextbookReview = (() => {
   function blocks(n){return el('div.review-blocks',{'aria-label':n+'この ブロック'},range(0,n-1).map(()=>el('span.review-block',{'aria-hidden':'true'})));}
   function tray(n,label,kind=q.thing){return el('div.review-tray',null,el('span.review-tray-label',{text:label}),
     el('div.review-objects',{role:'img','aria-label':({animal:'くま',flower:'おはな',umbrella:'かさ'})[kind]+' '+n+'こ'},items(n,kind)));}
-  function action(fn){if(q.done) return;exitArmed=false;Sound.sfx.tap();fn();renderQuestion(true);}
-  function renderQuestion(restore=false){
+  function action(fn){if(q.done) return;exitArmed=false;q.message='';Sound.sfx.tap();fn();renderQuestion(true);}
+  function renderQuestion(){
     UI.clearResultActions(node);
-    checkpoint();
+    const view=renderedQuestion===q?workingView():q.workspace;
+    renderGeneration++;node.classList.add('review-working');workActions.hidden=false;
     exitBtn.setAttribute('aria-label','もくじに もどる');
-    const focus=restore&&document.activeElement&&document.activeElement.getAttribute('data-focus');
     // Close the old top-layer sheet before rebuilding its problem and controls.
     const oldHelp=$('.review-hint',body);if(oldHelp&&oldHelp.open)oldHelp.close();
     clear(body);const c=chapters[lessons[q.lessonId].chapter];
@@ -14841,20 +15000,34 @@ const TextbookReview = (() => {
       else if(q.type==='take'||q.type==='subEquation')scene.append(tray(q.a,'はじめに '+q.a+'こ'),tray(q.b,'とる '+q.b+'こ'),el('p',{text:'はじめの '+q.a+'こから、'+q.b+'こを とります。'}));
       else scene.append(el('div.review-two-scenes',null,tray(q.a,'はじめに '+q.a+'こ'),el('span.review-action-arrow',{text:q.type==='combine'?'＋':'←','aria-hidden':'true'}),tray(q.b,(q.type==='combine'?'あわせる ': 'ふえる ')+q.b+'こ')),
         el('p',{text:q.a+'こ'+(q.type==='combine'?'と '+q.b+'こを あわせます。':' あって、'+q.b+'こ ふえます。')}));
-      if(equationTypes.includes(q.type))scene.append(equation());
     }else scene.append(tray(q.a,q.type==='zeroCount'?'おさらの なか':'よく みて かぞえよう'));
     const numeric=['count','five','zeroCount','sequence','hidden','makeTen','take','difference'].includes(q.type)||equationTypes.includes(q.type);
     if(numeric){
-      if(!equationTypes.includes(q.type)) body.append(el('div.review-answer',{text:'こたえ　'+(q.value===undefined?'□':q.value)}));
-      body.append(el('div.review-keypad',{'aria-label':'０から10の こたえ'},range(0,10).map(n=>el('button.review-number',{type:'button',disabled:q.done,text:n,dataset:{number:n,focus:'number'+n},'aria-label':String(n),'aria-pressed':String(equationTypes.includes(q.type)?q.values[q.active]===n:q.value===n),onclick:()=>action(()=>{if(equationTypes.includes(q.type)){q.values[q.active]=n;if(q.active<2)q.active++;}else q.value=n;})}))));
+      const workspace=el('div.review-numeric-workspace'+(equationTypes.includes(q.type)?'.has-equation':''),null,
+        equationTypes.includes(q.type)?equation():el('div.review-answer',{text:'こたえ　'+(q.value===undefined?'□':q.value)}),
+        el('div.review-keypad',{'aria-label':'０から10の こたえ'},range(0,10).map(n=>el('button.review-number',{type:'button',disabled:q.done,text:n,dataset:{number:n,focus:'number'+n},'aria-label':String(n),'aria-pressed':String(equationTypes.includes(q.type)?q.values[q.active]===n:q.value===n),onclick:()=>{action(()=>{if(equationTypes.includes(q.type)){q.values[q.active]=n;if(q.active<2)q.active++;}else q.value=n;});showAnswerWorkspace();}}))));
+      body.append(workspace);
     }
-    const feedback=el('p.review-feedback',{role:'status','aria-live':'polite',text:q.done?q.result:q.message||''});
-    body.append(feedback,el('div.review-actions',null,q.done?button(run.step+1===run.total?'できた！':'つぎの もんだい',advance,'btn-accent.review-next'):
-      [button('👀 ヒント',hint),button('たしかめる',check,'btn-accent.review-check')],
-      button('ここで 休む',pause,'btn-ghost.review-pause')));
-    if(q.showHint&&!q.done)renderSupport();
+    const feedback=el('p.review-feedback',{'aria-hidden':'true',text:q.done?q.result:q.message||''});
+    body.append(feedback);clear(workActions);
+    workActions.append(q.done?el('span.review-help-placeholder',{'aria-hidden':'true'}):button('👀 ヒント',hint),
+      q.done?button(run.step+1===run.total?'できた！':'つぎの もんだい',advance,'btn-accent.review-next'):button('たしかめる',check,'btn-accent.review-check'),
+      button('ここで 休む',pause,'btn-ghost.review-pause'));
+    if(q.done||q.message){
+      const primary=$('.btn-accent',workActions), label=el('span',{text:primary.textContent});clear(primary);
+      let status=q.done?'できた！':q.message.includes('□')?['さいしょの かずを いれよう','つぎの かずを いれよう','こたえを いれよう'][q.active]
+        :q.message==='＋か −を えらぼう。'?'＋か −を えらぼう':q.missed?'もういちど ためそう':'こたえを えらぼう';
+      primary.append(el('span.review-work-status',{role:'status','aria-live':'polite','aria-label':q.done?q.result:q.message,text:status}),label);
+    }
+    if(q.supported&&q.showHint&&!q.done)renderSupport();
     if(q.done) $$('button',scene).forEach(b=>b.disabled=true);
-    if(!supportOpen&&focus){const b=$('[data-focus="'+focus+'"]',body);if(b&&!b.disabled)b.focus({preventScroll:true});}
+    renderedQuestion=q;guardControls();restoreView(view);checkpoint();
+  }
+  function showAnswerWorkspace(){
+    const workspace=$('.review-numeric-workspace',body);if(!workspace)return;
+    const box=workspace.getBoundingClientRect(),pane=body.getBoundingClientRect();
+    if(box.top<pane.top||box.bottom>pane.bottom)body.scrollTop+=box.top-pane.top;
+    checkpoint();
   }
   function closeSupport(){
     supportOpen=false;const help=body&&$('.review-hint',body);if(help&&help.open)help.close();
@@ -14865,8 +15038,9 @@ const TextbookReview = (() => {
     const equation=equationTypes.includes(q.type), numeric=!!$('.review-keypad',body);
     const region=equation?$('.review-equation',body):numeric?$('.review-answer',body):$('.review-scene',body);
     const target=equation?$('[data-focus="field'+q.active+'"]',body):numeric?$('.review-keypad button',body):$('.review-scene button:not(:disabled)',body);
-    if(region)region.scrollIntoView({block:'start'});
+    if(numeric)showAnswerWorkspace();else if(region)region.scrollIntoView({block:'start'});
     if(target)target.focus({preventScroll:true});
+    checkpoint();
   }
   function renderSupport(){
     const help=el('dialog.review-hint',{'aria-labelledby':'review-help-title','aria-describedby':'review-help-prompt'},
@@ -14884,11 +15058,11 @@ const TextbookReview = (() => {
     if(supportOpen){help.showModal();$(supportStage()<2?'.review-model':'.review-try',help).focus({preventScroll:true});}
   }
   function equation(){
-    return el('div.review-equation',null,el('p',{text:'□を えらんで、すうじを いれよう。＋か − も えらぼう。'}),el('div.review-equation-row',null,
-      el('div.review-operands',null,field(0),el('div.review-operators',null,['＋','−'].map(op=>el('button.review-operator',{type:'button',text:op,'aria-label':op==='＋'?'たす':'ひく','aria-pressed':String(q.op===op),dataset:{focus:'op'+op},onclick:()=>action(()=>q.op=op)}))),field(1)),
+    return el('div.review-equation.review-scene',null,el('p.review-equation-instruction',{text:'□を えらんで すうじを いれよう'}),el('div.review-equation-row',null,
+      el('div.review-operands',null,field(0),el('div.review-operators',null,['＋','−'].map(op=>el('button.review-operator',{type:'button',disabled:q.done,text:op,'aria-label':op==='＋'?'たす':'ひく','aria-pressed':String(q.op===op),dataset:{focus:'op'+op},onclick:()=>{action(()=>q.op=op);showAnswerWorkspace();}}))),field(1)),
       el('div.review-equation-result',null,el('span',{text:'＝'}),field(2))));
   }
-  function field(i){return el('button.review-field',{type:'button',text:q.values[i]===null?'□':q.values[i],'aria-label':['さいしょの かず','つぎの かず','こたえ'][i], 'aria-pressed':String(q.active===i),dataset:{focus:'field'+i},onclick:()=>action(()=>q.active=i)});}
+  function field(i){return el('button.review-field',{type:'button',disabled:q.done,text:q.values[i]===null?'□':q.values[i],'aria-label':['さいしょの かず','つぎの かず','こたえ'][i], 'aria-pressed':String(q.active===i),dataset:{focus:'field'+i},onclick:()=>{action(()=>q.active=i);showAnswerWorkspace();}});}
   function toggle(i){q.selected=q.selected.includes(i)?q.selected.filter(v=>v!==i):q.selected.concat(i);}
   function correct(){
     if(q.type==='match')return q.pairs.length===q.a&&new Set(q.pairs.map(p=>p[0])).size===q.a&&new Set(q.pairs.map(p=>p[1])).size===q.a;
@@ -14905,7 +15079,19 @@ const TextbookReview = (() => {
     const incomplete=equationTypes.includes(q.type)?q.values.some(v=>v===null)||!q.op:
       ['count','five','zeroCount','sequence','hidden','makeTen','take','difference'].includes(q.type)?q.value===undefined:
       q.type==='match'?q.pairs.length<q.a:['splitSmall','splitLarge'].includes(q.type)?false:q.selected.length===0;
-    if(incomplete){q.message='まだ えらんでいない ところが あるよ。';renderQuestion();$('.review-check',body).focus({preventScroll:true});say(q.message);return;}
+    if(incomplete){
+      let focus;
+      if(equationTypes.includes(q.type)){
+        const missing=q.values.findIndex(v=>v===null);
+        if(missing>=0){q.active=missing;focus='field'+missing;q.message=['さいしょの かず','つぎの かず','こたえ'][missing]+'の □を えらんだよ。すうじを いれよう。';}
+        else{focus='op＋';q.message='＋か −を えらぼう。';}
+      }else if($('.review-keypad',body)){focus='number0';q.message='こたえの すうじを えらぼう。';}
+      else if(q.type==='match'){focus='target'+range(0,q.a-1).find(i=>!q.pairs.some(p=>p[0]===i));q.message='まだ むすんでいない くまを えらんで、かさと むすぼう。';}
+      else{focus=$('.review-scene button:not(:disabled)',body)?.dataset.focus;q.message=q.type==='sumCards'?'おなじ こたえの カードを ２まい えらぼう。':q.type==='subStory'?'しきに あう おはなしを えらぼう。':'えを タップして えらぼう。';}
+      renderQuestion();const target=$$('[data-focus]',body).find(b=>b.dataset.focus===focus);
+      if($('.review-keypad',body))showAnswerWorkspace();else if(target)target.scrollIntoView({block:'nearest'});
+      if(target){target.classList.add('review-needs-input');target.focus({preventScroll:true});}checkpoint();say(q.message);return;
+    }
     if(!correct()){
       const previous=q.wrongAttempts===undefined?Number(q.missed):q.wrongAttempts;
       q.missed=true;q.wrongAttempts=Math.min(100000,previous+1);
@@ -14913,13 +15099,13 @@ const TextbookReview = (() => {
       if(q.wrongAttempts>=2){q.supported=true;q.showHint=true;q.supportStage=Math.max(1,supportStage());q.hintText=hintText();}
       if(q.wrongAttempts===2||q.wrongAttempts===4)supportOpen=true;
       if(q.wrongAttempts>=4&&supportStage()<2)q.message='ひとつ みてみる ボタンで、さいしょの やりかたを みられるよ。';
-      Sound.sfx.tap();renderQuestion();$('.review-check',body).focus({preventScroll:true});say(q.message+(q.wrongAttempts===2?' '+q.hintText:''));return;
+      Sound.sfx.tap();renderQuestion();if(!supportOpen)$('.review-check',workActions).focus({preventScroll:true});say(q.message+(q.wrongAttempts===2?' '+q.hintText:''));return;
     }
     closeSupport();q.done=true;
     const outcome=q.supported?'supported':q.missed?'revised':'independent';run.outcomes.push(outcome);Store.countToday(1);
     q.result=({independent:'じぶんで できたね！',revised:'もういちど ためして できたね！',supported:'ヒントで できたね！'})[outcome];
     Sound.sfx.correct();renderQuestion();say(q.result);
-    const next=$('.review-next',body);if(next)next.focus({preventScroll:true});
+    const next=$('.review-next',workActions);if(next)next.focus({preventScroll:true});
   }
   function supportStage(){return q.supportStage===undefined?(q.showHint?1:0):q.supportStage;}
   function retryText(){
@@ -15045,7 +15231,7 @@ const TextbookReview = (() => {
         else fresh=Store.addPending(done.key);
       }
     }
-    run=null;q=null;exitArmed=false;clear(body);heading.textContent='やりとげたね！';
+    run=null;q=null;hideWorkspace();exitArmed=false;clear(body);heading.textContent='やりとげたね！';
     exitBtn.setAttribute('aria-label','もくじに もどる');
     const has=Store.hasSticker(done.key), pending=Store.isPending(done.key), record=Store.data.reviewRecords[done.key];
     let note=confirmed?'シールに いろが ついたよ！':fresh?(pending?'かりの シールを ゲット！ べつのひに ３もん たしかめよう。':'あたらしい なかまを ゲット！'):
@@ -15169,6 +15355,7 @@ const TransferAdventure = (() => {
   ];
   let node, body, heading, back, speech = '', run = null, question = null, exitArmed = false;
   let workspaceReady = false, renderVersion = 0;
+  let bookOrigin = null;
   const key = id => 'transfer:' + id;
   const missionFor = k => /^transfer:[0-5]$/.test(k) ? missions[Number(k.split(':')[1])] : null;
   function saveVisit(){
@@ -15182,6 +15369,7 @@ const TransferAdventure = (() => {
     return s ? {kind:'transfer',at:s.at,title:missions[s.run.id].title,done:s.run.step,remaining:QUESTIONS-s.run.step} : null;
   }
   function resume(){
+    if (UI.currentName() !== 'transfer' || !Book.canReturn(bookOrigin)) bookOrigin = null;
     const s=normalizeTransferSession(Store.data.transferSession);
     if (!s || !unlocked()) return false;
     const saved=JSON.parse(JSON.stringify(s)); workspaceReady=false;
@@ -15266,7 +15454,10 @@ const TransferAdventure = (() => {
       el('h3', { text: '✦ とくべつな ぼうけんシール' }),
       el('p', { text: '５もんのうち ４もんを、ヒントなしで さいしょから できた しるし。' }),
       el('div.transfer-collection-grid', null, missions.map((m, i) => el('button.transfer-collectible', {
-        type: 'button', onclick(){ Store.hasSticker(key(i)) ? StickerWorld.open(key(i)) : open(); }
+        type: 'button', dataset:{collectionKey:key(i)}, onclick(event){
+          const origin = Book.captureReturn(event.currentTarget, key(i));
+          Store.hasSticker(key(i)) ? StickerWorld.open(key(i), {bookOrigin:origin}) : open(i, {bookOrigin:origin});
+        }
       }, artwork(key(i), !Store.hasSticker(key(i))), el('span', { text: m.title })))));
   }
   function parentSummary(){
@@ -15302,7 +15493,7 @@ const TransferAdventure = (() => {
         note.textContent = 'ここで やすむ？ ← を もういちど おすと もどるよ。つづきは のこるよ。';
         say('ここで休む？続きは残るよ。戻るをもう一度押してね。');
       } else if (run){ run = null; menu(); }
-      else { Home.render(); UI.show('home', { replace: true }); }
+      else { returnFromBook(); }
     });
     node = el('div#transfer', null, el('div.topbar', null, back, heading, speakBtn(() => speech)), body);
     UI.register('transfer', node);
@@ -15326,20 +15517,30 @@ const TransferAdventure = (() => {
     body.append(cards);
     say('できることを使ってみよう。好きな冒険をえらんでね。５問のうち４問を、ヒントなしで初めから正しくできると、特別なシールがもらえるよ。');
   }
-  function open(){
+  function returnFromBook(){
+    const origin = bookOrigin; bookOrigin = null;
+    if (origin && Book.restoreReturn(origin)) return;
+    Home.render(); UI.show('home', {replace:true});
+  }
+  function open(id, opts){
     if (!unlocked()) return;
-    build(); UI.show('transfer'); menu();
+    const supplied = opts && opts.bookOrigin;
+    bookOrigin = supplied && Book.canReturn(supplied) ? supplied : null;
+    build(); UI.show('transfer');
+    if (Number.isInteger(id) && missions[id]) start(id); else menu();
   }
   function start(id,confirmed=false){
     if (!unlocked() || !missions[id]) return;
-    build(); UI.show('transfer');
+    if (UI.currentName() !== 'transfer' || !Book.canReturn(bookOrigin)) bookOrigin = null;
+    build(); UI.show('transfer'); UI.clearResultActions(node);
     const previous=Store.data.transferSession;
     if(previous && previous.run.step===QUESTIONS){resume();return;}
     const q=previous && previous.q;
-    if(!confirmed && previous && (previous.run.step>0 || q && (q.value || q.phase || q.previous!==null || q.supported || q.mistakes || (missions[previous.run.id].kind==='split' && q.left!==q.total)))){
+    if(!confirmed && previous && (Book.canReturn(bookOrigin) || previous.run.step>0 || q && (q.value || q.phase || q.previous!==null || q.supported || q.mistakes || (missions[previous.run.id].kind==='split' && q.left!==q.total)))){
       run=null;clear(body);heading.textContent='つづきが のこっているよ';
-      body.append(el('p',{text:missions[previous.run.id].title+'の つづきから あそべるよ。あたらしく はじめると、まえの とちゅうの ばめんは おわるよ。'}),
-        button('まえの つづきから',resume,'btn-accent'),button('あたらしく はじめる',()=>start(id,true)),button('ぼうけんを えらぶ',menu));
+      body.append(el('p',{text:missions[previous.run.id].title+'の つづきから あそべるよ。あたらしく「'+missions[id].title+'」を はじめると、まえの とちゅうの ばめんは おわるよ。'}),
+        button('まえの つづきから',resume,'btn-accent'),button('あたらしく はじめる',()=>start(id,true)),button('ぼうけんを えらぶ',menu),
+        Book.canReturn(bookOrigin) ? button('シールブックに もどる',returnFromBook) : null);
       return;
     }
     run = { id, step: 0, results: [] };
@@ -15556,7 +15757,7 @@ const TransferAdventure = (() => {
         : passed ? '「' + m.title + '」を じぶんで できたね。'
           : 'ヒントを つかっても だいじょうぶ。べつのひに また やってみよう。' }),
       el('div.transfer-actions', null,
-        owned ? button('じぶんの しまに かざる', () => StickerWorld.open(key(id)), 'btn-accent')
+        owned ? button('じぶんの しまに かざる', () => StickerWorld.open(key(id), {bookOrigin}), 'btn-accent')
           : button('もういちど あそぶ', () => start(id), 'btn-accent'),
         button('きょうは ここまで', () => Home.endToday()),
         button('ぼうけんを えらぶ', menu),
@@ -15727,6 +15928,7 @@ const Home = (() => {
   let parentBtn;
   let renderedDay;
   let progressEl, progressTarget;
+  let resumeMoreEl, resumeList, resumeNotice;
 
   // A sleeping PWA can return to yesterday's Home without a page reload.
   // Refresh only the visible Home when its local calendar day has changed.
@@ -15783,6 +15985,9 @@ const Home = (() => {
        sticker shelf the map itself was the smallest thing on its own screen. The
        padlocked cards in the 1ねんせい world carry the message now. */
     primaryEl = el('button.daily.home-primary', { type: 'button' });
+    resumeList = el('div.resume-options');
+    resumeMoreEl = el('details.resume-more', {hidden:true}, el('summary'), resumeList);
+    resumeNotice = el('p.resume-notice', {hidden:true,role:'status','aria-live':'polite'});
     choicesEl = el('div.home-choices');
     dailiesEl = el('div.dailies', null, recommendEl, dailyEl, missionResumeEl, reviewEl, focusEl);
     questsEl = el('div.home-quests');
@@ -15800,8 +16005,8 @@ const Home = (() => {
     todayHeading = el('h2', {text:'きょうは ここから'});
     endedEl = el('div.day-ending', {hidden:true});
     progressEl = el('div.home-short-progress', {hidden:true});
-    todayEl = el('section.home-today', {'aria-label':'きょうの ぼうけん'}, todayHeading, primaryEl, progressEl, endedEl);
-    contentEl = el('div.home-content', null, voiceWarnEl, todayEl, choicesEl, moreEl);
+    todayEl = el('section.home-today', {'aria-label':'きょうの ぼうけん'}, todayHeading, primaryEl, resumeMoreEl, progressEl, endedEl);
+    contentEl = el('div.home-content', null, voiceWarnEl, resumeNotice, todayEl, choicesEl, moreEl);
     node.append(contentEl);
     return UI.register('home', node);
   }
@@ -15849,13 +16054,14 @@ const Home = (() => {
     endedEl.hidden = !ended;
     if (!ended){
       todayEl.insertBefore(primaryEl, endedEl);
+      todayEl.insertBefore(resumeMoreEl, endedEl);
       todayEl.insertBefore(progressEl, endedEl);
       contentEl.insertBefore(choicesEl, moreEl);
       return;
     }
     // Keep every optional entrance, including an unfinished visit, behind the
     // child's explicit choice. The ending marker never consumes its checkpoint.
-    moreContent.prepend(primaryEl, progressEl, choicesEl);
+    moreContent.prepend(primaryEl, resumeMoreEl, progressEl, choicesEl);
     moreEl.open = false;
     const summary = Store.todaySummary(), entries = summary.entries.map(endingEntry).filter(Boolean).slice(0,3);
     clear(endedEl);
@@ -15915,6 +16121,22 @@ const Home = (() => {
       el('span.grow', null, el('span.t', { text:title }), el('span.s', { text:detail })),
       el('span.go', { text:'▶', 'aria-hidden':'true' }));
     button.onclick = () => { Sound.sfx.tap(); action(); };
+  }
+  function resumeChoice(choice, button){
+    if (button.disabled || !button.isConnected || UI.currentName()!=='home') return;
+    button.disabled=true;
+    Session.resume(choice);
+  }
+  function resumeChanged(){
+    const scroll=contentEl ? contentEl.scrollTop : 0, open=resumeMoreEl && resumeMoreEl.open;
+    render(); UI.show('home',{replace:true,keepScroll:true,focus:false});
+    resumeMoreEl.open=!!open;
+    resumeNotice.textContent='つづきが かわったよ。もういちど えらぼう。';
+    resumeNotice.hidden=false;
+    contentEl.scrollTop=scroll;
+    const focus = Store.endedToday() ? moreSummary : primaryEl;
+    focus.focus({preventScroll:true});
+    Sound.say(resumeNotice.textContent,{delay:100});
   }
 
   function gameCard(g){
@@ -15983,7 +16205,22 @@ const Home = (() => {
     const practiceDone = Store.practiceDoneToday();
     const firstRun = Store.round() === 1 && Store.totalStars() === 0
       && !Store.milestones().some(m => Store.milestoneRank(m.kind) >= Store.milestoneRank('together'));
-    const pending = Session.pendingSummary();
+    const pendingChoices = Session.pendingSummaries(), pending = pendingChoices[0];
+    resumeNotice.hidden=true;
+    clear(resumeList);
+    resumeMoreEl.hidden=pendingChoices.length<2;
+    resumeMoreEl.open=false;
+    $('summary',resumeMoreEl).textContent='ほかの つづき（'+Math.max(0,pendingChoices.length-1)+'）';
+    pendingChoices.slice(1).forEach(choice=>{
+      const button=el('button.resume-choice',{type:'button','data-resume-kind':choice.kind,'data-resume-round':choice.round},
+        el('span.resume-icon',{'aria-hidden':'true',text:choice.icon}),
+        el('span',null,el('b',{text:choice.title}),el('span.resume-detail',null,
+          el('span',{text:choice.kind==='review' ? 'ほんの つづき' : choice.kind==='transfer' ? 'ぼうけんの つづき' : 'れんしゅうの つづき'}),
+          el('span',{text:choice.remaining ? 'あと '+choice.remaining+'もん' : 'けっかを みよう'}))),
+        el('span',{'aria-hidden':'true',text:'▶'}));
+      button.onclick=()=>{Sound.sfx.tap();resumeChoice(choice,button);};
+      resumeList.append(button);
+    });
     const first = firstRun && FirstSteps.target();
     const short = !first && FirstSteps.shortPlan();
     const saved = Store.savedSession();
@@ -16003,9 +16240,12 @@ const Home = (() => {
         recGame.name + '　《' + lv.t + '》', () => Diagnostic.startRecommended());
     }
     primaryEl.dataset.action = pending ? 'resume' : first ? 'first' : short ? 'short' : recGame ? 'recommend' : 'daily';
+    primaryEl.disabled=false;
+    delete primaryEl.dataset.resumeKind; delete primaryEl.dataset.resumeRound;
     if (pending){
-      banner(primaryEl, '▶️', pending.remaining ? 'つづきから　あと ' + pending.remaining + 'もん' : 'できた！ けっかを みよう',
-        pending.title + (pending.done ? '　' + pending.done + 'もん できたね' : ''), () => Session.resume());
+      primaryEl.dataset.resumeKind=pending.kind; primaryEl.dataset.resumeRound=pending.round;
+      banner(primaryEl, pending.icon, pending.remaining ? 'つづきから　あと ' + pending.remaining + 'もん' : 'できた！ けっかを みよう',
+        pending.title + (pending.done ? '　' + pending.done + 'もん できたね' : ''), () => resumeChoice(pending,primaryEl));
     } else if (first){
       banner(primaryEl, BANNER_ICON.first, 'いっしょに ひとつ',
         first.game.name + '　1もんだけ。ヒントを つかって いいよ',
@@ -16134,7 +16374,7 @@ const Home = (() => {
     });
     renderEnding();
   }
-  return { build, render, endToday, choosePlay, captureMap, returnToMap };
+  return { build, render, endToday, choosePlay, captureMap, returnToMap, resumeChanged };
 })();
 
 /* ---------------------------------------------------------- LEVELS */
@@ -16487,6 +16727,8 @@ const Book = (() => {
   let node, body, grid, count, missing, headEl, filters, worldSelect, resultCount, extras;
   let detailNode, detailHeading, detailBody, detailSpeech = '', filter = 'all', world = 'all';
   let renderedRound = null, savedScroll = 0, selectedKey = null;
+  let detailKey = null, visitVersion = 0, returnTicket = null;
+  const journeyScreens = ['book','book-detail','transfer','sticker-world','island-jobs'];
   const filtersList = [['all','ぜんぶ'], ['owned','あつめた'], ['gold','きん'], ['recent','さいきん']];
   function build(){
     if (node) return node;
@@ -16522,12 +16764,16 @@ const Book = (() => {
           onclick(){ Sound.sfx.tap(); returnToBook(); }}, '←'),
         detailHeading, speakBtn(() => detailSpeech)), detailBody);
     UI.register('book-detail', detailNode);
+    new MutationObserver(() => {
+      if (returnTicket && (returnTicket.round !== Store.round() || !journeyScreens.includes(UI.currentName()))) returnTicket = null;
+    }).observe(node.parentNode, {subtree:true,attributes:true,attributeFilter:['hidden']});
     return node;
   }
   function speech(){
     return 'シールブックだよ。持っているシールが先に並んでいるよ。好きなシールを押してみよう。持っているシールは島に貼れるよ。金や場所でも選べるよ。一年生の遊びは、それぞれの準備ができたら開くよ。準備を見るボタンから、必要な遊びを選べるよ。';
   }
   function open(opts){
+    returnTicket = null; visitVersion++;
     render(); UI.show('book');
     const section = opts && {rounds:'.round-collection', review:'.review-collection, .review-gate', treasures:'.treasure-collection'}[opts.section];
     const destination = section && extras.querySelector(section);
@@ -16560,6 +16806,7 @@ const Book = (() => {
     return key.startsWith('treasure:') ? key.slice(9) : null;
   }
   function renderCatalog(){
+    visitVersion++;
     clear(grid);
     filters.querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.filter === filter)));
     worldSelect.value = world;
@@ -16584,6 +16831,7 @@ const Book = (() => {
     });
   }
   function returnToBook(){
+    returnTicket = null;
     if (renderedRound !== Store.round()){ savedScroll = 0; selectedKey = null; }
     // A visit may have earned a sticker while the catalog was hidden.
     render();
@@ -16592,6 +16840,7 @@ const Book = (() => {
     if (button) requestAnimationFrame(() => button.focus({preventScroll:true}));
   }
   function showDetail(key){
+    visitVersion++; detailKey = key;
     const lesson = lessonFor(key), has = owned(key), pending = has && Store.isPending(key);
     detailHeading.textContent = stickerFor(key);
     clear(detailBody).append(PokemonStickers.artwork(key, {silhouette:!has}));
@@ -16604,7 +16853,7 @@ const Book = (() => {
       : has ? 'あつめた シールだよ。じぶんの しまに はれるよ。' : 'この シールの あそびを みてみよう。';
     copy.append(el('p', {text:status}));
     if (has) actions.append(el('button.btn.btn-accent.book-place', {type:'button', text:'しまに はる',
-      onclick(){ Sound.sfx.tap(); StickerWorld.open(key); }}));
+      onclick(event){ Sound.sfx.tap(); StickerWorld.open(key, {bookOrigin:captureReturn(event.currentTarget, key)}); }}));
     let guidanceSpeech = '';
     if (lesson && (!has || pending)){
       if (!stageOpen(lesson.game)){
@@ -16627,6 +16876,66 @@ const Book = (() => {
     detailSpeech = stickerFor(key) + '。' + (lesson ? lesson.game.name + '。' + lesson.game.levels[lesson.levelIndex].t + '。' : '')
       + status + guidanceSpeech + 'シールブックにも戻れるよ。';
     UI.show('book-detail'); Sound.say(detailSpeech, {delay:150});
+  }
+  // This ticket describes one visible Book visit, never a learning checkpoint.
+  // Keep the original card as the visual anchor when earning adds a catalog row.
+  function captureReturn(source, item){
+    const screen = UI.currentName();
+    if (screen !== 'book' && screen !== 'book-detail') return null;
+    const detail = screen === 'book-detail';
+    const key = String(item || '').replace(/^lap2:/, '');
+    const matches = button => button.dataset.bookKey === key || button.dataset.collectionKey === key
+      || Array.from(button.querySelectorAll('[data-sticker-key]')).some(art => art.dataset.stickerKey === key);
+    let control = source && body.contains(source) ? source.closest('button') : null;
+    if (control && key && !matches(control)) control = null;
+    if (!detail && !control){
+      control = Array.from(extras.querySelectorAll('button')).concat(Array.from(grid.querySelectorAll('button'))).find(matches);
+    }
+    const art = control && control.querySelector('[data-sticker-key]');
+    const frame = body.getBoundingClientRect(), scale = body.offsetHeight ? frame.height / body.offsetHeight : 1;
+    returnTicket = {round:Store.round(), version:visitVersion, filter, world, extras:extras.open,
+      scroll:detail ? savedScroll : body.scrollTop, selectedKey, detail:detail ? detailKey : null,
+      detailScroll:detailBody.scrollTop, focusKey:control && (control.dataset.bookKey || control.dataset.collectionKey
+        || art && art.dataset.stickerKey), focusScope:control && grid.contains(control) ? 'catalog' : 'extras',
+      sourceTop:control ? (control.getBoundingClientRect().top - frame.top) / scale : null};
+    return returnTicket;
+  }
+  function canReturn(ticket){
+    return !!ticket && ticket === returnTicket && ticket.round === Store.round() && ticket.version === visitVersion
+      && journeyScreens.includes(UI.currentName());
+  }
+  function restoreReturn(ticket){
+    if (!canReturn(ticket)) return false;
+    returnTicket = null;
+    filter = ticket.filter; world = ticket.world; savedScroll = ticket.scroll; selectedKey = ticket.selectedKey;
+    render(); extras.open = ticket.extras;
+    if (ticket.detail){
+      showDetail(ticket.detail); detailBody.scrollTop = ticket.detailScroll;
+      const version = visitVersion;
+      requestAnimationFrame(() => {
+        if (UI.currentName() !== 'book-detail' || Store.round() !== ticket.round || detailKey !== ticket.detail || visitVersion !== version) return;
+        detailBody.scrollTop = ticket.detailScroll;
+        const place = $('.book-place', detailBody); if (place) place.focus({preventScroll:true});
+      });
+    } else {
+      UI.show('book', {keepScroll:true,focus:false}); body.scrollTop = ticket.scroll;
+      const scope = ticket.focusScope === 'catalog' ? grid : extras;
+      const control = Array.from(scope.querySelectorAll('button')).find(button => button.dataset.bookKey === ticket.focusKey
+        || button.dataset.collectionKey === ticket.focusKey
+        || Array.from(button.querySelectorAll('[data-sticker-key]')).some(art => art.dataset.stickerKey === ticket.focusKey));
+      if (control && ticket.sourceTop !== null){
+        const frame = body.getBoundingClientRect(), scale = body.offsetHeight ? frame.height / body.offsetHeight : 1;
+        body.scrollTop += (control.getBoundingClientRect().top - frame.top) / scale - ticket.sourceTop;
+      }
+      savedScroll = body.scrollTop;
+      const version = visitVersion;
+      requestAnimationFrame(() => {
+        if (UI.currentName() !== 'book' || Store.round() !== ticket.round || visitVersion !== version) return;
+        if (control) control.focus({preventScroll:true}); else headEl.focus({preventScroll:true});
+      });
+      Sound.say('シールブックに もどったよ。つづけて えらべるよ。', {delay:100});
+    }
+    return true;
   }
   function appendLessonAction(copy, actions, lesson){
     const {game, levelIndex} = lesson;
@@ -16691,7 +17000,7 @@ const Book = (() => {
     clear(count).append(el('b', {text:got + 'まい'}), ' あつめたよ　', el('span', {text:'シールを おそう'}));
     renderCatalog(); renderExtras();
   }
-  return {build, render, open, speech, returnToBook};
+  return {build, render, open, speech, returnToBook, captureReturn, canReturn, restoreReturn};
 })();
 
 /* ---- 91-parent.js ---- */

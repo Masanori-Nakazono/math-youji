@@ -20,6 +20,7 @@ const server=http.createServer((req,res)=>{
       const K=KazuApp,S=K.Store,R=K.TextbookReview,names=[],spoken=[];
       K.Sound.voiceOn=false;K.Sound.sfxOn=false;K.Sound.say=text=>spoken.push(text);
       const check=(name,ok)=>{if(!ok)throw new Error(name);names.push(name);};
+      const learningState=q=>{const {workspace,...learning}=q;return JSON.stringify(learning);};
       const click=sel=>{const b=document.querySelector('#review '+sel);if(!b)throw new Error('Missing '+sel);b.click();};
       const open=(id,step=0,edit=()=>{})=>{
         S.reset();S.setPref('secondRoundReached',true);if(id%4)S.addSticker('r2:'+(id-1));
@@ -84,12 +85,12 @@ const server=http.createServer((req,res)=>{
         check(type+': concrete hint opens without answering',R.inspect().q.supportStage===1&&!!document.querySelector('.review-support-scene')&&!R.inspect().q.done);
         check(type+': hint quantities describe the generated question',quantityMeaning());
         click('.review-model');
-        const partial=JSON.stringify(S.reviewSession().q);
+        const partial=learningState(S.reviewSession().q);
         check(type+': one-step support is checkpointed',S.reviewSession().q.supportStage===2&&R.inspect().q.supported&&!!document.querySelector('.review-reveal'));
         check(type+': model quantities still describe the correct operation',quantityMeaning());
         click('.review-try');click('.review-pause');const backup=S.exportText();S.reset();
-        check(type+': backup and resume keep the exact support step',S.importText(backup,'replace').ok&&R.resume()&&JSON.stringify(R.inspect().q)===partial);
-        click('.review-try');click('.review-check');
+        check(type+': backup and resume keep the exact support step and closed help',S.importText(backup,'replace').ok&&R.resume()&&learningState(R.inspect().q)===partial&&!document.querySelector('.review-hint[open]'));
+        click('.review-check');
         check(type+': the example leaves an answer for the child',!R.inspect().q.done&&R.inspect().run.outcomes.length===step&&S.todayCount()===before);
         answer();
         check(type+': completing the child action records supported success',R.inspect().q.done&&R.inspect().run.outcomes.at(-1)==='supported'&&S.todayCount()===before+1);

@@ -152,6 +152,7 @@ const Home = (() => {
   let parentBtn;
   let renderedDay;
   let progressEl, progressTarget;
+  let resumeMoreEl, resumeList, resumeNotice;
 
   // A sleeping PWA can return to yesterday's Home without a page reload.
   // Refresh only the visible Home when its local calendar day has changed.
@@ -208,6 +209,9 @@ const Home = (() => {
        sticker shelf the map itself was the smallest thing on its own screen. The
        padlocked cards in the 1ねんせい world carry the message now. */
     primaryEl = el('button.daily.home-primary', { type: 'button' });
+    resumeList = el('div.resume-options');
+    resumeMoreEl = el('details.resume-more', {hidden:true}, el('summary'), resumeList);
+    resumeNotice = el('p.resume-notice', {hidden:true,role:'status','aria-live':'polite'});
     choicesEl = el('div.home-choices');
     dailiesEl = el('div.dailies', null, recommendEl, dailyEl, missionResumeEl, reviewEl, focusEl);
     questsEl = el('div.home-quests');
@@ -225,8 +229,8 @@ const Home = (() => {
     todayHeading = el('h2', {text:'きょうは ここから'});
     endedEl = el('div.day-ending', {hidden:true});
     progressEl = el('div.home-short-progress', {hidden:true});
-    todayEl = el('section.home-today', {'aria-label':'きょうの ぼうけん'}, todayHeading, primaryEl, progressEl, endedEl);
-    contentEl = el('div.home-content', null, voiceWarnEl, todayEl, choicesEl, moreEl);
+    todayEl = el('section.home-today', {'aria-label':'きょうの ぼうけん'}, todayHeading, primaryEl, resumeMoreEl, progressEl, endedEl);
+    contentEl = el('div.home-content', null, voiceWarnEl, resumeNotice, todayEl, choicesEl, moreEl);
     node.append(contentEl);
     return UI.register('home', node);
   }
@@ -274,13 +278,14 @@ const Home = (() => {
     endedEl.hidden = !ended;
     if (!ended){
       todayEl.insertBefore(primaryEl, endedEl);
+      todayEl.insertBefore(resumeMoreEl, endedEl);
       todayEl.insertBefore(progressEl, endedEl);
       contentEl.insertBefore(choicesEl, moreEl);
       return;
     }
     // Keep every optional entrance, including an unfinished visit, behind the
     // child's explicit choice. The ending marker never consumes its checkpoint.
-    moreContent.prepend(primaryEl, progressEl, choicesEl);
+    moreContent.prepend(primaryEl, resumeMoreEl, progressEl, choicesEl);
     moreEl.open = false;
     const summary = Store.todaySummary(), entries = summary.entries.map(endingEntry).filter(Boolean).slice(0,3);
     clear(endedEl);
@@ -340,6 +345,22 @@ const Home = (() => {
       el('span.grow', null, el('span.t', { text:title }), el('span.s', { text:detail })),
       el('span.go', { text:'▶', 'aria-hidden':'true' }));
     button.onclick = () => { Sound.sfx.tap(); action(); };
+  }
+  function resumeChoice(choice, button){
+    if (button.disabled || !button.isConnected || UI.currentName()!=='home') return;
+    button.disabled=true;
+    Session.resume(choice);
+  }
+  function resumeChanged(){
+    const scroll=contentEl ? contentEl.scrollTop : 0, open=resumeMoreEl && resumeMoreEl.open;
+    render(); UI.show('home',{replace:true,keepScroll:true,focus:false});
+    resumeMoreEl.open=!!open;
+    resumeNotice.textContent='つづきが かわったよ。もういちど えらぼう。';
+    resumeNotice.hidden=false;
+    contentEl.scrollTop=scroll;
+    const focus = Store.endedToday() ? moreSummary : primaryEl;
+    focus.focus({preventScroll:true});
+    Sound.say(resumeNotice.textContent,{delay:100});
   }
 
   function gameCard(g){
@@ -408,7 +429,22 @@ const Home = (() => {
     const practiceDone = Store.practiceDoneToday();
     const firstRun = Store.round() === 1 && Store.totalStars() === 0
       && !Store.milestones().some(m => Store.milestoneRank(m.kind) >= Store.milestoneRank('together'));
-    const pending = Session.pendingSummary();
+    const pendingChoices = Session.pendingSummaries(), pending = pendingChoices[0];
+    resumeNotice.hidden=true;
+    clear(resumeList);
+    resumeMoreEl.hidden=pendingChoices.length<2;
+    resumeMoreEl.open=false;
+    $('summary',resumeMoreEl).textContent='ほかの つづき（'+Math.max(0,pendingChoices.length-1)+'）';
+    pendingChoices.slice(1).forEach(choice=>{
+      const button=el('button.resume-choice',{type:'button','data-resume-kind':choice.kind,'data-resume-round':choice.round},
+        el('span.resume-icon',{'aria-hidden':'true',text:choice.icon}),
+        el('span',null,el('b',{text:choice.title}),el('span.resume-detail',null,
+          el('span',{text:choice.kind==='review' ? 'ほんの つづき' : choice.kind==='transfer' ? 'ぼうけんの つづき' : 'れんしゅうの つづき'}),
+          el('span',{text:choice.remaining ? 'あと '+choice.remaining+'もん' : 'けっかを みよう'}))),
+        el('span',{'aria-hidden':'true',text:'▶'}));
+      button.onclick=()=>{Sound.sfx.tap();resumeChoice(choice,button);};
+      resumeList.append(button);
+    });
     const first = firstRun && FirstSteps.target();
     const short = !first && FirstSteps.shortPlan();
     const saved = Store.savedSession();
@@ -428,9 +464,12 @@ const Home = (() => {
         recGame.name + '　《' + lv.t + '》', () => Diagnostic.startRecommended());
     }
     primaryEl.dataset.action = pending ? 'resume' : first ? 'first' : short ? 'short' : recGame ? 'recommend' : 'daily';
+    primaryEl.disabled=false;
+    delete primaryEl.dataset.resumeKind; delete primaryEl.dataset.resumeRound;
     if (pending){
-      banner(primaryEl, '▶️', pending.remaining ? 'つづきから　あと ' + pending.remaining + 'もん' : 'できた！ けっかを みよう',
-        pending.title + (pending.done ? '　' + pending.done + 'もん できたね' : ''), () => Session.resume());
+      primaryEl.dataset.resumeKind=pending.kind; primaryEl.dataset.resumeRound=pending.round;
+      banner(primaryEl, pending.icon, pending.remaining ? 'つづきから　あと ' + pending.remaining + 'もん' : 'できた！ けっかを みよう',
+        pending.title + (pending.done ? '　' + pending.done + 'もん できたね' : ''), () => resumeChoice(pending,primaryEl));
     } else if (first){
       banner(primaryEl, BANNER_ICON.first, 'いっしょに ひとつ',
         first.game.name + '　1もんだけ。ヒントを つかって いいよ',
@@ -559,7 +598,7 @@ const Home = (() => {
     });
     renderEnding();
   }
-  return { build, render, endToday, choosePlay, captureMap, returnToMap };
+  return { build, render, endToday, choosePlay, captureMap, returnToMap, resumeChanged };
 })();
 
 /* ---------------------------------------------------------- LEVELS */
@@ -912,6 +951,8 @@ const Book = (() => {
   let node, body, grid, count, missing, headEl, filters, worldSelect, resultCount, extras;
   let detailNode, detailHeading, detailBody, detailSpeech = '', filter = 'all', world = 'all';
   let renderedRound = null, savedScroll = 0, selectedKey = null;
+  let detailKey = null, visitVersion = 0, returnTicket = null;
+  const journeyScreens = ['book','book-detail','transfer','sticker-world','island-jobs'];
   const filtersList = [['all','ぜんぶ'], ['owned','あつめた'], ['gold','きん'], ['recent','さいきん']];
   function build(){
     if (node) return node;
@@ -947,12 +988,16 @@ const Book = (() => {
           onclick(){ Sound.sfx.tap(); returnToBook(); }}, '←'),
         detailHeading, speakBtn(() => detailSpeech)), detailBody);
     UI.register('book-detail', detailNode);
+    new MutationObserver(() => {
+      if (returnTicket && (returnTicket.round !== Store.round() || !journeyScreens.includes(UI.currentName()))) returnTicket = null;
+    }).observe(node.parentNode, {subtree:true,attributes:true,attributeFilter:['hidden']});
     return node;
   }
   function speech(){
     return 'シールブックだよ。持っているシールが先に並んでいるよ。好きなシールを押してみよう。持っているシールは島に貼れるよ。金や場所でも選べるよ。一年生の遊びは、それぞれの準備ができたら開くよ。準備を見るボタンから、必要な遊びを選べるよ。';
   }
   function open(opts){
+    returnTicket = null; visitVersion++;
     render(); UI.show('book');
     const section = opts && {rounds:'.round-collection', review:'.review-collection, .review-gate', treasures:'.treasure-collection'}[opts.section];
     const destination = section && extras.querySelector(section);
@@ -985,6 +1030,7 @@ const Book = (() => {
     return key.startsWith('treasure:') ? key.slice(9) : null;
   }
   function renderCatalog(){
+    visitVersion++;
     clear(grid);
     filters.querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.filter === filter)));
     worldSelect.value = world;
@@ -1009,6 +1055,7 @@ const Book = (() => {
     });
   }
   function returnToBook(){
+    returnTicket = null;
     if (renderedRound !== Store.round()){ savedScroll = 0; selectedKey = null; }
     // A visit may have earned a sticker while the catalog was hidden.
     render();
@@ -1017,6 +1064,7 @@ const Book = (() => {
     if (button) requestAnimationFrame(() => button.focus({preventScroll:true}));
   }
   function showDetail(key){
+    visitVersion++; detailKey = key;
     const lesson = lessonFor(key), has = owned(key), pending = has && Store.isPending(key);
     detailHeading.textContent = stickerFor(key);
     clear(detailBody).append(PokemonStickers.artwork(key, {silhouette:!has}));
@@ -1029,7 +1077,7 @@ const Book = (() => {
       : has ? 'あつめた シールだよ。じぶんの しまに はれるよ。' : 'この シールの あそびを みてみよう。';
     copy.append(el('p', {text:status}));
     if (has) actions.append(el('button.btn.btn-accent.book-place', {type:'button', text:'しまに はる',
-      onclick(){ Sound.sfx.tap(); StickerWorld.open(key); }}));
+      onclick(event){ Sound.sfx.tap(); StickerWorld.open(key, {bookOrigin:captureReturn(event.currentTarget, key)}); }}));
     let guidanceSpeech = '';
     if (lesson && (!has || pending)){
       if (!stageOpen(lesson.game)){
@@ -1052,6 +1100,66 @@ const Book = (() => {
     detailSpeech = stickerFor(key) + '。' + (lesson ? lesson.game.name + '。' + lesson.game.levels[lesson.levelIndex].t + '。' : '')
       + status + guidanceSpeech + 'シールブックにも戻れるよ。';
     UI.show('book-detail'); Sound.say(detailSpeech, {delay:150});
+  }
+  // This ticket describes one visible Book visit, never a learning checkpoint.
+  // Keep the original card as the visual anchor when earning adds a catalog row.
+  function captureReturn(source, item){
+    const screen = UI.currentName();
+    if (screen !== 'book' && screen !== 'book-detail') return null;
+    const detail = screen === 'book-detail';
+    const key = String(item || '').replace(/^lap2:/, '');
+    const matches = button => button.dataset.bookKey === key || button.dataset.collectionKey === key
+      || Array.from(button.querySelectorAll('[data-sticker-key]')).some(art => art.dataset.stickerKey === key);
+    let control = source && body.contains(source) ? source.closest('button') : null;
+    if (control && key && !matches(control)) control = null;
+    if (!detail && !control){
+      control = Array.from(extras.querySelectorAll('button')).concat(Array.from(grid.querySelectorAll('button'))).find(matches);
+    }
+    const art = control && control.querySelector('[data-sticker-key]');
+    const frame = body.getBoundingClientRect(), scale = body.offsetHeight ? frame.height / body.offsetHeight : 1;
+    returnTicket = {round:Store.round(), version:visitVersion, filter, world, extras:extras.open,
+      scroll:detail ? savedScroll : body.scrollTop, selectedKey, detail:detail ? detailKey : null,
+      detailScroll:detailBody.scrollTop, focusKey:control && (control.dataset.bookKey || control.dataset.collectionKey
+        || art && art.dataset.stickerKey), focusScope:control && grid.contains(control) ? 'catalog' : 'extras',
+      sourceTop:control ? (control.getBoundingClientRect().top - frame.top) / scale : null};
+    return returnTicket;
+  }
+  function canReturn(ticket){
+    return !!ticket && ticket === returnTicket && ticket.round === Store.round() && ticket.version === visitVersion
+      && journeyScreens.includes(UI.currentName());
+  }
+  function restoreReturn(ticket){
+    if (!canReturn(ticket)) return false;
+    returnTicket = null;
+    filter = ticket.filter; world = ticket.world; savedScroll = ticket.scroll; selectedKey = ticket.selectedKey;
+    render(); extras.open = ticket.extras;
+    if (ticket.detail){
+      showDetail(ticket.detail); detailBody.scrollTop = ticket.detailScroll;
+      const version = visitVersion;
+      requestAnimationFrame(() => {
+        if (UI.currentName() !== 'book-detail' || Store.round() !== ticket.round || detailKey !== ticket.detail || visitVersion !== version) return;
+        detailBody.scrollTop = ticket.detailScroll;
+        const place = $('.book-place', detailBody); if (place) place.focus({preventScroll:true});
+      });
+    } else {
+      UI.show('book', {keepScroll:true,focus:false}); body.scrollTop = ticket.scroll;
+      const scope = ticket.focusScope === 'catalog' ? grid : extras;
+      const control = Array.from(scope.querySelectorAll('button')).find(button => button.dataset.bookKey === ticket.focusKey
+        || button.dataset.collectionKey === ticket.focusKey
+        || Array.from(button.querySelectorAll('[data-sticker-key]')).some(art => art.dataset.stickerKey === ticket.focusKey));
+      if (control && ticket.sourceTop !== null){
+        const frame = body.getBoundingClientRect(), scale = body.offsetHeight ? frame.height / body.offsetHeight : 1;
+        body.scrollTop += (control.getBoundingClientRect().top - frame.top) / scale - ticket.sourceTop;
+      }
+      savedScroll = body.scrollTop;
+      const version = visitVersion;
+      requestAnimationFrame(() => {
+        if (UI.currentName() !== 'book' || Store.round() !== ticket.round || visitVersion !== version) return;
+        if (control) control.focus({preventScroll:true}); else headEl.focus({preventScroll:true});
+      });
+      Sound.say('シールブックに もどったよ。つづけて えらべるよ。', {delay:100});
+    }
+    return true;
   }
   function appendLessonAction(copy, actions, lesson){
     const {game, levelIndex} = lesson;
@@ -1116,5 +1224,5 @@ const Book = (() => {
     clear(count).append(el('b', {text:got + 'まい'}), ' あつめたよ　', el('span', {text:'シールを おそう'}));
     renderCatalog(); renderExtras();
   }
-  return {build, render, open, speech, returnToBook};
+  return {build, render, open, speech, returnToBook, captureReturn, canReturn, restoreReturn};
 })();

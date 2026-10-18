@@ -25,8 +25,59 @@ const TextbookReview = (() => {
     [['add',0],['add',1]],
     [['sub',1],['sub',2]]
   ];
-  let node, body, heading, exitBtn, speech='', run=null, q=null, exitArmed=false, supportOpen=false;
-  function checkpoint(){if(run&&q)Store.saveReviewSession({at:Date.now(),run,q});}
+  let node, body, heading, exitBtn, workActions, speech='', run=null, q=null, exitArmed=false, supportOpen=false;
+  let renderedQuestion=null, renderGeneration=0, lastGesture=null, lastTouchPointer=null, runRound=null;
+  function workingView(){
+    const active=document.activeElement, key=active&&body.contains(active)&&active.getAttribute('data-focus');
+    return {v:1,scrollTop:Math.max(0,Math.round(body.scrollTop)),focusKey:key||q.workspace?.focusKey||null,supportOpen:!!(supportOpen&&q.supported&&q.showHint&&!q.done)};
+  }
+  function checkpoint(capture=true){
+    if(!run||!q||runRound!==Store.round()||UI.currentName()!=='review')return;
+    if(capture&&renderedQuestion===q)q.workspace=workingView();
+    Store.saveReviewSession({at:Date.now(),run,q});
+  }
+  function restoreView(view){
+    if(!view)return;
+    body.scrollTop=view.scrollTop;
+    const target=view.focusKey&&$$('[data-focus]',body).find(b=>b.dataset.focus===view.focusKey);
+    if(!supportOpen){
+      const fallback=q.done?$('.review-next',workActions):target&&!target.disabled?target:heading;
+      if(fallback){fallback.tabIndex=fallback===heading?-1:fallback.tabIndex;fallback.focus({preventScroll:true});}
+    }
+  }
+  function hideWorkspace(){
+    if(workActions){clear(workActions);workActions.hidden=true;}
+    if(node)node.classList.remove('review-working');
+    renderedQuestion=null;runRound=null;renderGeneration++;
+  }
+  function guardControls(){
+    const owner=q, generation=renderGeneration;
+    [...$$('button',body),...$$('button',workActions)].forEach(control=>control.addEventListener('click',event=>{
+      if(!control.isConnected||q!==owner||generation!==renderGeneration||!run||runRound!==Store.round()||UI.currentName()!=='review'){
+        event.preventDefault();event.stopImmediatePropagation();
+      }
+    },true));
+  }
+  function guardGestures(){
+    // A native second tap must not land on a replacement key, Next or Rest.
+    // Programmatic activation and separate keyboard presses keep their normal meaning.
+    document.addEventListener('pointerdown',event=>{if(event.pointerType==='touch')lastTouchPointer={at:event.timeStamp,x:event.clientX,y:event.clientY};},true);
+    document.addEventListener('click',event=>{
+      if(!event.isTrusted||event.detail===0)return;
+      const control=event.target.closest&&event.target.closest('button'), active=run&&UI.currentName()==='review';
+      const recent=lastGesture&&event.timeStamp-lastGesture.at<1200;
+      if(!active&&!recent)return;
+      const field=active&&control&&control.matches('.review-field,.review-operator');
+      const touch=event.pointerType==='touch'||event.sourceCapabilities?.firesTouchEvents||lastTouchPointer&&event.timeStamp-lastTouchPointer.at<100&&Math.hypot(event.clientX-lastTouchPointer.x,event.clientY-lastTouchPointer.y)<4;
+      const same=recent&&Math.hypot(event.clientX-lastGesture.x,event.clientY-lastGesture.y)<20;
+      if(!field&&same&&(event.detail>1||touch&&lastGesture.protected&&event.timeStamp-lastGesture.at<450)){
+        event.preventDefault();event.stopImmediatePropagation();return;
+      }
+      if(active&&control){lastGesture=field?null:{at:event.timeStamp,x:event.clientX,y:event.clientY,
+        protected:control.matches('.review-number,.review-check,.review-next,.review-pause,.review-model,.review-reveal')};}
+    },true);
+    node.addEventListener('keydown',event=>{if(run&&event.repeat&&(event.key==='Enter'||event.key===' ')){event.preventDefault();event.stopImmediatePropagation();}},true);
+  }
   function pendingSummary(){
     const saved=Store.reviewSession();if(!saved)return null;
     const r=saved.run,title=r.kind==='chapter'?chapters[r.chapter].title+'の まとめ':lessons[r.id].title;
@@ -36,13 +87,14 @@ const TextbookReview = (() => {
     const saved=Store.reviewSession();if(!saved)return false;
     const r=saved.run;
     if(r.kind==='chapter'?!chapterReady(r.chapter):!lessonOpen(r.id)){Store.clearReviewSession();return false;}
-    build();run=r;q=saved.q;exitArmed=false;supportOpen=!!q.showHint&&!q.done;UI.show('review');renderQuestion();
-    if(!supportOpen)focusHeading();
+    build();run=r;q=saved.q;runRound=Store.round();exitArmed=false;const view=q.workspace;
+    supportOpen=!!(view&&view.supportOpen&&q.supported&&q.showHint&&!q.done);UI.show('review',{focus:false});renderQuestion();
+    if(!supportOpen&&!view)focusHeading();
     say('つづきから。'+(q.done?q.result:q.prompt));return true;
   }
   function pause(){
     if(!run)return;checkpoint();const remaining=run.total-run.outcomes.length;
-    closeSupport();run=null;q=null;Home.render();UI.show('home',{replace:true});
+    closeSupport();run=null;q=null;hideWorkspace();Home.render();UI.show('home',{replace:true});
     say('ここまで、よく取り組んだね。'+(remaining?'つぎは、あと'+remaining+'問から。':'つぎは、できた！を押してシールを確かめよう。'));
   }
   function progress(){
@@ -144,22 +196,27 @@ const TextbookReview = (() => {
     body=el('div.review-body');heading=el('h2');
     exitBtn=el('button.btn.btn-ghost.btn-round',{type:'button','aria-label':'ちずに もどる',text:'←',onclick(){
       Sound.sfx.tap();
-      if(run){pause();return;}
+      if(run){checkpoint();menu();say('もくじに もどったよ。つづきから また あそべるよ。');return;}
       if($('.review-result',body)){menu();}else{Home.render();UI.show('home',{replace:true});}
     }});
-    node=el('div#review',null,el('div.topbar',null,exitBtn,heading,speakBtn(()=>speech)),body);
-    UI.register('review',node);
+    workActions=el('div.review-actions.review-work-actions',{'aria-label':'もんだいの そうさ',hidden:true});
+    node=el('div#review',null,el('div.topbar',null,exitBtn,heading,speakBtn(()=>speech)),body,workActions);
+    UI.register('review',node);guardGestures();
+    body.addEventListener('scroll',()=>checkpoint(),{passive:true});
+    body.addEventListener('focusin',()=>checkpoint());
+    window.addEventListener('pagehide',()=>{checkpoint();Store.flush();});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){checkpoint();Store.flush();}});
   }
   function open(id,chapter){
     if(!unlocked()){Book.open({section:'review'});return;}
-    build();run=null;menu();UI.show('review');
+    build();lastGesture=null;run=null;menu();UI.show('review');
     if(Number.isInteger(id)&&lessonOpen(id)) start(id);
     else if(Number.isInteger(chapter)&&chapterReady(chapter)) start(null,chapter);
     else say('準備ができた単元から、本で復習しよう。単元の中では、順番に進めるよ。');
   }
   function menu(){
     UI.clearResultActions(node);
-    closeSupport();run=null;q=null;exitArmed=false;clear(body);heading.textContent='うらの さんすう';
+    closeSupport();run=null;q=null;hideWorkspace();exitArmed=false;clear(body);heading.textContent='うらの さんすう';
     const pending=pendingSummary();
     exitBtn.setAttribute('aria-label','ちずに もどる');
     body.append(el('div.review-menu-intro',null,
@@ -194,9 +251,9 @@ const TextbookReview = (() => {
     const saved=Store.reviewSession();
     if(saved&&!replace){
       if(saved.run.outcomes.length===saved.run.total){
-        run=saved.run;q=saved.q;finish();return;
+        run=saved.run;q=saved.q;runRound=Store.round();finish();return;
       }
-      run=null;q=null;clear(body);heading.textContent='つづきが のこっているよ';
+      run=null;q=null;hideWorkspace();clear(body);heading.textContent='つづきが のこっているよ';
       const pending=pendingSummary(),nextTitle=Number.isInteger(chapter)?chapters[chapter].title+'の まとめ':lessons[id].title;
       body.append(el('div.review-start-choice',null,
         el('h3',{text:pending.title+'　あと '+pending.remaining+'もん'}),
@@ -209,7 +266,7 @@ const TextbookReview = (() => {
       say('つづきが残っているよ。前の続きから遊ぶか、新しく始めるか、選ぼう。');return;
     }
     const kind=Number.isInteger(chapter)?'chapter':check?'check':'lesson';
-    run={id,chapter,kind,step:0,total:kind==='chapter'?5:check?3:8,outcomes:[],key:kind==='chapter'?chapterKey(chapter):lessons[id].key};
+    run={id,chapter,kind,step:0,total:kind==='chapter'?5:check?3:8,outcomes:[],key:kind==='chapter'?chapterKey(chapter):lessons[id].key};runRound=Store.round();
     nextQuestion();
   }
   function nextQuestion(){
@@ -278,12 +335,12 @@ const TextbookReview = (() => {
   function blocks(n){return el('div.review-blocks',{'aria-label':n+'この ブロック'},range(0,n-1).map(()=>el('span.review-block',{'aria-hidden':'true'})));}
   function tray(n,label,kind=q.thing){return el('div.review-tray',null,el('span.review-tray-label',{text:label}),
     el('div.review-objects',{role:'img','aria-label':({animal:'くま',flower:'おはな',umbrella:'かさ'})[kind]+' '+n+'こ'},items(n,kind)));}
-  function action(fn){if(q.done) return;exitArmed=false;Sound.sfx.tap();fn();renderQuestion(true);}
-  function renderQuestion(restore=false){
+  function action(fn){if(q.done) return;exitArmed=false;q.message='';Sound.sfx.tap();fn();renderQuestion(true);}
+  function renderQuestion(){
     UI.clearResultActions(node);
-    checkpoint();
+    const view=renderedQuestion===q?workingView():q.workspace;
+    renderGeneration++;node.classList.add('review-working');workActions.hidden=false;
     exitBtn.setAttribute('aria-label','もくじに もどる');
-    const focus=restore&&document.activeElement&&document.activeElement.getAttribute('data-focus');
     // Close the old top-layer sheet before rebuilding its problem and controls.
     const oldHelp=$('.review-hint',body);if(oldHelp&&oldHelp.open)oldHelp.close();
     clear(body);const c=chapters[lessons[q.lessonId].chapter];
@@ -334,20 +391,34 @@ const TextbookReview = (() => {
       else if(q.type==='take'||q.type==='subEquation')scene.append(tray(q.a,'はじめに '+q.a+'こ'),tray(q.b,'とる '+q.b+'こ'),el('p',{text:'はじめの '+q.a+'こから、'+q.b+'こを とります。'}));
       else scene.append(el('div.review-two-scenes',null,tray(q.a,'はじめに '+q.a+'こ'),el('span.review-action-arrow',{text:q.type==='combine'?'＋':'←','aria-hidden':'true'}),tray(q.b,(q.type==='combine'?'あわせる ': 'ふえる ')+q.b+'こ')),
         el('p',{text:q.a+'こ'+(q.type==='combine'?'と '+q.b+'こを あわせます。':' あって、'+q.b+'こ ふえます。')}));
-      if(equationTypes.includes(q.type))scene.append(equation());
     }else scene.append(tray(q.a,q.type==='zeroCount'?'おさらの なか':'よく みて かぞえよう'));
     const numeric=['count','five','zeroCount','sequence','hidden','makeTen','take','difference'].includes(q.type)||equationTypes.includes(q.type);
     if(numeric){
-      if(!equationTypes.includes(q.type)) body.append(el('div.review-answer',{text:'こたえ　'+(q.value===undefined?'□':q.value)}));
-      body.append(el('div.review-keypad',{'aria-label':'０から10の こたえ'},range(0,10).map(n=>el('button.review-number',{type:'button',disabled:q.done,text:n,dataset:{number:n,focus:'number'+n},'aria-label':String(n),'aria-pressed':String(equationTypes.includes(q.type)?q.values[q.active]===n:q.value===n),onclick:()=>action(()=>{if(equationTypes.includes(q.type)){q.values[q.active]=n;if(q.active<2)q.active++;}else q.value=n;})}))));
+      const workspace=el('div.review-numeric-workspace'+(equationTypes.includes(q.type)?'.has-equation':''),null,
+        equationTypes.includes(q.type)?equation():el('div.review-answer',{text:'こたえ　'+(q.value===undefined?'□':q.value)}),
+        el('div.review-keypad',{'aria-label':'０から10の こたえ'},range(0,10).map(n=>el('button.review-number',{type:'button',disabled:q.done,text:n,dataset:{number:n,focus:'number'+n},'aria-label':String(n),'aria-pressed':String(equationTypes.includes(q.type)?q.values[q.active]===n:q.value===n),onclick:()=>{action(()=>{if(equationTypes.includes(q.type)){q.values[q.active]=n;if(q.active<2)q.active++;}else q.value=n;});showAnswerWorkspace();}}))));
+      body.append(workspace);
     }
-    const feedback=el('p.review-feedback',{role:'status','aria-live':'polite',text:q.done?q.result:q.message||''});
-    body.append(feedback,el('div.review-actions',null,q.done?button(run.step+1===run.total?'できた！':'つぎの もんだい',advance,'btn-accent.review-next'):
-      [button('👀 ヒント',hint),button('たしかめる',check,'btn-accent.review-check')],
-      button('ここで 休む',pause,'btn-ghost.review-pause')));
-    if(q.showHint&&!q.done)renderSupport();
+    const feedback=el('p.review-feedback',{'aria-hidden':'true',text:q.done?q.result:q.message||''});
+    body.append(feedback);clear(workActions);
+    workActions.append(q.done?el('span.review-help-placeholder',{'aria-hidden':'true'}):button('👀 ヒント',hint),
+      q.done?button(run.step+1===run.total?'できた！':'つぎの もんだい',advance,'btn-accent.review-next'):button('たしかめる',check,'btn-accent.review-check'),
+      button('ここで 休む',pause,'btn-ghost.review-pause'));
+    if(q.done||q.message){
+      const primary=$('.btn-accent',workActions), label=el('span',{text:primary.textContent});clear(primary);
+      let status=q.done?'できた！':q.message.includes('□')?['さいしょの かずを いれよう','つぎの かずを いれよう','こたえを いれよう'][q.active]
+        :q.message==='＋か −を えらぼう。'?'＋か −を えらぼう':q.missed?'もういちど ためそう':'こたえを えらぼう';
+      primary.append(el('span.review-work-status',{role:'status','aria-live':'polite','aria-label':q.done?q.result:q.message,text:status}),label);
+    }
+    if(q.supported&&q.showHint&&!q.done)renderSupport();
     if(q.done) $$('button',scene).forEach(b=>b.disabled=true);
-    if(!supportOpen&&focus){const b=$('[data-focus="'+focus+'"]',body);if(b&&!b.disabled)b.focus({preventScroll:true});}
+    renderedQuestion=q;guardControls();restoreView(view);checkpoint();
+  }
+  function showAnswerWorkspace(){
+    const workspace=$('.review-numeric-workspace',body);if(!workspace)return;
+    const box=workspace.getBoundingClientRect(),pane=body.getBoundingClientRect();
+    if(box.top<pane.top||box.bottom>pane.bottom)body.scrollTop+=box.top-pane.top;
+    checkpoint();
   }
   function closeSupport(){
     supportOpen=false;const help=body&&$('.review-hint',body);if(help&&help.open)help.close();
@@ -358,8 +429,9 @@ const TextbookReview = (() => {
     const equation=equationTypes.includes(q.type), numeric=!!$('.review-keypad',body);
     const region=equation?$('.review-equation',body):numeric?$('.review-answer',body):$('.review-scene',body);
     const target=equation?$('[data-focus="field'+q.active+'"]',body):numeric?$('.review-keypad button',body):$('.review-scene button:not(:disabled)',body);
-    if(region)region.scrollIntoView({block:'start'});
+    if(numeric)showAnswerWorkspace();else if(region)region.scrollIntoView({block:'start'});
     if(target)target.focus({preventScroll:true});
+    checkpoint();
   }
   function renderSupport(){
     const help=el('dialog.review-hint',{'aria-labelledby':'review-help-title','aria-describedby':'review-help-prompt'},
@@ -377,11 +449,11 @@ const TextbookReview = (() => {
     if(supportOpen){help.showModal();$(supportStage()<2?'.review-model':'.review-try',help).focus({preventScroll:true});}
   }
   function equation(){
-    return el('div.review-equation',null,el('p',{text:'□を えらんで、すうじを いれよう。＋か − も えらぼう。'}),el('div.review-equation-row',null,
-      el('div.review-operands',null,field(0),el('div.review-operators',null,['＋','−'].map(op=>el('button.review-operator',{type:'button',text:op,'aria-label':op==='＋'?'たす':'ひく','aria-pressed':String(q.op===op),dataset:{focus:'op'+op},onclick:()=>action(()=>q.op=op)}))),field(1)),
+    return el('div.review-equation.review-scene',null,el('p.review-equation-instruction',{text:'□を えらんで すうじを いれよう'}),el('div.review-equation-row',null,
+      el('div.review-operands',null,field(0),el('div.review-operators',null,['＋','−'].map(op=>el('button.review-operator',{type:'button',disabled:q.done,text:op,'aria-label':op==='＋'?'たす':'ひく','aria-pressed':String(q.op===op),dataset:{focus:'op'+op},onclick:()=>{action(()=>q.op=op);showAnswerWorkspace();}}))),field(1)),
       el('div.review-equation-result',null,el('span',{text:'＝'}),field(2))));
   }
-  function field(i){return el('button.review-field',{type:'button',text:q.values[i]===null?'□':q.values[i],'aria-label':['さいしょの かず','つぎの かず','こたえ'][i], 'aria-pressed':String(q.active===i),dataset:{focus:'field'+i},onclick:()=>action(()=>q.active=i)});}
+  function field(i){return el('button.review-field',{type:'button',disabled:q.done,text:q.values[i]===null?'□':q.values[i],'aria-label':['さいしょの かず','つぎの かず','こたえ'][i], 'aria-pressed':String(q.active===i),dataset:{focus:'field'+i},onclick:()=>{action(()=>q.active=i);showAnswerWorkspace();}});}
   function toggle(i){q.selected=q.selected.includes(i)?q.selected.filter(v=>v!==i):q.selected.concat(i);}
   function correct(){
     if(q.type==='match')return q.pairs.length===q.a&&new Set(q.pairs.map(p=>p[0])).size===q.a&&new Set(q.pairs.map(p=>p[1])).size===q.a;
@@ -398,7 +470,19 @@ const TextbookReview = (() => {
     const incomplete=equationTypes.includes(q.type)?q.values.some(v=>v===null)||!q.op:
       ['count','five','zeroCount','sequence','hidden','makeTen','take','difference'].includes(q.type)?q.value===undefined:
       q.type==='match'?q.pairs.length<q.a:['splitSmall','splitLarge'].includes(q.type)?false:q.selected.length===0;
-    if(incomplete){q.message='まだ えらんでいない ところが あるよ。';renderQuestion();$('.review-check',body).focus({preventScroll:true});say(q.message);return;}
+    if(incomplete){
+      let focus;
+      if(equationTypes.includes(q.type)){
+        const missing=q.values.findIndex(v=>v===null);
+        if(missing>=0){q.active=missing;focus='field'+missing;q.message=['さいしょの かず','つぎの かず','こたえ'][missing]+'の □を えらんだよ。すうじを いれよう。';}
+        else{focus='op＋';q.message='＋か −を えらぼう。';}
+      }else if($('.review-keypad',body)){focus='number0';q.message='こたえの すうじを えらぼう。';}
+      else if(q.type==='match'){focus='target'+range(0,q.a-1).find(i=>!q.pairs.some(p=>p[0]===i));q.message='まだ むすんでいない くまを えらんで、かさと むすぼう。';}
+      else{focus=$('.review-scene button:not(:disabled)',body)?.dataset.focus;q.message=q.type==='sumCards'?'おなじ こたえの カードを ２まい えらぼう。':q.type==='subStory'?'しきに あう おはなしを えらぼう。':'えを タップして えらぼう。';}
+      renderQuestion();const target=$$('[data-focus]',body).find(b=>b.dataset.focus===focus);
+      if($('.review-keypad',body))showAnswerWorkspace();else if(target)target.scrollIntoView({block:'nearest'});
+      if(target){target.classList.add('review-needs-input');target.focus({preventScroll:true});}checkpoint();say(q.message);return;
+    }
     if(!correct()){
       const previous=q.wrongAttempts===undefined?Number(q.missed):q.wrongAttempts;
       q.missed=true;q.wrongAttempts=Math.min(100000,previous+1);
@@ -406,13 +490,13 @@ const TextbookReview = (() => {
       if(q.wrongAttempts>=2){q.supported=true;q.showHint=true;q.supportStage=Math.max(1,supportStage());q.hintText=hintText();}
       if(q.wrongAttempts===2||q.wrongAttempts===4)supportOpen=true;
       if(q.wrongAttempts>=4&&supportStage()<2)q.message='ひとつ みてみる ボタンで、さいしょの やりかたを みられるよ。';
-      Sound.sfx.tap();renderQuestion();$('.review-check',body).focus({preventScroll:true});say(q.message+(q.wrongAttempts===2?' '+q.hintText:''));return;
+      Sound.sfx.tap();renderQuestion();if(!supportOpen)$('.review-check',workActions).focus({preventScroll:true});say(q.message+(q.wrongAttempts===2?' '+q.hintText:''));return;
     }
     closeSupport();q.done=true;
     const outcome=q.supported?'supported':q.missed?'revised':'independent';run.outcomes.push(outcome);Store.countToday(1);
     q.result=({independent:'じぶんで できたね！',revised:'もういちど ためして できたね！',supported:'ヒントで できたね！'})[outcome];
     Sound.sfx.correct();renderQuestion();say(q.result);
-    const next=$('.review-next',body);if(next)next.focus({preventScroll:true});
+    const next=$('.review-next',workActions);if(next)next.focus({preventScroll:true});
   }
   function supportStage(){return q.supportStage===undefined?(q.showHint?1:0):q.supportStage;}
   function retryText(){
@@ -538,7 +622,7 @@ const TextbookReview = (() => {
         else fresh=Store.addPending(done.key);
       }
     }
-    run=null;q=null;exitArmed=false;clear(body);heading.textContent='やりとげたね！';
+    run=null;q=null;hideWorkspace();exitArmed=false;clear(body);heading.textContent='やりとげたね！';
     exitBtn.setAttribute('aria-label','もくじに もどる');
     const has=Store.hasSticker(done.key), pending=Store.isPending(done.key), record=Store.data.reviewRecords[done.key];
     let note=confirmed?'シールに いろが ついたよ！':fresh?(pending?'かりの シールを ゲット！ べつのひに ３もん たしかめよう。':'あたらしい なかまを ゲット！'):

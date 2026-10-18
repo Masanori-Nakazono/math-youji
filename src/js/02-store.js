@@ -256,6 +256,15 @@ const Store = (() => {
     if(q.type==='group')savedQ.things=q.things;
     if(q.type==='sumCards')savedQ.cards=q.cards.map(c=>({a:c.a,b:c.b}));
     if(q.type==='subStory')savedQ.stories=q.stories.map(v=>({text:v.text,correct:v.correct}));
+    // Working position is optional and cannot grant access to answer support.
+    // Discard malformed UI data without discarding the question or its grading.
+    const w=q.workspace;
+    if(object(w)&&w.v===1&&Number.isFinite(w.scrollTop)&&w.scrollTop>=0&&w.scrollTop<=100000
+      &&(w.focusKey===null||typeof w.focusKey==='string'&&/^(?:field[0-2]|op[＋−]|number(?:10|[0-9])|(?:object|target|pair|order|card|story)[0-9]|piece[01][0-9])$/.test(w.focusKey))
+      &&typeof w.supportOpen==='boolean'){
+      savedQ.workspace={v:1,scrollTop:Math.round(w.scrollTop),focusKey:w.focusKey,
+        supportOpen:!!(w.supportOpen&&q.supported&&q.showHint&&!q.done)};
+    }
     return JSON.parse(JSON.stringify({at:s.at,run:{id:r.id??null,chapter:r.chapter??null,kind:r.kind,step:r.step,total:r.total,outcomes:r.outcomes,key:r.key},q:savedQ}));
   }
 

@@ -27,7 +27,11 @@ const viewports=[{width:320,height:568},{width:390,height:844},{width:1024,heigh
     const page=await context.newPage();page.setDefaultTimeout(8000);page.on('pageerror',e=>errors.push(e.message));await page.route('https://**',r=>r.abort());
     const quiet=()=>page.evaluate(()=>{const K=KazuApp;K.Sound.hush();K.Sound.voiceOn=false;K.Sound.sfxOn=false;K.Sound.say=(t,o)=>{if(o&&o.onend)o.onend();};});
     await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'domcontentloaded'});await quiet();
-    const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+    // The steady working position is measured after the entrance transform ends.
+    const settle=()=>page.evaluate(()=>{
+      document.getAnimations().filter(a=>a.effect&&Number.isFinite(a.effect.getTiming().iterations)).forEach(a=>a.finish());
+      return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    });
     const start=async id=>{await page.evaluate(id=>{const K=KazuApp;K.Store.reset();K.Store.setPref('transferReached',true);const random=Math.random;Math.random=()=>.5;try{K.TransferAdventure.open();document.querySelector('#transfer [data-mission="'+id+'"]').click();}finally{Math.random=random;}},id);await settle();};
     const state=()=>page.evaluate(()=>({saved:JSON.parse(JSON.stringify(KazuApp.Store.data.transferSession)),count:KazuApp.Store.todayCount(),records:JSON.stringify(KazuApp.Store.data.transferRecords),facts:JSON.stringify(KazuApp.Store.data.facts),stars:JSON.stringify(KazuApp.Store.data.stars)}));
     const plus=()=>page.locator('#transfer [aria-label="１つ うごかす"]'),minus=()=>page.locator('#transfer [aria-label="１つ もどす"]');
@@ -51,7 +55,7 @@ const viewports=[{width:320,height:568},{width:390,height:844},{width:1024,heigh
       for(const id of [4,5]){
         await start(id);const anchor=await prepareTap(plus());
         for(let n=1;n<=5;n++){
-          await page.mouse.click(anchor.x,anchor.y);await settle();assert.equal((await state()).saved.q.value,n,'consecutive physical taps reach the same plus control');const p=await position(plus());assert.ok(Math.abs(p.y-anchor.top)<=2,'plus remains under the finger while objects wrap');
+          await page.mouse.click(anchor.x,anchor.y);await settle();assert.equal((await state()).saved.q.value,n,'consecutive physical taps reach the same plus control');const p=await position(plus());assert.ok(Math.abs(p.y-anchor.top)<=2,'plus remains under the finger while objects wrap '+JSON.stringify({viewport,id,n,anchor,after:p,workspace:(await state()).saved.q.workspace}));
         }
         const back=await prepareTap(minus());for(let n=4;n>=2;n--){await page.mouse.click(back.x,back.y);await settle();assert.equal((await state()).saved.q.value,n);assert.ok(Math.abs((await position(minus())).y-back.top)<=2,'minus remains under the finger');}
         assert.equal((await state()).count,0,'draft construction is not graded');

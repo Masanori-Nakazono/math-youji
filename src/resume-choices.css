@@ -1,0 +1,12 @@
+/* Independent checkpoints stay available without competing with the latest. */
+.resume-more{margin:0 0 14px;border:2px solid var(--card-edge);border-radius:18px;background:var(--card);min-width:0;color:var(--ink)}
+.resume-more>summary{min-height:64px;padding:16px;box-sizing:border-box;font-size:18px;font-weight:800;cursor:pointer}
+.resume-options{display:grid;gap:10px;padding:0 10px 10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+.resume-choice{display:flex;align-items:center;gap:12px;width:100%;min-width:0;min-height:88px;padding:12px;border:2px solid var(--card-edge);border-radius:14px;background:var(--paper-2);color:var(--ink);text-align:left;font:inherit;cursor:pointer}
+.resume-choice>span:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}
+.resume-choice b{display:block;font-size:18px;line-height:1.5}
+.resume-icon{flex:none;font-size:36px}
+.resume-detail{display:flex;flex-wrap:wrap;gap:0 1em;margin-top:4px;font-size:16px;line-height:1.5}
+.resume-detail>span{white-space:nowrap}
+.resume-notice{padding:12px;border-radius:12px;background:var(--paper-2);color:var(--ink);font-size:17px;line-height:1.6}
+.session-previous{font-weight:700;overflow-wrap:anywhere}

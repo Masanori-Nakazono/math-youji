@@ -1,0 +1,50 @@
+/* Book answers stay beside their keys; question actions keep one fixed place. */
+#review.review-working{gap:6px;}
+#review.review-working .review-body{padding:8px 6px 12px;scrollbar-gutter:auto;overflow-anchor:none;}
+.review-work-actions{position:relative;flex:0 0 auto;display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:6px;width:min(100%,1020px);align-self:center;margin:0;padding:4px 0;}
+.review-work-actions>.btn-accent{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;height:64px;line-height:20px;padding:4px;}
+.review-work-status{display:block;font-size:12px;font-weight:800;line-height:14px;text-align:center;}
+.review-work-actions .btn{min-width:0;min-height:64px;padding:6px;font-size:16px;line-height:1.4;box-sizing:border-box;}
+.review-work-actions .review-pause{font-size:14px;}
+.review-numeric-workspace{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;margin-top:14px;padding:4px 0;}
+.review-numeric-workspace .review-keypad{width:100%;grid-template-columns:repeat(11,minmax(64px,1fr));gap:6px;margin:0;}
+.review-numeric-workspace .review-number{width:100%;height:64px;min-height:64px;font-size:30px;}
+.review-numeric-workspace .review-number:last-child{grid-column:auto;}
+.review-numeric-workspace .review-answer{margin:0;font-size:28px;line-height:1.5;}
+.review-numeric-workspace .review-equation{border:0;background:none;padding:0;width:100%;margin:0;}
+.review-equation .review-equation-instruction{margin:0 0 4px;font-size:13px;line-height:18px;}
+.review-numeric-workspace .review-equation-row{display:flex;justify-content:center;flex-wrap:wrap;gap:4px;margin:0;font-size:24px;}
+.review-numeric-workspace .review-operands,.review-numeric-workspace .review-equation-result{display:flex;align-items:center;justify-content:center;gap:4px;}
+.review-numeric-workspace .review-operators{display:flex;flex-direction:row;gap:4px;}
+.review-numeric-workspace .review-field,.review-numeric-workspace .review-operator{flex:0 0 64px;width:64px;min-width:64px;height:64px;min-height:64px;padding:4px;font-size:28px;}
+.review-needs-input{outline:4px solid var(--c-orange)!important;outline-offset:2px;}
+@media(max-width:600px){
+  .review-work-actions .btn{font-size:14px;}
+  .review-work-actions .review-pause{font-size:13px;}
+}
+@media(max-width:900px){
+  .review-numeric-workspace .review-keypad{width:268px;max-width:100%;grid-template-columns:repeat(4,minmax(64px,1fr));gap:4px;}
+  .review-numeric-workspace .review-equation-row{flex-direction:column;align-items:center;}
+}
+@media(max-height:450px) and (min-width:500px){
+  #review.review-working .review-numeric-workspace{display:grid;grid-template-columns:minmax(0,1fr) 268px;align-items:center;gap:8px;max-width:650px;padding:0;}
+  #review.review-working .review-numeric-workspace .review-keypad{width:268px;grid-template-columns:repeat(4,64px);gap:4px;}
+  #review.review-working .review-equation-instruction{display:none;}
+  #review.review-working .review-equation-row{display:flex;flex-direction:column;gap:4px;}
+  #review.review-working .review-operands{display:grid;grid-template-columns:64px 132px;grid-template-rows:64px 64px;gap:4px;}
+  #review.review-working .review-operands>.review-field:last-child{grid-column:2;justify-self:center;}
+  #review.review-working .review-equation-result{height:64px;}
+}
+@media(max-height:450px) and (min-width:500px){
+  #stage:has(#review.review-working:not([hidden])){padding:4px 8px;}
+  #review.review-working{position:relative;gap:2px;}
+  #review.review-working>.topbar{height:48px;min-height:48px;}
+  #review.review-working>.topbar>.btn-round{width:44px;min-width:44px;height:44px;min-height:44px;padding:4px;}
+  #review.review-working>.topbar h2{font-size:15px;align-self:flex-start;margin-top:2px;line-height:20px;}
+  #review.review-working>.round-status{position:absolute;top:25px;left:52px;right:52px;min-height:18px;padding:0;border:0;background:none;font-size:10px;line-height:18px;pointer-events:none;}
+  #review.review-working>.round-status>span{display:none;}
+  #review.review-working .review-body{padding:0;}
+  #review.review-working .review-work-actions{padding:0;gap:4px;}
+  #review.review-working .review-work-actions .btn{min-height:56px;height:56px;padding:4px;font-size:14px;}
+  #review.review-working .review-numeric-workspace{margin-top:8px;}
+}

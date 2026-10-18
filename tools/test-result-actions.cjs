@@ -17,7 +17,11 @@ const screens={regular:'#result',short:'#first-finish',book:'#review',transfer:'
   try{
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
     browser=await chromium.launch(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{});
-    const settle=page=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+    // Measure the final target size, not the screen entrance's temporary scale.
+    const settle=page=>page.evaluate(()=>{
+      document.getAnimations().filter(a=>a.effect&&Number.isFinite(a.effect.getTiming().iterations)).forEach(a=>a.finish());
+      return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    });
     const learning=page=>page.evaluate(()=>{const S=KazuApp.Store;return JSON.parse(JSON.stringify({today:S.todayCount(),
       stars:S.data.stars,plays:S.data.plays,stickers:S.data.stickers,pending:S.data.pending,daily:S.data.daily,
       shortCourses:S.data.shortCourses,milestones:S.data.milestones,reviewRecords:S.data.reviewRecords,transferRecords:S.data.transferRecords}));});

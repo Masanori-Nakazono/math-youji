@@ -75,6 +75,15 @@ jobs:
           TRANSFER_WORKSPACE_HTML=dist/kazu-no-bouken.html node tools/test-transfer-workspace.cjs
           TRANSFER_WORKSPACE_HTML=dist/artifact.html node tools/test-transfer-workspace.cjs
 
+      - name: Verify chosen resumptions, stable review answers and collection journeys
+        run: |
+          RESUME_CHOICES_HTML=dist/kazu-no-bouken.html node tools/test-resume-choices.cjs
+          RESUME_CHOICES_HTML=dist/artifact.html node tools/test-resume-choices.cjs
+          REVIEW_WORKSPACE_HTML=dist/kazu-no-bouken.html node tools/test-review-workspace.cjs
+          REVIEW_WORKSPACE_HTML=dist/artifact.html node tools/test-review-workspace.cjs
+          COLLECTION_JOURNEY_HTML=dist/kazu-no-bouken.html node tools/test-collection-journey.cjs
+          COLLECTION_JOURNEY_HTML=dist/artifact.html node tools/test-collection-journey.cjs
+
       - name: Verify one-question learning and later-day mastery checks
         run: |
           node tools/test-short-store.cjs

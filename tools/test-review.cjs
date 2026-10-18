@@ -88,12 +88,12 @@ const server=http.createServer((req,res)=>{
       click('.review-pause');
       check('resuming restores the same original question',R.resume()&&JSON.stringify(R.inspect().q,Object.keys(exact).sort())===JSON.stringify(exact,Object.keys(exact).sort()));
       text('👀 ヒント');click('.review-try');click('.topbar button');const paused=S.exportText();S.reset();S.importText(paused,'replace');
-      check('backup replacement restores hint and unfinished lesson',R.resume()&&R.inspect().q.supported&&R.inspect().q.showHint);
-      text('ひとつ みてみる');text('こたえを みる');click('.review-try');click('.review-check');const one=S.todayCount();click('.review-pause');R.resume();
+      check('backup replacement restores supported work while keeping closed help closed',R.resume()&&R.inspect().q.supported&&R.inspect().q.showHint&&!document.querySelector('.review-hint[open]'));
+      text('👀 ヒント');text('ひとつ みてみる');text('こたえを みる');click('.review-try');click('.review-check');const one=S.todayCount();click('.review-pause');R.resume();
       check('resuming an answered question does not count it twice',R.inspect().q.done&&S.todayCount()===one&&R.pendingSummary().remaining===7);
       click('.review-pause');R.open(4);click('.review-start-new');
       check('only an explicit new choice replaces a saved lesson without removing answered effort',R.inspect().run.id===4&&S.reviewSession().run.id===4&&S.todayCount()===one);
-      S.importText(paused,'replace');R.resume();text('ひとつ みてみる');text('こたえを みる');click('.review-try');click('.review-check');
+      S.importText(paused,'replace');R.resume();text('👀 ヒント');text('ひとつ みてみる');text('こたえを みる');click('.review-try');click('.review-check');
       const damaged=JSON.parse(S.exportText());damaged.data.reviewSession.run.outcomes=[];
       check('malformed resumed outcomes are rejected without losing history',!S.importText(JSON.stringify(damaged),'replace').ok&&S.todayCount()===one);
       S.clearReviewSession();S.importText(paused);check('merging an old backup cannot resurrect a finished or dismissed visit',!R.pendingSummary());
@@ -103,7 +103,7 @@ const server=http.createServer((req,res)=>{
       R.open(4);check('choosing a new lesson first completes the old final cursor and awards its earned sticker',!!document.querySelector('.review-result')&&S.hasConfirmed('r2:0')&&S.data.reviewRecords['r2:0'].independent===8&&!R.pendingSummary()&&S.todayCount()===8);
       R.open(4);check('after receiving the result a new lesson can start normally',R.inspect().run.id===4);
       S.importText(beforeResume,'replace');
-      R.open(0);click('.topbar button');check('back saves an unfinished lesson and returns home',K.UI.currentName()==='home'&&!!R.pendingSummary());
+      R.open(0);click('.topbar button');check('back saves an unfinished lesson and returns to contents',K.UI.currentName()==='review'&&!!document.querySelector('.review-menu-intro')&&!!R.pendingSummary());
       check('pausing awards no sticker or completed review record',!S.hasSticker('r2:0')&&!S.data.reviewRecords['r2:0']);
       R.open(0);click('.review-start-new');finish(8);check('all-supported completion earns no sticker but keeps the observations',!S.hasSticker('r2:0')&&S.data.reviewRecords['r2:0'].supported===8);
       R.open(0);finish(4);check('4/8 clean answers award a provisional sticker',S.isPending('r2:0')&&S.data.reviewRecords['r2:0'].independent===4);R.open();check('provisional menu cards wait for color',!!document.querySelector('.review-lesson-slot.pending'));check('summary stays locked while a chapter has provisional lessons',!R.chapterReady(0));
