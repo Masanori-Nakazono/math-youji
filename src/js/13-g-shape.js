@@ -50,7 +50,6 @@ function findAllShapes(api){
       if (c.hit){
         b.classList.add('picked'); found++; Sound.sfx.count(found - 1); drawTally();
         if (found === nTarget){ $$('.shapebtn.picked', grid).forEach(x => x.classList.add('correct')); api.correct(); }
-        api.saveDraft();
       } else {
         b.classList.add('wrong'); api.later(() => b.classList.remove('wrong'), 460); api.wrong(b);
       }
@@ -60,13 +59,6 @@ function findAllShapes(api){
   });
   drawTally();
   api.field.append(grid, tally, el('div.hintline', { text: 'むきが かわっても おなじ かたちだよ' }));
-  api.persist({ id:'foundShapes', read(){ return {picked:$$('.shapebtn', grid).flatMap((b, i) => b.classList.contains('picked') ? [i] : [])}; }, restore(d){
-    const buttons = $$('.shapebtn', grid);
-    if (!d || !draftIndices(d.picked, buttons.length) || d.picked.some(i => buttons[i].dataset.hit !== '1')) return false;
-    d.picked.forEach(i => buttons[i].classList.add('picked')); found = d.picked.length; drawTally();
-    if (found === nTarget) draftFinish(api, () => api.correct());
-    return true;
-  } });
   api.onShow(() => {
     $$('.shapebtn', grid).forEach(b => {
       if (b.dataset.hit === '1' && !b.classList.contains('picked')) b.click();
@@ -260,7 +252,6 @@ function shapePuzzle(api){
   const colors = shuffle(SHAPE_COLORS);
   let filled = 0;
   const dd = UI.makeDragDrop({
-    onChange(){ api.saveDraft(); },
     /* The piece in the child's hand is drawn at exactly the size of the hole it is
        going into. The tray tile has to be a tap-sized box whatever the piece, so
        tile size can never mean hole size; the thing being dragged can. */
@@ -293,7 +284,6 @@ function shapePuzzle(api){
         poly.setAttribute('stroke-width', '1.6');
         poly.classList.remove('glow', 'slot-focus');
         poly.dataset.filled = slot.dataset.filled = '1';
-        slot.dataset.tile = item.dataset.idx;
         slot.disabled = true;
         item.classList.add('used');
         filled++;
@@ -330,29 +320,6 @@ function shapePuzzle(api){
     tray.append(t);
   });
   api.field.append(el('div.hintline', { text: 'ゆびで はめて みよう' }));
-  const restorePuzzleSelection = d => {
-    dd.clearSel();
-    if (d && d.selected !== null){ const tile = $$('.shapetile', tray).find(t => Number(t.dataset.idx) === d.selected); if (tile && !tile.classList.contains('used')) dd.select(tile); }
-  };
-  api.persist({ id:'shapePuzzle', read(){ return {
-    placed:slots.flatMap((slot, i) => slot.dataset.filled === '1' ? [{slot:i, tile:Number(slot.dataset.tile)}] : []),
-    selected:dd.selected && !dd.selected.classList.contains('used') ? Number(dd.selected.dataset.idx) : null
-  }; }, restore(d){
-    if (!d || !Array.isArray(d.placed) || d.placed.length > slots.length
-        || !draftIndices(d.placed.map(p => p && p.slot), slots.length) || !draftIndices(d.placed.map(p => p && p.tile), slots.length)
-        || d.placed.some(p => slots[p.slot].dataset.sig !== signature(pz.pieces[p.tile].pts))
-        || !(d.selected === null || Number.isInteger(d.selected) && d.selected >= 0 && d.selected < slots.length && !d.placed.some(p => p.tile === d.selected))) return false;
-    const tiles = $$('.shapetile', tray);
-    d.placed.forEach(p => {
-      const slot = slots[p.slot], item = tiles.find(t => Number(t.dataset.idx) === p.tile), poly = slot._shape;
-      poly.setAttribute('fill', item.dataset.color); poly.setAttribute('stroke', edge(item.dataset.color)); poly.setAttribute('stroke-dasharray', '');
-      poly.dataset.filled = slot.dataset.filled = '1'; slot.dataset.tile = String(p.tile); slot.disabled = true;
-      item.classList.add('used'); item.disabled = true;
-    });
-    filled = d.placed.length; restorePuzzleSelection(d);
-    if (filled === slots.length) draftFinish(api, () => api.correct());
-    return true;
-  }, afterHelp:restorePuzzleSelection });
   /* Glowing the one hole a piece fits finished the puzzle for the child. The piece is
      picked up and every open hole with as many corners is marked: which way round it
      goes is still theirs to see (ちょうちょ's four triangles all light up). */
@@ -448,18 +415,15 @@ function sortGame(api, catset, nBins, byColor){
     else sample(catset[k].items, perBin).forEach(e => picks.push({ e, k }));
   });
   let placed = 0;
-  const placedOrder = [];
   const totalItems = picks.length;
 
   const dd = UI.makeDragDrop({
-    onChange(){ api.saveDraft(); },
     onDrop(item, target){
       if (api.locked) return;
       if (item.dataset.cat === target.dataset.cat){
         const copy = item.firstElementChild ? item.firstElementChild.cloneNode(true) : el('span', { text: item.textContent });
         $('.hold', target).append(el('span.item', null, copy));
         item.classList.add('gone');
-        placedOrder.push($$('.tile', tray).indexOf(item));
         placed++;
         Sound.sfx.place();
         if (placed === totalItems) api.later(() => api.correct(), 300);
@@ -492,18 +456,6 @@ function sortGame(api, catset, nBins, byColor){
     tray.append(t);
   });
   api.field.append(el('div.hintline', { text: 'ゆびで はこに いれてね' }));
-  const restoreSortSelection = d => { dd.clearSel(); if (d && d.selected !== null){ const tile = $$('.tile', tray)[d.selected]; if (tile && !tile.classList.contains('gone')) dd.select(tile); } };
-  api.persist({ id:'sorting', read(){ return {order:placedOrder.slice(), selected:dd.selected && !dd.selected.classList.contains('gone') ? $$('.tile', tray).indexOf(dd.selected) : null}; }, restore(d){
-    const tiles = $$('.tile', tray);
-    if (!d || !draftIndices(d.order, tiles.length) || !(d.selected === null || Number.isInteger(d.selected) && d.selected >= 0 && d.selected < tiles.length && !d.order.includes(d.selected))) return false;
-    d.order.forEach(i => {
-      const tile = tiles[i], copy = tile.firstElementChild ? tile.firstElementChild.cloneNode(true) : el('span', {text:tile.textContent});
-      $('.hold', binMap[tile.dataset.cat]).append(el('span.item', null, copy)); tile.classList.add('gone'); tile.disabled = true;
-    });
-    placedOrder.push(...d.order); placed = d.order.length; restoreSortSelection(d);
-    if (placed === totalItems) draftFinish(api, () => api.correct());
-    return true;
-  }, afterHelp:restoreSortSelection });
   // the piece in hand and the pictures on the boxes — not a glow on the right box
   api.coach({
     text: byColor ? 'いろを よく みて はこを えらぼう' : 'なんの なかまかな？ はこの えを みてね',
@@ -554,7 +506,7 @@ function patternQuestion(api, unitKind, blanks){
   holes.sort((a, b) => a - b);
   api.item('pat:' + unitKind + ':' + blanks, unitKind + ' の くりかえし');
   api.setPrompt('つづきは どれ？ きまりを みつけよう', '続きは、どれ？きまりを見つけよう。');
-  const train = el('div.train.pattern-train');
+  const train = el('div.train');
   const cars = seq.map((t, i) => {
     const isHole = holes.indexOf(i) >= 0;
     const c = el('div.car' + (isHole ? '.blank' : ''), { text: isHole ? '' : t });
@@ -566,7 +518,6 @@ function patternQuestion(api, unitKind, blanks){
   let hi = 0;
   function askHole(){
     if (hi >= holes.length) return;
-    api.clearHelp();
     const at = holes[hi];
     cars.forEach(c => c.classList.remove('now'));
     cars[at].classList.add('blank', 'now');
@@ -581,33 +532,25 @@ function patternQuestion(api, unitKind, blanks){
         cars[at].classList.add('filled');
         Sound.sfx.place();
         hi++;
-        api.saveDraft();
         if (hi < holes.length){ api.later(askHole, 560); return false; }
         return true;
       }
     });
-    api.coach({
-      text: unit.length + 'つずつ おなじ ならびが くりかえして いるよ',
-      say: `${tsuKana(unit.length)}ずつ、同じ並びが、繰り返しているよ。`,
-      tool(){ cars.forEach((c, i) => { if (Math.floor(i / unit.length) % 2 === 0) c.classList.add('unitmark'); }); },
-      // the hand reads the train aloud in its rhythm and stops at the gap
-      walk(){
-        const at = holes[hi];
-        const steps = [];
-        for (let i = 0; i < at; i++) steps.push({ at: cars[i], say: TOKEN_NAME[seq[i]] || '', ms: 560 });
-        steps.push({ at: cars[at], say: 'つぎは？', ms: 1500 });
-        return steps;
-      }
-    });
   }
   askHole();
-  api.persist({ id:'patternHoles', read(){ return {hi}; }, restore(d){
-    if (!d || !Number.isInteger(d.hi) || d.hi < 0 || d.hi > holes.length) return false;
-    hi = d.hi;
-    holes.slice(0, hi).forEach(at => { cars[at].textContent = seq[at]; cars[at].classList.remove('blank', 'now'); cars[at].classList.add('filled'); });
-    if (hi < holes.length) askHole(); else { clear(api.choices); draftFinish(api, () => api.correct()); }
-    return true;
-  } });
+  api.coach({
+    text: unit.length + 'つずつ おなじ ならびが くりかえして いるよ',
+    say: `${tsuKana(unit.length)}ずつ、同じ並びが、繰り返しているよ。`,
+    tool(){ cars.forEach((c, i) => { if (Math.floor(i / unit.length) % 2 === 0) c.classList.add('unitmark'); }); },
+    // the hand reads the train aloud in its rhythm and stops at the gap
+    walk(){
+      const at = holes[hi];
+      const steps = [];
+      for (let i = 0; i < at; i++) steps.push({ at: cars[i], say: TOKEN_NAME[seq[i]] || '', ms: 560 });
+      steps.push({ at: cars[at], say: 'つぎは？', ms: 1500 });
+      return steps;
+    }
+  });
 }
 
 /** Let the child author the repeating unit, then show the rule they created. */
@@ -616,7 +559,7 @@ function createPattern(api){
   api.item('create:AB', 'じぶんで 2つの くりかえしを つくる');
   api.setPrompt('すきな 2つを えらんで、きまりを つくろう',
                 '好きな二つを選んで、きまりを作ろう。');
-  const train = el('div.train.pattern-train');
+  const train = el('div.train');
   for (let i = 0; i < 8; i++) train.append(el('div.car.empty'));
   api.field.append(train);
   opts.forEach(v => {
@@ -625,7 +568,6 @@ function createPattern(api){
       if (api.locked) return;
       if (chosen.indexOf(v) >= 0) return;     // a child's double tap is one choice
       chosen.push(v);
-      api.saveDraft();
       const cars = $$('.car', train);
       cars.forEach((c, i) => {
         if (i >= chosen.length && chosen.length < 2) return;
@@ -633,8 +575,6 @@ function createPattern(api){
         c.textContent = chosen[i % chosen.length];
       });
       b.classList.add('picked');
-      api.clearHelp();
-      api.coach(patternCoach);
       if (chosen.length === 2){
         $$('.choice.picked', api.choices).forEach(x => x.classList.add('correct'));
         api.setPrompt('できた きまりを こえに だして いってみよう',
@@ -644,21 +584,12 @@ function createPattern(api){
     });
     api.choices.append(b);
   });
-  const patternCoach = {
+  api.coach({
     text: () => chosen.length ? chosen[0] + ' の つぎに くるものを えらぼう' : 'すきな えを 2つ えらぼう',
     say: () => chosen.length ? '次に来るものを、選ぼう。' : '好きな絵を、二つ選ぼう。',
     tool(){ Coach.pulse($$('.choice:not(.picked)', api.choices)); },
-    walk(){ return $$('.choice:not(.picked)', api.choices).slice(0, 2 - chosen.length).map(b => ({ at: b, ms: 900 })); }
-  };
-  api.coach(patternCoach);
-  api.persist({ id:'patternCreation', read(){ return {chosen:chosen.slice()}; }, restore(d){
-    if (!d || !Array.isArray(d.chosen) || d.chosen.length > 2 || new Set(d.chosen).size !== d.chosen.length || d.chosen.some(v => !opts.includes(v))) return false;
-    chosen.push(...d.chosen);
-    $$('.car', train).forEach((c, i) => { if (chosen.length && (chosen.length === 2 || i < chosen.length)){ c.classList.remove('empty'); c.textContent = chosen[i % chosen.length]; } });
-    $$('.choice', api.choices).forEach(b => { if (chosen.includes(b.textContent)) b.classList.add('picked'); });
-    if (chosen.length === 2){ clear(api.choices); api.setPrompt('できた きまりを こえに だして いってみよう', 'できた決まりを、声に出して言ってみよう。'); draftFinish(api, () => api.correct({quiet:true, delay:1300})); }
-    api.clearHelp(); api.coach(patternCoach); return true;
-  } });
+    walk(){ return $$('.choice:not(.picked)', api.choices).slice(0, 2).map(b => ({ at: b, ms: 900 })); }
+  });
   api.onShow(() => {
     $$('.choice:not(.picked)', api.choices).slice(0, 2 - chosen.length).forEach(b => b.click());
   });
@@ -837,7 +768,7 @@ function setClock(api, hand){
       v = Math.round(ang / (Math.PI * 2) * 12);
       if (v === 0) v = 12;
     }
-    if (v !== cur){ cur = v; Sound.sfx.tap(); paint(); api.saveDraft(); }
+    if (v !== cur){ cur = v; Sound.sfx.tap(); paint(); }
   }
   clock.addEventListener('pointerdown', e => {
     if (api.locked) return;
@@ -852,7 +783,7 @@ function setClock(api, hand){
   clock.addEventListener('pointercancel', release);
   paint();
 
-  const check = el('button.btn.btn-accent.answer-submit', { type: 'button', text: 'これで いい？',
+  const check = el('button.btn.btn-accent', { text: 'これで いい？',
     onclick(){
       if (api.locked) return;
       if (cur === target) api.correct(); else { api.wrong(check); }
@@ -862,28 +793,24 @@ function setClock(api, hand){
     ? [
         el('button.btn.clock-adjust', {
           type: 'button', text: 'ながい はりを 12に',
-          onclick(){ if (!api.locked){ cur = 0; Sound.sfx.tap(); paint(); api.saveDraft(); } }
+          onclick(){ if (!api.locked){ cur = 0; Sound.sfx.tap(); paint(); } }
         }),
         el('button.btn.clock-adjust', {
           type: 'button', text: 'ながい はりを 6に',
-          onclick(){ if (!api.locked){ cur = 30; Sound.sfx.tap(); paint(); api.saveDraft(); } }
+          onclick(){ if (!api.locked){ cur = 30; Sound.sfx.tap(); paint(); } }
         })
       ]
     : [
         el('button.btn.clock-adjust', {
           type: 'button', text: '1じ もどす',
-          onclick(){ if (!api.locked){ cur = cur === 1 ? 12 : cur - 1; Sound.sfx.tap(); paint(); api.saveDraft(); } }
+          onclick(){ if (!api.locked){ cur = cur === 1 ? 12 : cur - 1; Sound.sfx.tap(); paint(); } }
         }),
         el('button.btn.clock-adjust', {
           type: 'button', text: '1じ すすめる',
-          onclick(){ if (!api.locked){ cur = cur === 12 ? 1 : cur + 1; Sound.sfx.tap(); paint(); api.saveDraft(); } }
+          onclick(){ if (!api.locked){ cur = cur === 12 ? 1 : cur + 1; Sound.sfx.tap(); paint(); } }
         })
       ];
   api.choices.append(...controls, check);
-  api.persist({ id:'clockHand', read(){ return {cur}; }, restore(d){
-    if (!d || !Number.isInteger(d.cur) || (minuteMode ? d.cur < 0 || d.cur > 55 || d.cur % 5 !== 0 : d.cur < 1 || d.cur > 12)) return false;
-    cur = d.cur; paint(); return true;
-  } });
   api.coach({
     text: minuteMode ? '「はん」の とき、ながい はりは 6を さすよ' : 'みじかい はりが ' + targetHour + ' を さすように まわそう',
     say: minuteMode ? 'はん、の時、長い針は6を指すよ。' : `短い針が、${numKana(targetHour)}を指すように、回そう。`,
@@ -899,7 +826,7 @@ function setClock(api, hand){
       for (let g = 0; g < 13 && v !== goal; g++){
         v = minuteMode ? (v + 5) % 60 : v % 12 + 1;
         const vv = v;
-        steps.push({ at: minuteMode ? minuteHand : hourHand, act(){ cur = vv; Sound.sfx.tap(); paint(); api.saveDraft(); }, ms: 380 });
+        steps.push({ at: minuteMode ? minuteHand : hourHand, act(){ cur = vv; Sound.sfx.tap(); paint(); }, ms: 380 });
       }
       steps.push({ at: check, say: 'できたら、これでいい、を押そう。', ms: 1900 });
       return steps;

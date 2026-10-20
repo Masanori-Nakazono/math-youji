@@ -212,27 +212,6 @@ Games.add({
    ============================================================ */
 const CRITTERS = ['🐰','🐻','🦊','🐯','🐨','🐸','🐷','🐮','🐼','🐵','🦁','🐔','🐧','🦉'];
 
-// A long line still reads from the same end on a phone. The complete picture
-// stays above, and an equivalent set of roomy animal buttons appears below it.
-// CSS switches between these and direct picture taps, including after rotation.
-function ordinalAnswers(api, critters, choose){
-  const answers = el('div.ordinal-answers', { 'aria-label': 'どうぶつを えらぶ' });
-  const buttons = critters.map((c, i) => {
-    const b = el('button.choice.pic.ordinal-choice', { type: 'button', text: c,
-      'aria-label': c + 'を えらぶ', onclick(){ choose(i); } });
-    answers.append(b);
-    return b;
-  });
-  api.choices.append(answers);
-  return buttons;
-}
-
-function ordinalBoard(api, queue, marker, fromLeft){
-  const board = el('div.ordinal-board', { style: { '--on': String(queue.children.length) } },
-    el('div.ordinal-direction' + (fromLeft ? '' : '.from-right'), null, marker), queue);
-  api.field.append(board);
-}
-
 function ordinalRow(api, n, dir, target){
   const critters = sample(CRITTERS, n);
   const label = { front: 'まえ', back: 'うしろ', left: 'ひだり', right: 'みぎ' }[dir];
@@ -241,13 +220,12 @@ function ordinalRow(api, n, dir, target){
                 `${label}から${banmeKana(target)}の動物をタップ。`);
   const idxWanted = (dir === 'front' || dir === 'left') ? target - 1 : n - target;
   const q = el('div.queue');
-  let answerButtons;
   const mirror = n - 1 - idxWanted;      // the same 「◯ばんめ」 counted from the other end
   critters.forEach((c, i) => {
     const item = el('div.qi', { text: c });
     tappable(item, () => {
       if (api.locked) return;
-      if (i === idxWanted){ item.classList.add('correct'); if (answerButtons) answerButtons[i].classList.add('correct'); api.correct(); }
+      if (i === idxWanted){ item.classList.add('correct'); api.correct(); }
       else {
         item.classList.add('wrong');
         api.later(() => item.classList.remove('wrong'), 460);
@@ -262,8 +240,8 @@ function ordinalRow(api, n, dir, target){
   const marker = fromLeft
     ? el('div.dirmark', null, label + 'から', arrowSVG('right'))
     : el('div.dirmark', null, arrowSVG('left'), label + 'から');
-  ordinalBoard(api, q, marker, fromLeft);
-  answerButtons = ordinalAnswers(api, critters, i => $$('.qi', q)[i].click());
+  api.field.append(el('div.row', { style: { flexWrap: 'nowrap', gap: 'calc(var(--u)*.6)', maxWidth: '100%' } },
+    fromLeft ? marker : null, q, fromLeft ? null : marker));
   /* It used to number every animal from the end being counted from, which put the
      asked-for number on the right animal. Now only the start is marked; the counting
      is the child's, and the hand does it only when asked to show. */
@@ -291,27 +269,24 @@ function ordinalVsCount(api, n){
     countMode ? `前から${koKana(k)}、タップしてね。` : `前から${banmeKana(k)}だけタップしてね。`);
   const q = el('div.queue');
   const marked = new Set();
-  let answerButtons;
   critters.forEach((c, i) => {
     const item = el('div.qi', { text: c });
     tappable(item, () => {
       if (api.locked) return;
       if (countMode){
-        if (marked.has(i)){ marked.delete(i); item.classList.remove('marked'); if (answerButtons) answerButtons[i].classList.remove('picked'); Sound.sfx.tap(); api.saveDraft(); return; }
-        marked.add(i); item.classList.add('marked'); if (answerButtons) answerButtons[i].classList.add('picked'); Sound.sfx.count(marked.size - 1);
+        if (marked.has(i)){ marked.delete(i); item.classList.remove('marked'); Sound.sfx.tap(); return; }
+        marked.add(i); item.classList.add('marked'); Sound.sfx.count(marked.size - 1);
         if (marked.size === k){
           const ok = Array.from(marked).every(v => v < k);
-          if (ok){ $$('.qi', q).forEach((x, j) => { if (j < k){ x.classList.add('correct'); if (answerButtons) answerButtons[j].classList.add('correct'); } }); api.correct(); }
+          if (ok){ $$('.qi', q).forEach((x, j) => { if (j < k) x.classList.add('correct'); }); api.correct(); }
           else {
             api.wrong();
             marked.forEach(v => $$('.qi', q)[v].classList.remove('marked'));
-            if (answerButtons) answerButtons.forEach(b => b.classList.remove('picked'));
             marked.clear();
           }
         }
-        api.saveDraft();
       } else {
-        if (i === k - 1){ item.classList.add('correct'); if (answerButtons) answerButtons[i].classList.add('correct'); api.correct(); }
+        if (i === k - 1){ item.classList.add('correct'); api.correct(); }
         else {
           item.classList.add('wrong');
           api.later(() => item.classList.remove('wrong'), 460);
@@ -326,13 +301,8 @@ function ordinalVsCount(api, n){
     if (!countMode){ if (items[k - 1]) items[k - 1].click(); return; }
     items.forEach((x, i) => { if (i < k && !x.classList.contains('marked')) x.click(); });
   });
-  ordinalBoard(api, q, el('div.dirmark', null, 'まえから', arrowSVG('right')), true);
-  answerButtons = ordinalAnswers(api, critters, i => $$('.qi', q)[i].click());
-  if (countMode) api.persist({ id:'ordinalSet', read(){ return {marked:Array.from(marked)}; }, restore(d){
-    if (!d || !draftIndices(d.marked, n) || d.marked.length >= k) return false;
-    d.marked.forEach(i => { marked.add(i); $$('.qi', q)[i].classList.add('marked'); if (answerButtons) answerButtons[i].classList.add('picked'); });
-    return true;
-  } });
+  api.field.append(el('div.row', { style: { flexWrap: 'nowrap', gap: 'calc(var(--u)*.6)', maxWidth: '100%' } },
+    el('div.dirmark', null, 'まえ', arrowSVG('right')), q));
   api.coach({
     text: countMode ? `「${k}こ」は まえから ${k}ひき ぜんぶ` : `「${k}ばんめ」は その 1ぴき だけ`,
     say: countMode ? `${koKana(k)}は、前から${k}匹、全部だよ。` : `${banmeKana(k)}は、その一匹だけだよ。`,
@@ -631,8 +601,6 @@ function orderBySize(api){
         row.prepend(el('div.ordno', { text: String(step) }));
         Sound.sfx.count(step - 1);
         if (step === n){ $$('.mrow', wrap).forEach(r => r.classList.add('correct')); api.correct(); }
-        else { api.clearHelp(); api.coach(sizeCoach); }
-        api.saveDraft();
       } else {
         row.classList.add('wrong');
         api.later(() => row.classList.remove('wrong'), 460);
@@ -643,7 +611,7 @@ function orderBySize(api){
   });
   api.field.append(wrap);
   // lighting the next bar picked it for the child; the marks let them pick it
-  const sizeCoach = {
+  api.coach({
     text: asc ? 'のこりの なかで いちばん みじかいのは？' : 'のこりの なかで いちばん ながいのは？',
     say: asc ? '残りの中で、一番短いのは、どれ？' : '残りの中で、一番長いのは、どれ？',
     tool(){ Coach.ticks(wrap); },
@@ -654,17 +622,7 @@ function orderBySize(api){
       return r ? [{ at: () => $('.stickbar', r), act(){ r.classList.add('nexthint'); },
                     say: asc ? 'これが、次に短い。' : 'これが、次に長い。', ms: 1700 }] : [];
     }
-  };
-  api.coach(sizeCoach);
-  api.persist({ id:'sizeOrder', read(){ return {step}; }, restore(d){
-    if (!d || !Number.isInteger(d.step) || d.step < 0 || d.step >= n) return false;
-    step = d.step;
-    $$('.mrow', wrap).forEach(row => {
-      const index = wanted.indexOf(parseFloat($('.stickbar', row).style.width));
-      if (index < step){ row.classList.add('picked'); row.prepend(el('div.ordno', {text:String(index + 1)})); }
-    });
-    api.clearHelp(); api.coach(sizeCoach); return true;
-  } });
+  });
   api.onShow(() => {
     wanted.slice(step).forEach(len => {
       const r = $$('.mrow', wrap).find(x => !x.classList.contains('picked')

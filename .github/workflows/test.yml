@@ -49,87 +49,6 @@ jobs:
           node tools/test-motivation.cjs
           node tools/test-review-fixes.cjs
 
-      - name: Verify per-question counts and saved learning sessions
-        run: |
-          node tools/test-session-store.cjs
-          node tools/test-session-browser.cjs
-
-      - name: Verify work in progress survives rest and reload
-        run: |
-          QUESTION_DRAFT_HTML=dist/kazu-no-bouken.html node tools/test-question-drafts.cjs
-          CONSTRUCTION_DRAFT_HTML=dist/kazu-no-bouken.html node tools/test-construction-drafts.cjs
-          QUESTION_DRAFT_HTML=dist/artifact.html node tools/test-question-drafts.cjs
-          CONSTRUCTION_DRAFT_HTML=dist/artifact.html node tools/test-construction-drafts.cjs
-
-      - name: Verify the progress album and return navigation
-        run: |
-          node tools/test-progress-album.cjs
-          NAVIGATION_RETURN_HTML=dist/kazu-no-bouken.html node tools/test-navigation-return.cjs
-          NAVIGATION_RETURN_HTML=dist/artifact.html node tools/test-navigation-return.cjs
-
-      - name: Verify visible result actions, repeat activity and stable adventures
-        run: |
-          RESULT_ACTIONS_HTML=dist/kazu-no-bouken.html node tools/test-result-actions.cjs
-          RESULT_ACTIONS_HTML=dist/artifact.html node tools/test-result-actions.cjs
-          node tools/test-album-recency.cjs
-          TRANSFER_WORKSPACE_HTML=dist/kazu-no-bouken.html node tools/test-transfer-workspace.cjs
-          TRANSFER_WORKSPACE_HTML=dist/artifact.html node tools/test-transfer-workspace.cjs
-
-      - name: Verify chosen resumptions, stable review answers and collection journeys
-        run: |
-          RESUME_CHOICES_HTML=dist/kazu-no-bouken.html node tools/test-resume-choices.cjs
-          RESUME_CHOICES_HTML=dist/artifact.html node tools/test-resume-choices.cjs
-          REVIEW_WORKSPACE_HTML=dist/kazu-no-bouken.html node tools/test-review-workspace.cjs
-          REVIEW_WORKSPACE_HTML=dist/artifact.html node tools/test-review-workspace.cjs
-          COLLECTION_JOURNEY_HTML=dist/kazu-no-bouken.html node tools/test-collection-journey.cjs
-          COLLECTION_JOURNEY_HTML=dist/artifact.html node tools/test-collection-journey.cjs
-
-      - name: Verify level continuations, normal answer controls and saved island layouts
-        run: |
-          LEVEL_SHORT_HTML=dist/kazu-no-bouken.html node tools/test-level-short-entry.cjs
-          LEVEL_SHORT_HTML=dist/artifact.html node tools/test-level-short-entry.cjs
-          PLAY_WORKSPACE_HTML=dist/kazu-no-bouken.html node tools/test-play-workspace.cjs
-          PLAY_WORKSPACE_HTML=dist/artifact.html node tools/test-play-workspace.cjs
-          ISLAND_LAYOUT_HTML=dist/kazu-no-bouken.html node tools/test-island-layout.cjs
-          ISLAND_LAYOUT_HTML=dist/artifact.html node tools/test-island-layout.cjs
-
-      - name: Verify one-question learning and later-day mastery checks
-        run: |
-          node tools/test-short-store.cjs
-          node tools/test-short-browser.cjs
-          node tools/test-adaptive-short.cjs
-          node tools/test-short-gold.cjs
-
-      - name: Verify responsive number keys and daily endings
-        run: |
-          node tools/test-responsive-keypad.cjs
-          node tools/test-day-ending.cjs
-
-      - name: Verify picture controls, short-course progress and sticker navigation
-        run: |
-          node tools/test-playfield-access.cjs
-          node tools/test-short-progress-ui.cjs
-          node tools/test-sticker-book.cjs
-
-      - name: Verify current-stage coaching, consistent entrances and answer pacing
-        run: |
-          STAGE_COACH_HTML=dist/kazu-no-bouken.html node tools/test-stage-coaching.cjs
-          node tools/test-short-entry.cjs
-          node tools/test-answer-pacing.cjs
-          STAGE_COACH_HTML=dist/artifact.html node tools/test-stage-coaching.cjs
-          PACING_HTML=dist/artifact.html node tools/test-answer-pacing.cjs
-
-      - name: Verify parent guidance follows recent learning
-        run: node tools/test-parent-guidance.cjs
-
-      - name: Verify editable answers, island decoration and resumable home missions
-        run: |
-          INPUT_REVISION_HTML=dist/kazu-no-bouken.html node tools/test-input-revision.cjs
-          node tools/test-island-editor.cjs
-          MISSION_RESUME_HTML=dist/kazu-no-bouken.html node tools/test-mission-resume.cjs
-          INPUT_REVISION_HTML=dist/artifact.html node tools/test-input-revision.cjs
-          MISSION_RESUME_HTML=dist/artifact.html node tools/test-mission-resume.cjs
-
       - name: Verify island treasure chests and saved keepsakes
         run: node tools/test-treasures.cjs
 
@@ -137,13 +56,7 @@ jobs:
         run: node tools/test-transfer.cjs
 
       - name: Verify textbook review lessons and persistence in the first lap
-        run: |
-          node tools/test-review.cjs
-          node tools/test-review-scaffold.cjs
-          node tools/test-review-help.cjs
-
-      - name: Verify answer audio and tracing recovery
-        run: node tools/test-input-accessibility.cjs
+        run: node tools/test-review.cjs
 
       - name: Verify separate learning records, legacy migration and backup merging
         run: node tools/test-round-store.cjs

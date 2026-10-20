@@ -207,11 +207,6 @@ const server = http.createServer((req, res) => {
     for (const [label, size] of [['landscape', {width:1024,height:768}], ['portrait', {width:768,height:1024}], ['phone', {width:390,height:844}]]){
       await page.setViewportSize(size);
       await page.evaluate(() => { KazuApp.Sound.voiceOn=false; KazuApp.Sound.sfxOn=false; KazuApp.Book.open(); });
-      // The book now keeps the legacy collections in a disclosure. Open it so
-      // every original image and name is checked in its real, visible layout.
-      if (!await page.locator('#book .book-extras').evaluate(node => node.open))
-        await page.locator('#book .book-extras>summary').click();
-      assert.equal(await page.locator('#book .book-extras').evaluate(node => node.open), true, label + ' opens every collection for layout checks');
       await page.locator('#book .pokemon-image').first().waitFor();
       await verifyImages('#book .pokemon-image');
       const layout = await page.evaluate(() => {

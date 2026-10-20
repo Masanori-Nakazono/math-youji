@@ -27,35 +27,15 @@ const THINGS = [
 /* 「やってくる／いなくなる」が自然に言えるものだけを、動く文章題に出す。 */
 const MOVING_THINGS = THINGS.filter(thing => thing.moving);
 
-/* Drafts only describe the child's construction. The engine owns grading and
-   binds these values to the seeded question; never replay input to restore it. */
-function draftIndices(value, count){
-  return Array.isArray(value) && value.length <= count
-    && value.every(n => Number.isInteger(n) && n >= 0 && n < count)
-    && new Set(value).size === value.length;
-}
-function draftCounted(objs){
-  return objs.map((o, i) => ({ i, n: Number(($('.tag', o) || {}).textContent) }))
-    .filter(x => Number.isInteger(x.n) && x.n > 0).sort((a, b) => a.n - b.n).map(x => x.i);
-}
-function restoreCounted(objs, order){
-  objs.forEach(o => { o.classList.remove('counted'); const tag = $('.tag', o); if (tag) tag.remove(); });
-  order.forEach((i, n) => { objs[i].classList.add('counted'); objs[i].append(el('span.tag', { text: String(n + 1) })); });
-}
-function draftFinish(api, finish){
-  api.choices.append(el('button.btn.btn-accent.answer-submit', { type: 'button', text: 'できた！',
-    onclick(){ if (!api.locked) finish(); } }));
-}
-
 /* ============================================================
    1. かぞえよう — one-to-one correspondence & cardinality
    ============================================================ */
 function makeCountField(api, count, thing, layout){
-  const field = el('div.objfield' + (layout === 'collect' ? '.collect-field' : ''));
+  const field = el('div.objfield');
   const pts = layout === 'line' ? lineup(count, .5) : scatter(count);
   const objs = [];
   pts.forEach((p, i) => {
-    const o = el('div.obj', layout === 'collect' ? null : { style: { left: (p[0] * 100) + '%', top: (p[1] * 100) + '%' } }, thing.e);
+    const o = el('div.obj', { style: { left: (p[0] * 100) + '%', top: (p[1] * 100) + '%' } }, thing.e);
     o.dataset.i = i;
     objs.push(o);
     field.append(o);
@@ -78,7 +58,6 @@ function countQuestion(api, lo, hi, layout){
     const old = $('.tag', o);
     if (old) old.remove();
     o.append(el('span.tag', { text: String(done) }));
-    api.saveDraft();
     Sound.sfx.count(done - 1);
     Sound.say(numKana(done), { delay: 0, rate: 1.08 });
     if (done !== count) return;
@@ -100,8 +79,6 @@ function countQuestion(api, lo, hi, layout){
   });
 
   function ask(){
-    asked = true;
-    api.clearHelp();
     api.setPrompt(`${thing.n}は ぜんぶで いくつ？`, `${thing.n}は、全部でいくつ？`);
     const n = hi <= 5 ? 3 : 4;
     const vals = shuffle([count].concat(distractors(count, n - 1, 1, Math.max(hi + 2, 6))));
@@ -112,7 +89,6 @@ function countQuestion(api, lo, hi, layout){
     const recount = () => {
       done = 0;
       objs.forEach(o => { o.classList.remove('counted'); const t = $('.tag', o); if (t) t.remove(); });
-      api.saveDraft();
     };
     api.coach({
       text: 'もういちど ゆびで かぞえて みよう。さいごの かずが ぜんぶの かず',
@@ -127,18 +103,6 @@ function countQuestion(api, lo, hi, layout){
       }
     });
   }
-  api.persist({
-    id: 'count',
-    read(){ return { order: draftCounted(objs), asked }; },
-    restore(d){
-      if (!d || !draftIndices(d.order, objs.length) || typeof d.asked !== 'boolean') return false;
-      done = d.order.length; asked = d.asked || done === count;
-      restoreCounted(objs, d.order);
-      if (asked) ask();
-      return true;
-    },
-    afterHelp(d){ if (d && draftIndices(d.order, objs.length)){ done = d.order.length; restoreCounted(objs, d.order); } }
-  });
 }
 
 function giveQuestion(api, lo, hi){
@@ -147,19 +111,14 @@ function giveQuestion(api, lo, hi){
   const total = Math.min(14, target + ri(3, 5));
   api.item('give:' + target, target + 'こ だけ とりだす');
   api.setPrompt(`${thing.n}を ${numTag(target)}こ とって かごに いれよう`, `${thing.n}を${koKana(target)}、とって、かごに入れよう。`);
-  // Collecting must never put a fruit behind the basket or another fruit. Keep
-  // the available objects in their own grid and the basket in a separate row.
-  const objs = makeCountField(api, total, thing, 'collect');
-  const board = el('div.give-board');
-  board.append($('.collect-field', api.field));
+  const objs = makeCountField(api, total, thing, 'scatter');
   const picked = new Set();
   const basketCount = el('div.n', { text: '0' });
   const basketItems = el('div.items');
   const basket = el('div.basket', null,
     el('div.b', { text: '🧺' }), basketItems, basketCount);
-  board.append(basket);
-  api.field.append(board);
-  const doneBtn = el('button.btn.btn-accent.answer-submit', { type: 'button', text: 'できた！' });
+  $('.objfield', api.field).append(basket);
+  const doneBtn = el('button.btn.btn-accent', { text: 'できた！' });
   api.choices.append(doneBtn);
   const refresh = () => {
     basketCount.textContent = String(picked.size);
@@ -173,7 +132,6 @@ function giveQuestion(api, lo, hi){
     if (picked.has(i)){ picked.delete(i); o.classList.remove('picked'); Sound.sfx.tap(); }
     else { picked.add(i); o.classList.add('picked'); Sound.sfx.count(picked.size - 1); Sound.say(numKana(picked.size), { delay: 0, rate: 1.08 }); }
     refresh();
-    api.saveDraft();
   };
   objs.forEach(o => tappable(o, () => toggle(o)));
   doneBtn.addEventListener('click', () => {
@@ -205,17 +163,6 @@ function giveQuestion(api, lo, hi){
     objs.forEach(o => { if (picked.has(o.dataset.i)) toggle(o); });
     objs.slice(0, target).forEach(o => toggle(o));
     doneBtn.click();
-  });
-  api.persist({
-    id: 'give',
-    read(){ return { picked: Array.from(picked, Number) }; },
-    restore(d){
-      if (!d || !draftIndices(d.picked, objs.length)) return false;
-      picked.clear();
-      d.picked.forEach(i => picked.add(String(i)));
-      objs.forEach((o, i) => o.classList.toggle('picked', picked.has(String(i))));
-      refresh(); return true;
-    }
   });
 }
 
@@ -312,7 +259,6 @@ function flashQuestion(api, o){
   api.coach({ walk(){ return [{ at: go, act(){ go.click(); }, say: 'みる、を押すよ。', ms: o.ms + 1400 }]; } });
 
   function ask(){
-    api.clearHelp();
     /* Getting it right and never seeing the dots again is half a lesson. This game
        exists to make 7 *look* like「5と2」, so the arrangement has to come back at
        the moment the child is told they were right — that is when it gets attached
@@ -400,9 +346,7 @@ function numToQty(api, lo, hi){        // numeral shown → pick the matching gr
   api.item('n2q:' + n, 'すうじ ' + n + ' → その かず');
   api.answer(n);                   // so a plate one too many reads as「1つ多く」
   api.setPrompt(`${thing.e} が ${numTag(n)}こ あるのは どれ？`, `${thing.n}が${koKana(n)}、あるのは、どれ？`);
-  // Font glyph hit areas can extend beyond line-height:1, even when the element
-  // itself fits. A display-only numeral must never intercept an answer below it.
-  const big = el('div.numeral-display', { style: { fontFamily: 'var(--fs-num)', fontWeight: 800, fontSize: 'calc(var(--u)*11)', lineHeight: 1, color: 'var(--c-red)' }, text: String(n) });
+  const big = el('div', { style: { fontFamily: 'var(--fs-num)', fontWeight: 800, fontSize: 'calc(var(--u)*11)', lineHeight: 1, color: 'var(--c-red)' }, text: String(n) });
   api.field.append(big);
   const opts = shuffle([n].concat(distractors(n, 2, Math.max(1, lo - 1), Math.min(12, hi + 2), 2)));
   clear(api.choices);
@@ -525,8 +469,7 @@ function lineFill(api, lo, hi, gaps){
 
   let qi = 0;
   function askNext(){
-    api.clearHelp();
-    nums.forEach(v => cells[v].classList.remove('now', 'near'));
+    nums.forEach(v => cells[v].classList.remove('now'));
     const target = holes[qi];
     cells[target].classList.add('now');
     api.setPrompt('ひかって いる ところに はいる かずは？', '光っているところに入る数は？');
@@ -545,7 +488,6 @@ function lineFill(api, lo, hi, gaps){
         cells[target].classList.add('filled');
         Sound.sfx.place();
         qi++;
-        api.saveDraft();
         if (qi < holes.length){
           api.later(askNext, 620);
           return false;            // more holes to go: keep this question open
@@ -554,27 +496,13 @@ function lineFill(api, lo, hi, gaps){
       }
     });
     api.coach({
-      text: (target - 1) + 'の つぎは？　ひだりから かぞえて みよう',
+      text: 'ひだりの かずから かぞえて みよう',
       say: `${numKana(target - 1)}の、次は？`,
       tool(){ [target - 1, target + 1].forEach(v => { if (cells[v]) cells[v].classList.add('near'); }); },
       walk(){ return Coach.readAlong(nums.map(v => cells[v]), cells[target]); }
     });
   }
   askNext();
-  api.persist({
-    id: 'sequence',
-    read(){ return { qi }; },
-    restore(d){
-      if (!d || !Number.isInteger(d.qi) || d.qi < 0 || d.qi >= holes.length) return false;
-      qi = d.qi;
-      holes.forEach((v, i) => {
-        cells[v].textContent = i < qi ? String(v) : '?';
-        cells[v].classList.toggle('gap', i >= qi);
-        cells[v].classList.toggle('filled', i < qi);
-      });
-      askNext(); return true;
-    }
-  });
 }
 
 function nextBefore(api, hi){
@@ -683,9 +611,8 @@ function traceQuestion(api, digits){
   const s = svg('svg', { viewBox: '0 0 100 140', preserveAspectRatio: 'xMidYMid meet' });
   const gGuide = svg('g'), gDone = svg('g'), gLive = svg('g'), gMark = svg('g');
   s.append(gGuide, gDone, gLive, gMark);
-  const cue = el('div.trace-numlabel', { text: 'あかい てんから なぞろう' });
-  box.append(s);
-  api.field.append(box, cue);
+  box.append(s, el('div.trace-numlabel', { text: 'なぞりがき' }));
+  api.field.append(box);
 
   strokes.forEach(st => {
     gGuide.append(svg('path', { d: toPath(st), class: 'trace-guide', fill: 'none',
@@ -703,9 +630,8 @@ function traceQuestion(api, digits){
     idleTimer = api.later(() => {           // no progress for a while: show, don't scold
       if (si >= strokes.length) return;
       nudged = true;
-      startMark();
       showGuide();
-      Sound.say(progress ? '赤い点から、つづけてなぞろう。' : '赤い点から、なぞってみよう。', { delay: 100 });
+      Sound.say('赤い点から、なぞってみよう。', { delay: 100 });
     }, 9000);
   }
   function showGuide(){
@@ -715,13 +641,10 @@ function traceQuestion(api, digits){
   }
 
   function startMark(){
-    const guided = !!$('.trace-ghost', box);
     clear(gMark);
     if (si >= strokes.length) return;
-    const at = Math.min(progress, strokes[si].length - 1);
-    const p = strokes[si][at];
-    const q = strokes[si][Math.min(at + 6, strokes[si].length - 1)];
-    cue.textContent = progress ? 'ここから つづけよう' : 'あかい てんから なぞろう';
+    const p = strokes[si][0];
+    const q = strokes[si][Math.min(6, strokes[si].length - 1)];
     gMark.append(svg('circle', { cx: p[0], cy: p[1], r: 6.5, class: 'trace-start pulse' }));
     gMark.append(svg('text', { x: p[0], y: p[1] + 2.6, 'text-anchor': 'middle', fill: '#fff',
       'font-size': 7.5, 'font-weight': 800, 'font-family': 'var(--fs-num)' }, String(si + 1)));
@@ -730,7 +653,6 @@ function traceQuestion(api, digits){
       d: `M${p[0] + Math.cos(a) * 11} ${p[1] + Math.sin(a) * 11} l${Math.cos(a) * 8} ${Math.sin(a) * 8}`,
       stroke: 'var(--c-red)', 'stroke-width': 3, 'stroke-linecap': 'round', opacity: .7
     }));
-    if (guided) showGuide();
   }
   function redraw(){
     clear(gLive);
@@ -750,13 +672,9 @@ function traceQuestion(api, digits){
   function onDown(e){
     const p = pt(e); if (!p || si >= strokes.length) return;
     const st = strokes[si];
-    const at = Math.min(progress, st.length - 1);
-    const near = dist(p[0], p[1], st[at][0], st[at][1]);
-    // A lifted finger can continue at the moved red dot, or start this stroke
-    // again from its original start. Prefer continuation where a loop overlaps.
-    const restart = near > START_TOL && progress > 0 && dist(p[0], p[1], st[0][0], st[0][1]) <= START_TOL;
-    if (near <= START_TOL || restart){
-      if (restart){ progress = 0; redraw(); startMark(); api.saveDraft(); }
+    const near = dist(p[0], p[1], st[progress ? Math.min(progress, st.length - 1) : 0][0],
+                                  st[progress ? Math.min(progress, st.length - 1) : 0][1]);
+    if (near <= START_TOL){
       drawing = true;
       clearTimeout(idleTimer);
       box.setPointerCapture && box.setPointerCapture(e.pointerId);
@@ -770,9 +688,8 @@ function traceQuestion(api, digits){
         { duration: 420 });
       if (++strays % 2 === 0){
         nudged = true;
-        startMark();
         showGuide();
-        Sound.say(progress ? '赤い点から、つづけてなぞろう。' : '赤い点から、なぞってみよう。', { delay: 100 });
+        Sound.say('赤い点から、なぞってみよう。', { delay: 100 });
       }
       armIdle();
     }
@@ -783,12 +700,10 @@ function traceQuestion(api, digits){
     const p = pt(e); if (!p) return;
     const st = strokes[si];
     const look = Math.min(st.length - 1, progress + 26);
-    const before = progress;
     for (let i = Math.max(progress, 1); i <= look; i++){
       if (dist(p[0], p[1], st[i][0], st[i][1]) <= TOL) progress = Math.max(progress, i + 1);
     }
     redraw();
-    if (progress !== before) api.saveDraft();
     armIdle();
     if (progress >= st.length - 2) completeStroke();
   }
@@ -800,7 +715,6 @@ function traceQuestion(api, digits){
     clear(gLive);
     Sound.sfx.place();
     si++; progress = 0;
-    api.saveDraft();
     if (si >= strokes.length){
       clear(gMark);
       api.later(() => api.correct(), 220);
@@ -810,14 +724,7 @@ function traceQuestion(api, digits){
       Sound.say('次の線も、なぞってね。', { delay: 150 });
     }
   }
-  function onUp(){
-    const wasDrawing = drawing;
-    drawing = false;
-    if (si >= strokes.length || !wasDrawing) return;
-    startMark();
-    armIdle();
-    if (progress > 0) Sound.say('ここから、つづけよう。', { delay: 100 });
-  }
+  function onUp(){ drawing = false; }
 
   box.addEventListener('pointerdown', onDown);
   box.addEventListener('pointermove', onMove);
@@ -830,29 +737,6 @@ function traceQuestion(api, digits){
   startMark();
   redraw();
   armIdle();
-  api.persist({
-    id: 'trace',
-    read(){ return { si, progress, strays, nudged, guide: !!$('.trace-ghost', box) }; },
-    restore(d){
-      if (!d || !Number.isInteger(d.si) || d.si < 0 || d.si > strokes.length
-        || !Number.isInteger(d.progress) || d.progress < 0
-        || d.progress > (d.si < strokes.length ? strokes[d.si].length : 0)
-        || !Number.isInteger(d.strays) || d.strays < 0 || d.strays > 100000
-        || typeof d.nudged !== 'boolean' || typeof d.guide !== 'boolean') return false;
-      clearTimeout(idleTimer); drawing = false;
-      si = d.si; progress = d.progress; strays = d.strays; nudged = d.nudged;
-      clear(gDone); clear(gMark);
-      strokes.slice(0, si).forEach(st => gDone.append(svg('path', { d: toPath(st), class: 'trace-done', fill: 'none',
-        'stroke-width': 13, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })));
-      startMark(); redraw();
-      if (d.guide) showGuide();
-      if (si === strokes.length){
-        cue.textContent = 'ぜんぶ なぞれたね。できたを おそう';
-        draftFinish(api, () => api.correct());
-      }
-      return true;
-    }
-  });
 }
 
 Games.add({

@@ -5,7 +5,6 @@
 
 const UI = (() => {
   const screens = {};
-  const resultHandlers = new WeakMap();
   let stage = null, fx = null, current = null;
 
   function init(){
@@ -33,7 +32,7 @@ const UI = (() => {
     void n.offsetWidth;
     n.classList.add('enter');
     current = name;
-    if (!o.keepScroll) n.scrollTop = 0;
+    n.scrollTop = 0;
     const sc = $('.home-content, .worlds, .sheet, .levels, .book', n);
     if (sc) sc.scrollTop = o.keepScroll ? sc.scrollTop : 0;
     /* A visual transition is otherwise silent to screen readers and leaves
@@ -50,52 +49,6 @@ const UI = (() => {
     return n;
   }
   const currentName = () => current;
-
-  /* Keep the actual result controls (and their handlers) in one visible dock.
-     Rewards can scroll independently; auxiliary choices do not crowd out rest. */
-  function clearResultActions(screen){
-    if (!screen) return;
-    Array.from(screen.children).filter(n => n.classList.contains('result-dock')).forEach(n => n.remove());
-    screen.classList.remove('has-result-dock');
-  }
-  function resultActions(screen, actions, opts){
-    const o = opts || {}, choices = Array.from(actions.children), buttons = choices.filter(n => n.tagName === 'BUTTON');
-    const end = o.end, primary = o.primary && o.primary !== end ? o.primary : buttons.find(b => b !== end);
-    clearResultActions(screen);
-    clear(actions); actions.classList.add('result-dock');
-    actions.setAttribute('role', 'group'); actions.setAttribute('aria-label', 'つぎの あそびと おわりかた');
-    const row = el('div.result-dock-row');
-    if (primary){ primary.dataset.resultAction = 'continue'; }
-    if (end){ end.dataset.resultAction = 'end'; }
-    const leadingEnd = end && end.classList.contains('btn-accent');
-    (leadingEnd ? [end, primary] : [primary, end]).filter(Boolean).forEach(b => row.append(b));
-    actions.append(row);
-    const rest = choices.filter(b => b !== end && b !== primary);
-    if (rest.length){
-      const summary = el('summary', {text:'ほかの あそび ▾'});
-      const more = el('details.result-more', null, summary, el('div.result-options', null, rest));
-      more.addEventListener('toggle', () => { summary.textContent = more.open ? 'とじる ▴' : 'ほかの あそび ▾'; });
-      more.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && more.open){ e.preventDefault(); more.open = false; summary.focus({preventScroll:true}); }
-      });
-      actions.append(more);
-    }
-    // A double activation on a control that has just navigated away must never
-    // start another run, count a second completion, or place another reward.
-    let activated = false;
-    const previousHandler = resultHandlers.get(actions);
-    if (previousHandler) actions.removeEventListener('click', previousHandler, true);
-    const activate = e => {
-      const button = e.target.closest('button');
-      if (!button || !actions.contains(button)) return;
-      if (button.disabled) return;
-      if (activated || screen.hidden || current !== screen.id){ e.preventDefault(); e.stopImmediatePropagation(); return; }
-      activated = true;
-    };
-    resultHandlers.set(actions, activate); actions.addEventListener('click', activate, true);
-    screen.classList.add('has-result-dock'); screen.append(actions);
-    return actions;
-  }
 
   /* ---------- feedback ---------- */
   const CRAYONS = ['--c-red','--c-orange','--c-yellow','--c-green','--c-blue','--c-purple','--c-pink'];
@@ -174,21 +127,6 @@ const UI = (() => {
       if (!r.width && !r.height) continue;              // hidden / zero-sized
       if (r.left < b.left - slack || r.right > b.right + slack
        || r.top  < b.top  - slack || r.bottom > b.bottom + slack) return false;
-      // A collection tray has a basket underneath it. Being inside the overall
-      // field is insufficient if a fruit has spilled into that basket's row.
-      if (n.classList.contains('collect-field')){
-        const objects = n.querySelectorAll('.obj');
-        for (const object of objects){
-          const o = object.getBoundingClientRect();
-          if (o.left < r.left - slack || o.right > r.right + slack
-           || o.top < r.top - slack || o.bottom > r.bottom + slack) return false;
-        }
-        for (let a = 0; a < objects.length; a++) for (let z = a + 1; z < objects.length; z++){
-          const p = objects[a].getBoundingClientRect(), q = objects[z].getBoundingClientRect();
-          if (Math.min(p.right,q.right) > Math.max(p.left,q.left) + slack
-           && Math.min(p.bottom,q.bottom) > Math.max(p.top,q.top) + slack) return false;
-        }
-      }
       /* Staying inside the playfield is not enough: なんばんめ's row of animals
          scrolls inside its own container, so it can sit within the field and still
          hide half the animals the child is being asked to count. Only real scroll
@@ -215,10 +153,7 @@ const UI = (() => {
       field.style.setProperty('--u', (base * m).toFixed(2) + 'px');
       return fitsInside(field, kids);
     };
-    // Pattern cars are a picture; answers live in the full-size choice buttons.
-    // Ten display cars can therefore become smaller than a direct tap target
-    // instead of hiding the final question mark in a horizontal scroller.
-    let lo = field.querySelector('.pattern-train') ? 0.35 : FIT_MIN, hi = FIT_MAX;
+    let lo = FIT_MIN, hi = FIT_MAX;
     for (let i = 0; i < 7; i++){                        // ~1.5% precision over a wider range
       const m = (lo + hi) / 2;
       if (at(m)) lo = m; else hi = m;
@@ -269,7 +204,6 @@ const UI = (() => {
     function clearSel(){
       if (selected){ selected.classList.remove('sel'); selected.setAttribute('aria-pressed', 'false'); }
       selected = null;
-      if (opts.onChange) opts.onChange();
     }
     function setOver(t){
       if (overEl === t) return;
@@ -360,7 +294,6 @@ const UI = (() => {
         it.setAttribute('aria-pressed', 'false');
         if (selected === it) clearSel();
       }
-      if (opts.onChange) opts.onChange();
     }
     function bindItem(it){
       it.setAttribute('aria-pressed', 'false');
@@ -385,11 +318,10 @@ const UI = (() => {
     function select(it){
       if (unavailable(it)) return;
       clearSel(); selected = it; it.classList.add('sel'); it.setAttribute('aria-pressed', 'true');
-      if (opts.onChange) opts.onChange();
     }
     return { bindItem, bindTarget, clearSel, select, get selected(){ return selected; } };
   }
 
-  return { init, register, show, currentName, resultActions, clearResultActions, confetti, bigMark, stars, makeDragDrop, screens,
+  return { init, register, show, currentName, confetti, bigMark, stars, makeDragDrop, screens,
            fitPlayfield, watchFit };
 })();

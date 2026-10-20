@@ -200,8 +200,7 @@ body::before{
   flex-direction: column;
   gap: calc(var(--u) * .8);
 }
-/* Also used inside the artifact build, whose host does not supply this rule. */
-[hidden]{ display: none !important; }
+.screen[hidden]{ display: none !important; }
 
 .screen.enter{ animation: screenIn .34s cubic-bezier(.2,.9,.3,1.2) both; }
 @keyframes screenIn{
@@ -283,14 +282,6 @@ body::before{
 .pip.done{ background: var(--good); }
 .pip.miss{ background: var(--oops); }
 .pip.now { background: var(--accent); transform: scale(1.35); }
-.session-count{ flex:0 0 auto; text-align:center; color:var(--ink-soft); font-size:calc(var(--u)*1.05); }
-#session-overview{display:flex;flex-direction:column;gap:16px;overflow:auto;}
-.session-overview-body{margin:auto;max-width:760px;width:100%;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;padding:16px;box-sizing:border-box;}
-.session-overview-body>svg{width:120px;height:120px;}
-.session-overview-body h3{font-size:clamp(22px,3vw,36px);margin:0;}
-.session-overview-body p{margin:0;line-height:1.7;white-space:normal;}
-.session-overview-body .btn{min-width:min(100%,320px);min-height:64px;}
-.session-save-note{font-size:14px;color:var(--ink-soft);}
 
 /* ---------- play area ---------- */
 .prompt{
@@ -466,12 +457,16 @@ body::before{
    =========================================================== */
 #home{
   display:grid;
-  grid-template-columns:minmax(0,1fr);
+  grid-template-columns:minmax(170px,.6fr) minmax(0,2fr);
   grid-template-rows:auto auto minmax(0,1fr);
   gap:calc(var(--u)*.6);
 }
-#home > .home-head{ grid-row:1; }
-#home > .round-status{ grid-row:2; justify-content:flex-start; }
+#home > .home-head{ grid-column:1 / -1; }
+#home > .round-status{
+  grid-column:1; grid-row:2;
+  flex-direction:column; align-items:flex-start; justify-content:center; gap:2px;
+}
+#home > .home-rounds{ grid-column:2; grid-row:2; min-width:0; }
 .home-content{
   grid-column:1 / -1; grid-row:3;
   min-height:0; min-width:0; overflow-y:auto;
@@ -537,60 +532,49 @@ body::before{
 }
 .daily .go{ font-size: calc(var(--u)*2.4); line-height: 1; flex: 0 0 auto; }
 
-/* One main action stays visible; optional activities retain readable explanations. */
-.home-today{ display:grid; gap:8px; }
-.home-today > h2{ margin:0; font-size:clamp(17px,calc(var(--u)*1.5),24px); }
-.home-primary{ width:100%; min-height:96px; padding:16px 20px; gap:16px; }
-.home-primary .t{ display:block; font-size:clamp(24px,calc(var(--u)*2.5),36px); }
-.home-primary .s{ display:block; font-size:clamp(15px,calc(var(--u)*1.4),20px); margin-top:6px; }
-.home-choices{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; align-items:start; }
-.home-choices > .home-quest{ min-height:80px; }
-.home-choices .adventure-card{ height:100%; padding:12px; }
-.home-choices .adventure-card b{ white-space:normal; word-break:keep-all; overflow-wrap:anywhere; font-size:clamp(16px,calc(var(--u)*1.5),22px); }
-.home-choices .adventure-card small{ white-space:normal; overflow:visible; font-size:clamp(13px,calc(var(--u)*1.1),16px); }
-.home-choices .sticker-mission{ grid-column:auto; padding:0; }
-.home-choices .sticker-mission > summary{ min-height:76px; padding:12px; cursor:pointer; font-size:clamp(16px,calc(var(--u)*1.5),22px); }
-.home-choices .sticker-mission-picks{ flex-direction:column; padding:0 12px 12px; }
-.home-choices .sticker-mission-pick{ flex:auto; }
-.home-choices .sticker-mission-pick .name{ white-space:normal; font-size:14px; }
-.home-more{ border:2px solid var(--card-edge); border-radius:18px; background:var(--paper-2); }
-.home-more > summary{ min-height:64px; padding:16px; cursor:pointer; font-size:clamp(18px,calc(var(--u)*1.6),24px); font-weight:800; }
-.home-more > summary > span{ margin-right:8px; }
-.home-more-content{ display:grid; gap:18px; padding:8px 12px 18px; }
-.home-more-content .home-round-section h2{ margin:0 0 10px; font-size:18px; }
+/* The daily sets share one row. Each of the four (おすすめ / きょうの れんしゅう /
+   きのうの ミッション / にがて あつめ) used to be a full-width banner of its own,
+   so on a busy day the map they lead to was a strip at the bottom of the screen.
+   One row, never wrapping: with one banner it fills the width exactly as before,
+   with four they are quarters and the long subtitles clip. */
 .dailies{
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px;
+  flex: 0 0 auto;
+  display: flex; flex-wrap: nowrap; align-items: stretch;
+  gap: calc(var(--u)*.7);
 }
-.dailies > .daily{ min-width:0; min-height:88px; padding:12px; gap:10px; }
-.dailies > .daily .t,.dailies > .daily .s,.daily.diagnostic .t,.daily.diagnostic .s{
-  display:block; white-space:normal; overflow:visible; word-break:keep-all; overflow-wrap:anywhere;
+.dailies > .daily{
+  flex: 1 1 0; min-width: 0;
+  gap: calc(var(--u)*.7);
+  padding: calc(var(--u)*.6) calc(var(--u)*1);
 }
-.dailies > .daily .t{ font-size:clamp(16px,calc(var(--u)*1.55),23px); }
-.dailies > .daily .s{ font-size:clamp(13px,calc(var(--u)*1.1),16px); margin-top:5px; }
-.dailies > .daily .ico{ font-size:30px; }
-.dailies > .daily .go{ font-size:22px; }
-.daily.diagnostic{ background:var(--card); color:var(--ink); border-color:var(--card-edge); }
-.home-primary .t,.home-primary .s{ white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }
-/* An explicit ending remains an ending on today's Home. Extra lessons stay
-   available inside the native disclosure, without another bright start prompt. */
-.day-ending{
-  border:2px solid var(--good); border-radius:20px; padding:clamp(14px,2vw,22px);
-  background:var(--good-soft); color:var(--ink); min-width:0;
+.dailies > .daily .t{ font-size: calc(var(--u)*1.8); }
+.dailies > .daily .s{ font-size: calc(var(--u)*1.25); }
+/* one line each: a banner that wraps is a banner that grows the row back */
+.dailies > .daily .t,
+.dailies > .daily .s{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dailies > .daily .mascot{ width: calc(var(--u)*4.4); height: calc(var(--u)*4.4); }
+.dailies > .daily .go{ font-size: calc(var(--u)*2); }
+.dailies > .daily .ico{ font-size: calc(var(--u)*3); }
+/* three or four banners at once: the picture is how a child who cannot read yet
+   tells them apart, so it stays; the small print under the name goes instead */
+.dailies.n3 > .daily .t,
+.dailies.n4 > .daily .t{ font-size: calc(var(--u)*1.55); }
+/* with the small print gone there is room for the name to take two lines instead
+   of being cut to「いまの おす…」 */
+.dailies.n3 > .daily .t,
+.dailies.n4 > .daily .t{
+  white-space: normal; text-overflow: clip;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  /* and it breaks at the spaces the name is written with —「いまの／おすすめ」,
+     never「いまの おす／すめ」: a child who is starting to read reads word shapes */
+  word-break: keep-all; overflow-wrap: anywhere;
 }
-.day-ending-head{ display:flex; align-items:center; gap:14px; }
-.day-ending-head > span{ font-size:40px; line-height:1; }
-.day-ending h3{ margin:0; font-size:clamp(22px,calc(var(--u)*2.1),30px); }
-.day-ending-head p{ margin:4px 0 0; font-size:clamp(16px,calc(var(--u)*1.5),22px); }
-.day-ending-list{ padding:0; margin:14px 0 0; list-style:none; display:grid; gap:10px; }
-.day-ending-entry{ display:flex; gap:10px; align-items:center; background:var(--card); padding:10px 12px; border-radius:12px; min-width:0; }
-.day-ending-icon{ font-size:28px; flex:0 0 auto; }
-.day-ending-entry > div{ min-width:0; overflow-wrap:anywhere; }
-.day-ending-entry b,.day-ending-entry div > span{ display:block; }
-.day-ending-entry b{ font-size:clamp(16px,calc(var(--u)*1.45),21px); }
-.day-ending-entry div > span{ font-size:clamp(14px,calc(var(--u)*1.2),18px); color:var(--ink-soft); }
-.day-ending-bye{ margin:14px 0 10px; font-size:clamp(18px,calc(var(--u)*1.6),24px); font-weight:800; }
-.day-ending-actions{ display:flex; gap:10px; flex-wrap:wrap; }
-.day-ending-actions .btn{ min-height:48px; max-width:100%; white-space:normal; font-size:clamp(15px,calc(var(--u)*1.25),18px); }
+.dailies.n3 > .daily .s,
+.dailies.n4 > .daily .s{ display: none; }
+.dailies.n3 > .daily .ico,
+.dailies.n4 > .daily .ico{ font-size: calc(var(--u)*2.6); }
+.dailies.n3 > .daily .go,
+.dailies.n4 > .daily .go{ font-size: calc(var(--u)*1.6); }
 
 /* A child chooses a pictured prize before choosing a task.  This is kept out of
    the daily-routine row: the two have different jobs, and making five equal
@@ -727,44 +711,6 @@ body::before{
 #first-finish .reward-sheet h2{ font-size:calc(var(--u)*2.1); }
 #first-finish{ position:relative; }
 #first-finish > .speakbtn{ position:absolute; top:calc(var(--u)*.6); right:calc(var(--u)*.6); z-index:2; }
-#first-finish .reward-sheet{ overflow-y:auto; justify-content:safe center; }
-#first-finish .reward-sheet>*{ flex-shrink:0; }
-.short-rewards{ display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
-.short-rewards .pokemon-sticker{ width:clamp(112px,calc(var(--u)*9),132px); }
-.short-rewards .pokemon-name{ font-size:max(14px,calc(var(--u)*1.1)); }
-/* The same three steps follow a short course between visits and entrances. */
-.home-short-progress{margin-top:12px;}
-.short-progress{width:100%;min-width:0;box-sizing:border-box;text-align:left;border:2px solid var(--card-edge);border-radius:16px;background:var(--card);padding:12px;}
-.short-progress-course{margin:0 0 5px;font-size:max(14px,calc(var(--u)*1.15));color:var(--ink-soft);font-weight:700;overflow-wrap:anywhere;}
-.short-progress-head{display:flex;align-items:center;gap:8px;justify-content:space-between;}
-.short-progress-title{font-size:clamp(16px,calc(var(--u)*1.5),23px);line-height:1.5;overflow-wrap:anywhere;}
-.short-progress-speak{flex:0 0 44px;width:44px;min-width:44px;height:44px;min-height:44px;padding:4px;font-size:20px;}
-.short-progress-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:0;margin:10px 0;list-style:none;}
-.short-progress-step{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;border:2px solid var(--card-edge);border-radius:12px;padding:8px 4px;font-size:max(14px,calc(var(--u)*1.1));line-height:1.4;background:var(--paper-2);}
-.short-progress-step>span:first-child{font-size:23px;}
-.short-progress-step>span:last-child{white-space:pre-line;}
-.short-progress-step.current{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--card));font-weight:800;}
-.short-progress-step.done{border-color:var(--good);background:var(--good-soft);}
-.short-progress-detail{margin:0;font-size:max(14px,calc(var(--u)*1.2));line-height:1.65;overflow-wrap:anywhere;}
-.level-entry>.short-progress{flex-basis:100%;}
-/* The chosen picture leads to the same small visit from Home and the book. */
-#sticker-mission .reward-sheet{overflow-y:auto;justify-content:safe center;gap:12px;}
-#sticker-mission .reward-sheet>*{flex-shrink:0;}
-.sticker-mission-intro{display:flex;align-items:center;justify-content:center;gap:12px;width:min(100%,560px);}
-#sticker-mission .sticker-mission-prize .pokemon-sticker{--pokemon-size:100px;}
-.sticker-mission-intro .sticker-mission-detail{width:auto;min-width:0;flex:1;padding:12px;font-size:clamp(16px,calc(var(--u)*1.5),22px);text-align:left;}
-.sticker-mission-intro .sticker-mission-detail small{font-size:14px;line-height:1.5;}
-.sticker-mission-progress,.sticker-mission-course{width:min(100%,560px);min-width:0;}
-.sticker-mission-go{min-height:56px;max-width:100%;white-space:normal;}
-.long-course{width:100%;min-width:0;box-sizing:border-box;text-align:left;border:2px solid var(--card-edge);border-radius:14px;background:var(--paper-2);padding:10px 12px;}
-.long-course summary{cursor:pointer;min-height:44px;align-content:center;font-size:max(16px,calc(var(--u)*1.3));font-weight:800;}
-.long-course p,.long-course small{display:block;font-size:max(14px,calc(var(--u)*1.1));line-height:1.65;overflow-wrap:anywhere;}
-.long-course p{margin:8px 0;}
-.long-course .btn{margin-top:10px;max-width:100%;white-space:normal;}
-.first-actions>.long-course{flex-basis:100%;}
-.first-next .bl{display:grid;gap:4px;}
-.first-next .bl small{display:block;font-size:max(14px,calc(var(--u)*1.1));line-height:1.45;font-weight:600;white-space:normal;}
-.first-next{max-width:100%;white-space:normal;}
 #progress-album{ gap:calc(var(--u)*.7); }
 .album-intro{ margin:0; text-align:center; font-size:calc(var(--u)*1.4); font-weight:800; }
 .album-cards{ flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; align-content:start;
@@ -1063,9 +1009,8 @@ body::before{
   display: flex; flex-direction: column; gap: calc(var(--u)*.8);
   align-items: center; justify-content: center;
 }
-.level-entry{ width:min(100%,calc(var(--u)*53)); display:flex; flex-wrap:wrap; align-items:stretch; gap:calc(var(--u)*.5); }
+.level-entry{ width:min(100%,calc(var(--u)*53)); display:flex; align-items:stretch; gap:calc(var(--u)*.5); }
 .level-entry .levelcard{ width:auto; flex:1 1 auto; min-width:0; }
-.level-entry .gold-short-start{ flex-basis:100%; min-height:var(--tap); font-size:max(14px,calc(var(--u)*1.3)); }
 .first-retry{ flex:0 0 auto; min-width:var(--tap); font-size:calc(var(--u)*2); }
 .levelcard{
   position: relative;
@@ -1303,9 +1248,6 @@ body::before{
 
 .choice-audio{ display: grid; grid-template-columns: minmax(0, 1fr) var(--tap); gap: calc(var(--u)*.45); align-items: stretch; }
 .choice-audio .choice{ min-width: 0; width: 100%; }
-.choices > .choice-audio{ max-width: 100%; }
-.choices > .choice-audio.story-audio{ flex: 1 1 calc(var(--u)*26); max-width: min(100%, calc(var(--u)*36)); }
-.choice-audio .choice.story{ max-width: none; }
 .choice-hear{ min-width: var(--tap); min-height: var(--tap); border: calc(var(--u)*.22) solid var(--card-edge); border-radius: var(--wob-b); background: var(--paper-2); font-size: calc(var(--u)*1.8); }
 .daily .t{ word-break: keep-all; }
 
@@ -1477,7 +1419,6 @@ body::before{
   scrollbar-width: none;
 }
 .train::-webkit-scrollbar{ display: none; }
-.train.pattern-train{overflow:visible;}
 .car{
   flex: 0 0 auto;
   width: calc(var(--u)*6); height: calc(var(--u)*6);
@@ -1488,7 +1429,6 @@ body::before{
   border-radius: var(--wob-b);
   box-shadow: var(--shadow-sm);
 }
-.pattern-train .car{font-size:calc(var(--u)*4.2);}
 .car.blank{
   border-style: dashed; border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--card));
@@ -1531,22 +1471,6 @@ body::before{
   white-space: nowrap;
 }
 .dirmark svg{ width: calc(var(--u)*3); height: calc(var(--u)*1.6); }
-
-.ordinal-board{max-width:100%;display:flex;flex-direction:column;gap:6px;}
-.ordinal-direction{display:flex;justify-content:flex-start;}
-.ordinal-direction.from-right{justify-content:flex-end;}
-.ordinal-board .queue{overflow:visible;}
-.ordinal-answers{display:none;}
-@media(max-width:700px){
-  .ordinal-board{width:100%;}
-  .ordinal-board .queue{display:grid;grid-template-columns:repeat(var(--on),minmax(0,1fr));gap:3px;padding:3px;}
-  .ordinal-board .qi{width:100%;min-width:0;height:52px;min-height:52px;font-size:clamp(22px,6vw,32px);justify-content:center;border-width:2px;}
-  .ordinal-board .dirmark{font-size:16px;}
-  .ordinal-board .dirmark svg{width:32px;height:20px;}
-  .ordinal-answers{display:grid;grid-template-columns:repeat(4,64px);gap:8px;justify-content:center;}
-  .ordinal-answers .ordinal-choice{width:64px;min-width:64px;height:64px;min-height:64px;padding:3px;font-size:36px;}
-  .ordinal-answers .ordinal-choice.picked{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--card));}
-}
 
 /* grid variant */
 .qgrid{
@@ -1623,10 +1547,9 @@ body::before{
 .trace-start.pulse{ animation: startPulse 1.2s ease-in-out infinite; transform-origin: center; }
 @keyframes startPulse{ 0%,100%{ opacity: 1 } 50%{ opacity: .35 } }
 .trace-numlabel{
-  flex: 0 0 auto;
+  position: absolute; top: calc(var(--u)*.4); left: calc(var(--u)*.8);
   font-family: var(--fs-num); font-weight: 800;
-  font-size: clamp(14px, calc(var(--u)*1.3), 24px); line-height: 1.4;
-  color: var(--ink-soft); text-align: center; pointer-events: none;
+  font-size: calc(var(--u)*1.6); color: var(--ink-soft);
 }
 
 /* ===========================================================
@@ -1865,47 +1788,6 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 }
 .basket .want{ grid-column: 1 / -1; font-size: calc(var(--u)*1.25); color: var(--ink-soft); font-weight: 800; }
 
-/* The collection tray and its basket reserve separate space. A floating basket
-   covered some of the very objects the child had been asked to take. */
-.give-board{
-  width:100%; height:100%; min-height:0;
-  display:grid; grid-template-rows:minmax(0,1fr) auto; gap:6px;
-}
-.give-board .collect-field{
-  height:auto; min-height:0; padding:6px;
-  border-width:3px;
-  display:grid; grid-template-columns:repeat(5,minmax(0,1fr));
-  grid-auto-rows:minmax(48px,1fr); gap:4px; align-items:center; justify-items:center;
-}
-.give-board .obj{
-  position:relative; left:auto; top:auto; transform:none;
-  width:min(100%,max(48px,calc(var(--u)*7))); height:auto; max-height:100%; aspect-ratio:1; align-self:center;
-  padding:2px; font-size:clamp(32px,min(9vw,calc(var(--u)*4.6)),56px);
-}
-.give-board .obj:active{transform:scale(1.06);}
-.give-board .obj.picked::after{inset:1px;}
-.give-board .basket{
-  position:static; min-width:0; width:100%; min-height:52px;
-  padding:4px 8px; gap:6px; border-width:3px;
-}
-.give-board .basket .b,.give-board .basket .n{font-size:clamp(28px,calc(var(--u)*2.6),44px);line-height:1;}
-.give-board .basket .items{max-width:none; font-size:clamp(16px,calc(var(--u)*1.3),20px);}
-.give-board .basket .want{font-size:clamp(14px,calc(var(--u)*1.25),18px);line-height:1.3;}
-@media(min-width:701px){.give-board .collect-field{grid-auto-rows:minmax(64px,1fr);}}
-@media(max-height:700px){
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)){gap:2px;}
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .topbar>.backbtn{width:48px;height:48px;min-width:48px;}
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt{display:grid;grid-template-columns:minmax(0,1fr) 48px 48px;gap:4px;}
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.mascot{display:none;}
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.btn-round{width:48px;height:48px;min-width:48px;flex:0 0 48px;}
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.btn-round:not(.showbtn){grid-column:2;grid-row:1;}
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .prompt>.showbtn{grid-column:3;grid-row:1;}
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .txtwrap{display:contents;}
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .txt{grid-column:1;grid-row:1;font-size:20px;}
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .feedback{grid-column:1/-1;grid-row:2;display:block;font-size:14px;}
-  #play:is(:has(.give-board),:has(.ordinal-board),:has(.pairboard)) .feedback[hidden]{display:none;}
-}
-
 /* every plate is the same size, so width can no longer give the answer away */
 .plate.fixed{ min-width: 0; width: calc(var(--u)*17); height: calc(var(--u)*10.5); padding: calc(var(--u)*.6); }
 .slots{
@@ -2115,24 +1997,6 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 #parent .factchip.slow{ background:color-mix(in srgb, var(--c-yellow) 32%, var(--card)); }
 /* what kind of wrong it was — the sentence, not the percentage */
 #parent .factchip em{ font-style:normal; font-weight:500; color:var(--oops-ink); font-size:.78em }
-/* Parent observations stay readable beside their one-question action, including
-   narrow phones. Each tone describes today's state rather than lifetime errors. */
-#parent .parent-recommendation{
-  padding:calc(var(--u)*.9); margin:calc(var(--u)*.7) 0;
-  border:2px solid var(--good); border-radius:calc(var(--u)*.8); background:var(--good-soft);
-}
-#parent .parent-recommendation b{ display:block; overflow-wrap:anywhere }
-#parent .parent-recommendation p, #parent .parent-fact p{ margin:calc(var(--u)*.35) 0 calc(var(--u)*.65) }
-#parent .parent-fact-copy{ flex:1; min-width:0; overflow-wrap:anywhere }
-#parent .parent-fact-copy > small{ color:var(--ink-soft) }
-#parent .parent-practice-note{ font-size:.85em; color:var(--ink-soft) }
-#parent .parent-fact[data-fact-state="need"] .mk{ background:var(--c-yellow); color:var(--ink) }
-#parent .parent-fact[data-fact-state="rest"] .mk,
-#parent .parent-fact[data-fact-state="stale"] .mk{ background:var(--paper-2); color:var(--ink-soft) }
-#parent .parent-next .btn{
-  max-width:100%; min-height:44px; min-width:44px; white-space:normal;
-  font-size:max(14px,calc(var(--u)*1.1)); padding:8px 12px;
-}
 #parent .misslist{ display:grid; gap:calc(var(--u)*.4); margin:calc(var(--u)*.6) 0 }
 #parent .missrow{
   display:grid; grid-template-columns:1fr auto; gap:0 calc(var(--u)*.8);
@@ -2171,7 +2035,7 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 /* ---------- number keypad ----------
    A fixed 0–10 row, in the same place every time: the child learns where the
    numbers live, so answering stays about the arithmetic. */
-.choices.pad{ gap: calc(var(--u)*.7); max-width:100%; }
+.choices.pad{ gap: calc(var(--u)*.7); }
 /* eleven keys fit one row in landscape; where they cannot, break 6 + 5 rather
    than letting a lone "10" wrap onto a line of its own */
 @media (max-width: 900px){
@@ -2183,11 +2047,6 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
     justify-content: center; justify-items: center;
     gap: max(16px, calc(var(--u)*1.2));
   }
-  /* Eleven number keys leave one cell free: keep the explicit demonstration
-     there, beside the answers, instead of taking space from the picture. */
-  .choices.pad .teachbtn{grid-column:auto;display:flex;flex-direction:column;gap:0;width:var(--tap);min-width:var(--tap);min-height:var(--tap);padding:4px;font-size:14px;line-height:1.2;}
-  .choices.pad .teachbtn .bi{display:block;margin:0;}
-  .choices.pad .teachbtn .bl{display:block;max-width:100%;white-space:normal;}
 }
 .choice.padkey{
   /* the keypad is now the way the answer is given, so it gets real estate:
@@ -2196,28 +2055,6 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   min-height: max(calc(var(--u)*6), var(--tap));
   font-size: calc(var(--u)*3.2);
   padding: calc(var(--u)*.4) calc(var(--u)*.5);
-}
-/* Six 64px keys with 16px gaps need 464px. Phones keep the same large
-   targets in four columns, so 0/5/6 (or 10/15/16) never leave the screen. */
-@media (max-width:479px){
-  .choices.pad{grid-template-columns:repeat(4,var(--tap));gap:12px;}
-  .choices.pad .padkey{width:var(--tap);min-width:var(--tap);}
-}
-@media (max-width:479px) and (max-height:700px){
-  /* A short phone still needs the real picture after a hint. Use the full
-     prompt width for readable feedback; keep icons 48px and number keys 64px. */
-  #play:has(.choices.pad){gap:2px;}
-  .choices.pad{gap:8px;}
-  #play:has(.choices.pad) .topbar>.backbtn{width:48px;height:48px;min-width:48px;}
-  #play:has(.choices.pad) .prompt{display:grid;grid-template-columns:minmax(0,1fr) 48px 48px;gap:4px;}
-  #play:has(.choices.pad) .prompt>.mascot{display:none;}
-  #play:has(.choices.pad) .prompt>.btn-round{width:48px;height:48px;min-width:48px;flex:0 0 48px;}
-  #play:has(.choices.pad) .prompt>.btn-round:not(.showbtn){grid-column:2;grid-row:1;}
-  #play:has(.choices.pad) .prompt>.showbtn{grid-column:3;grid-row:1;}
-  #play:has(.choices.pad) .txtwrap{display:contents;}
-  #play:has(.choices.pad) .txt{grid-column:1;grid-row:1;}
-  #play:has(.choices.pad) .feedback{grid-column:1/-1;grid-row:2;display:block;}
-  #play:has(.choices.pad) .feedback[hidden]{display:none;}
 }
 
 /* ---------- diagnostic and real-world mission ---------- */
@@ -2304,35 +2141,10 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
 .ways-board .bond .legs{ width:calc(var(--u)*12); height:calc(var(--u)*1.8) }
 .ways-board .bond .part{ min-width:calc(var(--u)*4.5); min-height:calc(var(--u)*4.5); font-size:calc(var(--u)*2.4) }
 .three-sum{
-  display:flex;align-items:center;justify-content:center;gap:clamp(3px,calc(var(--u)*.35),12px);
-  font-family:var(--fs-num); font-size:clamp(20px,calc(var(--u)*2.8),44px); font-weight:800;
-  padding:8px;
+  font-family:var(--fs-num); font-size:calc(var(--u)*4); font-weight:800;
+  padding:calc(var(--u)*.7) calc(var(--u)*1.2);
   background:var(--card); border:calc(var(--u)*.24) solid var(--card-edge);
   border-radius:var(--wob-b);
-}
-.numeral-display{pointer-events:none;user-select:none;}
-.answer-submit{min-width:96px;min-height:48px;font-size:max(18px,calc(var(--u)*1.5));}
-.three-builder{display:flex;flex-direction:column;align-items:center;gap:8px;max-width:100%;}
-.three-sum-slot{font:inherit;line-height:1;color:var(--ink);background:var(--paper-2);border:3px solid var(--card-edge);border-radius:12px;min-width:48px;min-height:48px;padding:2px;cursor:pointer;}
-.three-sum>span{white-space:nowrap;}
-.first-home-mission,.day-ending-mission{width:100%;box-sizing:border-box;text-align:left;}
-.first-home-mission>summary,.day-ending-mission>summary{min-height:48px;padding:10px 6px;box-sizing:border-box;font-size:16px;font-weight:800;line-height:1.5;cursor:pointer;}
-.three-sum-slot.selected{border-color:var(--accent);background:var(--accent);color:var(--accent-ink);}
-.three-sum-slot:focus-visible{outline:3px solid var(--ring);outline-offset:2px;}
-.three-sum-slot:disabled{opacity:.55;cursor:default;}
-.three-note{font-size:clamp(14px,calc(var(--u)*1.3),20px);font-weight:800;color:var(--ink-soft);}
-.choices.three-pad .three-undo,.choices.three-pad .three-submit{min-width:var(--tap);min-height:var(--tap);width:var(--tap);padding:3px;font-size:14px;line-height:1.35;white-space:normal;}
-.choices.three-pad .btn:disabled{opacity:.45;cursor:default;}
-@media(max-width:479px) and (max-height:700px){
-  #play:has(.three-pad) .three-builder{gap:4px;}
-  #play:has(.three-pad) .three-sum{padding:2px;border-width:1px;}
-  #play:has(.three-pad) .three-note{line-height:1.2;}
-  .choices.three-pad .teachbtn{grid-column:1/-1;flex-direction:row;min-height:48px;width:100%;padding:3px 8px;}
-  .choices.three-pad .teachbtn .bl{max-width:none;}
-  /* The selected term already shows where input goes. Once the extra help row
-     appears, keep its duplicate instruction available to speech without taking
-     space away from the editable equation. */
-  #play:has(.three-pad .teachbtn) .three-note{position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
 }
 .clock-adjust{ min-height:var(--tap); padding-inline:calc(var(--u)*1.1) }
 .clock-readout{
@@ -2412,33 +2224,6 @@ polygon.glow{ stroke: var(--accent) !important; stroke-width: 2.6 !important; }
   border-radius: var(--wob-b);
   font-size: calc(var(--u)*3.2);
   background: var(--paper-2);
-}
-
-/* Grid tracks must include the same minimum as the objects: the old fixed
-   tracks shrank to 34px while their 64px buttons overlapped. */
-.pairrow{grid-template-columns:repeat(var(--pn,5),max(var(--tap),calc(var(--u)*6)));}
-@media(max-width:700px){
-  .pairboard{display:grid;grid-template-columns:repeat(var(--pair-cols,5),minmax(48px,1fr));gap:8px 5px;width:min(100%,320px);}
-  .pairboard .pairrow{display:contents;}
-  .pairboard .pairgap{display:none;}
-  .pairboard .pairitem,.pairboard .pairslot{
-    grid-column:var(--pair-col);grid-row:var(--pair-row);
-    width:100%;min-width:48px;height:48px;min-height:48px;
-    font-size:30px;border-width:2px;
-  }
-  .pairboard .pairitem .tag{top:-4px;right:-2px;min-width:18px;height:18px;padding:0 2px;font-size:12px;}
-}
-/* Once pairing is finished, the number pad is the answer surface. Return its
-   completed picture to two compact aligned rows so every pair and leftover can
-   remain visible above the 64px numeric keys, including on a short phone. */
-@media(max-width:700px) and (max-height:700px){
-  #play:has(.choices.pad) .pairboard{display:flex;gap:4px;width:100%;}
-  #play:has(.choices.pad) .pairboard .pairrow{display:grid;grid-template-columns:repeat(var(--pn),minmax(0,1fr));gap:3px;}
-  #play:has(.choices.pad) .pairboard .pairitem{
-    grid-column:auto;grid-row:auto;width:100%;min-width:0;
-    height:max(24px,calc(var(--u)*6));min-height:0;font-size:clamp(16px,calc(var(--u)*3.2),28px);
-  }
-  #play:has(.choices.pad) .pairboard .pairitem .tag{top:-3px;right:-2px;min-width:12px;height:12px;font-size:9px;}
 }
 
 /* ---- 20までの かず ---- */
@@ -2653,7 +2438,7 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .transfer-home strong{ font-size:clamp(15px,1.6vw,20px); line-height:1.4; }
 .transfer-home small{ color:var(--ink-soft); margin-top:4px; font-size:12px; line-height:1.4; }
 .shelf .strip .transfer-sticker{ --medal-size:40px; padding:3px; }
-.transfer-body{ overflow-y:auto; overflow-anchor:none; min-height:0; padding:12px 22px 28px; flex:1; }
+.transfer-body{ overflow-y:auto; min-height:0; padding:12px 22px 28px; flex:1; }
 #transfer{ color:var(--ink); }
 .transfer-intro{ text-align:center; margin:4px auto 26px; max-width:760px; }
 .transfer-eyebrow{ color:var(--ink-soft); font-size:14px; font-weight:800; }
@@ -2751,9 +2536,6 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .sticker-mission-pick .pokemon-image{ height:calc(var(--u)*3); }
 .sticker-mission-prize .pokemon-sticker{ --pokemon-size:calc(var(--u)*15); }
 .newsticker .e{ display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
-.result-sticker-place{display:flex;flex-direction:column;align-items:center;gap:6px;min-height:48px;padding:6px;background:var(--paper-2);border:2px solid var(--card-edge);border-radius:18px;color:var(--ink);cursor:pointer;font:inherit;}
-.result-sticker-place>span:last-child{font-size:16px;font-weight:800;line-height:1.5;}
-.result-sticker-place:focus-visible{outline:3px solid var(--ring);outline-offset:3px;}
 .newsticker .e .pokemon-sticker{ --pokemon-size:clamp(110px,calc(var(--u)*10),190px); }
 .levelcard .goldmark{ width:auto; height:auto; top:calc(var(--u)*-.6); right:calc(var(--u)*-.4); border-radius:12px; }
 .levelcard .goldmark .pokemon-sticker{ --pokemon-size:calc(var(--u)*4.4); border:0; padding:2px; gap:0; border-radius:10px; }
@@ -2847,10 +2629,6 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .review-chapter-number{display:grid;place-items:center;flex:0 0 54px;height:54px;border-radius:18px;background:var(--chapter-color);color:var(--on-crayon);font-size:29px;font-weight:900;}
 .review-chapter-heading h3{font-size:24px;margin:0 0 5px;}
 .review-chapter-heading p{font-size:15px;margin:0;color:var(--ink-soft);}
-.review-preparation{padding:14px 16px;margin:12px 0;border:2px solid var(--card-edge);border-radius:14px;background:var(--paper);}
-.review-preparation>strong{display:block;font-size:18px;line-height:1.6;}
-.review-preparation .review-missing{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
-.review-preparation .review-missing .btn{min-height:64px;max-width:100%;white-space:normal;font-size:16px;word-break:keep-all;overflow-wrap:anywhere;}
 .review-lesson-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
 .review-lesson-slot{min-width:0;}
 .review-lesson{width:100%;height:100%;min-height:185px;display:flex;flex-direction:column;align-items:center;gap:10px;background:var(--paper);color:var(--ink);border:2px solid var(--card-edge);border-radius:16px;padding:12px 8px;cursor:pointer;font:inherit;}
@@ -3061,14 +2839,27 @@ polygon.slot-focus{ stroke:var(--ring); stroke-width:2.8; stroke-dasharray:none;
 .shelf .strip .pokemon-sticker.pokemon-second-round{min-width:52px;}
 .shelf .strip .pokemon-round-badge{font-size:9px;padding:1px 0;}
 
-/* Keep all choices large enough to use on a narrow touch screen. */
-.home-quests > button,.dailies > .daily{ min-height:var(--tap); }
+/* Home cards share rows; only the compact toolbar and lap controls stay fixed. */
+.home-quests > button,.dailies > .daily{min-height:var(--tap);}
+@media(max-width:700px){
+  #home{
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto auto auto minmax(0,1fr);
+  }
+  #home > .round-status{
+    grid-column:1; grid-row:2;
+    flex-direction:row; align-items:center; justify-content:space-between;
+  }
+  #home > .home-rounds{grid-column:1;grid-row:3;}
+  .home-content{grid-row:4;}
+}
 @media(max-width:600px){
   .home-head{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;}
   .home-head .logo{grid-column:1 / 5;font-size:clamp(22px,6vw,30px);white-space:nowrap;}
   .home-head .spacer{display:none;}
   .home-head .starcount{justify-self:end;font-size:18px;}
   .home-head .btn-round{justify-self:center;width:100%;max-width:64px;}
+  .home-rounds .round-choice-copy small{display:none;}
   .home-rounds .round-choice-progress{font-size:11px;}
   .home-quests > .review-home,.home-quests > .transfer-home{
     display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:8px;
@@ -3079,123 +2870,10 @@ polygon.slot-focus{ stroke:var(--ring); stroke-width:2.8; stroke-dasharray:none;
   .home-quests .adventure-card{gap:4px;padding:6px;}
   .home-quests .adventure-card b{font-size:12px;white-space:normal;word-break:keep-all;}
   .home-quests .adventure-card small{font-size:10px;}
-  .home-choices{grid-template-columns:minmax(0,1fr);gap:10px;}
-  .home-more-content{padding:8px;}
-  .dailies{grid-template-columns:minmax(0,1fr);}
-  .dailies > .daily .t{font-size:18px;}
-  .dailies > .daily .s{display:block;font-size:14px;}
-  .dailies > .daily .ico{font-size:28px;}
-  .dailies > .daily .go{font-size:20px;}
-  .home-primary{padding:14px;gap:10px;}
-  .home-primary .ico{font-size:32px;}
-  .home-primary .go{font-size:22px;}
-}
-.review-support-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
-.review-support-scene{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:12px;margin:12px 0;min-width:0;}
-.review-support-scene>.review-art{width:58px;height:58px;flex:none;}
-.review-support-scene small{display:block;font-size:16px;text-align:center;}
-.review-support-scene>small{flex-basis:100%;}
-.review-support-part{max-width:100%;min-width:0;text-align:center;}
-.review-support-spatial{display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr);gap:8px;width:100%;}
-.review-support-blocks{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;max-width:365px;margin:6px auto;}
-.review-support-block{display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;background:#E9C26C;border:2px solid #8B723C;border-radius:6px;color:#403D3E;font-size:17px;line-height:1;font-weight:900;}
-.review-support-block.aside{background:var(--paper);border-style:dashed;opacity:.65;}
-.review-support-block.first,.review-support-order .first,.review-support-pair.first,.review-support-empty.first{outline:3px solid var(--c-blue);outline-offset:3px;}
-.review-support-order{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;}
-.review-support-order.vertical{flex-direction:column;}
-.review-support-order>span{display:flex;align-items:center;justify-content:center;min-width:26px;min-height:28px;border-radius:6px;font-weight:900;}
-.review-support-pairs{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;}
-.review-support-pair{display:flex;flex-direction:column;align-items:center;gap:7px;padding:3px;border-radius:5px;}
-.review-support-pair i{display:block;width:25px;height:25px;border:2px solid #8B723C;background:#E9C26C;border-radius:5px;}
-.review-support-pair>span{height:25px;font-size:18px;line-height:25px;}
-.review-support-empty{border:2px dashed var(--card-edge);border-radius:50%;padding:22px 15px;}
-
-/* Keep help and its next action together, independent of the long question page. */
-dialog.review-hint{position:fixed;inset:0;width:min(680px,calc(100vw - 28px));max-width:none;max-height:calc(100vh - 28px);max-height:calc(100dvh - 28px);margin:auto;padding:0;border:3px solid var(--c-blue);border-radius:20px;background:var(--paper);color:var(--ink);overflow:hidden;box-sizing:border-box;box-shadow:0 12px 48px rgba(0,0,0,.25);font-size:18px;line-height:1.7;}
-dialog.review-hint[open]{display:flex;flex-direction:column;}
-dialog.review-hint::backdrop{background:rgba(30,35,43,.45);}
-.review-help-heading{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 12px;border-bottom:2px solid var(--card-edge);flex:none;}
-.review-help-heading>div{min-width:0;flex:1;}
-.review-help-heading h3{font-size:22px;margin:0 0 4px;}
-.review-help-heading p{font-size:17px;line-height:1.6;margin:0;}
-.review-help-heading .review-hint-hear{flex:none;min-width:56px;min-height:56px;padding:6px;}
-.review-help-content{overflow:auto;min-height:0;padding:8px 18px 12px;overscroll-behavior:contain;}
-.review-help-content>p{margin:10px 0 0;}
-.review-help-response{font-weight:900;color:var(--ink);}
-.review-hint .review-support-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px 18px 16px;background:var(--paper-2);border-top:2px solid var(--card-edge);flex:none;}
-.review-hint .review-support-actions .btn{min-width:0;min-height:64px;white-space:normal;line-height:1.5;font-size:17px;padding:10px;}
-@media(max-width:480px){
-  .review-help-heading{padding:12px;gap:8px;}
-  .review-help-heading h3{font-size:20px;}
-  .review-help-heading p{font-size:16px;}
-  .review-help-content{padding:6px 12px 12px;}
-  .review-hint .review-support-actions{padding:12px;gap:8px;}
-  .review-hint .review-support-actions .btn{font-size:16px;}
-}
-
-/* ---------- a sticker book the child can browse and act on ---------- */
-#book .book-count{font-size:16px;line-height:1.5;margin:8px 0;}
-#book .book-count b{font-size:22px;}
-#book .book-count>span{font-size:14px;}
-#book .book-controls{flex:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,220px);gap:6px 12px;padding:2px 4px 8px;}
-#book .book-filters{display:flex;gap:6px;min-width:0;}
-#book .book-filter,#book .book-world{font:inherit;color:var(--ink);font-size:16px;min-height:64px;border:2px solid var(--card-edge);border-radius:12px;background:var(--card);padding:6px 10px;cursor:pointer;}
-#book .book-filter{flex:1;min-width:0;font-weight:800;padding-inline:4px;}
-#book .book-filter[aria-pressed="true"]{background:var(--good-soft);border-color:var(--good-ink);color:var(--good-ink);}
-#book .book-world{width:100%;min-width:0;}
-#book .book-filter-count{grid-column:1/-1;font-size:14px;color:var(--ink-soft);line-height:1.5;}
-#book .book{display:block;padding:4px 6px 18px;scrollbar-gutter:stable;}
-#book .book-catalog{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:12px;align-content:start;}
-#book .book-slot{font:inherit;flex-direction:column;min-width:0;min-height:172px;margin:0;cursor:pointer;color:var(--ink);padding:6px;gap:5px;transition:transform .15s;}
-#book .book-slot:active{transform:translateY(2px);}
-#book .book-slot .pokemon-sticker{--pokemon-size:128px;width:100%;background:transparent;box-shadow:none;}
-#book .book-slot .pokemon-image{height:92px;}
-#book .book-slot .pokemon-name{font-size:16px;}
-#book .book-slot .pokemon-rarity{font-size:12px;}
-#book .book-slot-state{font-size:14px;line-height:1.5;font-weight:800;}
-#book .book-slot.locked .book-slot-state{color:var(--ink-soft);}
-#book .book-empty{grid-column:1/-1;font-size:17px;line-height:1.8;padding:16px;}
-#book .book-extras{margin-top:20px;}
-#book .book-extras>summary{min-height:64px;display:flex;align-items:center;cursor:pointer;font-size:17px;font-weight:800;padding:12px;background:var(--paper-2);border-radius:14px;list-style:none;}
-#book .book-extras>summary::before{content:'▶';font-size:14px;margin-right:10px;}
-#book .book-extras[open]>summary::before{content:'▼';}
-#book .book-extra-content{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding-top:12px;}
-#book .book-guide{font-size:16px;line-height:1.8;}
-#book-detail .book-detail-body{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:16px;padding:12px 12px 24px;}
-#book-detail .book-detail-body>.pokemon-sticker{--pokemon-size:190px;}
-#book-detail .book-detail-copy{width:100%;max-width:680px;font-size:18px;line-height:1.7;}
-#book-detail .book-detail-copy p{margin:10px 0;}
-#book-detail .book-detail-actions{display:flex;flex-direction:column;width:100%;max-width:580px;gap:12px;}
-#book-detail .book-detail-actions .btn{min-height:64px;font-size:18px;white-space:normal;line-height:1.6;}
-@media(max-width:700px){
-  #book .book-controls{grid-template-columns:minmax(0,1fr);gap:6px;}
-  #book .book-count{margin:4px 0;font-size:14px;}
-  #book .book-count>span{font-size:13px;}
-  #book .book-filter{font-size:14px;}
-  #book .book-catalog{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
-  #book .book-slot{min-height:174px;}
-  #book .book-slot .pokemon-name{font-size:15px;}
-}
-/* Current-stage story help */
-.story-recap{max-width:100%;}
-.story-recap>summary{cursor:pointer;list-style:none;min-height:48px;display:flex;align-items:center;font-size:16px;}
-.story-recap>summary::-webkit-details-marker{display:none;}
-
-/* The completed answer stays until the child chooses the next question. */
-.answer-controls{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:4px 0;}
-.answer-controls[hidden]{display:none!important;}
-.answer-state{font-size:clamp(16px,calc(var(--u)*1.3),24px);font-weight:800;color:var(--good);}
-.answer-next{min-width:144px;min-height:64px;font-size:clamp(22px,calc(var(--u)*1.8),32px);line-height:1.2;}
-.answer-next:disabled{opacity:.55;cursor:default;}
-#play.answer-review .playfield,#play.answer-review .choices{pointer-events:none;}
-#play.answer-review .story-recap>summary{pointer-events:auto;}
-.choices.answer-complete{display:flex;gap:8px;padding:0;}
-.choices.answer-complete>:not(.answer-keep){display:none!important;}
-.choices.answer-complete .choice{min-width:48px;min-height:48px;width:auto;height:auto;max-width:100%;font-size:clamp(20px,calc(var(--u)*2.4),42px);padding:4px 12px;}
-.choices.answer-complete .choice-hear{display:none;}
-.choices.answer-complete .choice>svg{max-height:84px;width:auto;}
-@media(max-width:700px){
-  #play.answer-review{gap:4px;}
-  .answer-controls{gap:8px;}
-  .answer-next{min-width:144px;min-height:64px;}
+  .dailies{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .dailies.n1{grid-template-columns:minmax(0,1fr);}
+  .dailies > .daily .t{font-size:14px;white-space:normal;word-break:keep-all;}
+  .dailies > .daily .s{display:none;}
+  .dailies > .daily .ico{font-size:24px;}
+  .dailies > .daily .go{font-size:16px;}
 }

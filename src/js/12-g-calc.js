@@ -61,8 +61,7 @@ function decompose(api, whole, pad){
   api.field.append(bond);
   const showFrame = () => { if (!frameset.isConnected) api.field.prepend(frameset); };
   const showParts = {
-    // Leave time to see the last red dot, including the nine-dot decomposition.
-    correctOpts: { delay: Math.max(1500, 200 + (ans - 1) * 170 + 350) },
+    correctOpts: { delay: 1500 },
     onPick(){
       showFrame();
       // show the two parts making the whole (scoped to this question's own nodes)
@@ -150,7 +149,6 @@ function makeTwoWays(api){
         bondNode(whole, a, whole - a))));
   };
   const build = () => {
-    if (made.length){ api.clearHelp(); api.coach(bondCoach); }
     clear(api.choices);
     accepting = true;
     for (let a = 1; a < whole; a++){
@@ -166,7 +164,6 @@ function makeTwoWays(api){
           return;
         }
         made.push(a);
-        api.saveDraft();
         b.classList.add('correct');
         draw();
         Sound.say(`${numKana(a)}と${numKana(whole-a)}。`, { delay: 120 });
@@ -183,7 +180,7 @@ function makeTwoWays(api){
     return Array.from({ length: whole - 1 }, (_, i) => i + 1)
       .find(x => !used.has(Math.min(x, whole - x))) || 1;
   };
-  const bondCoach = {
+  api.coach({
     text: () => { const a = unused(); return a + ' と ' + (whole - a) + ' に わけることも できるよ'; },
     say: () => { const a = unused(); return `${numKana(a)}と${numKana(whole - a)}に、分けることもできるよ。`; },
     tool(){ if (!$('.tenframe', api.field)) api.field.append(el('div.frameset', null, tenFrameNode(whole, 5, { total: whole > 5 ? 10 : 5 }))); },
@@ -192,27 +189,13 @@ function makeTwoWays(api){
       const b = $$('.choice', api.choices).find(x => Number(x.textContent) === a);
       return b ? [{ at: b, say: `${numKana(a)}を押してみよう。`, ms: 1700 }] : [];
     }
-  };
-  api.coach(bondCoach);
+  });
   api.onShow(() => {
     const press = v => { const b = $$('.choice', api.choices).find(x => Number(x.textContent) === v); if (b) b.click(); };
     const taken = new Set(made.map(x => Math.min(x, whole - x)));
     const picks = [1, 2, 3].filter(v => !taken.has(v)).slice(0, 2 - made.length);
     press(picks[0]);
     if (picks[1] != null) api.later(() => api.afterSpeech(() => press(picks[1])), 450);
-  });
-  api.persist({
-    id: 'bondWays',
-    read(){ return { made: made.slice() }; },
-    restore(d){
-      if (!d || !Array.isArray(d.made) || d.made.length > 2
-        || !d.made.every(x => Number.isInteger(x) && x > 0 && x < whole)
-        || new Set(d.made.map(x => Math.min(x, whole - x))).size !== d.made.length) return false;
-      made.splice(0, made.length, ...d.made); draw();
-      if (made.length < 2) build();
-      else { clear(api.choices); draftFinish(api, () => api.correct({ quiet: true })); }
-      return true;
-    }
   });
 }
 
@@ -247,58 +230,33 @@ function fillToTen(api){
   }
   let count = start;
   const readout = el('div.hintline', { text: 'いま ' + count + 'こ' });
-  const askAdded = () => {
-    const add = 10 - start;
-    api.clearHelp();
-    api.setPrompt(`${numTag(start)} に <b>いくつ たした？</b>`, `${numKana(start)}に、いくつ足した？`);
-    readout.textContent = 'あかい まるが たした かず';
-    api.buildChoices(shuffle([add].concat(distractors(add, 2, 1, 9))), add, { correctOpts: { delay: 900 } });
-    const added = cells.slice(start);
-    const countAdded = Coach.once(() => Coach.countable(api, added));
-    api.coach({
-      text: 'たした あかい まるだけを タップして かぞえよう',
-      say: '足した赤い丸だけを、タップして数えよう。',
-      tool(){ countAdded(); Coach.pulse(added); },
-      walk(){ return countAdded().steps(); }
-    });
-  };
   cells.forEach((cell, i) => {
     if (i < start) return;
     cell.addEventListener('click', () => {
       if (api.locked || cell.firstChild) return;
       cell.append(el('div.dot.b'));
       count++;
-      api.saveDraft();
       Sound.sfx.count(count - 1);
       Sound.say(numKana(count), { delay: 0, rate: 1.08 });
       readout.textContent = 'いま ' + count + 'こ';
       if (count === 10){
-        api.later(() => api.afterSpeech(askAdded), 300);
+        api.later(() => api.afterSpeech(() => {
+          const add = 10 - start;
+          api.setPrompt(`${numTag(start)} に <b>いくつ たした？</b>`,
+                        `${numKana(start)}に、いくつ足した？`);
+          api.buildChoices(shuffle([add].concat(distractors(add, 2, 1, 9))), add, {
+            correctOpts: { delay: 900 }
+          });
+        }), 300);
       }
     });
   });
   api.field.append(el('div.frameset', null, f), readout);
-  api.coach({
-    text: () => 'いま ' + count + 'こ。あいた ところに たして 10に しよう',
-    say: () => `今は${koKana(count)}。空いたところに足して、10にしよう。`,
-    tool(){ readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; },
-    walk(){ return cells.filter(c => !c.firstChild).map(c => ({ at: c, act(){ c.click(); }, ms: 620 })); }
-  });
+  api.coach({ walk(){ return cells.filter(c => !c.firstChild).map(c => ({ at: c, act(){ c.click(); }, ms: 620 })); } });
+  api.onHint(() => { readout.textContent = 'いま ' + count + 'こ　／　あと ' + (10 - count) + 'こ'; });
   api.onShow(() => {
     cells.filter(c => !c.firstChild).forEach(c => c.click());
     api.later(() => api.afterSpeech(() => { const b = $('.choice.correct') || $$('.choice', api.choices).find(x => x.textContent === String(10 - start)); if (b) b.click(); }), 650);
-  });
-  api.persist({
-    id: 'fillTen',
-    read(){ return { filled: cells.map((c, i) => i >= start && c.firstChild ? i : -1).filter(i => i >= 0) }; },
-    restore(d){
-      if (!d || !draftIndices(d.filled, 10) || d.filled.some(i => i < start)) return false;
-      cells.slice(start).forEach(c => clear(c));
-      d.filled.forEach(i => cells[i].append(el('div.dot.b')));
-      count = start + d.filled.length; readout.textContent = 'いま ' + count + 'こ';
-      if (count === 10) askAdded();
-      return true;
-    }
   });
 }
 
@@ -332,9 +290,8 @@ function partnerOfTen(api, pad){
       }, (i - a) * 150 + 200);
     }
   };
-  const revealDelay = Math.max(1500, 200 + (ans - 1) * 150 + 350);
-  if (pad) api.buildPad(ans, revealed(fillIn, { delay: revealDelay }));
-  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans, revealed(fillIn, { delay: revealDelay }));
+  if (pad) api.buildPad(ans, revealed(fillIn, { delay: 1500 }));
+  else api.buildChoices(shuffle([ans].concat(distractors(ans, 3, 1, 9))), ans, revealed(fillIn, { delay: 1500 }));
   let walking = false;
   const fill = Coach.once(() => Coach.fillable(api, cells, { from: a,
     onDone(){ if (walking) return; Coach.pulse($$('.dot.b', f)); Sound.say('赤い丸は、いくつ？', { delay: 80 }); } }));
@@ -372,7 +329,7 @@ function pairHunt(api){
       if (api.locked || c.classList.contains('correct')) return;
       if (picked.indexOf(c) >= 0){
         picked.splice(picked.indexOf(c), 1); c.classList.remove('picked');
-        c.style.borderColor = ''; Sound.sfx.tap(); api.saveDraft(); return;
+        c.style.borderColor = ''; Sound.sfx.tap(); return;
       }
       picked.push(c); c.style.borderColor = 'var(--accent)'; Sound.sfx.tap();
       if (picked.length === 2){
@@ -385,7 +342,6 @@ function pairHunt(api){
           picked.length = 0;
         }
       }
-      api.saveDraft();
     });
     row.append(c);
   });
@@ -413,18 +369,6 @@ function pairHunt(api){
     const c2 = cs.find(c => c !== c1 && Number(c.textContent) === b);
     [c1, c2].forEach(c => { if (c) c.click(); });
   });
-  api.persist({
-    id: 'tenPair',
-    read(){ return { picked: picked.map(c => Array.from(row.children).indexOf(c)) }; },
-    restore(d){
-      if (!d || !draftIndices(d.picked, cards.length) || d.picked.length > 1) return false;
-      picked.length = 0;
-      const cs = $$('.choice', row);
-      cs.forEach(c => { c.classList.remove('picked'); c.style.borderColor = ''; });
-      d.picked.forEach(i => { picked.push(cs[i]); cs[i].style.borderColor = 'var(--accent)'; });
-      return true;
-    }
-  });
 }
 
 /** Build ten from three numbers. Multiple answers are accepted; the app evaluates
@@ -433,81 +377,34 @@ function threeMakeTen(api){
   api.item('three10', '3つの かずで 10を つくる');
   api.setPrompt('3つの すうじを えらんで <b>10</b> を つくろう',
                 '三つの数字を選んで、10を作ろう。');
-  const picked = [], history = [], keys = [];
-  let active = 0, submittedWrong = 0;
-  api.answer(10);
-  const readout = el('div.three-sum', { 'aria-label': '3つの かずで 10' });
-  const slots = [0, 1, 2].map(i => el('button.three-sum-slot', {
-    type: 'button',
-    onclick(){ if (!api.locked){ active = i; redraw(); Sound.sfx.tap(); api.saveDraft(); } }
-  }));
-  slots.forEach((slot, i) => {
-    if (i) readout.append(el('span', { text: '＋', 'aria-hidden': 'true' }));
-    readout.append(slot);
-  });
-  readout.append(el('span', { text: '＝10', 'aria-hidden': 'true' }));
-  const note = el('div.three-note', { 'aria-live': 'polite' });
-  const undo = el('button.btn.three-undo', { type: 'button', text: '↶ ひとつ もどす',
-    onclick(){
-      if (api.locked || !history.length) return;
-      const before = history.pop();
-      picked.splice(0, picked.length, ...before.picked); active = before.active;
-      redraw(); Sound.sfx.tap();
-      api.saveDraft();
-    }
-  });
-  const submit = el('button.btn.btn-accent.answer-submit.three-submit', {
-    type: 'button', text: 'できた！', onclick(){ send(); }
-  });
-  api.field.append(el('div.three-builder', null, readout, note));
+  const picked = [];
+  let accepting = true;
+  const readout = el('div.three-sum', { text: '? ＋ ? ＋ ? ＝ 10' });
+  api.field.append(readout);
   const redraw = () => {
-    slots.forEach((slot, i) => {
-      slot.textContent = picked[i] == null ? '？' : String(picked[i]);
-      slot.disabled = api.locked || i > picked.length;
-      slot.classList.toggle('selected', i === active);
-      slot.setAttribute('aria-pressed', String(i === active));
-      slot.setAttribute('aria-label', `${i + 1}つめの かず ${picked[i] == null ? 'まだ' : picked[i]}。えらびなおす`);
-    });
-    keys.forEach(key => { key.disabled = api.locked || active == null; });
-    undo.disabled = api.locked || !history.length;
-    submit.disabled = api.locked || picked.length !== 3;
-    note.textContent = api.locked ? '3つの かずで 10に なったね'
-      : active == null ? 'かえたい かずを おせるよ' : `${active + 1}つめの かずを えらぼう`;
+    const vals = picked.concat(['?', '?', '?']).slice(0, 3);
+    readout.textContent = vals.join(' ＋ ') + ' ＝ 10';
   };
-  function send(){
-    if (api.locked || picked.length !== 3) return;
-    const sum = picked.reduce((a, x) => a + x, 0);
-    if (sum === 10){
-      api.answer(picked.join(' ＋ ') + ' ＝ 10');
-      submit.classList.add('choice', 'correct');
-      api.correct({ delay: 1400 }); redraw();
-    } else {
-      active = 0; redraw();
-      api.wrong(submit, sum);
-      // Later attempts belong to the engine's hint/demonstration ladder. Do not
-      // interrupt that narration with the first attempt's correction prompt.
-      if (++submittedWrong === 1) Sound.say(`合わせると${numKana(sum)}だね。かずを押すと、選び直せるよ。`, { delay: 280 });
-      api.saveDraft();
-    }
-  }
   for (let v = 0; v <= 9; v++){
     const b = el('button.choice.padkey', { type: 'button', text: String(v) });
     b.addEventListener('click', () => {
-      if (api.locked || active == null) return;
-      history.push({ picked: picked.slice(), active });
-      picked[active] = v;
-      active = active < 2 ? active + 1 : null;
-      redraw(); Sound.sfx.tap();
-      api.saveDraft();
+      if (api.locked || !accepting) return;
+      picked.push(v); redraw(); Sound.sfx.tap();
+      if (picked.length < 3) return;
+      accepting = false;
+      const sum = picked.reduce((a, x) => a + x, 0);
+      if (sum === 10){
+        b.classList.add('correct');
+        api.correct({ delay: 1400 });
+      } else {
+        api.wrong(b);
+        Sound.say(`合わせると${numKana(sum)}だね。10になるように変えてみよう。`, { delay: 280 });
+        api.later(() => { picked.length = 0; redraw(); accepting = true; }, 650);
+      }
     });
-    keys.push(b);
     api.choices.append(b);
   }
-  // Ten digit keys leave two spaces in the phone's three-row keypad. Put the
-  // edit/submit actions there, preserving room for both the expression and help.
-  api.choices.append(undo, submit);
-  redraw();
-  api.choices.classList.add('pad', 'three-pad');
+  api.choices.classList.add('pad');
   const key = v => $$('.padkey', api.choices).find(k => k.textContent === String(v));
   api.coach({
     text: 'まず 5を えらんで、のこりの 5を 2つに わけよう',
@@ -519,23 +416,8 @@ function threeMakeTen(api){
     }
   });
   api.onShow(() => {
-    picked.splice(0, picked.length, 5, 2, 3); active = null;
-    redraw(); send();
-  });
-  api.persist({
-    id: 'threeTen',
-    read(){ return { picked: picked.slice(), active, history: history.slice(-100).map(x => ({ picked: x.picked.slice(), active: x.active })), submittedWrong }; },
-    restore(d){
-      const terms = xs => Array.isArray(xs) && xs.length <= 3 && xs.every(x => Number.isInteger(x) && x >= 0 && x <= 9);
-      const cursor = (x, xs) => x === null ? xs.length === 3 : Number.isInteger(x) && x >= 0 && x <= Math.min(2, xs.length);
-      if (!d || !terms(d.picked) || !cursor(d.active, d.picked)
-        || !Array.isArray(d.history) || d.history.length > 100
-        || !d.history.every(x => x && terms(x.picked) && cursor(x.active, x.picked))
-        || !Number.isInteger(d.submittedWrong) || d.submittedWrong < 0 || d.submittedWrong > 100000) return false;
-      picked.splice(0, picked.length, ...d.picked); active = d.active; submittedWrong = d.submittedWrong;
-      history.splice(0, history.length, ...d.history.map(x => ({ picked: x.picked.slice(), active: x.active })));
-      redraw(); return true;
-    }
+    picked.length = 0; redraw(); accepting = true;
+    [5, 2, 3].forEach(v => { const k = key(v); if (k) k.click(); });
   });
 }
 

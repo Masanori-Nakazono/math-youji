@@ -75,8 +75,7 @@ const Progress = (() => {
   };
   function levelReady(id, i){
     if (Store.hasConfirmed(id + ':' + i)) return true;
-    const evidence = Store.readiness(id, i);
-    return evidence.count >= 6 && evidence.accuracy >= .75;
+    return Store.recentCount(id, i) >= 6 && Store.recentAccuracy(id, i) >= .75;
   }
   function g1GameOpen(g){
     if (stageOf(g) !== 'g1') return false;
@@ -139,9 +138,6 @@ function levelOpen(g, i){ return stageOpen(g) && Store.levelUnlocked(g.id, i); }
 
 const Session = (() => {
   let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, showBtn, backBtn, moodEl, feedbackEl;
-  let answerControls, nextBtn, answerSpeech = '', advancePending = null;
-  let autoAdvanceOverride = null, blockAnswerUntil = 0;
-  let lastAnswerGesture = null, lastTouchPointer = null, surfaceVersion = 0;
   let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
@@ -150,11 +146,6 @@ const Session = (() => {
      is a separate short practice path.  Neither is written as a learning result. */
   let rewardTarget = null, adventureTarget = null;
   let firstTarget = null, firstPhase = null, visitMilestone = null;
-  let runId = '', runRound = 1, results = [], resumeQuestion = null;
-  // Navigation stays in memory and belongs to one run, never to its score or backup.
-  let levelReturn = null;
-  let draftAdapters = new Map(), restoringDraft = false;
-  let overviewNode, overviewBody, countEl, overviewOn = true, breaksOn = true;
   let hintBtns = [], hintExtras = [], hintShown = false, lastSpeech = '';
   /* Most questions keep their hint back until a second mistake, so the child
      gets a real second try first. A question whose picture is already hidden
@@ -285,10 +276,6 @@ const Session = (() => {
     epoch++;
     timers.forEach((v, id) => clearTimeout(id));
     timers.clear();
-    advancePending = null;
-    if (nextBtn) nextBtn.disabled = true;
-    if (answerControls) answerControls.hidden = true;
-    if (node) node.classList.remove('answer-review');
     endWalk();
   }
 
@@ -318,11 +305,7 @@ const Session = (() => {
       'aria-label': 'もういちど きく', title: 'もういちど きく',
       // the question, and the hint if one is up: a child who missed the hint's words
       // has no other way to hear them again
-      onclick(){
-        Sound.sfx.tap();
-        const text = locked && answerSpeech ? answerSpeech : lastSpeech + hintSpeech;
-        if (text) Sound.say(text, { delay: 40 });
-      }
+      onclick(){ Sound.sfx.tap(); if (lastSpeech || hintSpeech) Sound.say(lastSpeech + hintSpeech, { delay: 40 }); }
     }, '🔊');
     /* 👀: the help a child can ask for before getting it wrong. Help that only ever
        arrives after two mistakes teaches that being wrong is how you get help. */
@@ -337,66 +320,16 @@ const Session = (() => {
     backBtn = el('button.btn.btn-ghost.btn-round.backbtn', {
       'aria-label': 'もどる', onclick: quit
     }, '←');
-    nextBtn = el('button.btn.btn-accent.answer-next', {
-      type: 'button', disabled: true,
-      onclick(){ if (advancePending){ Sound.sfx.tap(); advancePending(); } }
-    }, 'つぎへ ▶');
-    answerControls = el('div.answer-controls', {hidden:true},
-      el('span.answer-state', {text:'◯ できたね', role:'status'}), nextBtn);
     node = el('div#play', null,
       el('div.topbar', null,
         backBtn,
         titleEl, pipsEl),
       el('div.prompt', null, moodEl,
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn, showBtn),
-      countEl = el('div.session-count',{'aria-live':'polite'}), fieldEl, choicesEl, answerControls);
+      fieldEl, choicesEl);
     UI.register('play', node);
-    const explicitField = target => target && target.closest && target.closest('.three-sum-slot');
-    const answerAction = target => target && target.closest && target.closest('.playfield button,.playfield [role="button"],.choices button,.choices [role="button"],.answer-next');
-    const nativeGesture = e => {
-      if (!e.isTrusted) return;
-      const control = answerAction(e.target), active = UI.currentName() === 'play';
-      const previous = lastAnswerGesture, elapsed = previous ? e.timeStamp - previous.at : Infinity;
-      if (!active && elapsed >= 1200) return;
-      if (explicitField(e.target)){ lastAnswerGesture = null; return; }
-      if (e.type === 'click' && e.detail === 0) return;
-      const touch = e.pointerType === 'touch' || e.sourceCapabilities?.firesTouchEvents
-        || lastTouchPointer && e.timeStamp - lastTouchPointer.at < 100
-          && Math.hypot(e.clientX-lastTouchPointer.x,e.clientY-lastTouchPointer.y) < 4;
-      const same = previous && elapsed < 1200
-        && Math.hypot(e.clientX-previous.x,e.clientY-previous.y) < 20;
-      const handoff = previous && (previous.numeric || wrongThisQ > previous.wrong || previous.epoch !== epoch || previous.surface !== surfaceVersion);
-      if (same && (e.detail > 1 || touch && handoff && elapsed < 450)){
-        e.preventDefault();e.stopImmediatePropagation();return;
-      }
-      if (e.type === 'click' && active && control) lastAnswerGesture = {
-        at:e.timeStamp,x:e.clientX,y:e.clientY,epoch,surface:surfaceVersion,wrong:wrongThisQ,
-        numeric:control.matches('.padkey,.answer-submit,.answer-next,.three-undo')
-      };
-    };
-    document.addEventListener('pointerdown', e => {
-      if (e.pointerType === 'touch') lastTouchPointer = {at:e.timeStamp,x:e.clientX,y:e.clientY};
-      nativeGesture(e);
-    }, true);
-    document.addEventListener('click', nativeGesture, true);
-    node.addEventListener('keydown', e => {
-      if (e.repeat && (e.key === 'Enter' || e.key === ' ') && answerAction(e.target)){
-        e.preventDefault();e.stopImmediatePropagation();
-      }
-    }, true);
     // has a finger been on this question yet — the together-tool must not wipe the child's own work
-    const touch = e => {
-      // The second tap of a double tap on Next must not land on the new answer
-      // surface that has just appeared in the same place.
-      if (e.detail > 1 && performance.now() < blockAnswerUntil && e.target.closest
-          && e.target.closest('.playfield, .choices')){
-        e.preventDefault(); e.stopImmediatePropagation(); return;
-      }
-      // Listening is part of reading the question, not the child's first answer.
-      // This listener runs in capture phase, before the audio button can stop it.
-      if (e.target.closest && e.target.closest('.choice-hear')) return;
-      touched = true;
-    };
+    const touch = () => { touched = true; };
     node.addEventListener('pointerdown', touch, true);
     node.addEventListener('click', touch, true);
     refit = UI.watchFit(fieldEl);
@@ -423,185 +356,6 @@ const Session = (() => {
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
   }
   function clearFeedback(){ feedbackEl.hidden = true; clear(feedbackEl); }
-
-  function checkpoint(nextIndex = idx, question){
-    if (restoringDraft || !runId || Store.round() !== runRound || !plan.length) return;
-    const currentQuestion = {wrongThisQ, helped, taughtQ, missType};
-    if (question === undefined && demo !== 'show' && curItem && draftAdapters.size){
-      const parts = [];
-      for (const [id, adapter] of draftAdapters){
-        try{
-          const data = adapter.read();
-          if (data !== undefined) parts.push({id, data});
-        }catch(e){ /* A failed optional draft must not lose the scored visit. */ }
-      }
-      if (parts.length) currentQuestion.draft = {v:1, item:curItem, touched, parts};
-    }
-    const target = t => t ? { gameId:t.game.id, levelIndex:t.levelIndex, want:t.want || null } : null;
-    Store.saveSession({ v:1, id:runId, at:Date.now(), mode, title:titleEl.textContent,
-      gameId:curGame ? curGame.id : null, levelIndex:curLevelIdx, index:nextIndex,
-      plan:plan.map(p => ({gameId:p.game.id, levelIndex:p.levelIndex,
-        ...(p.intro ? {intro:p.intro} : {}), ...(p.check ? {check:p.check} : {}),
-        ...(p.want ? {want:p.want} : {}), ...(p.seed !== undefined ? {seed:p.seed} : {})})),
-      firstTryRight, mistakes, swiftCount, results:results.slice(), sessionOutcomes:sessionOutcomes.slice(),
-      shaky:shaky.slice(), focusKeys:focusKeys.slice(), usedItems:Array.from(usedItems),
-      checkTally, announced:Array.from(announced), rewardKey:rewardTarget ? rewardTarget.key : null,
-      adventureTarget:target(adventureTarget), firstTarget:target(firstTarget), firstPhase,
-      visitMilestone, question:question === undefined
-        ? currentQuestion : question });
-  }
-
-  function restoreDraft(draft, step){
-    if (!draft || !draft.touched || draft.item !== curItem || demo === 'show') return false;
-    const oldSay = Sound.say, oldSfx = Sound.sfxOn;
-    const restored = new Set(), attempted = new Set();
-    let restoredHelp = false;
-    restoringDraft = true;
-    Sound.say = () => {}; Sound.sfxOn = false;
-    try{
-      const restoreKnown = () => {
-        for (const part of draft.parts){
-          const adapter = draftAdapters.get(part.id);
-          if (!adapter || attempted.has(part.id)) continue;
-          attempted.add(part.id);
-          try{ if (adapter.restore(part.data) !== false) restored.add(part.id); }catch(e){ /* Ignore invalid game data. */ }
-        }
-      };
-      withRandomSeed(step.seed, restoreKnown);
-      if (helped || wrongThisQ >= hintAfter){ hint(); restoredHelp = true; }
-      // A hint may register a counting tool belonging to the restored stage.
-      restoreKnown();
-      if (restored.size){
-        // Keep the epoch: newly built controls still belong to this question.
-        // Cancel only animations that would overwrite its restored stage.
-        timers.forEach((v, id) => clearTimeout(id)); timers.clear(); endWalk();
-      }
-      for (const part of draft.parts){
-        const adapter = draftAdapters.get(part.id);
-        if (restored.has(part.id) && adapter && adapter.afterHelp){
-          try{ adapter.afterHelp(part.data); }catch(e){}
-        }
-      }
-      if (restored.size) touched = draft.touched;
-    }finally{
-      Sound.say = oldSay; Sound.sfxOn = oldSfx; restoringDraft = false;
-    }
-    // The child hears the current question once, after its whole board is ready.
-    if (restored.size || restoredHelp) Sound.say(lastSpeech + (hintShown ? hintSpeech : ''), {delay:180});
-    return restored.size > 0 || restoredHelp;
-  }
-
-  function saveBeforeLeaving(){
-    if (!restoringDraft && UI.currentName() === 'play' && !locked){ checkpoint(); Store.flush(); }
-  }
-  window.addEventListener('pagehide', saveBeforeLeaving);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) saveBeforeLeaving(); });
-
-  function enginePendingSummary(saved = Store.savedSession()){
-    if (!saved) return null;
-    const exists = p => p && Games.byId[p.gameId] && Games.byId[p.gameId].levels[p.levelIndex];
-    if (saved.plan.some(p => !exists(p)) || (saved.gameId && !exists({gameId:saved.gameId,levelIndex:saved.levelIndex}))
-      || (['level','first'].includes(saved.mode) && !saved.gameId)
-      || (saved.firstTarget && !exists(saved.firstTarget)) || (saved.adventureTarget && !exists(saved.adventureTarget))
-      || (saved.mode==='first' && (!saved.firstTarget || !saved.firstPhase))
-      || (saved.mode==='adventure' && !saved.adventureTarget)){
-      Store.clearSavedSession(); return null;
-    }
-    return { kind:'session',at:saved.at,title:saved.title, remaining:saved.plan.length-saved.index, done:saved.index,
-      mode:saved.mode, gameId:saved.gameId, levelIndex:saved.levelIndex };
-  }
-
-  // A choice describes one checkpoint in the current lap. Keep its revision in
-  // memory only: opening Home must never rewrite a learning record.
-  function pendingSummaries(){
-    const saved = Store.savedSession(), review = Store.reviewSession();
-    const transfer = normalizeTransferSession(Store.data.transferSession);
-    const session = enginePendingSummary(saved);
-    const entries = [session && {summary:session,saved,icon:session.gameId ? Games.byId[session.gameId].ico : '🧭'},
-      review && typeof TextbookReview!=='undefined' && {summary:TextbookReview.pendingSummary(),saved:review,icon:'📘'},
-      transfer && typeof TransferAdventure!=='undefined' && {summary:TransferAdventure.pendingSummary(),saved:transfer,
-        icon:(TransferAdventure.missionFor('transfer:'+transfer.run.id)||{}).icon || '🧭'}];
-    return entries.filter(e=>e && e.summary).map(e=>Object.assign({},e.summary,
-      {round:Store.round(),icon:e.icon,revision:JSON.stringify(e.saved)})).sort((a,b)=>b.at-a.at);
-  }
-  function pendingSummary(){ return pendingSummaries()[0] || null; }
-  function resumeUnavailable(){
-    if (typeof Home!=='undefined' && Home.resumeChanged) Home.resumeChanged();
-    return false;
-  }
-
-  function showOverview(resting, previous){
-    killTimers(); Sound.hush();
-    if (!overviewNode){
-      overviewBody = el('div.session-overview-body');
-      overviewNode = el('div#session-overview', null,
-        el('div.topbar',null,el('h2',{text:'ぼうけんの じゅんび'})),overviewBody);
-      UI.register('session-overview',overviewNode);
-    }
-    clear(overviewBody);
-    const remaining = plan.length-idx, intros = plan.filter(p=>p.intro).length, checks = plan.filter(p=>p.check).length;
-    overviewBody.append(mascotSVG('happy','talk'),el('h3',{text:resting ? 'ここまで '+idx+'もん できたね' : titleEl.textContent}),
-      el('p',{text:resting ? 'つづきは あと '+remaining+'もん。ここで やすんでも だいじょうぶ。'
-        : 'ぜんぶで '+plan.length+'もん'+(intros || checks ? '（'+(intros ? 'みほん・いっしょに '+intros+'もん　' : '')+(checks ? 'たしかめ '+checks+'もん　' : '')+'ほんばん '+(plan.length-intros-checks)+'もん）' : '')}));
-    if (previous){
-      const choice = {kind:'session',round:Store.round(),revision:JSON.stringify(previous)};
-      overviewBody.append(el('p.session-previous',{text:'まえの つづき：'+previous.title+'　あと '+(previous.plan.length-previous.index)+'もん'}),
-        el('button.btn',{text:'まえの つづきから',onclick(){
-          if (this.disabled || !this.isConnected || UI.currentName()!=='session-overview') return;
-          this.disabled=true; resume(choice);
-        }}));
-    }
-    overviewBody.append(el('button.btn.btn-accent.session-continue',{text:resting ? 'つづける' : previous ? 'あたらしく はじめる' : 'はじめる',onclick(){
-      checkpoint(idx,null); UI.show('play'); nextQuestion();
-    }}),el('button.btn.btn-ghost',{text:resting ? 'ここで やすむ' : 'ホームに もどる',onclick(){
-      if (resting || !previous) checkpoint(idx,null);
-      Home.render(); UI.show('home',{replace:true});
-    }}),el('p.session-save-note',{text:Store.storage === 'ok' ? 'つづきは この たんまつに のこるよ' : 'この たんまつに ほぞんできません。おうちのひとに つたえてね'}));
-    UI.show('session-overview');
-    Sound.say(resting ? 'ここまで、'+idx+'問できたね。続ける？ここで休んでも大丈夫。'
-      : '全部で、'+plan.length+'問だよ。途中で休んでも、続きから遊べるよ。',{delay:100});
-  }
-
-  function resume(target){
-    const explicit = target && typeof target==='object';
-    const choices = pendingSummaries();
-    const latest = explicit ? choices.find(c=>c.kind===target.kind && c.round===target.round && c.revision===target.revision)
-      : target===true ? choices.find(c=>c.kind==='session') : choices[0];
-    // A removed/replaced choice never falls through to a different adventure.
-    if (!latest) return explicit ? resumeUnavailable() : false;
-    if(latest.kind==='review') return TextbookReview.resume() || resumeUnavailable();
-    if(latest.kind==='transfer') return TransferAdventure.resume() || resumeUnavailable();
-    const saved = Store.savedSession();
-    if (!saved || !enginePendingSummary()) return false;
-    if (levelReturn && (levelReturn.id !== saved.id || levelReturn.origin.round !== Store.round())) levelReturn = null;
-    if (saved.mode === 'level' && UI.currentName() === 'levels'
-        && Levels.game === Games.byId[saved.gameId]){
-      levelReturn = {id:saved.id, origin:Levels.captureReturn(saved.levelIndex)};
-    }
-    build(); killTimers(); blockAnswerUntil = 0;
-    runId=saved.id; runRound=Store.round(); mode=saved.mode; curGame=saved.gameId ? Games.byId[saved.gameId] : null;
-    curLevelIdx=saved.levelIndex; idx=saved.index; mistakes=saved.mistakes; firstTryRight=saved.firstTryRight; swiftCount=saved.swiftCount;
-    plan=saved.plan.map(p=>Object.assign({},p,{game:Games.byId[p.gameId],level:Games.byId[p.gameId].levels[p.levelIndex]}));
-    results=saved.results.slice(); sessionOutcomes=saved.sessionOutcomes.slice(); shaky=saved.shaky.slice(); focusKeys=saved.focusKeys.slice();
-    usedItems=new Set(saved.usedItems); checkTally=saved.checkTally; announced=new Set(saved.announced); visitMilestone=saved.visitMilestone;
-    const restoreTarget=t=>t ? {game:Games.byId[t.gameId],levelIndex:t.levelIndex,want:t.want||null} : null;
-    adventureTarget=restoreTarget(saved.adventureTarget); firstTarget=restoreTarget(saved.firstTarget); firstPhase=saved.firstPhase;
-    rewardTarget=saved.rewardKey ? {key:saved.rewardKey} : null;
-    titleEl.textContent=saved.title; resumeQuestion=saved.question;
-    renderPips();
-    if (idx>=plan.length){finish();return true;}
-    UI.show('play'); nextQuestion(); return true;
-  }
-
-  function settleCompleted(){
-    const saved=Store.savedSession();
-    return !!(saved && saved.index===saved.plan.length && resume(true));
-  }
-
-  function renderPips(){
-    clear(pipsEl);
-    plan.forEach((p,i)=>pipsEl.append(el('div.pip'+(p.intro?'.intro':p.check?'.check':'')+(results[i]?'.'+results[i]:''))));
-  }
 
   /** Is there anything on the board the child could count right now? The recall
       levels keep the ten-frame back until the hint, and ぱっと みて hides its dots
@@ -635,8 +389,8 @@ const Session = (() => {
       quitArmed = true;
       backBtn.textContent = '🏠';
       backBtn.setAttribute('aria-label', 'もういちど おすと おわる');
-      showFeedback('hint', 'ここで やすむ？ もういちど おしてね');
-      Sound.say('ここで休む？続きは残るよ。もう一度押してね。', { delay: 60 });
+      showFeedback('hint', 'おわりに する？ もういちど おしてね');
+      Sound.say('終わりにする？もう一度押してね。', { delay: 60 });
       clearTimeout(quitTimer);
       quitTimer = setTimeout(() => {
         disarmQuit();
@@ -645,8 +399,6 @@ const Session = (() => {
       return;
     }
     disarmQuit();
-    // onCorrect has already checkpointed the following question before its animation.
-    if (!locked) checkpoint();
     killTimers();
     Sound.hush();
     Sound.sfx.tap();
@@ -656,19 +408,12 @@ const Session = (() => {
         prior && prior.game === firstTarget.game && prior.levelIndex === firstTarget.levelIndex ? prior.opts : null);
       return;
     }
-    if (mode === 'level' && levelReturn && levelReturn.id === runId
-        && levelReturn.origin.round === Store.round() && levelReturn.origin.gameId === curGame.id){
-      Levels.returnToList(levelReturn.origin); return;
-    }
     if (mode === 'level') Levels.render(curGame); else Home.render();
     UI.show(mode === 'level' ? 'levels' : 'home', { replace: true });
   }
 
   /* ---------- public entry points ---------- */
   function startLevel(game, levelIndex, opts){
-    if(settleCompleted()) return;
-    const origin = UI.currentName() === 'levels' && Levels.game === game ? Levels.captureReturn(levelIndex)
-      : opts && opts.returnToLevels || null;
     build();
     killTimers();
     mode = 'level'; curGame = game; curLevelIdx = levelIndex;
@@ -686,11 +431,9 @@ const Session = (() => {
     plan.unshift(...checkSteps(game.id + ':' + levelIndex, 1));
     titleEl.textContent = game.name + '　' + lv.t;
     begin();
-    levelReturn = origin && origin.round === Store.round() && origin.gameId === game.id ? {id:runId, origin} : null;
   }
 
   function startDaily(count){
-    if(settleCompleted()) return;
     build();
     killTimers();
     mode = 'daily'; curGame = null; rewardTarget = null; adventureTarget = null;
@@ -718,7 +461,6 @@ const Session = (() => {
   /** A short first-run sampler. It chooses a starting point; it never locks content
       or labels a child. Every game remains available from Home. */
   function startDiagnostic(){
-    if(settleCompleted()) return;
     build();
     killTimers();
     mode = 'diagnostic'; curGame = null; rewardTarget = null; adventureTarget = null;
@@ -757,7 +499,6 @@ const Session = (() => {
       itself also stops it concentrating. This is the other half of the pair: the
       bag is drawn from the weak set instead of from the level. */
   function startFocus(keys, opts){
-    if(settleCompleted()) return;
     build();
     killTimers();
     const o = opts || {};
@@ -788,7 +529,6 @@ const Session = (() => {
       evidence threshold; an adventure only says that the child completed this
       four-question attempt, so it never unlocks a level by itself. */
   function startAdventure(target){
-    if(settleCompleted()) return;
     const t = target;
     if (!t || !t.game || !t.level || !levelOpen(t.game, t.levelIndex)) return;
     build();
@@ -810,30 +550,19 @@ const Session = (() => {
     begin();
   }
 
-  /** Each visit stays one question long. Supported turns teach the method;
-      independent turns accumulate towards a later-day check in Store. */
-  function firstTitle(game, levelIndex){
-    return (Store.shortStatus(game.id, levelIndex).goldActive ? 'きんへ 1もんずつ　'
-      : firstPhase === 'check' ? 'べつのひの たしかめ　'
-      : firstPhase === 'independent' ? 'じぶんで 1もん　' : 'はじめてコース　') + game.name;
-  }
-
-  function startFirst(game, levelIndex, phase, opts){
-    if(settleCompleted()) return;
+  /** A child may see the method and stop, or choose one supported turn. Neither
+      visit is a level attempt or evidence for a sticker or unlock. */
+  function startFirst(game, levelIndex, phase){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    if (opts && opts.gold && !Store.startShortGold(game.id, levelIndex).goldActive) return;
     build(); killTimers();
     mode = 'first'; curGame = game; curLevelIdx = levelIndex;
     rewardTarget = null; adventureTarget = null;
-    firstTarget = { game, levelIndex };
-    firstPhase = phase === 'independent' || phase === 'check'
-      ? Store.shortStatus(game.id, levelIndex).phase : phase === 'show' ? 'show' : 'together';
+    firstTarget = { game, levelIndex }; firstPhase = phase === 'show' ? 'show' : 'together';
     const step = { game, level: game.levels[levelIndex], levelIndex };
-    plan = firstPhase === 'independent' || firstPhase === 'check' ? [step]
-      : phase === 'afterShow' ? [Object.assign({}, step, { intro: 'together' })]
+    plan = phase === 'afterShow' ? [Object.assign({}, step, { intro: 'together' })]
       : firstPhase === 'show' ? [Object.assign({}, step, { intro: 'show' })]
       : [Object.assign({}, step, { intro: 'show' }), Object.assign({}, step, { intro: 'together' })];
-    titleEl.textContent = firstTitle(game, levelIndex);
+    titleEl.textContent = 'はじめてコース　' + game.name;
     begin();
   }
 
@@ -886,26 +615,13 @@ const Session = (() => {
   }
 
   function begin(){
-    lastAnswerGesture = null;
-    const previous = Store.savedSession();
-    blockAnswerUntil = 0;
     disarmQuit();
     idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0;
-    runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10); runRound=Store.round();
-    results=[]; resumeQuestion=null;
     if (mode !== 'focus') focusKeys = [];
-    usedItems = new Set(mode === 'first' && (firstPhase === 'independent' || firstPhase === 'check')
-      ? Store.shortItems(curGame.id, curLevelIdx) : []);
-    shaky = []; sessionOutcomes = []; visitMilestone = null;
+    usedItems = new Set(); shaky = []; sessionOutcomes = []; visitMilestone = null;
+    clear(pipsEl);
     checkTally = {}; announced = new Set();
-    renderPips();
-    const unfinished = previous && (previous.index > 0 || previous.question && (previous.question.wrongThisQ || previous.question.helped
-      || previous.question.draft && previous.question.draft.touched));
-    if (overviewOn && (mode !== 'first' || unfinished)){
-      if (!unfinished) checkpoint(0,null);
-      showOverview(false,unfinished ? previous : null); return;
-    }
-    checkpoint(0,null);
+    plan.forEach(p => pipsEl.append(el('div.pip' + (p.intro ? '.intro' : p.check ? '.check' : ''))));
     UI.show('play');
     nextQuestion();
   }
@@ -925,28 +641,10 @@ const Session = (() => {
         promptTxt.innerHTML = html;
         lastSpeech = speech != null ? speech : String(html).replace(/<[^>]*>/g, '');
         spokenAt = 0;
-        if (!restoringDraft) Sound.say(lastSpeech, { delay: 220, onend(){ if (!stale()) spokenAt = performance.now(); } });
+        Sound.say(lastSpeech, { delay: 220, onend(){ if (!stale()) spokenAt = performance.now(); } });
       },
-      // A completed step can replace its instructions without erasing the fact
-      // that this question used help, or resetting mistakes and scoring.
-      clearHelp(){
-        if (stale()) return;
-        clearFeedback(); hintSpeech = ''; hintShown = false; walked = false;
-        coach = null; hintAfter = 2;
-        hintExtras = []; hintStrongFns = []; extrasShown = false;
-        // Let an ongoing demonstration finish its callback: first-time lessons
-        // use it to continue into the next step. The question still keeps help.
-      },
-      say(t, o){ if (stale()) return; lastSpeech = t; if (!restoringDraft) Sound.say(t, o); },
-      afterSpeech(fn){ if (restoringDraft) return () => {}; return Sound.afterSpeech(() => { if (!stale()) fn(); }); },
-      // Each game owns plain values and a render-only restore function. Multiple
-      // adapters let a shared board and its later stage keep their own state.
-      persist(adapter){
-        if (stale() || !adapter || typeof adapter.read !== 'function' || typeof adapter.restore !== 'function') return;
-        draftAdapters.set(adapter.id || 'main', adapter);
-      },
-      saveDraft(){ if (!stale() && !locked && !restoringDraft) checkpoint(); },
-      get restoring(){ return restoringDraft; },
+      say(t, o){ if (stale()) return; lastSpeech = t; Sound.say(t, o); },
+      afterSpeech(fn){ return Sound.afterSpeech(() => { if (!stale()) fn(); }); },
       /** Name the fact this question asks. `label` is what the result screen and
           the parent page will call it. Optional: a game that names nothing simply
           keeps the old purely-random behaviour. */
@@ -967,7 +665,7 @@ const Session = (() => {
           the same level, which is the right topic if not the exact fact. */
       /** A check question on another day. A generator with a two-way format (two
           plates, おなじ／かわった) asks it with three instead: a coin toss confirms nothing. */
-      get check(){ return !!(plan[idx] && plan[idx].check) || mode === 'first' && firstPhase === 'check'; },
+      get check(){ return !!(plan[idx] && plan[idx].check); },
       get want(){
         const w = plan[idx] && plan[idx].want;
         if (!w) return null;
@@ -989,7 +687,7 @@ const Session = (() => {
         coach = Object.assign({}, coach || {}, c);
         if (c.after) hintAfter = Math.max(1, c.after);
         // a together-question hands its tool over as soon as it has one, before any finger
-        if (!restoringDraft && demo === 'together' && c.tool && !touched && !hintShown) later(togetherHint, 30);
+        if (demo === 'together' && c.tool && !touched && !hintShown) later(togetherHint, 30);
       },
       /** Show (and take) the correct action, for the bottom rung of the ladder.
           `buildChoices` / `buildPad` questions need nothing: the engine presses the
@@ -998,15 +696,15 @@ const Session = (() => {
           Optional: without it the engine still ends the question rather than
           leaving the child pressing wrong things forever. */
       onShow(fn){ if (!stale()) showFn = fn; },
-      correct(o){ if (!stale() && !restoringDraft) onCorrect(o || {}); },
+      correct(o){ if (!stale()) onCorrect(o || {}); },
       /** `given` is what the child actually chose: a value the engine can read
           against the answer, or a tag a generator supplies for something the item
           key cannot say ('looks', 'rev'). Optional — omitting it only costs the
           diagnosis, never the behaviour. */
-      wrong(target, given){ if (!stale() && !restoringDraft) onWrong(target, given); },
+      wrong(target, given){ if (!stale()) onWrong(target, given); },
       /** delayed work that dies with the question */
-      later(fn, ms){ if (stale() || restoringDraft) return null; return later(fn, ms); },
-      get locked(){ return locked || stale(); },
+      later(fn, ms){ return later(fn, ms); },
+      get locked(){ return locked; },
 
       /** A fixed 0–10 keypad.
 
@@ -1027,7 +725,6 @@ const Session = (() => {
         askedAt = performance.now();     // a story animation is not thinking time
         curAnswer = answer;
         newSurface();
-        const surface = surfaceVersion;
         choicesEl.classList.add('pad');
         choicesEl.dataset.built = '1';
         /* No hintBtns: the engine's fallback dims one more wrong answer on every
@@ -1041,7 +738,7 @@ const Session = (() => {
           const b = el('button.choice.padkey', { type: 'button', text: String(v) });
           const val = v;
           b.addEventListener('click', () => {
-            if (locked || stale() || surface !== surfaceVersion) return;
+            if (locked || stale()) return;
             markResponse();
             if (val === answer){
               if (settled) return;
@@ -1089,18 +786,17 @@ const Session = (() => {
         askedAt = performance.now();
         curAnswer = answer;
         newSurface();
-        const surface = surfaceVersion;
         choicesEl.dataset.built = '1';
         hintBtns = [];
         let settled = false;              // one accepted answer per set of buttons
-        values.forEach((v, i) => {
+        values.forEach(v => {
           const val = (v && typeof v === 'object' && 'v' in v) ? v.v : v;
           const b = el('button.choice' + (o.cls ? '.' + o.cls : ''), { type: 'button' });
           const content = o.render ? o.render(val, v) : String(val);
           if (content && content.nodeType) b.append(content); else b.textContent = content;
           const hit = o.match ? o.match(val, answer) : val === answer;
           b.addEventListener('click', () => {
-            if (locked || stale() || surface !== surfaceVersion) return;
+            if (locked || stale()) return;
             markResponse();
             if (hit){
               /* A five-year-old taps twice. The picked button was never disabled —
@@ -1123,19 +819,7 @@ const Session = (() => {
           });
           if (hit && !answerBtn){ answerBtn = b; answerText = typeof content === 'string' ? content : String(val); }
           if (!hit) hintBtns.push(b);
-          if (o.speech){
-            const say = typeof o.speech === 'function' ? o.speech(val, v) : String(o.speech);
-            const hear = el('button.choice-hear', { type: 'button',
-              'aria-label': (i + 1) + 'ばんめの こたえを きく',
-              onclick(e){
-                e.stopPropagation();
-                if (locked || stale()) return;
-                Sound.sfx.tap(); Sound.say(say, { delay: 0 });
-              } }, '🔊');
-            const pair = el('div.choice-audio', null, b, hear);
-            if (o.cls === 'story') pair.classList.add('story-audio');
-            choicesEl.append(pair);
-          } else choicesEl.append(b);
+          choicesEl.append(b);
         });
         return choicesEl;
       }
@@ -1149,12 +833,10 @@ const Session = (() => {
      on a board where nothing works. Mistakes keep accumulating across the blanks,
      so a child who needed showing on the first one is shown the next one quickly. */
   function newSurface(){
-    surfaceVersion++;
     answerBtn = null; answerText = null; hintStrongFns = []; taught = false;
   }
 
   function resetSurface(){
-    draftAdapters = new Map();
     locked = false; hintBtns = []; hintExtras = []; hintShown = false;
     hintAfter = 2; extrasShown = false;
     coach = null; hintSpeech = ''; walked = false; endWalk();
@@ -1163,11 +845,7 @@ const Session = (() => {
     curItem = null; curLabel = null; curAnswer = null; missType = null;
     hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false; taughtQ = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
-    choicesEl.classList.remove('pad', 'three-pad', 'answer-complete');
-    answerSpeech = '';
-    showBtn.disabled = false;
-    speakBtn.setAttribute('aria-label', 'もういちど きく');
-    speakBtn.title = 'もういちど きく';
+    choicesEl.classList.remove('pad');
     clearFeedback();
     fieldEl.className = 'playfield';
   }
@@ -1185,20 +863,18 @@ const Session = (() => {
       this child owes practice to. The generator is random, so we cannot go back to
       an earlier draw — we accept the one that is on screen when we stop. */
   function drawQuestion(step){
-    const replay = step.seed !== undefined;
-    const tries = replay ? 1 : step.want ? FOCUS_TRIES : TRIES;
+    const tries = step.want ? FOCUS_TRIES : TRIES;
     for (let t = 0; t < tries; t++){
       killTimers();
       resetSurface();
       try{
-        if (!replay) step.seed = Math.floor(Math.random()*4294967296);
-        withRandomSeed(step.seed,()=>step.level.make(api()));
+        step.level.make(api());
       }catch(err){
         console.error('question build failed', err);
         promptTxt.textContent = 'よみこみに しっぱいしました';
         return;
       }
-      if (replay || !curItem) return;
+      if (!curItem) return;                      // this game does not name its items
       if (step.want){
         // the shuffle bag is deliberately out of the way here: repeating the fact
         // inside one sitting is the entire point of a 集中練習 session
@@ -1227,25 +903,16 @@ const Session = (() => {
     setMood('idle');
     const step = plan[idx];
     if (step.check) titleEl.textContent = 'たしかめ　' + step.game.name + '　' + step.level.t;
-    else if (mode === 'first') titleEl.textContent = firstTitle(step.game, step.levelIndex);
     else if (mode !== 'level'){
       const modeName = mode === 'daily' ? 'きょうの れんしゅう'
                      : mode === 'focus' ? 'とっくん'
-                     : mode === 'adventure' ? 'ちいさな ぼうけん' : 'はじめの ぼうけん';
+                     : mode === 'adventure' ? 'ちいさな ぼうけん'
+                     : mode === 'first' ? 'はじめてコース' : 'はじめの ぼうけん';
       titleEl.textContent = modeName + '　' + step.game.name;
     } else if (curGame) titleEl.textContent = curGame.name + '　' + curGame.levels[curLevelIdx].t;
     demo = step.intro || null;
     touched = false;
     drawQuestion(step);
-    if (resumeQuestion){
-      wrongThisQ=resumeQuestion.wrongThisQ; helped=resumeQuestion.helped;
-      taughtQ=resumeQuestion.taughtQ; missType=resumeQuestion.missType;
-      if (!restoreDraft(resumeQuestion.draft, step) && (helped || wrongThisQ >= hintAfter)) hint();
-      resumeQuestion=null;
-    }
-    countEl.textContent = (idx+1)+'／'+plan.length+'もん'+(step.intro ? '　みほん・いっしょに'
-      : step.check || mode === 'first' && firstPhase === 'check' ? '　たしかめ' : '');
-    checkpoint();
     // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
     // call buildChoices, so start their clock here
     if (!askedAt) askedAt = performance.now();
@@ -1316,7 +983,6 @@ const Session = (() => {
   function hint(prefix){
     hintShown = true;
     helped = true;
-    checkpoint();
     const c = coach || {};
     if (c.tool){ try{ c.tool(wrongThisQ); }catch(e){ console.error('hint failed', e); } }
     let text = null, say = null;
@@ -1336,11 +1002,7 @@ const Session = (() => {
   /** Second rung: the hand shows the method, and only then do the choices narrow. */
   function strongHint(){
     offerTeach();
-    const stageCoach = coach;
     const narrow = () => {
-      // A walk may itself complete a stage. Its old narrowing must not act on
-      // the choices registered by the next stage of the same question.
-      if (coach !== stageCoach) return;
       runExtras();
       hintStrongFns.forEach(fn => { try{ fn(); }catch(e){ console.error('hint failed', e); } });
       // leave exactly one wrong answer standing beside the right one
@@ -1448,7 +1110,6 @@ const Session = (() => {
     if (locked || taught || demoRunning || node.classList.contains('walking')) return;
     if (!coach || (!coach.tool && !coach.walk)){ if (lastSpeech) Sound.say(lastSpeech, { delay: 40 }); return; }
     helped = true;
-    checkpoint();
     if (!hintShown && coach.tool){ hint(); return; }
     if (!walked && coach.walk){
       showFeedback('hint', 'やりかたを みせるね');
@@ -1462,7 +1123,6 @@ const Session = (() => {
   function teach(){
     if (locked || taught) return;
     taught = true; taughtQ = true;
-    checkpoint();
     // stop the child racking up misses on a board that is already being answered
     $$('.choice', choicesEl).forEach(b => { if (b !== answerBtn) b.disabled = true; });
     const tb = $('.teachbtn', choicesEl);
@@ -1498,7 +1158,6 @@ const Session = (() => {
         ? given
         : classifyMiss(curItem, curAnswer, given);
     }
-    checkpoint();
     Sound.sfx.wrong();
     setMood('soft');
     if (target && target.classList){
@@ -1553,15 +1212,8 @@ const Session = (() => {
     if (graded && timed != null && timed <= FLUENT_FAST_MS) swiftCount++;
     if (slipAt && wrongThisQ === 1 && performance.now() - slipAt < PAD_SLIP_MS
         && (missType === 'up' || missType === 'down')) missType = null;
-    if (scaffold === 'together' && !taughtQ && (mode === 'level' || mode === 'adventure' || mode === 'first')){
+    if (scaffold === 'together' && !taughtQ && (mode === 'level' || mode === 'adventure' || mode === 'first'))
       Store.markIntroduced(g.id, plan[idx].levelIndex);
-      if (mode === 'first'){
-        Store.startShortCourse(g.id, plan[idx].levelIndex);
-      }
-    }
-    // Completing a supported visit also gives relief when the child needed the
-    // final demonstration. It does not mark that method as learned.
-    if (scaffold === 'together' && mode === 'first') Store.noteShortSupport(g.id, plan[idx].levelIndex);
     if (mode !== 'diagnostic'){
       const kind = scaffold === 'show' || taughtQ ? 'viewed' : scaffold === 'together' ? 'together'
         : helped ? 'supported' : wrongThisQ ? 'revised' : 'independent';
@@ -1570,11 +1222,7 @@ const Session = (() => {
         visitMilestone = { gameId: g.id, levelIndex: plan[idx].levelIndex, kind, label: curLabel || '' };
     }
     if (mode !== 'diagnostic' && !scaffold){
-      const short = mode === 'first' && (firstPhase === 'independent' || firstPhase === 'check');
-      if (short) Store.recordShortAnswer(g.id, plan[idx].levelIndex, clean, runId, firstPhase, Array.from(usedItems),
-        {kind:taughtQ ? 'viewed' : helped ? 'supported' : wrongThisQ ? 'revised' : 'independent', missType});
-      if (short && clean) Store.markIntroduced(g.id, plan[idx].levelIndex);
-      Store.noteOutcome(g.id, plan[idx].levelIndex, clean, !short);
+      Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
       if (curItem){
         /* 'taught' outranks the reading of the first mistake: what matters about
            this question is that the child did not get there on their own. */
@@ -1585,10 +1233,6 @@ const Session = (() => {
         }
       }
     }
-    // Count the answer on the actual day it happened, even if the child rests now.
-    Store.countToday(1);
-    results[idx]=scaffold ? 'introdone' : clean ? 'done' : 'miss';
-    checkpoint(idx+1,null);
     Sound.sfx.correct();
     setMood('happy');
     const pip = $$('.pip', pipsEl)[idx];
@@ -1601,52 +1245,10 @@ const Session = (() => {
       Sound.say(praise, { delay: 320 });
     }
     if ((idx + 1) % 4 === 0) UI.confetti(22);
-    const spoken = spokenAnswerLabel(answerText);
-    answerSpeech = [curLabel, spoken != null ? '答えは、' + spoken + 'だよ。'
-      : !curLabel ? 'できたね。絵を確かめてみよう。' : ''].filter(Boolean).join('。');
-    speakBtn.setAttribute('aria-label', 'こたえを もういちど きく');
-    speakBtn.title = 'こたえを もういちど きく';
-    showBtn.disabled = true;
-    const manual = scaffold !== 'show' && !(autoAdvanceOverride === null
-      ? Store.data.autoAdvance === true : autoAdvanceOverride);
-    const mine = epoch;
-    let ready = false, moved = false;
-    const advance = () => {
-      if (!ready || moved || mine !== epoch || !locked || UI.currentName() !== 'play') return;
-      moved = true; advancePending = null; nextBtn.disabled = true;
-      answerControls.hidden = true;
-      if (manual) blockAnswerUntil = performance.now() + 300;
+    afterNarration(() => {
       idx++;
       if (idx >= plan.length) finish();
-      else if (breaksOn && idx % 4 === 0 && mode !== 'first') showOverview(true);
-      else {
-        nextQuestion();
-        if (manual){
-          promptTxt.setAttribute('tabindex', '-1');
-          promptTxt.focus({preventScroll:true});
-        }
-      }
-    };
-    if (manual){
-      // Keep the completed picture and selected answers. The full keypad is no
-      // longer needed, leaving room for both the picture and a large Next button.
-      node.classList.add('answer-review');
-      choicesEl.classList.add('answer-complete');
-      Array.from(choicesEl.children).forEach(n => n.classList.toggle('answer-keep',
-        n.classList.contains('correct') || !!n.querySelector('.correct')));
-      $$('button', fieldEl).concat($$('button', choicesEl)).forEach(b => { b.disabled = true; });
-      answerControls.hidden = false;
-      nextBtn.disabled = true;
-      advancePending = advance;
-      refit();
-    }
-    // Generators provide the complete reveal duration. Narration may take longer;
-    // both pacing modes wait for it before a manual or automatic transition.
-    afterNarration(() => {
-      if (mine !== epoch || UI.currentName() !== 'play') return;
-      ready = true;
-      if (manual){ nextBtn.disabled = false; nextBtn.focus({preventScroll:true}); }
-      else advance();
+      else nextQuestion();
     }, o.delay || 950);
   }
 
@@ -1661,7 +1263,7 @@ const Session = (() => {
   function finish(){
     killTimers();
     if (mode === 'first'){
-      Store.clearSavedSession();
+      Store.countToday(plan.length);
       FirstSteps.finish(firstTarget.game, firstTarget.levelIndex, firstPhase, visitMilestone);
       return;
     }
@@ -1699,7 +1301,7 @@ const Session = (() => {
     });
     if (mode === 'level'){
       const key = curGame.id + ':' + curLevelIdx;
-      Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total, true);
+      Store.recordLevel(curGame.id, curLevelIdx, stars, firstTryRight, total);
       if (swift) Store.recordSwift(curGame.id, curLevelIdx);
       /* A sticker means "cleared", so it waits for a pass — and below ★★★ it waits
          for another day too. Eight right first time is not something guessing
@@ -1726,9 +1328,9 @@ const Session = (() => {
       Store.recordDiagnostic(sessionOutcomes, recommended);
     } else {
       if (mode === 'daily'){
-        Store.recordPractice(firstTryRight, total, true);
+        Store.recordPractice(firstTryRight, total);
         Store.completePracticeToday();
-      } else Store.recordFocus(firstTryRight, total, true);
+      } else Store.recordFocus(firstTryRight, total);
       // one sticker per calendar day, per set
       const key = (mode === 'daily' ? 'daily:' : 'focus:') + Store.todayKey();
       if (Store.addSticker(key)) newStickers.push({ key, emoji: stickerFor(key), gold: stars === 3 });
@@ -1736,7 +1338,7 @@ const Session = (() => {
     /* The two lesson questions and another level's three checks are not graded, but
        they were answered: leaving them out of today's count let a first-time level with
        a check run to 13 questions while「きょうは ここまで」still counted 8. */
-    Store.clearSavedSession();
+    if (mode !== 'diagnostic') Store.countToday(plan.length - total);
     const justOpenedG1 = !wasOpen && Progress.g1Open();
     if (justOpenedG1){
       Sound.sfx.unlockSfx();
@@ -1755,7 +1357,7 @@ const Session = (() => {
   }
 
   return {
-    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, build, resume, pendingSummary, pendingSummaries,
+    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, build,
     _test: {
       flushTimers,
       get idx(){ return idx; },
@@ -1779,16 +1381,10 @@ const Session = (() => {
       get planItems(){ return plan.map(p => p.want || null); },
       /** the first-meeting questions are on by default; most of the suite tests the rest */
       intro(on){ introOn = !!on; },
-      overview(on){ overviewOn=!!on; },
-      breaks(on){ breaksOn=!!on; },
-      // Legacy grading suites explicitly choose their former automatic pacing;
-      // the dedicated pacing suite exercises the persisted/default child flow.
-      autoAdvance(on){ autoAdvanceOverride = on == null ? null : !!on; },
       get introStep(){ return plan[idx] ? plan[idx].intro || null : null; },
       get planIntro(){ return plan.map(p => p.intro || null); },
       get planChecks(){ return plan.map(p => p.check || null); },
-      get helped(){ return helped; },
-      get touched(){ return touched; }
+      get helped(){ return helped; }
     }
   };
 })();

@@ -17,7 +17,6 @@
   // levels opened for the first time start with two lesson questions; those have
   // tests of their own (87–89), and everything else here counts questions exactly
   if (S.intro) S.intro(false);
-  S.overview(false); S.breaks(false); S.autoAdvance(true);
   const doc = document;
   const results = [];
   let uncaught = 0;
@@ -47,18 +46,6 @@
   }
   /** tap answers until the question is accepted; false when nothing is tappable */
   function answerOnce(){
-    // A constructed answer is now a draft until the child presses できた. Drive
-    // the visible term editors and submit, rather than expecting the third key
-    // to grade automatically.
-    if (q('#play .three-builder')){
-      const slots = qa('#play .three-sum-slot');
-      [5, 2, 3].forEach((value, i) => {
-        slots[i].click();
-        qa('#play .padkey').find(key => key.textContent === String(value)).click();
-      });
-      q('#play .three-submit').click();
-      return true;
-    }
     // 「まえから Nこ」は the first N animals as a set; random tapping is not a
     // meaningful driver and can keep clearing the set forever by chance.
     const ordinalCount = (q('#play .prompt .txt') && q('#play .prompt .txt').textContent || '')
@@ -1108,7 +1095,7 @@
     return true;
   }
 
-  /* ---------- 30. missions persist completion and reflection after a break ---------- */
+  /* ---------- 30. missions persist completion and next-day reflection ---------- */
   (function missions(){
     K.Store.reset();
     const d = new Date(); d.setDate(d.getDate() - 1);
@@ -1133,11 +1120,11 @@
     K.Store.recordMission({ day: oldDay, id: 'old-mission', gameId: 'count',
       text: 'ふるい', prompt: 'ふるい' });
     K.Store.completeMission(oldDay);
-    const afterBreak = K.Missions.recentReview();
-    check('a completed real-world mission returns for reflection even after a rest day',
+    const onlyYesterday = K.Missions.yesterdayReview();
+    check('a completed real-world mission returns for a next-day reflection',
       gated && adultAnswer && review && review.id === 'test-mission'
-        && K.Store.mission(day).reviewed && afterBreak && afterBreak.id === 'old-mission',
-      'gated=' + gated + ' review=' + (review && review.id) + ' afterBreak=' + (afterBreak && afterBreak.id));
+        && K.Store.mission(day).reviewed && onlyYesterday === null,
+      'gated=' + gated + ' review=' + (review && review.id) + ' oldIgnored=' + (onlyYesterday === null));
     K.Store.reset();
   })();
 
@@ -1271,29 +1258,32 @@
     K.Store.reset();
   })();
 
-  /* ---------- 34. Home offers one main action and keeps the map available ---------- */
-  (function homeChoices(){
-    K.Store.reset(); K.Home.render(); K.UI.show('home');
-    const more = q('#home .home-more'); more.open = false;
-    const primary = q('#home .home-primary');
-    const calm = qa('#home .home-today .home-primary').length === 1
-      && primary.dataset.action === 'first' && /いっしょに ひとつ/.test(primary.textContent)
-      && !more.open && qa('#home .home-choices > .home-quest').length === 2;
-    more.open = true;
+  /* ---------- 34. the daily banners share one row ----------
+     おすすめ, きょうの れんしゅう, きのうの ミッション and にがて あつめ each used
+     to be a full-width banner. On a day all four are up they took the top third of
+     the screen and the map they lead to became a strip. They live on one row now:
+     the row's height must not grow with the number of banners on it. */
+  (function dailyRow(){
+    K.Store.reset();
+    K.Home.render();
+    const row = q('#home .dailies');
+    const shown = () => qa('#home .dailies > .daily').filter(b => !b.hidden);
+    const oneUp = row.getBoundingClientRect().height;
+    // force every banner up, the way a child mid-way through a week sees it
+    shown();
     qa('#home .dailies > .daily').forEach(b => { b.hidden = false; });
-    const explained = qa('#home .dailies > .daily .s').every(n =>
-      getComputedStyle(n).display !== 'none' && getComputedStyle(n).whiteSpace === 'normal');
-    const freeChoice = qa('#home .gamecard').length === K.Games.list.length
-      && !!q('#home [data-round-target="2"]') && !q('#home .stagelocked');
-    more.open = false;
-    primary.click();
-    const one = S.mode === 'first' && S.planLength === 1;
-    S.forceCorrect(); S.flushTimers();
-    const success = K.UI.currentName() === 'first-finish' && K.Store.milestones().some(m => m.kind === 'together');
-    check('Home has one supported first step, readable optional activities and a complete freely chosen map',
-      calm && explained && freeChoice && one && success,
-      JSON.stringify({calm,explained,freeChoice,one,success}));
-    K.Store.reset(); K.Home.render();
+    row.className = 'dailies n4';
+    const allUp = row.getBoundingClientRect().height;
+    const tops = qa('#home .dailies > .daily').map(b => Math.round(b.getBoundingClientRect().top));
+    const oneRow = new Set(tops).size === 1;
+    // and the door to 小学1年生 is not a banner of its own down at the foot
+    const noStageBanner = !q('#home .stagelocked');
+    check('the daily banners stay on one row, however many are up',
+      !!row && oneRow && allUp <= oneUp * 1.35 && noStageBanner,
+      'h1=' + Math.round(oneUp) + ' h4=' + Math.round(allUp) + ' tops=' + tops.join(',')
+        + ' stageBanner=' + !noStageBanner);
+    K.Home.render();
+    K.Store.reset();
   })();
 
   /* ---------- 35. a row of things to count holds exactly what the answer says ----------
@@ -2323,7 +2313,6 @@
     });
     K.Home.render();
     K.UI.show('home');
-    q('#home .home-more').open = true;
     const up = qa('#home .dailies > .daily').filter(b => !b.hidden);
     const icons = up.map(b => (b.querySelector('.ico') || {}).textContent || '');
     const visible = up.every(b => { const i = b.querySelector('.ico'); return !!i && i.getBoundingClientRect().width > 0; });
@@ -2372,7 +2361,7 @@
     }
     check('Home, the level list and the sticker book say what they are, out loud',
       card.indexOf(name) >= 0 && levels.indexOf(name) >= 0
-        && /(いっしょに ひとつ|きょうの おすすめ|つづきから)/.test(home) && /準備/.test(book) && /シールブック/.test(book),
+        && /(きょうの れんしゅう|はじめの ぼうけん)/.test(home) && /準備/.test(book) && /シールブック/.test(book),
       'card=' + card + ' | levels=' + levels + ' | home=' + home + ' | book=' + book);
     K.UI.show('home');
     K.Store.reset();
@@ -2520,12 +2509,7 @@
       d.primary = ((q('#result .result-actions .primary .bl') || {}).textContent) || '';
       d.drill = qa('#result .result-actions .bl').some(b => b.textContent === 'とっくん する');
       d.tried = !!q('#result .tried') && !q('#result .bigstars') && !q('#result .result-sub');
-      const more = q('#result .result-more');
-      if (more) more.open = true;
-      // This synchronous suite observes screenIn's initial .985 transform.
-      // Check the layout size here; real rendered hit targets are also tested
-      // after animation in test-result-actions.cjs at four viewport sizes.
-      d.tall = qa('#result .result-actions .btn').every(b => b.offsetHeight >= 64);
+      d.tall = qa('#result .result-actions .btn').every(b => b.getBoundingClientRect().height >= 63.5);
       d.spoken = log.join(' ');
       log.length = 0;
       const speak = q('#result > .speakbtn');
@@ -2540,7 +2524,8 @@
     K.Store.reset();
   })();
 
-  /* ---------- 75c. optional activities retain readable names and explanations ---------- */
+  /* ---------- 75c. the banner names break where the words do ----------
+     With three or four banners up, the names wrapped mid-word:「いまの おす／すめ」. */
   (function bannerNamesKeepWords(){
     K.Store.reset();
     ['bond:dec:10-4', 'bond:dec:10-3'].forEach(k => {
@@ -2551,10 +2536,8 @@
     K.UI.show('home');
     const names = qa('#home .dailies > .daily').filter(b => !b.hidden).map(b => b.querySelector('.t'));
     const breaks = names.map(t => getComputedStyle(t).wordBreak);
-    const descriptions = qa('#home .dailies > .daily').filter(b => !b.hidden).map(b => b.querySelector('.s'));
-    check('optional activity names keep words together and their explanations remain shown',
-      names.length >= 2 && breaks.every(b => b === 'keep-all')
-        && descriptions.every(d => getComputedStyle(d).display !== 'none'), breaks.join(','));
+    check('with three or more banners up, their names break only at the spaces',
+      names.length >= 2 && breaks.every(b => b === 'keep-all'), breaks.join(','));
     K.Store.reset();
   })();
 
@@ -2910,15 +2893,9 @@
     [0, 1].forEach(i => { K.Store.recordLevel('count', i, 3, 8, 8); K.Store.addSticker('count:' + i); });
     for (let n = 0; n < 3; n++) K.Store.recordLevel('count', 2, 0, 2, 8);
     for (let n = 0; n < 8; n++) K.Store.noteOutcome('count', 2, n % 4 === 0);
-    K.Store.noteFact('count:rested', false, 'おやすみの もんだい', 'count:2');
-    const now = K.Diagnostic.current(), adventure = K.Adventures.target(), first = K.FirstSteps.target();
-    const rests = x => x && (x.gameId || x.game.id) === 'count' && x.levelIndex === 2;
-    const consistent = K.Diagnostic.resting('count', 2)
-      && !K.Diagnostic.weakFacts().some(f => f.at === 'count:2')
-      && !rests(adventure) && !rests(first)
-      && !K.StickerMissions.available().some(x => x.game.id === 'count' && x.levelIndex === 2);
-    check('a level tried three times rests across every automatic entrance while its map stays available',
-      !!now && !rests(now) && consistent && K.levelOpen(K.Games.byId.count, 2), JSON.stringify(now));
+    const now = K.Diagnostic.current();
+    check('a level tried three times without a pass rests, and おすすめ moves on',
+      !!now && !(now.gameId === 'count' && now.levelIndex === 2), JSON.stringify(now));
     K.Store.reset();
   }
 
@@ -2959,29 +2936,23 @@
     const c = choices[0], d = {};
     try{
       K.Home.render(); K.UI.show('home');
-      q('#home .sticker-mission').open = true;
       d.pictures = qa('#home .sticker-mission-pick').length === choices.length && choices.length > 0;
       d.open = !!c && K.levelOpen(c.game, c.levelIndex) && !K.Store.hasSticker(c.key);
       K.StickerMissions.open(c);
-      const go = q('#sticker-mission .sticker-mission-go');
+      const go = q('#sticker-mission .btn-accent');
       go.click();
-      d.oneQuestion = S.mode === 'first' && S.planLength === 1
-        && S.planGames.every(x => x === c.game.id + ':' + c.levelIndex);
-      S.forceCorrect(); S.flushTimers();
-      d.smallVisit = K.UI.currentName() === 'first-finish' && !K.Store.hasSticker(c.key)
-        && K.Store.plays(c.game.id, c.levelIndex) === 0;
-      K.StickerMissions.open(c);
-      const longer = q('#sticker-mission .long-course');
-      d.deliberate = !!longer && !longer.open && new RegExp((c.level.n || 8) + 'もん').test(longer.textContent);
-      longer.open = true;
-      q('#sticker-mission .long-course button').click();
+      d.firstChoice = c.game.intro === false || K.UI.currentName() === 'first-steps';
+      if (K.UI.currentName() === 'first-steps'){
+        const direct = qa('#first-steps .first-actions .btn').find(b => /じぶんで/.test(b.textContent));
+        if (direct) direct.click();
+      }
       d.startsTarget = S.mode === 'level' && S.planGames.every(x => x === c.game.id + ':' + c.levelIndex);
       let guard = 0;
       while (!onResult() && guard++ < 16){ S.forceCorrect(); S.flushTimers(); }
       d.earned = K.Store.hasSticker(c.key) && /えらんだ シールを ゲット/.test(q('#result').textContent);
     } finally { K.Store.reset(); }
-    check('a chosen sticker starts one question and offers an explicit longer course with its own prize',
-      d.pictures && d.open && d.oneQuestion && d.smallVisit && d.deliberate && d.startsTarget && d.earned, JSON.stringify(d));
+    check('a chosen sticker names an open level, starts that level, and celebrates the chosen prize',
+      d.pictures && d.open && d.firstChoice && d.startsTarget && d.earned, JSON.stringify(d));
   }
 
   /* ---------- 85. small adventures are short rewards, never unlocks ---------- */
@@ -3171,8 +3142,7 @@
 
       leavePlay(); K.Store.reset(); S.intro(true);
       const random = Math.random;
-      // Seed 0 draws the six-counter, two-way construction reproducibly.
-      try { Math.random = () => 0; K.Session.startLevel(K.Games.byId.bond, 1); }
+      try { Math.random = () => 0.1; K.Session.startLevel(K.Games.byId.bond, 1); }
       finally { Math.random = random; }
       end(); S.flushTimers(120);             // introductory question, then the method
       end(); S.flushTimers(120);             // the method, then the rescue explanation
@@ -3254,11 +3224,7 @@
       const kinds = K.Store.milestones().map(m => m.kind);
       d.honestAlbum = kinds.includes('viewed') && kinds.includes('together') && !kinds.includes('independent');
       K.ProgressAlbum.open();
-      const album = q('#progress-album .album-card[data-album-key="play:bond:0"]');
-      const entries = album ? Array.from(album.querySelectorAll('.album-entry')) : [];
-      d.visibleAlbum = K.UI.currentName() === 'progress-album' && qa('#progress-album .album-card').length === 1
-        && entries.length === 2 && entries.some(e => /みた/.test(e.textContent))
-        && entries.some(e => /いっしょに/.test(e.textContent));
+      d.visibleAlbum = K.UI.currentName() === 'progress-album' && qa('#progress-album .album-card').length === 2;
     } finally { K.Sound.say = say; K.UI.show('home'); K.Store.reset(); }
     check('first course stops after a view or one answer without granting a level clear, and the album keeps them distinct',
       Object.values(d).every(Boolean), JSON.stringify(d));

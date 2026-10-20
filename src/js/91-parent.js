@@ -62,7 +62,7 @@ const Parent = (() => {
     gateNode = el('div#gate', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); clearTimeout(waitTimer); waitTimer = null; Home.render(); UI.show('home', { replace: true }); } }, '←'),
+          onclick(){ Sound.sfx.tap(); clearTimeout(waitTimer); waitTimer = null; UI.show('home', { replace: true }); } }, '←'),
         el('h2', { text: 'おうちの かたへ' })),
       el('div.gate', null,
         el('div.hint', { text: 'おとなの かた だけが すすめます。けいさんの こたえを ' + GATE_RUN + 'もん つづけて えらんで ください。' }),
@@ -127,7 +127,7 @@ const Parent = (() => {
         const now = Store.gameRecentAccuracy(g.id, g.levels.length);   // the one to act on
         const acc = Store.accuracy(g.id);                              // lifetime, for context
         const seen = Store.data.seen[g.id] || 0;
-        /* The second axis. 「ヒントなし初回正解」cannot separate a child who remembers
+        /* The second axis. 「1回目で正解」cannot separate a child who remembers
            「10は4と6」from one who counted the six empty cells for nine seconds —
            and only the first of those is what くり上がり needs. */
         const ms = g.fluent ? Store.gameSpeed(g.id) : null;
@@ -150,127 +150,117 @@ const Parent = (() => {
     t.append(body);
     sec.append(el('div', { style: { overflowX: 'auto' } }, t));
     sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
-      text: '「直近30問」「通算」はどちらも「ヒントなしで初回正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
+      text: '「直近30問」「通算」はどちらも「1回目のタップで正解した割合」です。判断に使うのは直近30問のほうです。通算は開始以来の平均なので、1か月目に苦戦した記録がいつまでも分母に残り、いま伸びていることも、いまつまずき始めたことも映しません。直近が60%を下回っている遊びは赤で出ます。' }));
     sec.append(el('p', {
-      text: '「こたえるまで」は、けいさんの やま の4つの遊びだけに出ます。ヒントなしで初回正解したときの、問題が出てから答えるまでの時間です。3.0秒までは緑、9.0秒以上は茶色で表示します。時間がかかっても間違いではありません。答えを急がせる指標にはせず、具体物を数えたり、かたまりで見たりする支援の参考にできます。' }));
+      text: '「こたえるまで」は、けいさんの やま の4つの遊びだけに出ます。問題が出てから最初に答えるまでの時間で、正解だったときだけ記録しています。3.0秒までなら緑（思い出している）、9.0秒を超えると茶色（数えて出している）。正答率だけを見ていると「できている」と「数えればできる」が同じ数字になりますが、くり上がりの計算で効くのは前者だけです。茶色はこの時期には自然な段階で、まちがいではありません。次は「かたまりで見る」練習がいちばん効きます（下の「できるけれど、数えている」）。' }));
     return sec;
   }
 
-  /* The next action shares the child's planner; item-level growth shares Store's
-     recovery window. Old lifetime misses never turn a recovered fact into today's
-     homework, and a resting lesson stays outside automatic practice suggestions. */
+  /* ---- 今週やること ----
+     The dashboard used to be a table plus an essay, and deciding what the child
+     should practise was left entirely to the reader. The app has the data. */
   function nextUpSection(){
-    const sec = el('section.parent-next');
-    sec.append(el('div.eyebrow', { text: 'next' }), el('h3', { text: 'いまの成長と次の1問' }));
-    const plan = FirstSteps.shortPlan();
-    if (plan){
-      const copy = FirstSteps.planCopy(plan), status = plan.status;
-      const detail = status && status.phase === 'check'
-        ? '別日の確認を' + status.checks + '／3問まで終えています。'
-        : status ? '自分で試した問題が' + status.answered + '／8問たまっています。' : '';
-      sec.append(el('div.parent-recommendation', { 'data-parent-plan':plan.kind },
-        el('b', { text: '1問ずつのコース：' + plan.game.name + '《' + plan.game.levels[plan.levelIndex].t + '》' }),
-        el('p', { text: detail + (plan.kind === 'support'
-          ? '支援や答え直しが続いたので、やり方を一緒に確認します。その後はこの内容を少し休み、別の遊びへ進めます。'
-          : plan.kind === 'easier' || plan.kind === 'known'
-          ? 'いま難しい内容は少し休み、できるところから試せます。'
-          : plan.kind === 'return' ? '少し休んだ内容へ戻る1問です。ヒントも使えます。'
-          : copy.reason + '。1問で終えても、途中で休んでも大丈夫です。') }),
-        el('button.btn.btn-accent.parent-plan-start', { type:'button', text:copy.title,
-          onclick(){ Sound.sfx.tap(); FirstSteps.startPlan(plan); } })));
-    } else {
-      sec.append(el('p', { text: '「ひとつだけ」から、やり方を見て、自分で1問ずつ試せます。何回かに分けても記録はたまり、別の日の確認につながります。1問で終えても大丈夫です。' }));
-    }
+    const sec = el('section');
+    sec.append(el('div.eyebrow', { text: 'next' }), el('h3', { text: '今週やること' }));
 
-    const targetFor = status => {
-      if (!status || !status.at) return null;
-      const cut = status.at.lastIndexOf(':'), game = Games.byId[status.at.slice(0, cut)];
-      const levelIndex = Number(status.at.slice(cut + 1));
-      return game && Array.isArray(game.levels) && Number.isSafeInteger(levelIndex) && game.levels[levelIndex] && levelOpen(game, levelIndex)
-        ? {game, levelIndex} : null;
-    };
-    const facts = Object.keys(Store.data.facts || {}).map(k => Store.factStatus(k))
-      .map(status => ({status, target:targetFor(status)})).filter(x => x.target);
-    const byKey = new Map(facts.map(x => [x.status.key, x]));
-    const weak = Diagnostic.weakFacts().map(x => byKey.get(x.key)).filter(Boolean);
-    const resting = facts.filter(x => x.status.needsPractice && Diagnostic.resting(x.target.game.id, x.target.levelIndex));
-    const recovered = facts.filter(x => x.status.recovered && !x.status.needsPractice
-      && x.status.missed >= 2 && x.status.daysSince < 7).sort((a, b) => a.status.daysSince - b.status.daysSince);
-    const stale = facts.filter(x => !x.status.needsPractice && x.status.daysSince >= 7
-      && (x.status.recovered || x.status.n >= 6 && x.status.accuracy >= .8))
-      .sort((a, b) => b.status.daysSince - a.status.daysSince);
-    const factCard = (item, state, message, action) => {
-      const s = item.status, content = el('div.parent-fact-copy', null,
-        el('small', { text:item.target.game.name }), el('b', { text:s.label }), el('p', { text:message }),
-        el('p.parent-practice-note', {text:'この項目を優先して、同じ遊びから1問出します。'}));
-      if (action) content.append(el('button.btn.btn-ghost.parent-fact-start', {
-        type:'button', text:action, 'aria-label':item.target.game.name + 'を1問',
-        onclick(){ Sound.sfx.tap(); Session.startFocus([s.key], {n:1}); }
-      }));
-      return el('div.todo.parent-fact', {'data-fact-state':state, 'data-fact-key':s.key},
-        el('div.mk', {'aria-hidden':'true', text:state === 'recovered' ? '✓' : state === 'rest' ? '☕' : '○'}), content);
-    };
-    const accuracyText = s => s.recentN
-      ? '直近' + s.recentN + '問のヒントなし初回正答率 ' + pct(s.recentAccuracy) + '。'
-      : 'これまでのヒントなし初回正答率 ' + pct(s.accuracy) + '。';
-
-    sec.append(el('h4', { text:'いま支援が必要' }));
-    if (weak.length){
-      weak.slice(0, 6).forEach(item => {
-        const s = item.status, miss = Store.factMiss(s.key);
-        sec.append(factCard(item, 'need', accuracyText(s) + (s.slow
-          ? '自力で答えられても、時間がかかっている記録があります。急がせず、具体物をかたまりで見るところから。'
-          : 'ヒントを使っても大丈夫です。おはじきなどで同じ数を作り、一緒に確かめられます。')
-          + (miss ? 'これまでにみられた答え方：' + missParent(miss.kind) + '。' : ''), 'この遊びを 1問'));
-      });
-    } else sec.append(el('p', { text:'いま自動で取り上げる支援項目はありません。通算の間違いだけで苦手とは判断せず、最近の回答と休息の状態を見ています。' }));
-
-    if (resting.length){
-      sec.append(el('h4', { text:'いまは少し休む内容' }),
-        el('p', { text:'同じ内容を続ける負担を減らすため、自動の練習候補から外しています。上の1問では、やり方を一緒に確認したり、別の遊びへ進めたりします。ここから選ぶ場合だけ、同じ内容を試せます。' }));
-      resting.slice(0, 4).forEach(item => sec.append(factCard(item, 'rest',
-        'いったん休んで、また後で戻れます。今日は取り組まなくても大丈夫です。', '試したい遊びを 1問')));
-    }
-    if (recovered.length){
-      sec.append(el('h4', { text:'最近できるようになった' }),
-        el('p', { text:'以前はヒントや答え直しが必要だった内容です。「前はむずかしかったね。今は自分でできたね」と、変わったところを声かけに使えます。' }));
-      recovered.slice(0, 6).forEach(item => sec.append(factCard(item, 'recovered',
-        accuracyText(item.status) + '子どもの練習でも、以前の苦手から外れています。確かめたいときだけ1問にできます。', 'できた遊びを 1問')));
-    }
-    if (stale.length){
-      sec.append(el('h4', { text:'しばらく触れていない' }));
-      stale.slice(0, 4).forEach(item => sec.append(factCard(item, 'stale',
-        item.status.daysSince + '日ふれていません。以前できていた内容です。忘れたと決めつけず、思い出す1問を任意で試せます。', '思い出す 1問（同じ遊び）')));
-    }
-    sec.append(missSection(new Set(weak.map(x => x.status.key))));
-
-    // Level summaries are secondary to item-level observations. A short visit can
-    // already reveal a useful item even before eight answers exist for its level.
+    /* One question answered wrong is not a diagnosis. Nothing is named here until
+       there is a level's worth of evidence behind it. */
+    const ENOUGH = 8;
     const levels = [];
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
-      if (!levelOpen(g, i) || Diagnostic.resting(g.id, i)) return;
+      if (!levelOpen(g, i)) return;
       const n = Store.recentCount(g.id, i);
-      if (n >= 8) levels.push({g, lv, i, n, acc:Store.recentAccuracy(g.id, i), cold:Store.daysSince(g.id, i)});
+      if (n < ENOUGH) return;
+      levels.push({ g, lv, i, n, acc: Store.recentAccuracy(g.id, i), cold: Store.daysSince(g.id, i) });
     }));
-    const focus = levels.sort((a, b) => a.acc - b.acc)[0];
-    if (focus){
-      sec.append(el('h4', { text:'レベル全体のようす' }), el('p', {
-        text:focus.g.name + '《' + focus.lv.t + '》：直近' + focus.n + '問のヒントなし初回正答率 ' + pct(focus.acc) + '。'
-          + (focus.acc < .75 ? '一度に終える必要はありません。次の1問と、必要なら具体物のヒントを使えます。'
-            : weak.length ? 'レベル全体は安定しています。必要な支援は上の項目ごとに確かめられます。'
-            : '最近は安定して答えています。次の遊びへ進んでも大丈夫です。') }));
-      if (focus.g.aim) sec.append(el('div.aimnote', {html:focus.g.aim}));
-      if (!stale.length){
-        const cold = levels.filter(x => x.acc >= .75 && x.cold >= 7).sort((a, b) => b.cold - a.cold)[0];
-        if (cold) sec.append(el('div.todo.parent-level-stale', {'data-level-key':cold.g.id + ':' + cold.i},
-          el('div.mk', {'aria-hidden':'true', text:'○'}), el('div.parent-fact-copy', null,
-            el('b', {text:'しばらく触れていない：' + cold.g.name + '《' + cold.lv.t + '》'}),
-            el('p', {text:cold.cold + '日ふれていません。思い出したいときに1問だけ試せます。'}),
-            el('button.btn.btn-ghost', {type:'button', text:'この遊びを 1問', onclick(){
-              Sound.sfx.tap(); FirstSteps.startOne(cold.g, cold.i, true);
-            }}))));
-      }
-    } else if (!facts.length) sec.append(el('p', {text:'成績を判断できるだけの記録はまだありません。まずは1問から、子どものペースで試せます。'}));
+
+    if (!levels.length){
+      sec.append(el('p', { text: '判断できるだけの回数がまだありません（1レベル＝8問を、どれか1つ最後まで）。「かずの しま」の《かぞえよう》から始めてください。1日1レベルで十分です。' }));
+      return sec;
+    }
+
+    const focus = levels.slice().sort((a, b) => a.acc - b.acc)[0];
+    const stale = levels.slice()
+      .filter(x => x.acc >= .75 && x.cold >= 7)
+      .sort((a, b) => b.cold - a.cold)[0];
+
+    const line = (mark, head, body2) => el('div.todo', null,
+      el('div.mk', { text: mark }),
+      el('div', null, el('b', { text: head }), el('div', { text: body2 })));
+
+    if (focus.acc < .75){
+      sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
+        '直近' + focus.n + '問の初回正答率 ' + pct(focus.acc) + '。ここを中心に、1日1回。8問を最後までやりきれば十分です。'));
+    } else {
+      /* Levels are judged on eight questions or more, facts on two misses — so a page
+         could say「よく仕上がっています」and list three gaps directly under it. Say
+         only what both halves agree on. */
+      const facts0 = Store.data.facts || {};
+      const gaps = Object.keys(facts0).some(k => {
+        const f = facts0[k];
+        return f && (f[0] - f[1]) >= 2 && f[1] / f[0] < .6;
+      });
+      sec.append(line('◎', focus.g.name + '　《' + focus.lv.t + '》',
+        '直近' + focus.n + '問で ' + pct(focus.acc) + '。' + (gaps
+          ? 'レベルとしては安定しています。次のレベルに進みながら、下の「つまずいている中身」だけを「とっくん」で拾ってください。'
+          : 'いちばん低いところがこれなら、よく仕上がっています。次のレベルに進んで構いません。')));
+    }
+    // what that game is actually for — the one place a parent is most likely to read it
+    if (focus.g.aim) sec.append(el('div.aimnote', { html: focus.g.aim }));
+    if (stale && stale !== focus){
+      sec.append(line('○', stale.g.name + '　《' + stale.lv.t + '》',
+        stale.cold + '日ふれていません。できていたことなので、思い出す時間として1回だけ。'));
+    }
+
+    /* the exact facts that are missing — the thing a per-game percentage can never say */
+    const facts = Store.data.facts || {};
+    const weak = [];
+    for (const k in facts){
+      const f = facts[k];
+      // "missed it at least twice", not "missed it once" — one slip is not a gap
+      if (!f || (f[0] - f[1]) < 2) continue;
+      const acc = f[1] / f[0];
+      if (acc >= .6) continue;
+      const gid = k.slice(0, k.indexOf(':'));
+      weak.push({ acc, n: f[0], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid,
+                  miss: Store.factMiss(k) });
+    }
+    weak.sort((a, b) => a.acc - b.acc || b.n - a.n);
+    if (weak.length){
+      sec.append(el('h4', { text: 'つまずいている中身' }));
+      const chips = el('div.factchips');
+      weak.slice(0, 8).forEach(w => chips.append(
+        el('span.factchip', null, el('small', { text: w.game }), w.label,
+          w.miss ? el('em', { text: missParent(w.miss.kind) }) : null)));
+      sec.append(chips);
+      sec.append(el('p', { text: 'ここに出た項目は「きょうの れんしゅう」が自動で多めに出します。声かけに使うなら、答えを教えるより、おはじきやお菓子で同じ数を作ってみせるほうが早いです。' }));
+    } else {
+      sec.append(el('p', { style: { marginTop: 'calc(var(--u)*.8)' },
+        text: '取りこぼしている項目はいまのところありません。' }));
+    }
+
+    sec.append(missSection());
+
+    /* Right every time, and still counted out. Invisible to every number on this
+       page until answers were timed, and the single most useful thing to work on
+       once the accuracy is already there. */
+    const slowOnes = [];
+    for (const k in facts){
+      const f = facts[k];
+      if (!f || !f[0] || !f[5] || f[5] < FLUENT_SLOW_MS) continue;
+      if (f[1] / f[0] < .6) continue;                 // already named above
+      const gid = k.slice(0, k.indexOf(':'));
+      slowOnes.push({ ms: f[5], label: f[3] || k, game: (Games.byId[gid] || {}).name || gid });
+    }
+    slowOnes.sort((a, b) => b.ms - a.ms);
+    if (slowOnes.length){
+      sec.append(el('h4', { text: 'できるけれど、数えている' }));
+      const chips = el('div.factchips');
+      slowOnes.slice(0, 8).forEach(w => chips.append(
+        el('span.factchip.slow', null, el('small', { text: w.game + '　' + secs(w.ms) }), w.label)));
+      sec.append(chips);
+      sec.append(el('p', { text: '正解はしていますが、答えが出るまでに時間がかかっています。指を折る、枠のマスを数える、というやり方で合わせている状態です。まちがいではないので放っておかれがちですが、くり上がりのたし算は「9+4 を 9+1+3 にする」途中でこの答えを即座に使うので、ここが遅いとその先が進みません。「とっくん」はこれらも拾います。家では、答えを急がせるより、おはじきを5と5、6と4 のように置いて見せて「かたまりで見る」経験を足すほうが早いです。' }));
+    }
     return sec;
   }
 
@@ -280,12 +270,11 @@ const Parent = (() => {
      cover the four rather than to drill the fact. The app throws away nothing now:
      the value pressed on the first mistake is classified and counted (06-miss.js),
      so this is the one place on the page that says what to actually do. */
-  function missSection(currentKeys){
+  function missSection(){
     const facts = Store.data.facts || {};
     const tally = {};                   // kind -> { n, games:Set, examples:[] }
     let taught = 0;
     for (const k in facts){
-      if (!currentKeys.has(k)) continue;
       const m = facts[k] && facts[k][6];
       if (!m) continue;
       const gid = k.slice(0, k.indexOf(':'));
@@ -304,9 +293,9 @@ const Parent = (() => {
     if (!kinds.length && !taught) return el('span', { hidden: true });
 
     const s = el('div');
-    s.append(el('h4', { text: 'いま支援する内容で、これまでにみられた答え方' }));
+    s.append(el('h4', { text: 'まちがえ方の型' }));
     if (kinds.length){
-      s.append(el('p', { text: '上の「いま支援が必要」に出た項目について、これまでの最初の誤答を分類した記録です。回復した項目や休息中の項目は含めません。現在の答え方と一緒に見て、声かけの参考にできます。' }));
+      s.append(el('p', { text: '同じ「不正解」でも中身は違います。1回目に押した答えを分類して数えたものです。正答率だけを見ていても出てこない情報で、家庭での声かけを変えられるのはここです。' }));
       const list = el('div.misslist');
       kinds.forEach(k => {
         const t = tally[k];
@@ -320,8 +309,8 @@ const Parent = (() => {
     if (taught){
       s.append(el('p', { style: { marginTop: 'calc(var(--u)*.7)' },
         text: '※ 自力では届かず、アプリが答えを見せて終えた回が ' + taught
-            + ' 回あります（6回まちがえると出ます）。★にも「ヒントなし初回正解」にも数えていません。'
-            + '上の項目から、その遊びを1問試せます。' }));
+            + ' 回あります（6回まちがえると出ます）。★にも「1回目で正解」にも数えていません。'
+            + 'この回の項目は「とっくん」が必ず拾います。' }));
     }
     return s;
   }
@@ -451,7 +440,7 @@ const Parent = (() => {
 
   const PLAN = [
     ['1〜2か月め', 'かずの しま を中心に', 'かぞえよう / すうじ どれかな / かずの じゅんばん。まず10までを確実に。数字のなぞり書きも並行して少しずつ。'],
-    ['3〜4か月め', 'けいさんの やま に入る', 'いくつと いくつ → 10の おともだち の順で。難しいときは具体物を使い、1問ずつ。できるところを挟み、後で戻っても大丈夫です。'],
+    ['3〜4か月め', 'けいさんの やま に入る', 'いくつと いくつ → 10の おともだち の順で。ここが半年計画の山場です。毎日「きょうの れんしゅう」を1回。'],
     ['5〜6か月め', 'たしざん・ひきざん と 生活の数', '式の形に慣れ、とけい・おおきさくらべ・なんばんめ で入学後の単元に先に触れておきます。'],
     ['準備ができたら', '1ねんせいの きょうしつ', '各遊びに関連する2〜3レベルの準備ができると、その遊びから開きます。金色のシールは条件に入りません。なかまづくり（同じものの集まり）と 1たい1で くらべる（一対一対応）から、20までの数・式へ。1年生の1学期の順番そのままです。']
   ];
@@ -501,7 +490,7 @@ const Parent = (() => {
         : '入学前の48レベルはすべてクリア済みです。あとは「きょうの れんしゅう」と「とっくん」で保つのと、「1ねんせいの きょうしつ」を進めるので十分です。' }));
     } else if (elapsed < 7 || pre.got === 0){
       s.append(el('p', { text: 'ペースを見積もれるだけの日数がまだありません（1週間ほど使うと出ます）。'
-        + '1問で終えても記録はたまり、別の日の確認につながります。1日に終えるレベル数は決めず、難しい内容は休みながら進められます。' }));
+        + '目安は1日1レベル・10分です。48レベルなら、休む日を入れても2〜3か月で終わる分量です。' }));
     } else {
       const rate = pre.got / Math.max(1, elapsed);            // levels per calendar day
       const eta = Math.ceil(left / rate);
@@ -519,9 +508,10 @@ const Parent = (() => {
           el('div', { text: '使い始めてから ' + elapsed + '日で ' + pre.got + 'レベル（週 ' + perWeek + 'レベル）。'
             + 'のこり ' + left + 'レベルを同じペースで進めた場合の見込みです。' }))));
       if (!inTime){
-        s.append(el('p', { text: 'これは過去のクリア数だけから計算した見込みです。見込みに合わせて1日の問題数を増やす必要はありません。'
-          + '「ひとつだけ」で1問ずつ進め、支援や答え直しが続く内容は少し休んでから戻れます。'
-          + '入学の時点で全部終わっていなくても、記録は残り、入学後も続けられます。' }));
+        s.append(el('p', { text: '追いつき方は2つです。1つは「いまの おすすめ」を毎日1回、最後まで（8問）。'
+          + 'これがそのまま1日1レベルになります。もう1つは、間違いが多いレベルを繰り返すより'
+          + '「とっくん」で該当する項目だけを10問回すほうが、同じ10分で進みます。'
+          + 'なお、間に合わなくても内容が消えるわけではありません——入学後も続けられます。' }));
       }
     }
 
@@ -543,7 +533,7 @@ const Parent = (() => {
   function planSection(){
     const s = el('section');
     s.append(el('div.eyebrow', { text: 'roadmap' }), el('h3', { text: '入学までの半年、どう進めるか' }),
-      el('p', { text: '時期は目安です。「ひとつだけ」で1問ずつ進め、別の日にも確かめられます。1日で1レベルを終える必要はありません。余裕がある日は通常コースや「きょうの れんしゅう」も選べ、4問ごとに休憩できます。' }));
+      el('p', { text: '1日10分・1レベル（8問）を目安に。「きょうの れんしゅう」は解けるようになった遊びから10問を混ぜて出すので、復習にちょうど良い分量です。' }));
     const t = el('table.skilltable');
     t.append(el('thead', null, el('tr', null,
       el('th', { text: '時期' }), el('th', { text: '中心にする世界' }), el('th', { text: 'ねらい' }))));
@@ -734,9 +724,6 @@ const Parent = (() => {
         if (currentVoiceUI && currentVoiceUI.node.isConnected) currentVoiceUI.update();
       }));
     s.append(row);
-    s.append(toggle('正解後に自動で進む', () => Store.data.autoAdvance === true,
-      v => Store.setPref('autoAdvance', v)),
-      el('p', {text:'オフでは、正解した絵と答えを見て「つぎへ」で進みます。オンでも、答えの図と読み上げが終わってから進みます。見本は自動で進みます。'}));
     s.append(voiceRow());
     const reset = el('button.btn', { text: justReset ? '消しました' : '記録をすべて消す',
       style: { borderColor: 'var(--oops)', color: 'var(--oops-ink)' } });
@@ -956,10 +943,10 @@ const Parent = (() => {
         // counted, not typed: the sentence used to say 15 and quietly went stale
         el('p', { text: '小学校1年生の算数は「数える」「数を分ける・合わせる」「比べる」「形をとらえる」の4つの土台の上に立っています。逆に言えば、入学前にやるべきことは計算の先取りではなく、この土台を手と目と声で確かめておくことです。このアプリは入学前の'
           + Games.list.filter(g => Progress.stageOf(g) === 'pre').length
-          + 'の遊びを4つの世界に分けています。1問ずつ成長できるコースと、4問ごとに休める通常コースがあり、短い時間でも記録を重ねられます。'
+          + 'の遊びを4つの世界に分け、1レベル8問・1日10分で回せる分量にしています。'
           + '関連する2〜3レベルの準備ができた遊びから、小学1年生の1学期にあたる「1ねんせいの きょうしつ」が開きます。' }),
-        el('p', { text: '答えを間違えても減点や時間制限はありません。通常の遊びでは2回間違えると、答えではなく「解き直すための道具」が画面に出て、声でも伝えます（タップして数える、空いたマスを埋める、端をそろえる、など）。ここでは選択肢を減らしません。4回で指のアニメがやり方を最後まで見せて「こたえを みる」ボタンが出て、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、ヒントなし初回正解には数えません）。' }),
-        el('p', { text: 'はじめて開くレベルは、テストから始めません。最初の1問は指のアニメがやり方を見せ（「みてて」）、次の1問は道具を出したまま一緒に解き（「いっしょに」）、そのあとに本番の問題が続きます。この2問は自力の成績や★には数えず、「見た」「一緒にできた」として別に記録します。問題の横の 👀 を押すと、まちがえる前でも道具が出ます（押した問題は自力の正解には数えません）。' }));
+        el('p', { text: '答えを間違えても減点や時間制限はありません。2回間違えると、答えではなく「解き直すための道具」が画面に出て、声でも伝えます（タップして数える、空いたマスを埋める、端をそろえる、など）。ここでは選択肢を減らしません。4回で指のアニメがやり方を最後まで見せて「こたえを みる」ボタンが出て、6回でアプリが答えを見せて一緒に終わらせます。どの問題も行き止まりにはなりません（答えを見せて終えた問題は、1回目の正解には数えません）。' }),
+        el('p', { text: 'はじめて開くレベルは、テストから始めません。最初の1問は指のアニメがやり方を見せ（「みてて」）、次の1問は道具を出したまま一緒に解き（「いっしょに」）、そのあとに本番の問題が続きます。この2問は★にも記録にも数えません。問題の横の 👀 を押すと、まちがえる前でも道具が出ます（押した問題は自力の正解には数えません）。' }));
     sheetInner.append(
       Rounds.parentSummary(),
       nextUpSection(),

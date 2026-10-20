@@ -36,7 +36,7 @@ const server = http.createServer((req, res) => {
       const K = KazuApp;
       K.Sound.hush(); K.Sound.voiceOn = false; K.Sound.sfxOn = false;
       K.Sound.say = () => {}; K.Sound.probeVoice = () => Promise.resolve(true);
-      K.Session._test.intro(false); K.Session._test.overview(false); K.Session._test.autoAdvance(true); K.Session._test.breaks(false);
+      K.Session._test.intro(false);
     });
     const passed = name => console.log('PASS ' + name);
     const solveAdultGate = async page => {
@@ -108,7 +108,6 @@ const server = http.createServer((req, res) => {
     await page.evaluate(() => KazuApp.Rounds.go(1));
     const firstTheme = (await expectRound(page, 'home', 1)).theme;
     await capture(page, 'home1');
-    await page.locator('#home .home-more').evaluate(node => { node.open = true; });
     await page.locator('#home [data-round-target="2"]').click();
     await expectRound(page, 'book', 1);
     assert.match(await page.locator('#book .round-collection').innerText(), /156/);
@@ -134,9 +133,8 @@ const server = http.createServer((req, res) => {
     assert.deepEqual(complete.pending, { progress: 155, open: false });
     assert.equal(complete.progress, 156); assert.equal(complete.open, true); assert.equal(complete.keys.length, 156);
     assert.equal(new Set(complete.first.concat(complete.second)).size, 312, 'all 312 fixed species are different');
-    passed('related preparation opens textbook chapters within lap 1; all 156 confirmed collection rewards unlock the true second lap');
+    passed('131 original rewards unlock textbook review within lap 1; all 156 confirmed rewards unlock the true second lap');
 
-    await page.locator('#home .home-more').evaluate(node => { node.open = true; });
     await page.locator('#home [data-round-target="2"]').click();
     assert.notEqual((await expectRound(page, 'home', 2)).theme, firstTheme);
     assert.equal(await page.locator('#home .gamecard').count(), 20, 'lap 2 opens the complete map');
@@ -188,7 +186,7 @@ const server = http.createServer((req, res) => {
     assert.equal(played.screen, 'result'); assert.equal(played.stars, 3); assert.equal(played.normal, true); assert.equal(played.gold, true);
     assert.equal(played.first, fresh.first); await expectRound(page, 'result', 2);
     assert.ok(await page.locator('#result .pokemon-second-round .pokemon-round-badge').count() > 0); await capture(page, 'sticker2');
-    await page.locator('#result .result-actions button').filter({ hasText: /きょうは ここまで|きょうは おしまい/ }).click();
+    await page.locator('#result .result-actions button').filter({ hasText: /あそびを えらぶ|きょうは おしまい/ }).click();
     await expectRound(page, 'home', 2);
     passed('a replayed level earns distinct lap 2 normal and gold stickers without changing any first-lap learning field');
 
@@ -223,9 +221,7 @@ const server = http.createServer((req, res) => {
     });
     await expectRound(page, 'review', 2);
     assert.equal(await page.locator('#review .review-lesson').count(), 20); assert.equal(await page.locator('#review .review-summary').count(), 5);
-    assert.deepEqual(await page.locator('#review .review-lesson:not([disabled])').evaluateAll(nodes => nodes.map(n => Number(n.dataset.lesson))),
-      [0, 4, 8, 12, 16], 'each prepared chapter restarts with only its own first lesson available');
-    assert.equal(await page.locator('#review .review-summary:not([disabled])').count(), 0, 'summaries still wait for four confirmed lessons in their own chapter');
+    assert.equal(await page.locator('#review .review-lesson:not([disabled])').count(), 1, 'textbook progression restarts too');
     const review = await page.evaluate(() => {
       const K = KazuApp, R = K.TextbookReview, S = K.Store;
       const click = sel => { const n = document.querySelector('#review ' + sel); if (!n) throw new Error('Missing review control ' + sel); n.click(); };

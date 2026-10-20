@@ -30,7 +30,7 @@ const server = http.createServer((req, res) => {
       const K = KazuApp;
       K.Sound.hush(); K.Sound.voiceOn = false; K.Sound.sfxOn = false;
       K.Sound.say = (text, opts) => { if (opts && opts.onend) opts.onend(); };
-      K.Store.reset(); K.Session._test.intro(false); K.Session._test.overview(false); K.Session._test.autoAdvance(true); K.Session._test.breaks(false);
+      K.Store.reset(); K.Session._test.intro(false);
       document.querySelectorAll('.bigmark').forEach(node => node.remove());
     });
     const passed = name => console.log('PASS ' + name);
@@ -95,7 +95,6 @@ const server = http.createServer((req, res) => {
 
     await setup();
     await page.evaluate(() => { KazuApp.Home.render(); KazuApp.UI.show('home'); });
-    await page.locator('#home .home-more > summary').click();
     await page.getByRole('button', { name: /^🎒 なかまづくり/ }).click();
     assert.equal(await page.locator('#g1-preparation').isVisible(), true);
     const preparation = await page.locator('#g1-preparation .preparation-level').evaluateAll(nodes => nodes.map(n => ({ game: n.dataset.game, level: n.dataset.level, text: n.textContent })));
@@ -126,7 +125,7 @@ const server = http.createServer((req, res) => {
       const initialLength = T.planLength;
       for (let guard = 0; K.UI.currentName() === 'play' && guard < 20; guard++){ T.forceCorrect(); T.flushTimers(); }
       K.Home.render();
-      const label = () => document.querySelector('#home .dailies > .daily:not(.recommended):not(.reviewmission):not(.mission-resume):not(.focusset) .t').textContent;
+      const label = () => document.querySelector('#home .dailies > .daily:not(.recommended):not(.reviewmission):not(.focusset) .t').textContent;
       const before = { count: S.todayCount(), practice: S.data.practice.slice(), done: S.practiceDoneToday(), label: label() };
       K.Session.startDaily(10); T.forceCorrect(); T.flushTimers();
       const back = document.querySelector('#play .backbtn'); back.click(); back.click();

@@ -10,14 +10,14 @@
 'use strict';
 
 const StickerMissions = (() => {
-  let node, prizeEl, detailEl, progressEl, courseEl, goBtn, backBtn, active = null;
+  let node, prizeEl, detailEl, goBtn, backBtn, active = null;
 
   function available(){
     const rec = Diagnostic.current() || {};
     const all = [];
     Games.list.forEach(g => g.levels.forEach((lv, i) => {
       const key = g.id + ':' + i;
-      if (!levelOpen(g, i) || Diagnostic.resting(g.id, i) || Store.hasSticker(key)) return;
+      if (!levelOpen(g, i) || Store.hasSticker(key)) return;
       all.push({ game: g, levelIndex: i, level: lv, key,
         recommended: rec.gameId === g.id && rec.levelIndex === i,
         known: Store.introduced(g.id, i), plays: Store.plays(g.id, i) });
@@ -45,52 +45,46 @@ const StickerMissions = (() => {
     const row = el('div.sticker-mission-picks');
     choices.forEach(choice => row.append(el('button.sticker-mission-pick', {
       type: 'button', title: choice.game.name + '　' + choice.level.t,
-      dataset:{missionKey:choice.key},
       onclick(){ Sound.sfx.tap(); open(choice); }
     },
       el('span.prize', null, PokemonStickers.artwork(choice.key, { rarity: false })),
       el('span.name', { text: choice.game.name }),
       el('span.go', { text: '▶', 'aria-hidden': 'true' }))));
-    return el('details.home-quest.sticker-mission', { 'aria-label': 'ほしいシールをえらぶ' },
-      el('summary.quest-title', null, el('span', { text: '✨', 'aria-hidden': 'true' }),
-        el('span', { text: 'ほしい シールから えらぶ' })), row);
+    return el('section.home-quest.sticker-mission', { 'aria-label': 'ほしいシールをえらぶ' },
+      el('div.quest-title', null, el('span', { text: '✨', 'aria-hidden': 'true' }),
+        el('span', { text: 'ほしい シールを えらぼう' })), row);
   }
 
   function build(){
     if (node) return node;
     prizeEl = el('div.sticker-mission-prize');
     detailEl = el('div.sticker-mission-detail');
-    progressEl = el('div.sticker-mission-progress');
-    courseEl = el('div.sticker-mission-course');
-    goBtn = el('button.btn.btn-accent.sticker-mission-go', { type: 'button' });
+    goBtn = el('button.btn.btn-accent', { type: 'button', text: 'あそびに いく ▶' });
     backBtn = el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
       onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←');
     node = el('div#sticker-mission', null,
       el('div.topbar', null, backBtn, el('h2', { text: 'シールミッション' })),
-      el('div.reward-sheet', null,
-        el('div.sticker-mission-intro', null, prizeEl, detailEl), goBtn, progressEl, courseEl));
+      el('div.reward-sheet', null, mascotSVG('happy', 'talk'), prizeEl, detailEl, goBtn));
     return UI.register('sticker-mission', node);
   }
 
   function open(choice){
-    if (!choice || !choice.game || !choice.level || !levelOpen(choice.game, choice.levelIndex)) return;
+    if (!choice || !choice.game || !choice.level) return;
     build(); active = choice;
     clear(prizeEl).append(PokemonStickers.artwork(choice.key));
     clear(detailEl);
     detailEl.append(
-      el('b', { text: choice.game.ico + '　' + choice.game.name }),
-      el('span', { text: '《' + choice.level.t + '》' }),
-      el('small', { text: 'この シールへ、1もんずつで いいよ' }));
-    const progress = ShortProgress.describe(choice.game.id, choice.levelIndex, {gold:false, preview:true});
-    clear(progressEl).append(ShortProgress.render(choice.game.id, choice.levelIndex, {gold:false, preview:true}));
-    clear(courseEl).append(FirstSteps.longCourse(choice.game, choice.levelIndex, {stickerMission:choice}));
-    goBtn.textContent = progress.nextLabel;
+      el('b', { text: choice.game.name + '　《' + choice.level.t + '》' }),
+      el('span', { text: 'クリアすると「' + stickerFor(choice.key) + '」の シールが もらえるよ' }),
+      el('small', { text: 'いろが つくのは、べつの ひに たしかめてから' }));
     goBtn.onclick = () => {
       Sound.sfx.tap();
-      ShortProgress.start(choice.game, choice.levelIndex, {gold:false, stickerMission:choice});
+      if (choice.game.intro !== false && !Store.introduced(choice.game.id, choice.levelIndex))
+        FirstSteps.open(choice.game, choice.levelIndex, { stickerMission: choice });
+      else Session.startLevel(choice.game, choice.levelIndex, { stickerMission: choice });
     };
     UI.show('sticker-mission');
-    Sound.say(stickerFor(choice.key) + 'のシールへの遊びだよ。' + progress.speech + '1問ずつでいいよ。', { delay: 180 });
+    Sound.say(stickerFor(choice.key) + 'のシールを取りに行こう。' + choice.game.name + 'の、' + choice.level.t + 'をクリアすると、もらえるよ。', { delay: 180 });
   }
 
   return { available, homeCard, build, open, get active(){ return active; } };
@@ -108,17 +102,16 @@ const Adventures = (() => {
   }
 
   function target(){
-    const weak = Diagnostic.weakFacts(1)[0];
+    const weak = Store.weakFacts(1)[0];
     const aimed = weak && fromOrigin(weak.at, weak.key);
     if (aimed) return aimed;
     const rec = Diagnostic.current();
     const game = rec && Games.byId[rec.gameId];
-    if (game && game.levels[rec.levelIndex] && levelOpen(game, rec.levelIndex)
-        && !Diagnostic.resting(game.id, rec.levelIndex)){
+    if (game && game.levels[rec.levelIndex] && levelOpen(game, rec.levelIndex)){
       return { game, levelIndex: rec.levelIndex, level: game.levels[rec.levelIndex], want: null };
     }
     for (const g of Games.list){
-      for (let i = 0; i < g.levels.length; i++) if (levelOpen(g, i) && !Diagnostic.resting(g.id, i)) return { game: g, levelIndex: i, level: g.levels[i], want: null };
+      for (let i = 0; i < g.levels.length; i++) if (levelOpen(g, i)) return { game: g, levelIndex: i, level: g.levels[i], want: null };
     }
     return null;
   }
@@ -164,147 +157,39 @@ const Adventures = (() => {
 
 const FirstSteps = (() => {
   let node, detail, choices, result, active = null, finishSpeech = '';
-  function withOrigin(game, levelIndex, opts){
-    return UI.currentName() === 'levels' && Levels.game === game
-      ? Object.assign({}, opts, {returnToLevels:Levels.captureReturn(levelIndex)}) : opts || null;
-  }
   function target(){
     const rec = Diagnostic.current();
     const g = rec && Games.byId[rec.gameId];
     if (g && g.intro !== false && g.levels[rec.levelIndex]
-        && levelOpen(g, rec.levelIndex) && !Diagnostic.resting(g.id, rec.levelIndex)
-        && !Store.introduced(g.id, rec.levelIndex))
+        && levelOpen(g, rec.levelIndex) && !Store.introduced(g.id, rec.levelIndex))
       return { game: g, levelIndex: rec.levelIndex };
     for (const game of Games.list){
       if (game.intro === false) continue;
       for (let i = 0; i < game.levels.length; i++)
-        if (levelOpen(game, i) && !Diagnostic.resting(game.id, i) && !Store.introduced(game.id, i)) return { game, levelIndex: i };
+        if (levelOpen(game, i) && !Store.introduced(game.id, i)) return { game, levelIndex: i };
     }
     return null;
   }
-  function shortCourses(){
-    return Object.keys(Store.data.shortCourses || {}).map(key => {
-      const [id, index] = key.split(':'), game = Games.byId[id], levelIndex = Number(index);
-      if (!game || !Array.isArray(game.levels) || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return null;
-      const status = Store.shortStatus(id, levelIndex);
-      return { game, levelIndex, status };
-    }).filter(Boolean).sort((a, b) => b.status.at - a.status.at);
-  }
-  function shortTarget(){
-    return shortCourses().filter(t => (!t.status.confirmed || t.status.goldActive) && !t.status.waiting
-      && !Diagnostic.resting(t.game.id, t.levelIndex))
-      .sort((a, b) => Number(b.status.phase === 'check') - Number(a.status.phase === 'check')
-        || b.status.at - a.status.at)[0] || null;
-  }
-  function shortPlan(){
-    const courses = shortCourses();
-    if (!courses.length) return null;
-    const unfinished = courses.filter(t => !t.status.confirmed || t.status.goldActive);
-    const available = t => !Diagnostic.resting(t.game.id, t.levelIndex);
-    const due = unfinished.find(t => t.status.phase === 'check' && available(t));
-    if (due) return {...due, kind:'check'};
-    const support = unfinished.find(t => t.status.resting && t.status.supportNeeded);
-    if (support) return {...support, kind:'support'};
-    const returning = unfinished.find(t => available(t) && !t.status.waiting
-      && t.status.restUntil !== null && t.status.lastDay < t.status.restUntil);
-    if (returning) return {...returning, kind:'return'};
-    const current = unfinished.find(t => available(t) && !t.status.waiting);
-    if (current) return {...current, kind:'resume'};
-    const rest = unfinished.find(t => !available(t));
-    const known = (game, i) => levelOpen(game, i) && !Diagnostic.resting(game.id, i)
-      && (Store.introduced(game.id, i) || Store.hasConfirmed(game.id + ':' + i))
-      && !Store.shortStatus(game.id, i).waiting;
-    if (rest){
-      for (let i = rest.levelIndex - 1; i >= 0; i--)
-        if (known(rest.game, i)) return {game:rest.game, levelIndex:i, kind:'easier'};
-      for (const game of Games.list){
-        if (game.intro === false || game.id === rest.game.id) continue;
-        for (let i = 0; i < game.levels.length; i++)
-          if (known(game, i)) return {game, levelIndex:i, kind:'known'};
-      }
-    }
-    const next = target();
-    if (next) return {...next, kind:'new'};
-    for (const game of Games.list){
-      if (game.intro === false) continue;
-      for (let i = 0; i < game.levels.length; i++)
-        if (known(game, i)) return {game, levelIndex:i, kind:'review'};
-    }
-    const waiting = unfinished.find(available);
-    return waiting ? {...waiting, kind:'review'} : null;
-  }
-  function planCopy(t){
-    const titles = {check:'べつのひの たしかめを 1もん', support:'いっしょに 1もん',
-      return:'まえの あそびを 1もん', resume:'つづきの 1もん', easier:'やさしい もんだいを 1もん',
-      known:'できる あそびを 1もん', new:'あたらしい あそびを 1もん', review:'ふくしゅうを 1もん'};
-    const reasons = {check:'べつのひにも できるかな', support:'やりかたを みてから。このあそびは あとで また',
-      return:'すこし やすんだ あそびを ためそう', resume:'1もんずつでも すすむよ',
-      easier:'できる ところから ためそう', known:'できる ところから ためそう',
-      new:'1もんだけ。ヒントも あるよ', review:'たしかめは また べつのひでも いいよ'};
-    const gold = t.status && t.status.goldActive;
-    return {title:gold && t.kind === 'check' ? 'きんへの たしかめを 1もん'
-      : gold && (t.kind === 'resume' || t.kind === 'return') ? 'きんへ つづきの 1もん' : titles[t.kind] || titles.resume,
-      reason:gold && t.kind === 'resume' ? 'できた シールを のこして、きんに チャレンジ' : reasons[t.kind] || reasons.resume};
-  }
-  function startPlan(t, opts){
-    if (!t) return;
-    if (t.kind === 'support'){
-      build(); active = {game:t.game, levelIndex:t.levelIndex, opts:withOrigin(t.game, t.levelIndex, opts)};
-      Session.startFirst(t.game, t.levelIndex, 'afterShow');
-    } else startOne(t.game, t.levelIndex, t.kind ? t.kind !== 'new' : undefined, opts);
-  }
-  function oneTarget(){
-    const current = shortPlan();
-    if (current) return current;
-    const rec = Diagnostic.current(), g = rec && Games.byId[rec.gameId];
-    if (g && g.intro !== false && levelOpen(g, rec.levelIndex) && !Diagnostic.resting(g.id, rec.levelIndex))
-      return { game:g, levelIndex:rec.levelIndex };
-    for (const game of Games.list){
-      if (game.intro === false) continue;
-      for (let i = 0; i < game.levels.length; i++)
-        if (levelOpen(game, i) && !Diagnostic.resting(game.id, i)) return { game, levelIndex:i };
-    }
-    return null;
-  }
-  function homeCard(opts){
-    const one = opts && opts.one, t = one ? oneTarget() : target();
+  function homeCard(){
+    const t = target();
     if (!t) return null;
     return el('button.home-quest.adventure-card.first-card', { type: 'button',
-      onclick(){ Sound.sfx.tap(); if (one) startPlan(t); else open(t.game, t.levelIndex); } },
-      el('span.icon', { text: one ? '👆' : '👀', 'aria-hidden': 'true' }),
-      el('span.copy', null, el('b', { text: one ? 'ひとつだけ やってみる' : 'まず みてみる' }),
-        el('small', { text: t.game.name + (one && t.kind ? '　' + planCopy(t).title : one ? Store.introduced(t.game.id, t.levelIndex)
-          ? Store.shortStatus(t.game.id, t.levelIndex).phase === 'check' ? '　べつのひの たしかめ 1もん' : '　じぶんで 1もん。ヒントも あるよ'
-          : '　ヒントつきの 1もん' : '　みるだけでも いいよ') })),
+      onclick(){ Sound.sfx.tap(); open(t.game, t.levelIndex); } },
+      el('span.icon', { text: '👀', 'aria-hidden': 'true' }),
+      el('span.copy', null, el('b', { text: 'まず みてみる' }),
+        el('small', { text: t.game.name + '　ひとつから' })),
       el('span.arrow', { text: '▶', 'aria-hidden': 'true' }));
   }
   const button = (icon, label, fn, accent) => el('button.btn' + (accent ? '.btn-accent' : ''),
     { type: 'button', onclick(){ Sound.sfx.tap(); fn(); } },
     el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
-  // The longer course remains a deliberate choice. Its scored question count is
-  // stable; the engine's preparation screen names any teaching/check additions.
-  function longCourse(game, levelIndex, opts){
-    const n = game.levels[levelIndex].n || 8;
-    return el('details.long-course', null,
-      el('summary', {text:'まとめて あそびたいとき'}),
-      el('p', {text:n + 'もんで レベルに チャレンジ。せいかいに あわせて、ほしや シールが のこるよ。'}),
-      el('p', {text:'1もんずつの じゅんびとは べつの コースだよ。みほんや、ほかの シールの たしかめが くわわることも あるよ。'}),
-      el('small', {text:'つぎの がめんで、ぜんぶの もんすうを みられるよ。とちゅうで やすんでも いいよ。'}),
-      button('▶', n + 'もんの コース', () => Session.startLevel(game, levelIndex, opts)));
-  }
   function build(){
     if (node) return node;
     detail = el('div.first-detail'); choices = el('div.first-actions');
     node = el('div#first-steps', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
-          onclick(){
-            Sound.sfx.tap();
-            const origin = active && active.opts;
-            if (origin && origin.returnToBook) Book.returnToBook();
-            else if (origin && origin.returnToLevels) Levels.returnToList(origin.returnToLevels);
-            else { Home.render(); UI.show('home', { replace: true }); }
-          } }, '←'),
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
         el('h2', { text: 'はじめてコース' }), speakBtn(() => 'まず、見るだけでもいいよ。ひとつやったら、そこで終われるよ。')),
       el('div.reward-sheet', null, mascotSVG('happy', 'talk'), detail, choices));
     UI.register('first-steps', node);
@@ -316,28 +201,9 @@ const FirstSteps = (() => {
     UI.register('first-finish', result);
     return node;
   }
-  function startOne(game, levelIndex, independent, opts){
-    if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = { game, levelIndex, opts:withOrigin(game, levelIndex, opts) };
-    Session.startFirst(game, levelIndex, independent || game.intro === false || Store.introduced(game.id, levelIndex)
-      ? Store.shortStatus(game.id, levelIndex).phase : 'afterShow');
-  }
-  function startGold(game, levelIndex, opts){
-    if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = {game, levelIndex, opts:withOrigin(game, levelIndex, opts)};
-    // The engine settles any completed checkpoint before starting a fresh goal.
-    Session.startFirst(game, levelIndex, 'independent', {gold:true});
-  }
-  function resume(choice, game, levelIndex, opts){
-    if (!game || !game.levels[levelIndex] || !choice || choice.kind !== 'session' || choice.mode !== 'first'
-        || choice.gameId !== game.id || choice.levelIndex !== levelIndex){ active = null; return false; }
-    build(); active = {game,levelIndex,opts:withOrigin(game,levelIndex,opts)};
-    if (Session.resume(choice)) return true;
-    active = null; return false;
-  }
   function open(game, levelIndex, opts){
     if (!game || !game.levels[levelIndex] || !levelOpen(game, levelIndex)) return;
-    build(); active = { game, levelIndex, opts:withOrigin(game, levelIndex, opts) };
+    build(); active = { game, levelIndex, opts: opts || null };
     detail.textContent = game.ico + '　' + game.name + '　《' + game.levels[levelIndex].t + '》';
     const previous = Store.milestones().find(m => m.gameId === game.id && m.levelIndex < levelIndex);
     if (previous) detail.append(el('small', { text: '📒 まえは「' + Store.milestoneText(previous.kind) + '」' }));
@@ -345,279 +211,61 @@ const FirstSteps = (() => {
     choices.append(
       button('👀', 'まず みてみる', () => Session.startFirst(game, levelIndex, 'show'), true),
       button('🤝', 'みてから ひとつ', () => Session.startFirst(game, levelIndex, 'together')),
-      button('👆', 'じぶんで 1もん', () => startOne(game, levelIndex, true, active.opts)));
-    const status = Store.shortStatus(game.id, levelIndex);
-    if (status.canStartGold || status.goldActive) choices.append(button('✨',
-      ShortProgress.describe(game.id, levelIndex, {gold:true}).nextLabel,
-      () => ShortProgress.start(game, levelIndex, Object.assign({}, active.opts, {gold:true}))));
-    choices.append(longCourse(game, levelIndex, active.opts));
-    const progress = ShortProgress.render(game.id, levelIndex);
-    if (progress) detail.append(progress);
+      button('▶', 'じぶんで あそぶ', () => Session.startLevel(game, levelIndex, active.opts)));
     UI.show('first-steps');
     Sound.say('初めてのことは、まず見るだけでもいいよ。一つやったら、そこで終われるよ。', { delay: 180 });
   }
   function finish(game, levelIndex, phase, milestone){
     build();
-    // Keep the selected prize only for this course; the book return remains useful
-    // even if the child follows a recommendation for another activity.
-    const origin = active && active.game === game && active.levelIndex === levelIndex ? active.opts : null;
     const info = $('.first-detail', result), actions = $('.first-actions', result);
-    const short = phase === 'independent' || phase === 'check';
-    const status = Store.shortStatus(game.id, levelIndex);
-    const rewards = short ? status.rewardKeys || [] : [];
-    const newGold = rewards.includes(game.id + ':' + levelIndex + ':g');
     const answered = milestone && milestone.kind === 'together';
-    const doneText = short ? milestone ? Store.milestoneText(milestone.kind) : 'ひとつ ためしたね'
-      : phase === 'show' || !answered ? 'やりかたを みたね' : 'いっしょに ひとつ できたね';
-    info.textContent = doneText;
-    if (short){
-      if (newGold) info.append(el('p.first-progress', {text:'🌟　きんの シールを ゲット！ べつのひも できたね'}));
-      else if (status.lastResult === 'confirmed') info.append(el('p.first-progress', {text:'🌟　べつのひも できたね！ シールが かんせいしたよ'}));
-      info.append(ShortProgress.render(game.id, levelIndex));
-    }
-    if (rewards.length) info.append(el('div.short-rewards', {'aria-label':'もらった シール'},
-      rewards.map(key => PokemonStickers.artwork(key))));
-    if (status.resting) info.append(el('p.first-progress', {text:status.supportNeeded
-      ? 'いっしょに やりかたを みよう。そのあとは べつの あそびに しよう'
-      : 'このあそびは すこし おやすみ。また あとで もどれるよ'}));
+    info.textContent = phase === 'show' || !answered ? 'やりかたを みたね' : 'いっしょに ひとつ できたね';
     clear(actions);
     if (phase === 'show') actions.append(button('🤝', 'いっしょに ひとつ',
       () => Session.startFirst(game, levelIndex, 'afterShow'), true));
     actions.append(button('🏠', 'きょうは ここまで', () => {
-      Home.endToday();
+      Home.render(); UI.show('home', { replace: true });
     }, phase !== 'show'));
-    const choose = button('🗺️', 'べつの あそびを えらぶ', () => {
-      if (origin && origin.returnToBook) Book.returnToBook();
-      else Home.choosePlay();
-    });
-    choose.classList.add('first-choose'); actions.append(choose);
-    if (rewards.length) actions.append(button('🏡', 'しまに はる', () => StickerWorld.open(rewards[rewards.length - 1])));
-    if (phase !== 'show'){
-      const next = shortPlan() || {game, levelIndex, kind:'resume'};
-      const same = next.game.id === game.id && next.levelIndex === levelIndex;
-      const nextOrigin = same ? origin : origin && origin.returnToBook ? {returnToBook:true} : null;
-      const nextButton = button(next.game.ico, same && next.kind === 'resume' && !status.goldActive
-        ? 'じぶんで もう 1もん' : planCopy(next).title, () => startPlan(next, nextOrigin));
-      nextButton.classList.add('first-next');
-      $('.bl', nextButton).append(el('small', {text:next.game.name + '　《' + next.game.levels[next.levelIndex].t + '》'}));
-      actions.append(nextButton);
-    }
-    if (phase !== 'show' && status.canStartGold) actions.append(button('✨', 'きんへ 1もんずつ',
-      () => startGold(game, levelIndex, origin)));
-    actions.append(longCourse(game, levelIndex, origin));
+    actions.append(button('▶', 'もっと あそぶ', () => Session.startLevel(game, levelIndex, active && active.opts)));
     if (milestone && milestone.label) info.append(el('small', { text: '📒 ' + milestone.label }));
-    if (short) info.append(el('details.first-home-mission', null,
-      el('summary', { text: '🏡 おうちで あそぶ（やりたい ときに）' }), Missions.resultCard(game.id)));
-    const end = Array.from(actions.children).find(b => /きょうは ここまで/.test(b.textContent));
-    UI.resultActions(result, actions, {end, primary:phase === 'show' ? actions.firstElementChild : $('.first-next', actions)});
     UI.show('first-finish', { replace: true });
-    finishSpeech = doneText + '。' + (short && status.lastResult === 'confirmed'
-      ? '別の日もできたね。シールが完成したよ。' : short && status.waiting ? '確かめは、また別の日にしよう。' : '')
-      + (short ? ShortProgress.describe(game.id, levelIndex).speech : '')
-      + '今日はここまででもいいよ。';
-    if (rewards.length){
-      finishSpeech = doneText + '。' + rewards.map(key => PokemonStickers.reward(key).name).join('と')
-        + 'のシールをもらったよ。島に貼っても、今日はここまででもいいよ。';
-      Sound.sfx.finish(); UI.confetti(40);
-    }
+    finishSpeech = phase === 'show' || !answered ? 'やり方を見たね。今日はここまででもいいよ。'
+      : '一緒に一つできたね。今日はここまででもいいよ。';
     Sound.say(finishSpeech, { delay: 200 });
   }
-  return { target, shortTarget, shortPlan, planCopy, startPlan, oneTarget, homeCard, longCourse, build, open, startOne, startGold, resume, finish, get active(){ return active; } };
+  return { target, homeCard, build, open, finish, get active(){ return active; } };
 })();
 
 const ProgressAlbum = (() => {
-  const FILTERS = [ ['recent', 'さいきん'], ['play', 'あそび'], ['adventure', 'ぼうけん'], ['book', 'ほん'] ];
-  let node, cards, filters, count, selected = 'recent', origin = null;
-  /* day is a local calendar date encoded as a UTC day number by Store. Reading
-     its UTC components preserves that actual date even after changing zones. */
-  function date(day){
-    const d = new Date(day * 86400000), year = d.getUTCFullYear(), month = d.getUTCMonth() + 1, n = d.getUTCDate();
-    return { iso: year + '-' + String(month).padStart(2, '0') + '-' + String(n).padStart(2, '0'),
-      text: year + '/' + month + '/' + n, speech: year + '年' + month + '月' + n + '日' };
-  }
-  const validDay = day => Number.isSafeInteger(day) && day >= 0 && Number.isFinite(new Date(day * 86400000).getTime());
-  const roundText = round => round + 'しゅうめ';
-  function outcomes(r){
-    return [ ['independent', 'さいしょから ひとりで'], ['revised', 'こたえなおして'], ['supported', 'ヒント・みほんと'] ]
-      .filter(([key]) => r[key] > 0).map(([key, label]) => label + ' ' + r[key] + 'もん').join(' ／ ');
-  }
-  function collect(){
-    const groups = new Map();
-    const add = (key, type, title, icon, entry) => {
-      if (!validDay(entry.day)) return;
-      if (!groups.has(key)) groups.set(key, {key, type, title, icon, entries:[], activity:[]});
-      groups.get(key)[entry.activity ? 'activity' : 'entries'].push(entry);
-    };
-    [1, 2].forEach(round => {
-      const source = Store.roundData(round);
-      if (!source) return;
-      Object.entries(source.milestones || {}).forEach(([key, m]) => {
-        const match = /^([a-z0-9]+):(\d+):(viewed|together|supported|revised|independent)$/.exec(key);
-        const g = match && Games.byId[match[1]], lv = g && g.levels[Number(match[2])];
-        if (!lv || !m) return;
-        add('play:' + match[1] + ':' + match[2], 'play', g.name + '　' + lv.t, g.ico,
-          {round, day:m.day, rank:Store.milestoneRank(match[3]), text:Store.milestoneText(match[3]),
-            label:typeof m.label === 'string' ? m.label : ''});
-      });
-      // last is an actual observation day, including a familiar question met in
-      // daily practice or a short visit. It proves activity, not independence,
-      // a completed course, or a series of historical attempts.
-      Object.entries(source.last || {}).forEach(([key, day]) => {
-        const match = /^([a-z0-9]+):(\d+)$/.exec(key);
-        const game = match && Games.byId[match[1]], level = game && game.levels[Number(match[2])];
-        if (!level) return;
-        add('play:' + key, 'play', game.name + '　' + level.t, game.ico,
-          {round, day, activity:true});
-      });
-      Object.entries(source.transferRecords || {}).forEach(([key, r]) => {
-        const mission = TransferAdventure.missionFor('transfer:' + key);
-        if (!mission || !r) return;
-        add('adventure:' + key, 'adventure', mission.title, mission.icon,
-          {round, day:r.day, rank:0, text:outcomes(r), label:'さいごの きろく',
-            note:(r.independent + r.revised + r.supported) + 'もん やりとげたね'});
-      });
-      Object.entries(source.reviewRecords || {}).forEach(([key, r]) => {
-        const match = /^(r2|r2chapter):(\d+)$/.exec(key);
-        const item = match && (match[1] === 'r2' ? TextbookReview.lessons : TextbookReview.chapters)[Number(match[2])];
-        if (!item || !r) return;
-        const kind = {lesson:'レッスン', check:'べつのひの たしかめ', chapter:'まとめ'}[r.kind];
-        if (!kind) return;
-        add('book:' + key, 'book', item.title + (match[1] === 'r2chapter' ? 'の まとめ' : ''), '📘',
-          {round, day:r.day, rank:0, text:outcomes(r), label:'さいごの きろく・' + kind,
-            note:(r.independent + r.revised + r.supported) + 'もん あそんだね'});
-      });
-    });
-    return Array.from(groups.values()).map(group => {
-      group.entries.sort((a, b) => a.day - b.day || a.round - b.round || a.rank - b.rank);
-      group.activity.sort((a, b) => a.round - b.round);
-      group.latest = group.entries[group.entries.length - 1] || null;
-      group.firstDay = group.entries.length ? group.entries[0].day : null;
-      group.activityDay = group.activity.length ? Math.max(...group.activity.map(e => e.day)) : null;
-      group.sortDay = Math.max(group.latest ? group.latest.day : 0, group.activityDay === null ? 0 : group.activityDay);
-      return group;
-    }).sort((a, b) => b.sortDay - a.sortDay || a.title.localeCompare(b.title, 'ja'));
-  }
-  function entrySpeech(entry){
-    return date(entry.day).speech + '。' + roundText(entry.round) + '。'
-      + (entry.label ? entry.label + '。' : '') + entry.text + '。';
-  }
-  function activitySpeech(entry){
-    return roundText(entry.round) + '。さいごに あそんだひは、' + date(entry.day).speech + '。';
-  }
-  function card(group){
-    const latest = group.latest, d = date(group.activityDay === null ? latest.day : group.activityDay);
-    const rounds = Array.from(new Set(group.entries.concat(group.activity).map(e => e.round))).sort().map(roundText);
-    const history = el('div.album-history');
-    group.entries.forEach(entry => {
-      const ed = date(entry.day);
-      history.append(el('div.album-entry', {dataset:{round:entry.round}},
-        el('div.album-entry-date', null, el('time', {datetime:ed.iso, text:ed.text}), el('span', {text:roundText(entry.round)})),
-        entry.label ? el('small.album-entry-label', {text:entry.label}) : null,
-        el('p', {text:entry.text})));
-    });
-    const activity = group.activity.map(entry => {
-      const day = date(entry.day);
-      return el('div.album-last-played', {dataset:{round:entry.round}},
-        el('b', {text:'さいごに あそんだひ'}),
-        el('span', null, el('time', {datetime:day.iso, text:day.text}), '　' + roundText(entry.round)));
-    });
-    return el('details.album-card', {dataset:{albumKey:group.key, albumType:group.type}, ontoggle(event){
-      $('.album-expand', event.currentTarget).textContent = event.currentTarget.open ? 'きろくを とじる ▴' : 'きろくを みる ▾';
-    }},
-      el('summary.album-summary', null,
-        el('span.album-icon', {text:group.icon, 'aria-hidden':'true'}),
-        el('span.album-card-copy', null, el('b', {text:group.title}),
-          el('span.album-latest', null, latest
-            ? [group.activityDay !== null ? el('small.album-past-label', {text:'これまでの きろく'}) : null,
-              el('span', {text:latest.note || latest.text})]
-            : 'あそんだ きろくが あるよ'),
-          el('span.album-date', null, group.activityDay !== null ? el('span.album-date-label', {text:'さいごに あそんだひ'}) : null,
-            el('time', {datetime:d.iso, text:d.text}),
-            rounds.map(text => el('span.album-round', {text}))),
-          el('span.album-expand', {text:'きろくを みる ▾'}))),
-      el('div.album-card-body', null,
-        el('button.album-read.btn.btn-ghost', {type:'button', text:'🔊 きろくを よむ',
-          'aria-label':group.title + 'の きろくを よむ', onclick(){
-            Sound.sfx.tap(); Sound.say(group.title + '。' + group.entries.map(entrySpeech).join('')
-              + group.activity.map(activitySpeech).join(''), {delay:80});
-          }}),
-        group.type === 'play' && group.firstDay !== null ? el('p.album-first-date', null,
-          'はじめての きろく　', el('time', {datetime:date(group.firstDay).iso, text:date(group.firstDay).text})) : null,
-        activity,
-        history,
-        group.type !== 'play' ? el('p.album-record-note', {text:'それぞれの しゅうの、さいごに あそんだ きろくだよ'}) : null));
-  }
-  function render(){
-    const all = collect(), entries = selected === 'recent' ? all : all.filter(e => e.type === selected);
-    $$('button', filters).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.albumFilter === selected)));
-    count.textContent = entries.length ? entries.length + 'この あそびの きろく' : 'この きろくは まだ ないよ';
-    clear(cards); cards.scrollTop = 0;
-    if (!entries.length) cards.append(el('div.album-empty', {text:all.length
-      ? 'ここは まだ からっぽ。ほかの きろくも みられるよ'
-      : 'まだ からっぽ。 まずは みるだけでも いいよ 👀'}));
-    entries.forEach(group => cards.append(card(group)));
-    return entries.length;
-  }
+  let node, cards;
   function build(){
     if (node) return node;
     cards = el('div.album-cards');
-    count = el('p.album-count', {role:'status', 'aria-live':'polite'});
-    filters = el('div.album-filters', {role:'group', 'aria-label':'きろくの しゅるい'});
-    FILTERS.forEach(([key, label]) => filters.append(el('button.album-filter', {type:'button', text:label,
-      dataset:{albumFilter:key}, 'aria-pressed':String(key === selected), onclick(){
-        Sound.sfx.tap(); selected = key; const n = render();
-        Sound.say(label + '。' + (n ? n + 'このあそびの記録があるよ。' : 'この記録はまだないよ。'), {delay:80});
-      }})));
     node = el('div#progress-album', null,
       el('div.topbar', null,
         el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
-          onclick(){ Sound.sfx.tap(); back(); } }, '←'),
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
         el('h2', { text: 'できたアルバム' }),
         speakBtn(() => 'できたことを、いっしょに見てみよう。')),
-      el('p.album-intro', { text: 'ちいさな「できた」を あつめたよ' }), filters, count, cards);
+      el('p.album-intro', { text: 'ちいさな「できた」を あつめたよ' }), cards);
     return UI.register('progress-album', node);
   }
-  function captureResult(button){
-    const screen = button && button.closest && button.closest('#result');
-    if (!screen || !button.isConnected || UI.currentName() !== 'result') return null;
-    const scroll = [];
-    for (let n = button.parentElement; n; n = n.parentElement){
-      scroll.push({node:n, top:n.scrollTop, left:n.scrollLeft});
-      if (n === screen) break;
-    }
-    return {screen, button, scroll, round:Store.round()};
-  }
-  function back(){
-    const saved = origin; origin = null;
-    if (!saved || saved.round !== Store.round() || !saved.button.isConnected
-        || saved.button.closest('#result') !== saved.screen){
-      Home.render(); UI.show('home', {replace:true}); return;
-    }
-    // Reuse the completed result verbatim. Result.show would repeat effects and
-    // rebuild buttons; this return must neither grade nor award anything.
-    UI.show('result', {replace:true, keepScroll:true, focus:false});
-    const restore = () => {
-      if (UI.currentName() !== 'result' || saved.round !== Store.round() || !saved.button.isConnected) return;
-      saved.scroll.forEach(s => { s.node.scrollTop = s.top; s.node.scrollLeft = s.left; });
-      saved.button.focus({preventScroll:true});
-    };
-    restore(); requestAnimationFrame(restore);
-  }
-  function open(options){
-    const opts = options || {};
-    origin = captureResult(opts.fromResult);
-    build(); selected = 'recent'; const n = render();
+  function open(){
+    build(); clear(cards);
+    const entries = Store.milestones();
+    if (!entries.length) cards.append(el('div.album-empty', { text: 'まだ からっぽ。 まずは みるだけでも いいよ 👀' }));
+    entries.forEach(m => {
+      const g = Games.byId[m.gameId], lv = g && g.levels[m.levelIndex];
+      if (!lv) return;
+      cards.append(el('button.album-card', { type: 'button',
+        onclick(){ Sound.sfx.tap(); Sound.say(g.name + '。' + (m.label || lv.t) + '。'
+          + Store.milestoneText(m.kind), { delay: 80 }); } },
+        el('span.album-icon', { text: g.ico, 'aria-hidden': 'true' }),
+        el('div', null, el('b', { text: g.name + '　' + (m.label || lv.t) }),
+          el('span', { text: Store.milestoneText(m.kind) }))));
+    });
     UI.show('progress-album');
-    const target = typeof opts.key === 'string' && $$('.album-card', cards).find(card => card.dataset.albumKey === opts.key);
-    if (target){
-      target.open = true; target.classList.add('album-highlight');
-      requestAnimationFrame(() => {
-        if (UI.currentName() !== 'progress-album' || node.hidden || !target.isConnected) return;
-        const summary = $('summary', target);
-        summary.scrollIntoView({block:'start', behavior:'auto'}); summary.focus({preventScroll:true});
-      });
-    }
-    Sound.say(n ? 'できたことを、いっしょに見てみよう。あそびを選ぶと、記録が見られるよ。'
+    Sound.say(entries.length ? 'できたことを、いっしょに見てみよう。'
       : 'まだ空っぽだよ。まずは見るだけでもいいよ。', { delay: 150 });
   }
   return { build, open };
@@ -711,9 +359,7 @@ const StickerWorld = (() => {
     { id: 'sea', label: 'うみ', icon: '🌊' },
     { id: 'sky', label: 'そら', icon: '☁️' }
   ];
-  let node, board, palette, hint, selectedBar, picker, pickerSummary, filterBar, empty, actions;
-  let placeButton, removeButton, undoButton, doneButton, selected = null, draft = null, undo = null;
-  let filter = 'recent', bookOrigin = null, pendingDraft = false;
+  let node, board, palette, hint, selected = null;
 
   function owned(){
     return Store.ownedStickerKeys().filter(k => {
@@ -730,89 +376,45 @@ const StickerWorld = (() => {
     if (k.replace(/^lap2:/,'').startsWith('transfer:')) art.classList.add('transfer-sticker');
     return art;
   };
-  function say(text){ hint.textContent = text; Sound.say(text, { delay: 60 }); }
-  function stickerButton(k){
-    return el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : '') + (selected === k ? '.selected' : ''), {
-      type: 'button', dataset: { worldKey: k }, 'aria-label': itemName(k) + 'を うごかす',
-      title: itemName(k) + 'を うごかす',
-      onclick(e){ e.stopPropagation(); choose(k); board.focus({ preventScroll: true }); }
-    }, itemArt(k));
+  function build(){
+    if (node) return node;
+    board = el('div.sticker-world-board', { role: 'application', 'aria-label': 'じぶんの しま' });
+    palette = el('div.sticker-world-palette');
+    hint = el('div.sticker-world-hint');
+    board.onclick = e => {
+      if (e.target.closest('.world-sticker')) return;
+      if (!selected){
+        Sound.say('下から、置きたいシールや宝物をえらんでね。', { delay: 40 });
+        return;
+      }
+      const r = board.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width * 100, y = (e.clientY - r.top) / r.height * 100;
+      if (Store.putWorldSticker(selected, x, y)){
+        Sound.sfx.place();
+        render();
+        Sound.say('おけたね。ほかのばしょにも、うごかせるよ。', { delay: 80 });
+      }
+    };
+    node = el('div#sticker-world', null,
+      el('div.topbar', null,
+        el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
+          onclick(){ Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); } }, '←'),
+        el('h2', { text: 'じぶんの しま' }),
+        speakBtn(() => '集めたシールや宝物を、好きな場所に置けるよ。下から選んで、島をタップしよう。')),
+      el('div.sticker-world-tools', null,
+        el('span', { text: 'ばしょを えらぶ' }),
+        BACKGROUNDS.map(bg => el('button.world-background', { type: 'button', dataset: { background: bg.id },
+          onclick(){ Store.setStickerWorldBackground(bg.id); Sound.sfx.tap(); render(); }
+        }, bg.icon + ' ' + bg.label)),
+        el('button.btn.btn-accent.world-job-open', { type: 'button',
+          onclick(){ Sound.sfx.tap(); IslandJobs.open(); } }, '⛵️ しまの おしごと')),
+      board, hint, palette);
+    return UI.register('sticker-world', node);
   }
-  // A percentage describes the centre of the card. Its actual artwork, name and
-  // round badge must all fit, including when a saved island opens on a phone.
-  function cardSize(k){
-    let art = Array.from(board.querySelectorAll('.world-sticker')).find(n => n.dataset.worldKey === k), probe;
-    if (!art){
-      probe = stickerButton(k); probe.tabIndex = -1; probe.style.visibility = 'hidden';
-      board.append(probe); art = probe;
-    }
-    const size = {width:art.offsetWidth, height:art.offsetHeight};
-    if (probe) probe.remove();
-    return size;
-  }
-  function safePosition(k, x, y, size){
-    const w = board.clientWidth, h = board.clientHeight;
-    if (!w || !h) return { x, y };
-    const card = size || cardSize(k);
-    const edgeX = Math.min(50, (card.width / 2 + 5) / w * 100);
-    const edgeY = Math.min(50, (card.height / 2 + 5) / h * 100);
-    return { x: clamp(x, edgeX, 100 - edgeX), y: clamp(y, edgeY, 100 - edgeY) };
-  }
-  const samePoint = (a, b) => Math.abs(a.x - b.x) < .01 && Math.abs(a.y - b.y) < .01;
-  function initialPosition(k){
-    const w = board.clientWidth, h = board.clientHeight;
-    if (!w || !h) return null;
-    const size = cardSize(k), items = Store.stickerWorld().items, keys = owned();
-    const rect = (p, card) => ({left:p.x / 100 * w - card.width / 2,
-      top:p.y / 100 * h - card.height / 2, width:card.width, height:card.height});
-    const occupied = Object.keys(items).filter(key => keys.includes(key)).map(key => {
-      const card = cardSize(key); return rect(safePosition(key, items[key].x, items[key].y, card), card);
-    });
-    // A fixed candidate set bounds the work even when every free space is full.
-    // Only the new preview moves; existing saved arrangements remain untouched.
-    const candidates = [{x:50,y:50}];
-    for (let row = 0; row <= 6; row++) for (let col = 0; col <= 6; col++) candidates.push({x:col / 6 * 100,y:row / 6 * 100});
-    let best = null;
-    candidates.forEach(candidate => {
-      const p = safePosition(k, candidate.x, candidate.y, size), box = rect(p, size);
-      const overlap = occupied.reduce((sum, other) => sum
-        + Math.max(0, Math.min(box.left + box.width + 3, other.left + other.width + 3) - Math.max(box.left - 3, other.left - 3))
-        * Math.max(0, Math.min(box.top + box.height + 3, other.top + other.height + 3) - Math.max(box.top - 3, other.top - 3)), 0);
-      const distance = Math.pow((p.x - 50) * w / 100, 2) + Math.pow((p.y - 50) * h / 100, 2);
-      if (!best || overlap < best.overlap - .01 || Math.abs(overlap - best.overlap) < .01 && distance < best.distance - .01)
-        best = {p, overlap, distance};
-    });
-    return best.p;
-  }
-  function prepareDraft(){
-    if (!pendingDraft || !selected || !draft) return;
-    const position = initialPosition(selected);
-    // The untouched automatic preview follows the available space on rotation.
-    if (position) draft = position;
-  }
-  function fitPlaced(){
-    if (!board || !board.clientWidth || !board.clientHeight) return;
-    const items = Store.stickerWorld().items;
-    board.querySelectorAll('.world-sticker').forEach(n => {
-      const k = n.dataset.worldKey, p = items[k];
-      if (!p) return;
-      const safe = safePosition(k, p.x, p.y);
-      n.style.left = safe.x + '%'; n.style.top = safe.y + '%';
-    });
-    prepareDraft();
-    moveCursor();
-  }
-  function moveCursor(){
-    const cursor = board.querySelector('.world-position');
-    if (!cursor || !selected || !draft) return;
-    const position = safePosition(selected, draft.x, draft.y);
-    const placed = Store.stickerWorld().items[selected];
-    cursor.hidden = !!placed && samePoint(safePosition(selected, placed.x, placed.y), position);
-    cursor.style.left = position.x + '%'; cursor.style.top = position.y + '%';
-    board.setAttribute('aria-label', itemName(selected) + 'の おきばしょ。やじるしで うごかして、エンターで おく');
-  }
-  function paintBoard(){
+  function render(){
+    build();
     const world = Store.stickerWorld(), keys = owned();
+    if (selected && keys.indexOf(selected) < 0) selected = null;
     board.className = 'sticker-world-board ' + world.background;
     clear(board);
     board.append(el('span.world-starter.sun', { text: '☀️', 'aria-hidden': 'true' }),
@@ -821,198 +423,27 @@ const StickerWorld = (() => {
       board.append(el('span.world-job.boat', { text: '⛵️', title: 'つくった ふね' }));
     if (Store.islandJob('snack') && Store.islandJob('snack').completed)
       board.append(el('span.world-job.snack', { text: '🧺', title: 'つくった おやつ' }));
-    Object.keys(world.items).filter(k => keys.includes(k)).forEach(k => {
-      const p = world.items[k], n = stickerButton(k);
-      n.style.left = p.x + '%'; n.style.top = p.y + '%'; board.append(n);
+    Object.keys(world.items).filter(k => keys.indexOf(k) >= 0).forEach(k => {
+      const p = world.items[k];
+      board.append(el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : ''), { type: 'button',
+        'aria-label': itemName(k) + 'を うごかす', title: itemName(k) + 'を うごかす', style: { left: p.x + '%', top: p.y + '%' },
+        onclick(e){ e.stopPropagation(); selected = k; render(); Sound.sfx.tap(); }
+      }, itemArt(k)));
     });
-    if (selected && draft) board.append(el('span.world-position', { 'aria-hidden': 'true', text: '＋' }));
-    else board.setAttribute('aria-label', 'じぶんの しま。うごかす シールを えらべるよ');
     $$('.world-background', node).forEach(b => b.classList.toggle('selected', b.dataset.background === world.background));
-    fitPlaced();
-  }
-  function updateSelection(){
-    clear(selectedBar);
-    selectedBar.append(selected
-      ? el('div.world-selection', null, itemArt(selected), el('div.world-selection-name', null,
-        el('small', { text: 'えらんだ シール' }), el('b', { text: itemName(selected) }),
-        Store.ownedStickerPending(selected) ? el('small', { text: 'かりの シール' }) : null))
-      : el('b.world-selection-empty', { text: 'すきな シールを かざろう' }));
-    selectedBar.append(el('button.btn.world-choose', { type: 'button', text: selected ? 'えらびなおす' : 'シールを えらぶ',
-      onclick(){ picker.open = true; picker.scrollIntoView({ block: 'start', behavior: 'auto' });
-        const target = palette.querySelector('.selected') || palette.querySelector('button');
-        if (target) target.focus({ preventScroll: true }); scrollSelected(); }
-    }));
-    placeButton.hidden = removeButton.hidden = doneButton.hidden = !selected;
-    removeButton.disabled = !selected || !Store.stickerWorld().items[selected];
-    placeButton.textContent = selected && Store.stickerWorld().items[selected] ? 'ここに うごかす' : 'ここに おく';
-    undoButton.hidden = !undo; actions.hidden = !selected && !undo;
-    $$('.world-palette-sticker', palette).forEach(n => {
-      const active = n.dataset.worldKey === selected;
-      n.classList.toggle('selected', active); n.setAttribute('aria-pressed', String(active));
-    });
-  }
-  function scrollSelected(){
-    if (!picker.open) return;
-    const tile = palette.querySelector('.selected');
-    if (tile) palette.scrollTop = Math.max(0, tile.offsetTop - 6);
-  }
-  function paintPalette(){
-    const world = Store.stickerWorld(), keys = owned();
-    // Each lap appends new stickers to its own acquisition list. Keepsakes have
-    // no acquisition timestamp, so the recent filter does not invent their age.
-    const recent = Store.data.stickers.slice().reverse().map(k => Store.worldKey(k)).filter(k => keys.includes(k)).slice(0, 6);
-    const all = keys.slice().reverse();
-    const visible = filter === 'recent' ? recent : filter === 'unplaced' ? all.filter(k => !world.items[k]) : all;
     clear(palette);
-    visible.forEach(k => palette.append(el('button.world-palette-sticker' + (isTreasure(k) ? '.world-palette-treasure' : '') + (selected === k ? '.selected' : ''), {
-      type: 'button', dataset: { worldKey: k }, title: itemName(k) + 'を おく',
-      'aria-label': itemName(k) + 'を おく', 'aria-pressed': String(selected === k),
-      onclick(){ choose(k); board.focus({ preventScroll: true }); board.scrollIntoView({ block: 'center', behavior: 'auto' }); }
+    keys.forEach(k => palette.append(el('button.world-palette-sticker' + (isTreasure(k) ? '.world-palette-treasure' : '') + (selected === k ? '.selected' : ''), {
+      type: 'button', title: itemName(k) + 'を おく', 'aria-label': itemName(k) + 'を おく', 'aria-pressed': String(selected === k),
+      onclick(){ selected = k; Sound.sfx.tap(); render(); Sound.say('島の置きたい場所をタップしてね。', { delay: 60 }); }
     }, itemArt(k))));
-    empty.hidden = visible.length > 0;
-    empty.textContent = !keys.length ? 'さいしょの シールを もらったら、ここに おけるよ'
-      : filter === 'unplaced' ? 'どの シールも しまに かざってあるよ。「ぜんぶ」から えらびなおせるよ' : 'ここには まだ シールが ないよ';
-    pickerSummary.textContent = '🎨 シールを えらぶ（' + keys.length + 'まい）';
-    $$('button', filterBar).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.filter === filter)));
+    hint.textContent = keys.length
+      ? (selected ? '🌟　しまの おきたい ばしょを タップしてね' : '下の シールや たからものを えらんで、しまに おこう')
+      : 'さいしょの シールを もらったら、ここに おけるよ';
   }
-  function choose(k){
-    if (!owned().includes(k)) return;
-    const placed = Store.stickerWorld().items[k];
-    selected = k; draft = placed ? {x:placed.x,y:placed.y} : {x:50,y:50}; pendingDraft = !placed;
-    picker.open = false; paintBoard(); updateSelection();
-    say(itemName(k) + '。しまを タップするか、やじるしで ばしょを えらぼう');
-    Sound.sfx.tap();
-  }
-  function place(x, y){
-    if (!selected || !owned().includes(selected)) return;
-    const before = Store.stickerWorld().items[selected] || null, requested = {x,y};
-    if (before && samePoint(before, requested)){
-      say('ここに かざってあるよ。できあがりなら「できあがり」を おしてね'); return;
-    }
-    const p = safePosition(selected, x, y);
-    // A horizontal key does not rewrite a vertically clamped logical position.
-    if (before){
-      if (Math.abs(before.x - x) < .01) p.x = before.x;
-      if (Math.abs(before.y - y) < .01) p.y = before.y;
-    }
-    if (before && samePoint(before, p)) return;
-    if (!Store.putWorldSticker(selected, p.x, p.y)) return;
-    undo = { key: selected, before }; draft = p; pendingDraft = false;
-    Sound.sfx.place(); paintBoard(); paintPalette(); updateSelection();
-    say('おけたね。うごかしたり、ひとつ もどしたり できるよ');
-  }
-  function undoEdit(){
-    if (!undo) return;
-    const previous = undo; undo = null;
-    if (previous.background) Store.setStickerWorldBackground(previous.background);
-    else if (owned().includes(previous.key)){
-      if (previous.before) Store.putWorldSticker(previous.key, previous.before.x, previous.before.y);
-      else Store.removeWorldSticker(previous.key);
-      selected = previous.key; draft = previous.before ? {x:previous.before.x,y:previous.before.y} : {x:50,y:50}; pendingDraft = !previous.before;
-    }
-    paintBoard(); paintPalette(); updateSelection(); say('ひとつ もどしたよ');
-  }
-  function build(){
-    if (node) return node;
-    board = el('div.sticker-world-board', { role: 'application', tabindex: '0', 'aria-label': 'じぶんの しま',
-      'aria-describedby': 'world-instructions',
-      onkeydown(e){
-        if (e.target !== board || !selected || !draft) return;
-        prepareDraft();
-        const step = e.shiftKey ? 10 : 5;
-        const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
-        if (delta){
-          e.preventDefault(); const position = safePosition(selected, draft.x, draft.y);
-          const next = safePosition(selected, position.x + delta[0], position.y + delta[1]);
-          if (!samePoint(position, next)) pendingDraft = false;
-          if (delta[0] && Math.abs(next.x - position.x) >= .01) draft = {x:next.x,y:draft.y};
-          if (delta[1] && Math.abs(next.y - position.y) >= .01) draft = {x:draft.x,y:next.y};
-          moveCursor();
-        }
-        else if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); place(draft.x, draft.y); }
-      }
-    });
-    palette = el('div.sticker-world-palette', { 'aria-label': 'かざれる シール' });
-    hint = el('div#world-instructions.sticker-world-hint', { role: 'status', 'aria-live': 'polite' });
-    selectedBar = el('div.world-selected');
-    empty = el('p.world-picker-empty'); filterBar = el('div.world-picker-filters', { 'aria-label': 'シールの えらびかた' });
-    [{ id: 'recent', label: 'さいきん もらった' }, { id: 'unplaced', label: 'まだ かざっていない' }, { id: 'all', label: 'ぜんぶ' }].forEach(f =>
-      filterBar.append(el('button.btn', { type: 'button', text: f.label, dataset: { filter: f.id },
-        onclick(){ filter = f.id; paintPalette(); palette.scrollTop = 0; Sound.sfx.tap(); }
-      })));
-    pickerSummary = el('summary');
-    picker = el('details.world-picker', { ontoggle(){ if (picker.open) scrollSelected(); } }, pickerSummary, filterBar, palette, empty);
-    placeButton = el('button.btn.btn-accent.world-place', { type: 'button', onclick(){ prepareDraft(); if (draft) place(draft.x, draft.y); } });
-    removeButton = el('button.btn.world-remove', { type: 'button', text: '📦 しまう', onclick(){
-      const before = selected && Store.stickerWorld().items[selected];
-      if (!before || !Store.removeWorldSticker(selected)) return;
-      undo = { key: selected, before }; draft = { x: 50, y: 50 }; pendingDraft = true;
-      paintBoard(); paintPalette(); updateSelection(); say('シールを しまったよ。また かざれるよ');
-    } });
-    undoButton = el('button.btn.world-undo', { type: 'button', text: '↶ ひとつ もどす', onclick: undoEdit });
-    doneButton = el('button.btn.world-done', { type: 'button', text: '✨ できあがり', onclick(){
-      selected = null; draft = null; pendingDraft = false; picker.open = false; paintBoard(); updateSelection();
-      say('すてきな しまに なったね。また いつでも かざれるよ');
-    } });
-    actions = el('div.world-edit-actions', null, placeButton, removeButton, undoButton, doneButton);
-    board.onclick = e => {
-      if (e.target.closest('.world-sticker')) return;
-      if (!selected){
-        say('「シールを えらぶ」から、かざしたい シールを えらんでね');
-        return;
-      }
-      const r = board.getBoundingClientRect();
-      place((e.clientX - r.left - board.clientLeft) / board.clientWidth * 100,
-        (e.clientY - r.top - board.clientTop) / board.clientHeight * 100);
-    };
-    node = el('div#sticker-world', null,
-      el('div.topbar', null,
-        el('button.btn.btn-ghost.btn-round', { type: 'button', 'aria-label': 'もどる',
-          onclick(){
-            Sound.sfx.tap(); const origin = bookOrigin; bookOrigin = null;
-            if (origin && Book.restoreReturn(origin)) return;
-            Home.render(); UI.show('home', { replace: true });
-          } }, '←'),
-        el('h2', { text: 'じぶんの しま' }),
-        speakBtn(() => '集めたシールや宝物を、好きな場所に置けるよ。シールを選んで、島をタップしよう。矢印で動かして、エンターでも置けるよ。')),
-      el('div.world-workspace', null, selectedBar, board, hint, actions, picker,
-      el('details.world-other-tools', null, el('summary', { text: '🌳 ばしょ・しまの おしごと' }),
-      el('div.sticker-world-tools', null,
-        el('span', { text: 'ばしょを えらぶ' }),
-        BACKGROUNDS.map(bg => el('button.world-background', { type: 'button', dataset: { background: bg.id },
-          onclick(){
-            const before = Store.stickerWorld().background;
-            if (before !== bg.id){ undo = { background: before }; Store.setStickerWorldBackground(bg.id); }
-            Sound.sfx.tap(); paintBoard(); updateSelection();
-          }
-        }, bg.icon + ' ' + bg.label)),
-        el('button.btn.btn-accent.world-job-open', { type: 'button',
-          onclick(){ Sound.sfx.tap(); IslandJobs.open(); } }, '⛵️ しまの おしごと')))));
-    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(fitPlaced).observe(board);
-    return UI.register('sticker-world', node);
-  }
-  function render(){
-    build();
-    if (selected && !owned().includes(selected)){ selected = null; draft = null; undo = null; pendingDraft = false; }
-    paintBoard(); paintPalette(); updateSelection();
-    hint.textContent = selected ? 'しまを タップ。やじるしと エンターでも おけるよ'
-      : '「シールを えらぶ」から、すきな シールを えらぼう';
-  }
-  function open(item, opts){
-    const source = UI.currentName(), supplied = opts && opts.bookOrigin;
-    if (source === 'book' || source === 'book-detail') bookOrigin = supplied && Book.canReturn(supplied)
-      ? supplied : Book.captureReturn(document.activeElement, item);
-    else if (source === 'transfer' && supplied && Book.canReturn(supplied)) bookOrigin = supplied;
-    else if (source !== 'island-jobs' || !Book.canReturn(bookOrigin)) bookOrigin = null;
+  function open(item){
     if (item) item = Store.worldKey(item);
-    undo = null;
-    if (item && owned().includes(item)){
-      const placed = Store.stickerWorld().items[item];
-      selected = item; draft = placed ? {x:placed.x,y:placed.y} : {x:50,y:50}; pendingDraft = !placed; filter = 'all';
-    }
+    if (item && owned().includes(item)) selected = item;
     render(); UI.show('sticker-world');
-    picker.open = !selected;
-    requestAnimationFrame(() => { if (!node.hidden){ fitPlaced(); scrollSelected(); } });
     Sound.say(item && selected === item ? itemName(item) + 'を、島の好きな場所に置いてね。'
       : '自分の島だよ。集めたシールや宝物を、好きな場所に置けるよ。', { delay: 150 });
   }

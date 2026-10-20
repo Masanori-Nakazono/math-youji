@@ -171,7 +171,7 @@ async function preview(page){
   await page.evaluate(() => {
     const K = KazuApp, random = Math.random;
     K.Sound.voiceOn = true; K.Sound.sfxOn = false; K.Sound.voiceId = 'nemo-female2';
-    K.Session._test.intro(false); K.Session._test.overview(false); K.Session._test.breaks(false);
+    K.Session._test.intro(false);
     Math.random = () => .4;
     try{ K.Session.startLevel(K.Games.byId.count, 0); }finally{ Math.random = random; }
   });

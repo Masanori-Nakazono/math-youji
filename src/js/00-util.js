@@ -57,25 +57,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
 /* ---- random ---- */
-let randomSource = () => Math.random();
-/* A saved question can be rebuilt without serializing its DOM or answer. */
-function withRandomSeed(seed, fn){
-  const previous = randomSource;
-  let state = seed >>> 0;
-  randomSource = () => {
-    state = (state + 0x6D2B79F5) >>> 0;
-    let t = Math.imul(state ^ state >>> 15, state | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-  try{ return fn(); } finally { randomSource = previous; }
-}
-const ri     = (a, b) => a + Math.floor(randomSource() * (b - a + 1));
-const pick   = arr => arr[Math.floor(randomSource() * arr.length)];
-const chance = p => randomSource() < p;
+const ri     = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick   = arr => arr[Math.floor(Math.random() * arr.length)];
+const chance = p => Math.random() < p;
 function shuffle(arr){
   const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(randomSource() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
 const sample = (arr, n) => shuffle(arr).slice(0, n);
