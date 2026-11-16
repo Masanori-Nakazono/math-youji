@@ -1993,6 +1993,96 @@
     K.Store.reset();
   })();
 
+  /* ---------- 91b2. the ball is beside the check inside a level too ----------
+     The level's opening check said「ボールを あけに いこう！」with no ball on screen.
+     It is the visit's ball now: a crack, then open on the second right answer — and
+     the sticker is confirmed there, so leaving the level cannot put it back. */
+  (function ballInLevel(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = finishSpeech;
+    const d = {};
+    const ball = () => q('#play .checkball');
+    try{
+      K.Store.markIntroduced('bond', 0);
+      K.Store.addPending('bond:0');
+      K.Store.data.pending['bond:0'][0] = K.Store.dayNumber() - 1;
+      K.Session.startLevel(K.Games.byId.count, 0);
+      d.ballUp = S.ball === 'bond:0' && !ball().hidden && !!q('#play .checkball .pokeball') && S.planLength === 11;
+      S.forceCorrect(); S.flushTimers();
+      d.cracked = ball().classList.contains('crack1') && K.Store.isPending('bond:0');
+      S.forceCorrect();
+      d.opensThere = ball().classList.contains('open') && !K.Store.isPending('bond:0') && K.Store.hasSticker('bond:0');
+      d.thirdNotAsked = S.planLength === 10 && S.planChecks.filter(Boolean).length === 2
+        && qa('#play .pip').length === 10;
+      S.flushTimers();
+      d.goneForTheLevel = S.ball === null && ball().hidden && /^count:/.test(S.item || '');
+      leavePlay();
+      d.keptAfterLeaving = !K.Store.isPending('bond:0') && K.Session.dueChecks().length === 0;
+
+      // one right of three: nothing opens, and the check is settled at the end as before
+      K.Store.reset();
+      K.Store.markIntroduced('bond', 0);
+      K.Store.addPending('bond:0');
+      K.Store.data.pending['bond:0'][0] = K.Store.dayNumber() - 1;
+      K.Session.startLevel(K.Games.byId.count, 0);
+      for (let i = 0; i < 2; i++){
+        const wrong = qa('#play .choices .choice').find(b => Number(b.textContent) !== S.answer);
+        if (!wrong) throw new Error('No wrong answer for in-level ball fixture: ' + S.item);
+        wrong.click();
+        S.forceCorrect(); S.flushTimers();
+      }
+      d.stillShut = S.ball === 'bond:0' && !ball().classList.contains('open') && !ball().classList.contains('crack1');
+      for (let i = 0; i < 20 && !onResult(); i++){ S.forceCorrect(); S.flushTimers(); }
+      d.waitsAsBefore = K.Store.isPending('bond:0') && K.Store.checkFailed('bond:0');
+    } finally { K.Sound.say = say; }
+    if (!doc.getElementById('play').hidden) leavePlay();
+    check('a check inside a level has its ball beside it, opens on the second right answer and is confirmed there',
+      Object.keys(d).every(k => d[k]) && Object.keys(d).length === 8, JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 91b3. the result screen shows the Pokémon before the rest ----------
+     Same content as before; the lines under the Pokémon come in after it, and two
+     Pokémon at once stand side by side. The buttons are there from the start. */
+  (function resultOneAtATime(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = finishSpeech;
+    const d = {};
+    const shown = n => !!n && getComputedStyle(n).display !== 'none';
+    try{
+      K.Store.markIntroduced('bond', 0);
+      K.Store.addPending('bond:0');
+      K.Store.data.pending['bond:0'][0] = K.Store.dayNumber() - 1;
+      K.Session.startLevel(K.Games.byId.count, 0);
+      for (let i = 0; i < 20 && !onResult(); i++){ S.forceCorrect(); S.flushTimers(); }
+      const inner = q('#result .inner');
+      const more = qa('#result .inner > .result-more');
+      d.bothRewards = qa('#result .result-reward.pair > .newsticker').length === 2;
+      d.held = inner.classList.contains('holding') && more.length > 0 && more.every(n => !shown(n));
+      d.rewardAndButtonsUp = qa('#result .newsticker').every(shown) && shown(q('#result .result-actions'))
+        && shown(q('#result .bigstars'));
+      d.berryWaits = more.some(n => n.classList.contains('berry-news'));
+      const a = q('#result .result-actions').getBoundingClientRect();
+      d.neitherUnderButtons = qa('#result .newsticker .e').every(e => e.getBoundingClientRect().bottom <= a.top + 1);
+      K.Result.showMore();
+      d.thenTheRest = !inner.classList.contains('holding') && more.every(shown);
+
+      // nothing to celebrate: nothing is held back
+      K.Session.startLevel(K.Games.byId.count, 0);
+      for (let i = 0; i < 20 && !onResult(); i++){
+        const wrong = qa('#play .choices .choice').find(b => Number(b.textContent) !== S.answer);
+        if (wrong) wrong.click();
+        S.forceCorrect(); S.flushTimers();
+      }
+      d.plainIsWhole = !q('#result .inner').classList.contains('holding') && !q('#result .result-more');
+    } finally { K.Sound.say = say; }
+    check('a result with a Pokémon shows the stars and the Pokémon first, side by side when there are two, then the rest',
+      Object.keys(d).every(k => d[k]) && Object.keys(d).length === 7, JSON.stringify(d));
+    K.Store.reset();
+  })();
+
   /* ---------- 91c. a collected Pokémon can be brought along ----------
      Chosen from the book, it stands beside the question, on the road and on the
      home screen. One still in its ball cannot be chosen, and the choice is a
@@ -2039,6 +2129,130 @@
     } finally { K.Sound.say = say; }
     leavePlay();
     check('a collected Pokémon can be brought along to the questions, one in a ball cannot, and the choice is only a picture',
+      Object.keys(d).every(k => d[k]) && Object.keys(d).length === 9, JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 91c2. かずぴょん answers, and the child judges ----------
+     Five of the levels' own questions with the roles turned round: three slips and
+     two right answers. Catching a slip hands the question's own buttons back so the
+     child can show the answer. None of it is written to the learning record. */
+  (function spotting(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = finishSpeech;
+    const d = {};
+    const card = () => { K.Home.render(); return q('#home .spot-card'); };
+    const record = () => JSON.stringify([K.Store.data.stars, K.Store.data.stickers, K.Store.data.facts,
+      K.Store.data.recent, K.Store.data.pending, K.Store.data.plays]);
+    try{
+      d.hiddenAtFirst = !card() && !K.Session.canSpot();
+      K.Store.markIntroduced('bond', 0);
+      K.Store.markIntroduced('numeral', 0);
+      d.offered = !!card();
+      const before = record(), today = K.Store.todayCount();
+      card().click();
+      const roles = S.planSpot;
+      d.threeSlips = S.mode === 'spot' && roles.length === 5 && roles[0] === 'wrong'
+        && roles.filter(r => r === 'wrong').length === 3 && roles.filter(r => r === 'right').length === 2;
+      d.judged = true; d.fixed = true; d.agreed = true;
+      for (let i = 0; i < 5; i++){
+        const sp = S.spot;
+        if (!sp) throw new Error('no answer from かずぴょん on question ' + i + ': ' + S.item);
+        const waiting = qa('#play .choices > .choice').every(b => getComputedStyle(b).display === 'none');
+        d.judged = d.judged && waiting && sp.stage === 'judge' && sp.right === (roles[i] === 'right')
+          && (sp.k === S.answer) === sp.right && q('#play .spot-value').textContent === String(sp.k);
+        if (sp.right){
+          q('#play .spot-judge.yes').click();
+          d.agreed = d.agreed && S.locked && S.wrongThisQ === 0;
+        } else {
+          q('#play .spot-judge.no').click();
+          const kazu = q('#play .choices .choice.kazu-pick');
+          d.fixed = d.fixed && S.spot.stage === 'fix' && S.spot.caught && !q('#play .spot-panel') && !S.locked
+            && !!kazu && Number(kazu.textContent) === sp.k;
+          qa('#play .choices .choice').find(b => Number(b.textContent) === S.answer).click();
+          d.fixed = d.fixed && S.locked && /ありがとう/.test(q('#play .feedback').textContent);
+        }
+        S.flushTimers();
+      }
+      const text = q('#result').textContent;
+      d.result = onResult() && /まちがいを 3こ みつけたよ/.test(text) && /ありがとう/.test(text) && !q('#result .bigstars');
+      d.noRecord = record() === before;
+      d.countedToday = K.Store.todayCount() === today + 5;
+
+      // 「あってる」 to a slip: the board is handed over to check with; a second time かずぴょん owns up
+      K.Session.startSpot();
+      q('#play .spot-judge.yes').click();
+      d.asksToCheck = S.spot.stage === 'judge' && S.wrongThisQ === 1 && !S.locked && !q('#play .feedback').hidden;
+      q('#play .spot-judge.yes').click();
+      d.ownsUp = S.spot.stage === 'fix' && !S.spot.caught && !q('#play .spot-panel');
+      leavePlay();
+
+      // the slips lean toward the kind this child makes: here, saying back the number on the screen
+      K.Store.reset();
+      K.Store.markIntroduced('bond', 0);
+      for (let i = 0; i < 4; i++) K.Store.noteFact('bond:dec:5-2', false, '5 は 2 と 3', 'bond:0', null, 'part');
+      let could = 0, did = 0;
+      for (let run = 0; run < 60; run++){
+        K.Session.startSpot();
+        const sp = S.spot;
+        const onOffer = qa('#play .choices > .choice').map(b => Number(b.textContent))
+          .filter(v => v !== S.answer && K.classifyMiss(S.item, S.answer, v) === 'part');
+        if (onOffer.length){ could++; if (onOffer.indexOf(sp.k) >= 0) did++; }
+        leavePlay();
+      }
+      d.leansToOwnMistake = could >= 8 && did / could > 0.6;
+      d.lean = could + ':' + did;
+    } finally { K.Sound.say = say; }
+    if (!doc.getElementById('play').hidden) leavePlay();
+    check('かずぴょん answers five questions, the child judges and puts the slips right, and no learning record is touched',
+      Object.keys(d).every(k => d[k]) && Object.keys(d).length === 13, JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 91c3. かずぴょん greets on the home screen ----------
+     One line about today, said once, and the card it means is marked. It adds a
+     voice and a pointer: every way in that was on the screen is still there. */
+  (function homeGreeting(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    const heard = [];
+    K.Sound.say = (t, o) => { heard.push(t); finishSpeech(t, o); };
+    const d = {};
+    const home = () => { K.Home.render(); K.UI.show('home', { replace: true }); return K.Home.greeting; };
+    const ways = () => qa('#home button').filter(b => !b.classList.contains('home-kazu')).length;
+    try{
+      let g = home();
+      d.firstDay = g.key === 'first' && g.target === q('#home .daily.recommended')
+        && g.target.classList.contains('kazu-points') && q('#home .home-kazu-line').textContent === g.text;
+      d.onlyOnePointed = qa('#home .kazu-points').length === 1;
+      heard.length = 0;
+      d.saysIt = K.Home.greetNow() === true && heard.length === 1 && /初めの冒険/.test(heard[0])
+        && /^(おはよう|こんにちは|こんばんは)！/.test(heard[0]);
+      d.saysItOnce = K.Home.greetNow() === false && heard.length === 1;
+      q('#home .home-kazu').click();
+      d.againWhenPressed = heard.length === 2 && !/^(おはよう|こんにちは|こんばんは)/.test(heard[1]);
+
+      // a ball that can be opened today is the news, and it is the ball that gets pointed at
+      K.Store.markIntroduced('bond', 0);
+      K.Store.addPending('bond:0');
+      K.Store.data.pending['bond:0'][0] = K.Store.dayNumber() - 1;
+      const before = (K.Home.render(), ways());
+      g = home();
+      d.ballFirst = g.key === 'ball:bond:0' && g.target === q('#home .ball-pick')
+        && g.text.indexOf(K.stickerFor('bond:0')) === 0;
+      heard.length = 0;
+      d.newNewsIsSaid = K.Home.greetNow() === true && heard.length === 1 && /ボール/.test(heard[0]);
+      d.nothingRemoved = ways() === before && !!q('#home .home-kazu');
+
+      // away from home it stays quiet
+      K.Book.open();
+      heard.length = 0;
+      K.Home.render();
+      d.quietElsewhere = K.Home.greetNow(true) === false && heard.length === 0;
+      K.UI.show('home', { replace: true });
+    } finally { K.Sound.say = say; }
+    check('かずぴょん says one thing about today on the home screen, once, and marks the card it means without removing any',
       Object.keys(d).every(k => d[k]) && Object.keys(d).length === 9, JSON.stringify(d));
     K.Store.reset();
   })();
@@ -2105,7 +2319,8 @@
 
   /* ---------- 92. ungraded questions still count towards「きょうは ここまで」----------
      A first-time level that also carries a check is 3 + 2 + 8 questions. Only the 8
-     reached today's total, so the day's stopping point arrived five questions late. */
+     reached today's total, so the day's stopping point arrived five questions late.
+     (The ball opens on the second check answer, so the third is not asked: 12.) */
   (function ungradedCountsToday(){
     K.Store.reset();
     S.intro(true);
@@ -2124,7 +2339,7 @@
     } finally { K.Sound.say = say; S.intro(false); }
     leavePlay();
     check('the lesson and check questions count towards today\'s total, and not towards the level\'s stars',
-      d.plan === 13 && d.today === 13 && d.gradedOnEight, JSON.stringify(d));
+      d.plan === 13 && d.today === 12 && d.gradedOnEight, JSON.stringify(d));
     K.Store.reset();
   })();
 

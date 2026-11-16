@@ -50,6 +50,10 @@ function literalSentences(source){
 const staticLines = files.filter(f => /^(05|06|10|11|12|13|14|88|89|90)-/.test(f))
   .flatMap(f => literalSentences(sources[f]));
 staticLines.push('こんにちは。今日も一緒に、数を数えよう！');
+/* The Pokémon are embedded at build time, so the collector's page has no names:
+   read every one that can be met from the collection itself. */
+const POKEMON_NAMES = Array.from(new Set(Object.values(
+  JSON.parse(fs.readFileSync(path.join(ROOT, 'src/pokemon/manifest.json'), 'utf8')).pokemon).map(p => p.name))).sort();
 
 const harness = String.raw`
 const corpus = new Map();
@@ -76,7 +80,7 @@ const Sound = {
 `;
 
 const collector = String.raw`
-window.collectSpeech = async function(samples, staticLines){
+window.collectSpeech = async function(samples, staticLines, pokemonNames){
   staticLines.forEach(record);
   const counts = { literalSentences: corpus.size };
   const errors = new Map();
@@ -241,6 +245,27 @@ window.collectSpeech = async function(samples, staticLines){
       for (const review of ['', 'きのうの ミッション']) for (const focus of ['', 'とっくん'])
         record([first, daily, review, focus].filter(Boolean).join('、') + '。');
   (window.__speechMissionBank || []).forEach(x => { record(x[1] + '。'); record(x[2]); });
+  /* The moments a child plays for. Each is built around a Pokémon's name or a
+   * number, so no literal in the source holds the whole sentence; without these
+   * the peak of a run was the one line read in the device's voice. */
+  for (const name of pokemonNames || []){
+    if (!name) continue;
+    record(name + '！');
+    record(name + 'に、会えたね！');
+    record(name + 'が、ボールから出てきたよ！');
+    record(name + 'が、ボールから、出てきたね！');
+    record(name + 'の、シールだよ！');
+    record(name + 'のボールが、待ってるよ。');
+    record(name + 'は、あいぼうだよ！');
+  }
+  record('開けにいこう！');
+  record('ボールから、出てきたね！');
+  // かずぴょんの まちがい さがし, and かずぴょん at the door
+  for (let n = 0; n <= 20; n++) record('かずぴょんは、' + numKana(n) + 'だと思うって。');
+  for (let n = 1; n <= 3; n++) record('かずぴょんの間違いを、' + koKana(n) + '、見つけたね！');
+  for (const hi of ['おはよう', 'こんにちは', 'こんばんは']) record(hi + '！');
+  for (let n = 2; n <= 31; n++) record(n + '日、続けて来てくれたね。');
+  for (const g of Games.list) record('今日は、' + g.name + 'は、どうかな？');
   host.remove();
   counts.afterFiniteTemplates = corpus.size;
   return { phrases: Array.from(corpus, ([key, text]) => ({ key, text })).sort((a, b) => a.key.localeCompare(b.key, 'ja')), counts, perLevel, errors: Array.from(errors) };
@@ -264,7 +289,8 @@ window.collectSpeech = async function(samples, staticLines){
     const page = await browser.newPage();
     page.on('pageerror', e => console.error('page error:', e.message));
     await page.goto('http://127.0.0.1:' + server.address().port);
-    const out = await page.evaluate(async ({ samples, lines }) => window.collectSpeech(samples, lines), { samples: SAMPLES, lines: staticLines });
+    const out = await page.evaluate(async ({ samples, lines, names }) => window.collectSpeech(samples, lines, names),
+      { samples: SAMPLES, lines: staticLines, names: POKEMON_NAMES });
     fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
     fs.writeFileSync(OUTPUT, JSON.stringify({ version: 1, normalization: 'Remove all whitespace and trailing 。！？!?; preserve internal punctuation.', phrases: out.phrases }, null, 2) + '\n');
     console.log(JSON.stringify({ output: OUTPUT, samplesPerLevel: SAMPLES, phraseCount: out.phrases.length,

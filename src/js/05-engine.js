@@ -276,6 +276,14 @@ const Session = (() => {
      each answer right first time, and opens on the second — the rule the check
      always had (two of three), shown on the question that earned it. */
   let ballEl, ballOpened = false;
+  /* The same ball rides with the check wherever the check is asked. A level begun
+     on a later day opens with those three questions and said「ボールを あけに いこう！」
+     over a screen with no ball on it; the Pokémon then came out as one still line
+     on the result screen, eight questions later. Now the ball is beside those
+     questions too, and it opens on the answer that settles it. `ballKey` is the
+     ball on screen; `ballsOpen` the ones this sitting has opened; `confirmedNow`
+     the stickers confirmed at that moment rather than at the end. */
+  let ballKey = null, ballsOpen = new Set(), confirmedNow = [];
   /* The companion, beside かずぴょん in every kind of session. Outside the board:
      the things on the board are things to count, and it must never be one of them. */
   let buddyEl;
@@ -288,25 +296,34 @@ const Session = (() => {
     else buddyEl.removeAttribute('src');
   }
   function setupBall(){
-    ballOpened = false;
+    ballOpened = false; ballKey = null; ballsOpen = new Set(); confirmedNow = [];
     if (!ballEl) return;
     clear(ballEl); ballEl.hidden = true; ballEl.className = 'checkball';
-    if (mode !== 'check' || !plan.length) return;
-    const r = PokemonStickers.reward(plan[0].check);
+  }
+  /** Put this check's ball beside the question, as cracked as its answers so far
+      have made it — or take the ball away for a question that is not a check. */
+  function showBall(key){
+    if (!ballEl || (key || null) === ballKey) return;
+    ballKey = key || null;
+    clear(ballEl); ballEl.className = 'checkball'; ballEl.hidden = !ballKey;
+    if (!ballKey) return;
+    const r = PokemonStickers.reward(ballKey);
     ballEl.append(
       el('img.checkball-mon', { src: r.image, alt: '', draggable: 'false' }),
       el('span.pokeball', { 'aria-hidden': 'true' }));
     ballEl.dataset.name = r.name;
     ballEl.setAttribute('aria-label', r.name + 'の ボール');
-    ballEl.hidden = false;
+    const t = checkTally[ballKey];
+    if (t && t.right) ballEl.classList.add('crack' + Math.min(t.right, CHECK_PASS));
   }
   /** one answer right first time: a crack, or — on the one that settles it — out it comes */
-  function hitBall(right){
-    if (!ballEl || ballEl.hidden) return false;
+  function hitBall(key, right){
+    if (!ballEl || ballEl.hidden || key !== ballKey) return false;
     ballEl.classList.remove('hit');
     void ballEl.offsetWidth;
     ballEl.classList.add('hit', 'crack' + Math.min(right, CHECK_PASS));
-    if (right < CHECK_PASS || ballOpened) return false;
+    if (right < CHECK_PASS || ballsOpen.has(key)) return false;
+    ballsOpen.add(key);
     ballOpened = true;
     ballEl.classList.add('open');
     return true;
@@ -396,6 +413,159 @@ const Session = (() => {
     Sound.sfx.star(1);
     const r = trailEl.getBoundingClientRect();
     UI.confetti(34, r.left + r.width / 2, r.bottom + 40);
+  }
+
+  /* ---------- かずぴょんの まちがい さがし ----------
+     In all sixty levels the child is the one being asked. Here the roles turn round:
+     かずぴょん answers, and the child says whether it is right — and, when it is not,
+     shows かずぴょん the answer. The questions are the levels' own (the same boards,
+     the same hints); only the first move is different. The engine already knows the
+     answer and the choices of every `buildChoices` / `buildPad` question, so no game
+     had to be rewritten for it.
+
+     かずぴょん's slips are not random: each wrong value is read with `classifyMiss`,
+     and the kinds this child has actually made in that game (06-miss.js, recorded on
+     the facts) are the likeliest to come up. The child meets their own mistake from
+     the outside, where it is somebody else's and can be looked at.
+
+     It is a visit, not a test: nothing here is written to stars, stickers, unlocks
+     or the fact record. Judging an answer is not the same evidence as producing one,
+     so the record the levels are graded on stays made of the child's own answers. */
+  const SPOT_N = 5;
+  const SPOT_LEVELS = { count: [0, 1], numeral: [0, 1, 2], compare: [2], bond: [0, 1, 2],
+                        ten: [1], add: [0, 1, 2], sub: [0, 1, 2] };
+  /* the questions that end in one numeric answer surface; a level's other formats
+     (plates, おなじ／かわった, an open split) are re-rolled past */
+  const SPOT_ITEMS = /^(?:count[LS]|q2n|teen|numcmp|dec|com|ten|sum|rest|diff):/;
+  let spot = null, spotFound = 0, spotSlips = 0;
+  function spotPool(){
+    const out = [];
+    Object.keys(SPOT_LEVELS).forEach(id => {
+      const g = Games.byId[id];
+      if (!g) return;
+      SPOT_LEVELS[id].forEach(i => {
+        // like きょうの れんしゅう: only ground the child has already been shown
+        if (g.levels[i] && levelOpen(g, i) && Store.introduced(g.id, i))
+          out.push({ game: g, level: g.levels[i], levelIndex: i });
+      });
+    });
+    return out;
+  }
+  function canSpot(){ return spotPool().length > 0; }
+  /** the kinds of mistake this child has made in this game: { kind: count } */
+  function missTally(gameId){
+    const out = {}, facts = Store.data.facts || {}, pre = gameId + ':';
+    for (const k in facts){
+      const m = k.indexOf(pre) === 0 && facts[k] && facts[k][6];
+      if (m) for (const t in m) out[t] = (out[t] || 0) + m[t];
+    }
+    return out;
+  }
+  /** The wrong answer かずぴょん gives: one of the values on the surface, leaning
+      toward the kind of slip this child makes. A wild guess (`far`) is easy to catch
+      and teaches little, so it only leads when nothing nearer is on offer. */
+  function spotSlip(wrongs, answer){
+    const tally = missTally(plan[idx].game.id);
+    const own = (Store.fact(curItem) || [])[6] || {};
+    const read = wrongs.map(v => ({ v, kind: classifyMiss(curItem, answer, v) }));
+    const near = read.some(x => x.kind !== 'far');
+    let total = 0;
+    read.forEach(x => {
+      x.w = x.kind === 'far' ? (near ? 0.1 : 1) : 1;
+      if (x.kind && x.kind !== 'far') x.w += 2 * Math.min(4, tally[x.kind] || 0) + 3 * Math.min(2, own[x.kind] || 0);
+      total += x.w;
+    });
+    let r = Math.random() * total;
+    for (const x of read){ r -= x.w; if (r <= 0) return x.v; }
+    return read[read.length - 1].v;
+  }
+  /** Called by buildChoices / buildPad once their buttons exist. The real buttons
+      stay where they are, out of sight, until the child has judged. */
+  function spotOffer(values, answer, btnOf){
+    if (mode !== 'spot' || spot) return;
+    spot = { stage: 'off' };              // one offer per question, whatever it turns out to be
+    if (typeof answer !== 'number' || !answerBtn || values.length < 2
+        || values.some(v => typeof v !== 'number')) return;
+    const right = plan[idx].spot === 'right';
+    const k = right ? answer : spotSlip(values.filter(v => v !== answer), answer);
+    const judge = (says, sym, label) => el('button.btn.spot-judge' + (says ? '.yes' : '.no'), {
+      type: 'button', dataset: { says: says ? 'right' : 'wrong' },
+      onclick(e){ spotJudge(says, e.currentTarget); } },
+      el('span.bi', { text: sym, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
+    const panel = el('div.spot-panel', null,
+      el('div.spot-says', { role: 'img', 'aria-label': 'かずぴょんの こたえは ' + k },
+        mascotSVG('idle', 'spot-face'),
+        el('span.spot-lead', { text: 'かずぴょんの こたえ' }),
+        el('b.spot-value', { text: String(k) })),
+      el('div.spot-btns', null, judge(true, '◯', 'あってる'), judge(false, '✕', 'ちがうよ')));
+    Object.assign(spot, { stage: 'judge', k, right, misjudged: 0, caught: false, line: null, panel,
+      btn: btnOf(k), pad: choicesEl.classList.contains('pad'), base: lastSpeech });
+    choicesEl.classList.remove('pad');
+    choicesEl.classList.add('spot-judging');
+    choicesEl.append(panel);
+    // the question, and then what かずぴょん made of it
+    lastSpeech = spot.base + 'かずぴょんは、' + numKana(k) + 'だと思うって。合ってるかな？';
+    Sound.say(lastSpeech, { delay: 220 });
+    if (refit) refit();
+  }
+  /** the real answer surface comes back */
+  function spotOpen(){
+    choicesEl.classList.remove('spot-judging');
+    if (spot.pad) choicesEl.classList.add('pad');
+    spot.panel.remove();
+    if (refit) refit();
+  }
+  /** かずぴょん was wrong: the child shows it the answer, on the question's own buttons */
+  function spotFix(text, say){
+    spot.stage = 'fix';
+    spot.line = ['おしえて くれて ありがとう！', '教えてくれて、ありがとう！'];
+    spotOpen();
+    if (spot.btn) spot.btn.classList.add('tried', 'dim', 'kazu-pick');
+    lastSpeech = spot.base;
+    setMood('soft');
+    showFeedback('hint', text);
+    Sound.say(say, { delay: 200 });
+  }
+  function spotJudge(saysRight, button){
+    if (locked || !spot || spot.stage !== 'judge' || node.classList.contains('walking')) return;
+    disarmQuit();
+    if (saysRight === spot.right){
+      if (!spot.right){
+        spot.caught = !spot.misjudged;
+        Sound.sfx.place();
+        spotFix('みつけたね！ ほんとうは どれかな？ おしえて あげよう',
+                'よく見つけたね！本当は、どれかな？かずぴょんに、教えてあげて。');
+        return;
+      }
+      if (!spot.misjudged) spot.line = ['ほんとだ、あってたね！', '本当だ、合ってたね！'];
+      spot.stage = 'done';
+      spotOpen();
+      if (answerBtn && answerBtn.isConnected) answerBtn.click();   // runs the question's own reveal
+      return;
+    }
+    spot.misjudged++; wrongThisQ++; mistakes++;
+    Sound.sfx.wrong();
+    setMood('soft');
+    if (button){ button.classList.add('wrong'); later(() => button.classList.remove('wrong'), 460); }
+    if (spot.misjudged === 1){
+      /* not「ちがうよ」: the board is handed over so the child can check for themselves */
+      if (coach && coach.tool && !hintShown) hint('本当かな？確かめてみよう。');
+      else {
+        showFeedback('oops', 'ほんとかな？ もういちど よく みて みよう');
+        Sound.say('本当かな？もう一度、よく見てみよう。', { delay: 260 });
+      }
+      return;
+    }
+    /* A second time, かずぴょん settles it itself: nobody is left pressing the same
+       button at a screen that will not move. */
+    if (spot.right){
+      spot.stage = 'done';
+      spotOpen();
+      showFeedback('hint', 'かずぴょんの こたえで あってたよ');
+      Sound.say('かずぴょんの答えで、合ってたよ。', { delay: 150 });
+      afterNarration(() => { if (!locked && answerBtn && answerBtn.isConnected) answerBtn.click(); }, 900);
+    } else spotFix('あっ、かずぴょん まちがえてた！ ほんとうは どれかな？',
+                   'あっ、かずぴょん、間違えてた！本当は、どれかな？');
   }
 
   /* ---------- timer lifecycle ----------
@@ -501,7 +671,7 @@ const Session = (() => {
     feedbackEl.hidden = false;
     feedbackEl.className = 'feedback ' + kind;
     clear(feedbackEl);
-    feedbackEl.append(el('span.mk', { text: kind === 'oops' ? '？' : '💡' }), text);
+    feedbackEl.append(el('span.mk', { text: kind === 'oops' ? '？' : kind === 'thanks' ? '💛' : '💡' }), text);
     if (extra) feedbackEl.append(extra);
     feedbackEl.animate && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)
       && feedbackEl.animate([{ transform: 'translateX(-.4em)' }, { transform: 'none' }], { duration: 260 });
@@ -624,6 +794,39 @@ const Session = (() => {
     plan = [];
     for (let i = 0; i < CHECK_N; i++) plan.push(Object.assign({}, t));
     titleEl.textContent = 'ボールを あけよう　' + t.game.name;
+    begin();
+  }
+
+  /** 「かずぴょんの まちがい さがし」: five questions かずぴょん answers first. Three of
+      its answers are wrong and two are right — always saying「ちがうよ」must not be
+      the way through — and the first is a slip, so the game explains itself. */
+  function startSpot(){
+    const pool = spotPool();
+    if (!pool.length){ Home.render(); UI.show('home', { replace: true }); return; }
+    build();
+    killTimers();
+    mode = 'spot'; curGame = null; rewardTarget = null; adventureTarget = null;
+    firstTarget = null; firstPhase = null;
+    /* lean toward the levels this child finds hard — that is where their own
+       mistakes are — without letting one level fill the sitting */
+    const bag = pool.map(p => {
+      const acc = Store.recentAccuracy(p.game.id, p.levelIndex);
+      return { p, w: 1 + (acc == null ? 0.5 : (1 - acc) * 3), n: 0 };
+    });
+    const picks = [];
+    for (let guard = 0; picks.length < SPOT_N && guard < 200; guard++){
+      const live = bag.filter(x => x.n < 2 || bag.every(y => y.n >= 2));
+      let total = 0;
+      live.forEach(x => { total += x.w; });
+      let r = Math.random() * total, hit = live[live.length - 1];
+      for (const x of live){ r -= x.w; if (r <= 0){ hit = x; break; } }
+      hit.n++;
+      picks.push(hit.p);
+    }
+    const roles = ['wrong'].concat(shuffle(['wrong', 'wrong', 'right', 'right']));
+    plan = shuffle(picks).map((p, i) => Object.assign({}, p, { spot: roles[i] }));
+    spotFound = 0; spotSlips = 0;
+    titleEl.textContent = 'まちがい さがし';
     begin();
   }
 
@@ -946,6 +1149,9 @@ const Session = (() => {
             if (Math.abs(Number(b.textContent) - answer) > 1) b.classList.add('dim');
           });
         });
+        const all = [];
+        for (let v = lo; v <= hi; v++) all.push(v);
+        spotOffer(all, answer, v => keys[v - lo]);
         return choicesEl;
       },
 
@@ -962,6 +1168,7 @@ const Session = (() => {
         choicesEl.dataset.built = '1';
         hintBtns = [];
         let settled = false;              // one accepted answer per set of buttons
+        const plain = [], btnFor = new Map();
         values.forEach(v => {
           const val = (v && typeof v === 'object' && 'v' in v) ? v.v : v;
           const b = el('button.choice' + (o.cls ? '.' + o.cls : ''), { type: 'button' });
@@ -992,8 +1199,11 @@ const Session = (() => {
           });
           if (hit && !answerBtn){ answerBtn = b; answerText = typeof content === 'string' ? content : String(val); }
           if (!hit) hintBtns.push(b);
+          plain.push(val); btnFor.set(val, b);
           choicesEl.append(b);
         });
+        // a rendered or matched choice is not a bare number かずぴょん could have said
+        if (!o.render && !o.match) spotOffer(plain, answer, v => btnFor.get(v));
         return choicesEl;
       }
     };
@@ -1018,7 +1228,8 @@ const Session = (() => {
     curItem = null; curLabel = null; curAnswer = null; missType = null;
     hintStrongFns = []; showFn = null; answerBtn = null; answerText = null; taught = false; taughtQ = false;
     clear(fieldEl); clear(choicesEl); delete choicesEl.dataset.built;
-    choicesEl.classList.remove('pad');
+    choicesEl.classList.remove('pad', 'spot-judging');
+    spot = null;
     clearFeedback();
     fieldEl.className = 'playfield';
   }
@@ -1031,12 +1242,15 @@ const Session = (() => {
      name between five and forty-five facts, so this lands most of the time and
      falls back to the same level when it does not. */
   const FOCUS_TRIES = 24;
+  /* A level's formats that かずぴょん cannot answer (plates, an open split) come up
+     at most half the time, so this is as good as certain to land on one it can. */
+  const SPOT_TRIES = 18;
 
   /** Draw a question, re-rolling to avoid repeating a fact and to favour the ones
       this child owes practice to. The generator is random, so we cannot go back to
       an earlier draw — we accept the one that is on screen when we stop. */
   function drawQuestion(step){
-    const tries = step.want ? FOCUS_TRIES : TRIES;
+    const tries = step.want ? FOCUS_TRIES : mode === 'spot' ? SPOT_TRIES : TRIES;
     for (let t = 0; t < tries; t++){
       killTimers();
       resetSurface();
@@ -1046,6 +1260,16 @@ const Session = (() => {
         console.error('question build failed', err);
         promptTxt.textContent = 'よみこみに しっぱいしました';
         return;
+      }
+      if (mode === 'spot'){
+        /* only a question かずぴょん can answer out loud; a repeat is better than
+           a format it cannot play, so the bag gives way near the end */
+        const ok = !!curItem && SPOT_ITEMS.test(curItem.slice(curItem.indexOf(':') + 1));
+        if (t === tries - 1 || (ok && (!usedItems.has(curItem) || t >= tries - 4))){
+          if (curItem) usedItems.add(curItem);
+          return;
+        }
+        continue;
       }
       if (!curItem) return;                      // this game does not name its items
       if (step.want){
@@ -1078,7 +1302,8 @@ const Session = (() => {
     if (mode === 'check') titleEl.textContent = 'ボールを あけよう　' + step.game.name;
     else if (step.check) titleEl.textContent = 'たしかめ　' + step.game.name + '　' + step.level.t;
     else if (mode !== 'level'){
-      const modeName = mode === 'daily' ? 'きょうの れんしゅう'
+      const modeName = mode === 'spot' ? 'まちがい さがし'
+                     : mode === 'daily' ? 'きょうの れんしゅう'
                      : mode === 'focus' ? 'とっくん'
                      : mode === 'adventure' ? 'ちいさな ぼうけん'
                      : mode === 'first' ? 'はじめてコース' : 'はじめの ぼうけん';
@@ -1090,6 +1315,7 @@ const Session = (() => {
     node.dataset.world = step.game.world || '';
     node.style.setProperty('--wc', world ? world.color : 'var(--card-edge)');
     worldEl.textContent = WORLD_MARK[step.game.world] || '';
+    showBall(step.check || null);
     drawQuestion(step);
     // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
     // call buildChoices, so start their clock here
@@ -1385,7 +1611,7 @@ const Session = (() => {
     if (plan[idx].check){
       const t = checkTally[plan[idx].check] || (checkTally[plan[idx].check] = { n: 0, right: 0 });
       t.n++;
-      if (clean){ t.right++; opened = mode === 'check' && hitBall(t.right); }
+      if (clean){ t.right++; opened = hitBall(plan[idx].check, t.right); }
     }
     const g = plan[idx].game;
     const timed = g.fluent && clean ? respondedMs : null;
@@ -1394,14 +1620,21 @@ const Session = (() => {
         && (missType === 'up' || missType === 'down')) missType = null;
     if (scaffold === 'together' && !taughtQ && (mode === 'level' || mode === 'adventure' || mode === 'first'))
       Store.markIntroduced(g.id, plan[idx].levelIndex);
-    if (mode !== 'diagnostic'){
+    /* かずぴょん's questions are a visit: what the child judged is not written into
+       the record their own answers are graded on */
+    const visit = mode === 'spot';
+    if (visit && spot && spot.stage !== 'off' && !spot.right){
+      spotSlips++;
+      if (spot.caught) spotFound++;
+    }
+    if (mode !== 'diagnostic' && !visit){
       const kind = scaffold === 'show' || taughtQ ? 'viewed' : scaffold === 'together' ? 'together'
         : helped ? 'supported' : wrongThisQ ? 'revised' : 'independent';
       Store.recordMilestone(g.id, plan[idx].levelIndex, kind, curLabel);
       if (!visitMilestone || Store.milestoneRank(kind) >= Store.milestoneRank(visitMilestone.kind))
         visitMilestone = { gameId: g.id, levelIndex: plan[idx].levelIndex, kind, label: curLabel || '' };
     }
-    if (mode !== 'diagnostic' && !scaffold){
+    if (mode !== 'diagnostic' && !scaffold && !visit){
       Store.noteOutcome(g.id, plan[idx].levelIndex, clean);
       if (curItem){
         /* 'taught' outranks the reading of the first mistake: what matters about
@@ -1427,7 +1660,10 @@ const Session = (() => {
       const praise = wrongThisQ === 0
         ? pick(['やったね！', '正解！', 'すごい！', '上手だね！', 'ばっちり！', 'その調子！'])
         : pick(['できたね！', 'よく頑張ったね！', 'その通り！']);
-      if (!met && !opened) Sound.say(praise, { delay: 320 });
+      /* in かずぴょん's own words when the child put it right, or agreed with reason */
+      const thanks = visit && spot && spot.line;
+      if (thanks){ showFeedback('thanks', thanks[0]); Sound.say(thanks[1], { delay: 320 }); }
+      else if (!met && !opened) Sound.say(praise, { delay: 320 });
     }
     /* the step that reaches the Pokémon is the peak of the run, and it happens
        here, on the question that earned it — not eight questions later */
@@ -1442,7 +1678,21 @@ const Session = (() => {
     if (opened){
       Sound.say((ballEl.dataset.name || '') + 'が、ボールから出てきたよ！', { delay: 320 });
       later(openBall, 420);
-      plan = plan.slice(0, idx + 1);
+      if (mode === 'check') plan = plan.slice(0, idx + 1);
+      else {
+        /* Inside a level or きょうの れんしゅう the same holds: the check's own rule is
+           met, so the sticker is confirmed here, where the child saw the ball open
+           (leaving before the end must not put the Pokémon back), and what is left
+           of this check is not asked. */
+        const k = plan[idx].check;
+        if (Store.confirmSticker(k)) confirmedNow.push(k);
+        for (let i = plan.length - 1; i > idx; i--){
+          if (plan[i].check !== k) continue;
+          plan.splice(i, 1);
+          const spare = $$('.pip', pipsEl)[i];
+          if (spare) spare.remove();
+        }
+      }
     }
     if ((idx + 1) % 4 === 0 && !met && !opened) UI.confetti(22);
     afterNarration(() => {
@@ -1465,6 +1715,17 @@ const Session = (() => {
     if (mode === 'first'){
       Store.countToday(plan.length);
       FirstSteps.finish(firstTarget.game, firstTarget.levelIndex, firstPhase, visitMilestone);
+      return;
+    }
+    if (mode === 'spot'){
+      /* the questions took the child's time, so today's count and the island's berry
+         know about them; nothing else does — no stars, no sticker, no unlock, no record */
+      Store.countToday(plan.length);
+      const got = Store.earnBerry();
+      Sound.sfx.finish(); UI.confetti(60);
+      Result.show({ stars: 0, right: 0, total: plan.length, mode, game: null, levelIndex: 0,
+                    stickers: [], confirmed: [], shaky: [], focusKeys: [],
+                    spotFound, spotSlips, berry: got, berryFirst: got && Store.berriesToday() === 1 });
       return;
     }
     // the lesson questions are not graded, and neither are another level's checks
@@ -1493,8 +1754,9 @@ const Session = (() => {
        gate before the sticker is handed out, so「もう開いていた」and「いま開いた」
        stay distinguishable. */
     const wasOpen = Progress.g1Open();
-    const confirmed = [];
+    const confirmed = confirmedNow.slice();
     Object.keys(checkTally).forEach(k => {
+      if (confirmedNow.indexOf(k) >= 0) return;          // its ball opened on the question
       const t = checkTally[k];
       /* a ball visit stops at the second right answer: two of three is already met */
       if (t.n < CHECK_N && !(mode === 'check' && t.right >= CHECK_PASS)) return;
@@ -1566,8 +1828,14 @@ const Session = (() => {
   }
 
   return {
-    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, startCheck, dueChecks, build,
+    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, startCheck, dueChecks,
+    startSpot, canSpot, build,
     _test: {
+      /** what かずぴょん said on this question, and where the judging has got to */
+      get spot(){ return spot && spot.stage !== 'off'
+        ? { k: spot.k, right: spot.right, stage: spot.stage, caught: spot.caught } : null; },
+      get planSpot(){ return plan.map(p => p.spot || null); },
+      get answer(){ return curAnswer; },
       flushTimers,
       get idx(){ return idx; },
       get planLength(){ return plan.length; },
@@ -1595,6 +1863,7 @@ const Session = (() => {
       get planChecks(){ return plan.map(p => p.check || null); },
       get helped(){ return helped; },
       get trail(){ return trail ? { n: trail.n, need: trail.need, at: trail.at } : null; },
+      get ball(){ return ballKey; },
       get buddy(){ return buddyEl && !buddyEl.hidden ? buddyEl.dataset.name || '' : null; }
     }
   };

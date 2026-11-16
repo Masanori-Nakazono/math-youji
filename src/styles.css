@@ -3311,3 +3311,109 @@ button.sticker:active{ transform: scale(.96); }
   .berry-tray.feeding .berry, .world-sticker.fed > *{ animation: none; }
   .world-sticker.fed::after{ animation: none; transform: translate(-50%, -110%); }
 }
+
+/* ---------- かずぴょんの まちがい さがし ----------
+   While the child is judging, the question's own answer buttons wait out of sight
+   and かずぴょん's answer stands in their place, with the two ways to judge it. */
+.choices.spot-judging > .choice,
+.choices.spot-judging > .choice-audio{ display: none; }
+.spot-panel{
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: calc(var(--u)*1.6);
+}
+.spot-says{
+  display: flex; align-items: center; gap: calc(var(--u)*.7);
+  padding: calc(var(--u)*.4) calc(var(--u)*1.1);
+  border: calc(var(--u)*.24) dashed var(--accent);
+  border-radius: var(--wob-b);
+  background: color-mix(in srgb, var(--accent) 10%, var(--card));
+}
+.spot-face{ width: calc(var(--u)*4.4); height: calc(var(--u)*4.4); flex: 0 0 auto; }
+.spot-lead{ font-size: calc(var(--u)*1.35); font-weight: 800; color: var(--ink); white-space: nowrap; }
+.spot-value{
+  min-width: calc(var(--u)*5.4); min-height: calc(var(--u)*5.4);
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 calc(var(--u)*.6);
+  font-family: var(--fs-num); font-size: calc(var(--u)*3.6); font-weight: 800; line-height: 1;
+  background: var(--card); color: var(--ink);
+  border: calc(var(--u)*.26) solid var(--card-edge); border-radius: var(--wob-a);
+}
+.spot-btns{ display: flex; gap: calc(var(--u)*1.2); }
+.spot-judge{
+  min-width: max(calc(var(--u)*11), var(--tap)); min-height: max(calc(var(--u)*6), var(--tap));
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: calc(var(--u)*.1); padding: calc(var(--u)*.4) calc(var(--u)*1);
+  font-weight: 800; background: var(--card); color: var(--ink);
+  border: calc(var(--u)*.26) solid var(--card-edge); border-radius: var(--wob-a);
+  box-shadow: var(--shadow);
+}
+.spot-judge .bi{ font-size: calc(var(--u)*2.8); line-height: 1; }
+.spot-judge .bl{ font-size: calc(var(--u)*1.4); }
+.spot-judge.yes{ border-color: var(--good); }
+.spot-judge.yes .bi{ color: var(--good); }
+.spot-judge.no{ border-color: var(--oops); }
+.spot-judge.no .bi{ color: var(--oops); }
+.spot-judge:active{ transform: translateY(.2em) scale(.98); box-shadow: var(--shadow-sm); }
+.spot-judge.wrong{ animation: shake .42s; }
+/* the answer かずぴょん gave stays on the buttons, marked as its own */
+.choice.kazu-pick{ text-decoration: line-through; }
+.feedback.thanks{ background: var(--good-soft); color: var(--good-ink); }
+.spot-card{ border-color: color-mix(in srgb, var(--accent) 45%, var(--card-edge)); }
+@media (max-width: 700px){
+  .spot-panel{ gap: calc(var(--u)*.9); }
+  .spot-lead{ display: none; }
+}
+
+/* ---------- home: かずぴょん at the door ----------
+   It stands in the heading, in room that was empty, so the map loses nothing. */
+.home-kazu{
+  flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: calc(var(--u)*.4);
+  padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-kazu > svg{ flex: 0 0 auto; width: calc(var(--u)*4.2); height: calc(var(--u)*4.2); }
+/* the name of the app keeps its one line; かずぴょん takes what is left over */
+@media (min-width: 601px){ .home-head .logo{ flex: 0 0 auto; white-space: nowrap; } }
+.home-kazu-line{
+  position: relative; min-width: 0; text-align: left;
+  padding: calc(var(--u)*.35) calc(var(--u)*.8);
+  font-size: calc(var(--u)*1.15); font-weight: 800; line-height: 1.3;
+  background: var(--card); border: calc(var(--u)*.18) solid var(--card-edge);
+  border-radius: calc(var(--u)*1.1); border-bottom-left-radius: calc(var(--u)*.2);
+  box-shadow: var(--shadow-sm);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.home-kazu:active > svg{ transform: scale(.94); }
+/* the card かずぴょん means: it moves a few times, and keeps a ring afterwards */
+.kazu-points{
+  outline: calc(var(--u)*.3) solid var(--accent); outline-offset: calc(var(--u)*.2);
+  animation: kazuPoints .7s ease-in-out 3;
+}
+@keyframes kazuPoints{
+  0%,100%{ transform: none; }
+  25%{ transform: translateY(calc(var(--u)*-.35)) rotate(-1.2deg); }
+  75%{ transform: translateY(calc(var(--u)*-.15)) rotate(1.2deg); }
+}
+@media (prefers-reduced-motion: reduce){ .kazu-points{ animation: none; } }
+@media (max-width: 600px){
+  .home-kazu{ grid-column: 1 / -1; }
+  .home-kazu > svg{ width: 34px; height: 34px; }
+  .home-kazu-line{ font-size: 13px; padding: 4px 8px; }
+}
+
+/* ---------- result: one thing at a time ---------- */
+#result .inner.holding > .result-more{ display: none; }
+/* the Pokémon must not move when the rest arrives under it: a screen that shows
+   itself in two steps hangs from the top instead of floating in the middle */
+#result .inner.holding > :first-child, #result .inner.more-in > :first-child{ margin-top: calc(var(--u)*1.2); }
+#result .inner.more-in > .result-more{ animation: resultMore .45s ease-out both; }
+@keyframes resultMore{ from{ opacity: 0; transform: translateY(calc(var(--u)*.8)); } to{ opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce){ #result .inner.more-in > .result-more{ animation: none; } }
+/* a ball that opened and a Pokémon just won: side by side */
+.result-reward.pair{
+  display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center;
+  gap: calc(var(--u)*1); align-self: stretch;
+}
+.result-reward.pair > .newsticker{ flex: 0 1 auto; min-width: 0; max-width: 48%; }
+.result-reward.pair .newsticker .e .pokemon-sticker{ --pokemon-size: clamp(96px, calc(var(--u)*8.5), 160px); }
+@media (max-width: 600px){ .result-reward.pair > .newsticker{ max-width: 100%; } }

@@ -148,7 +148,101 @@ const G1Preparation = (() => {
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl, roundsEl;
-  let parentBtn, logoEl;
+  let parentBtn, logoEl, islandBtn, kazuBtn, kazuLine;
+  /* ---------- かずぴょん at the door ----------
+     The home screen is a wall of written cards to a child who does not read yet,
+     and it never spoke unless 🔊 was pressed. かずぴょん stands in the heading now:
+     it says one thing about today, out loud, and the card it means moves. Nothing
+     is hidden or reordered — every way in is where it was; this only points.
+
+     What it says comes from what is already known (a ball waiting, today's count,
+     what has not been done yet today), and the pick moves on from day to day and
+     after each sitting, so the screen has something new to say when it is opened. */
+  const ENOUGH_TODAY = 18;                 // the same「きょうは ここまで」the result screen uses
+  let greeting = null, saidKey = '', saidHello = false, greetTimer = null;
+  /** days in a row with questions answered, ending today or — first thing — yesterday */
+  function daysRunning(){
+    const daily = Store.data.daily || {};
+    const d = new Date();
+    const key = () => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    if (!(daily[key()] > 0)) d.setDate(d.getDate() - 1);
+    let n = 0;
+    for (; n < 400 && daily[key()] > 0; n++) d.setDate(d.getDate() - 1);
+    return n;
+  }
+  function pickGreeting(){
+    const ball = $('.ball-pick', questsEl);
+    if (ball){
+      const name = stickerFor(ball.dataset.ball);
+      return { key: 'ball:' + ball.dataset.ball, target: ball,
+        text: name + 'の ボールが まってるよ。あけに いこう！',
+        say: name + 'のボールが、待ってるよ。開けにいこう！' };
+    }
+    if (Store.todayCount() >= ENOUGH_TODAY) return { key: 'enough', target: islandBtn,
+      text: 'きょうは たくさん がんばったね。しまで あそぼう',
+      say: '今日は、たくさん頑張ったね。おうちのボタンで、島に行って遊ぼう。' };
+    const shown = b => b && !b.hidden;
+    const first = shown(recommendEl) && /はじめの ぼうけん/.test(recommendEl.textContent);
+    if (first) return { key: 'first', target: recommendEl,
+      text: 'はじめの ぼうけんに いこう！', say: '初めの冒険に、行こう！' };
+    const picks = [];
+    if (shown(dailyEl) && !Store.practiceDoneToday()) picks.push({ key: 'daily', target: dailyEl,
+      text: 'きょうの れんしゅうが まってるよ', say: '今日の練習が、待ってるよ。' });
+    if (shown(recommendEl)){
+      const rec = Diagnostic.current(), g = rec && Games.byId[rec.gameId];
+      if (g) picks.push({ key: 'rec:' + g.id, target: recommendEl,
+        text: 'きょうは ' + g.name + 'は どうかな？', say: '今日は、' + g.name + 'は、どうかな？' });
+    }
+    const spot = $('.spot-card', questsEl);
+    if (spot) picks.push({ key: 'spot', target: spot,
+      text: 'かずぴょんの こたえ、あってるか みて くれる？', say: 'かずぴょんの答え、合ってるか、見てくれる？' });
+    if (shown(focusEl)) picks.push({ key: 'focus', target: focusEl,
+      text: 'とっくんで つよく なろう！', say: '特訓で、強くなろう！' });
+    if (Store.berries() > 0) picks.push({ key: 'berry', target: islandBtn,
+      text: 'きのみが あるよ。しまで ポケモンに あげよう', say: '木の実があるよ。おうちのボタンで島に行って、ポケモンにあげよう。' });
+    if (!picks.length) return { key: 'map', target: $('.gamecard:not(.locked)', worldsEl),
+      text: 'すきな あそびを えらんでね', say: '好きな遊びを、選んでね。' };
+    /* a different one tomorrow, and the next one along after each sitting today */
+    const g = picks[(Store.dayNumber() + Math.floor(Store.todayCount() / 5)) % picks.length];
+    return Object.assign({}, g, { key: g.key + '@' + Store.dayNumber() });
+  }
+  function hello(){
+    const h = new Date().getHours();
+    const hi = h < 4 ? 'こんばんは' : h < 11 ? 'おはよう' : h < 18 ? 'こんにちは' : 'こんばんは';
+    const n = daysRunning();
+    return hi + '！' + (Store.name ? Store.name + '、' : '')
+      + (n >= 2 ? n + '日、続けて来てくれたね。' : '');
+  }
+  function point(){
+    $$('.kazu-points', node).forEach(x => x.classList.remove('kazu-points'));
+    const t = greeting && greeting.target;
+    if (!t) return;
+    void t.offsetWidth;                    // so pressing かずぴょん again moves the card again
+    t.classList.add('kazu-points');
+  }
+  function renderGreeting(){
+    greeting = pickGreeting();
+    kazuLine.textContent = greeting.text;
+    kazuBtn.setAttribute('aria-label', 'かずぴょん：' + greeting.text);
+    point();
+    /* Said once the home screen is really up, and only when there is something new
+       to say: coming back from a look at the sticker book does not repeat it. */
+    clearTimeout(greetTimer);
+    // a line already being said here (the lap change announces itself) is heard out first
+    greetTimer = setTimeout(() => Sound.afterSpeech(() => greetNow()), 420);
+  }
+  /** Says the line if it has not been said. `again` is かずぴょん being pressed. */
+  function greetNow(again){
+    if (!greeting || UI.currentName() !== 'home') return false;
+    if (!again && greeting.key === saidKey) return false;
+    const line = (saidHello ? '' : hello()) + greeting.say;
+    saidKey = greeting.key; saidHello = true;
+    const t = greeting.target;
+    if (t && t.scrollIntoView && !again) t.scrollIntoView({ block: 'nearest' });
+    point();
+    Sound.say(line, { delay: again ? 40 : 260 });
+    return true;
+  }
   /* The companion waits beside the logo. Tapping it is not a way in to anything:
      it hops and says its name, which is what a child does with it first. */
   function renderBuddy(){
@@ -185,6 +279,9 @@ const Home = (() => {
       el('div.home-head', null,
         logoEl = el('h1.logo', null,
           el('span.k', { text: 'かず' }), el('span.n', { text: 'の' }), el('span.b', { text: 'ぼうけん' })),
+        kazuBtn = el('button.home-kazu', { type: 'button',
+          onclick(){ Sound.sfx.tap(); greetNow(true); } },
+          mascotSVG('happy', 'talk'), kazuLine = el('span.home-kazu-line')),
         el('div.spacer'),
         el('div.starcount', null, starSVG(true), starEl),
         speakBtn(homeSpeech),
@@ -192,7 +289,7 @@ const Home = (() => {
           onclick(){ Sound.sfx.tap(); Book.open(); } }, '📖'),
         el('button.btn.btn-round', { 'aria-label': 'できたアルバム', title: 'できたアルバム',
           onclick(){ Sound.sfx.tap(); ProgressAlbum.open(); } }, '📒'),
-        el('button.btn.btn-round', { 'aria-label': 'じぶんの しま', title: 'じぶんの しま',
+        islandBtn = el('button.btn.btn-round', { 'aria-label': 'じぶんの しま', title: 'じぶんの しま',
           onclick(){ Sound.sfx.tap(); StickerWorld.open(); } }, '🏡'),
         parentBtn = el('button.btn.btn-round', { 'aria-label': 'おうちのかたへ', title: 'おうちのかたへ',
           onclick(){ Sound.sfx.tap(); Parent.open(); } }, '👤')));
@@ -225,7 +322,8 @@ const Home = (() => {
     const names = [recommendEl, dailyEl, reviewEl, focusEl]
       .filter(b => b && !b.hidden).map(b => ($('.t', b) || {}).textContent).filter(Boolean);
     const balls = Session.dueChecks().length ? 'ボールが待っているよ。ボールを押して、開けにいこう。' : '';
-    return 'いまは'+Store.round()+'周目だよ。地図も本も、この周の記録で遊べるよ。' + balls + '上のボタンから選んでね。' + names.join('、') + '。下の地図から、好きな遊びも選べるよ。';
+    const spot = Session.canSpot() ? '虫眼鏡のボタンは、かずぴょんの間違い探しだよ。' : '';
+    return 'いまは'+Store.round()+'周目だよ。地図も本も、この周の記録で遊べるよ。' + balls + '上のボタンから選んでね。' + names.join('、') + '。' + spot + '下の地図から、好きな遊びも選べるよ。';
   }
 
   /* 「ボールを あけに いこう」: one button per ball that can be opened today. Each
@@ -248,6 +346,19 @@ const Home = (() => {
       el('div.quest-title', null, el('span.pokeball.mini', { 'aria-hidden': 'true' }),
         el('span', { text: 'ボールを あけに いこう' }),
         due.length > BALLS_SHOWN ? el('small', { text: 'あと ' + (due.length - BALLS_SHOWN) + 'こ' }) : null), row);
+  }
+
+  /* 「かずぴょんの まちがい さがし」: the one place the child is not the one being
+     asked. It only appears once there is a level かずぴょん can answer questions from. */
+  function spotCard(){
+    if (!Session.canSpot()) return null;
+    return el('button.home-quest.adventure-card.spot-card', { type: 'button',
+      'aria-label': 'かずぴょんの まちがい さがし',
+      onclick(){ Sound.sfx.tap(); Session.startSpot(); } },
+      el('span.icon', { text: '🔍', 'aria-hidden': 'true' }),
+      el('span.copy', null, el('b', { text: 'かずぴょんの まちがい さがし' }),
+        el('small', { text: 'あってるか みて あげよう　5もん' })),
+      el('span.arrow', { text: '▶', 'aria-hidden': 'true' }));
   }
 
   function gameCard(g){
@@ -399,6 +510,8 @@ const Home = (() => {
     if (stickerQuest) questsEl.append(stickerQuest);
     if (firstStep) questsEl.append(firstStep);
     if (adventure) questsEl.append(adventure);
+    const spot = spotCard();
+    if (spot) questsEl.append(spot);
     questsEl.hidden = !questsEl.childElementCount;
 
     const got = Store.data.stickers;
@@ -444,8 +557,12 @@ const Home = (() => {
             el('span.sub', { text: shut ? 'じゅんびが できると ひらくよ' : w.sub })),
           Treasures.card(w.id)), grid));
     });
+    renderGreeting();
   }
-  return { build, render };
+  return { build, render,
+    /** what かずぴょん has to say right now, and the card it points at */
+    get greeting(){ return greeting ? { key: greeting.key, text: greeting.text, target: greeting.target } : null; },
+    greetNow };
 })();
 
 /* ---------------------------------------------------------- LEVELS */
@@ -511,6 +628,22 @@ const Levels = (() => {
 /* ---------------------------------------------------------- RESULT */
 const Result = (() => {
   let node, inner, lastSpoken = '';
+  /* ---------- one thing at a time ----------
+     A run that won a Pokémon used to put everything on the screen at once — the
+     album line, the facts to practise, the berry, the kitchen-table mission — in a
+     column up to 1,200px tall in a 700px window, and on the day a ball had opened
+     the Pokémon just won sat half under the buttons. The stars and the Pokémon have
+     the screen to themselves first; the rest comes in under them once the voice has
+     finished (or at a touch). It is the same content, and the buttons are there
+     from the start. */
+  const HOLD_MS = 2600;
+  let holdToken = 0;
+  function showMore(){
+    holdToken++;
+    if (!inner || !inner.classList.contains('holding')) return;
+    inner.classList.remove('holding');
+    inner.classList.add('more-in');
+  }
   const DAY_ENOUGH = 18;          // questions: one level (8) and one きょうの れんしゅう (10)
   function build(){
     if (node) return node;
@@ -518,6 +651,7 @@ const Result = (() => {
     /* Every other screen can say itself again; this was the one that could not —
        and it is the one where a child who cannot read has to pick a button. */
     node = el('div#result', null, speakBtn(() => lastSpoken), inner);
+    node.addEventListener('pointerdown', showMore, true);
     return UI.register('result', node);
   }
   function show(r){
@@ -535,12 +669,16 @@ const Result = (() => {
        Either way the facts stay one tap away as the second button. */
     const ballVisit = r.mode === 'check';
     const ballOut = ballVisit && (r.confirmed || []).length > 0;
+    /* かずぴょんの まちがい さがし is not graded either: what it shows is how many
+       of かずぴょん's slips the child caught, and never how many got past */
+    const spotVisit = r.mode === 'spot';
     const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus' && r.mode !== 'adventure' && !ballVisit;
     const lead = drill && !(canNext && r.stars >= 2) && !(r.mode === 'level' && r.stars === 0);
     const supportedRetry = r.mode === 'level' && r.stars === 0 && r.game.intro !== false;
     const msg = r.mode === 'diagnostic' ? 'さいしょの ぼうけん クリア！'
               : r.mode === 'adventure' ? 'ぼうけん かんせい！'
               : ballVisit ? (ballOut ? 'ボールが あいた！' : 'ボールは また あした')
+              : spotVisit ? 'おしえて くれて ありがとう！'
               : r.stars === 3 ? 'パーフェクト！'
               : r.stars === 2 ? 'よく できました！'
               : r.stars === 1 ? 'クリア！'
@@ -553,6 +691,9 @@ const Result = (() => {
                  : r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
                  : r.mode === 'adventure' ? '小さな冒険、完成！ヒントを使って、最後までできたね。'
                  : ballVisit ? (ballOut ? 'ボールが開いたよ！' : 'ボールは、まだ開かなかったね。また明日、開けにいこう。')
+                 : spotVisit ? (r.spotFound
+                     ? 'かずぴょんの間違いを、' + koKana(r.spotFound) + '、見つけたね！教えてくれて、ありがとう！'
+                     : '最後まで見てくれて、ありがとう！')
                  : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
@@ -566,7 +707,7 @@ const Result = (() => {
     /* A run that earned nothing is not shown three empty stars, a sad face and
        「8もん中 2もん」: that is a verdict. It is shown that the child got to the end.
        The count is for a run good enough to be proud of; the parent page has the rest. */
-    const tried = ballVisit ? !ballOut : r.mode !== 'diagnostic' && r.stars === 0;
+    const tried = ballVisit ? !ballOut : r.mode !== 'diagnostic' && !spotVisit && r.stars === 0;
     inner.append(
       mascotSVG(tried ? 'happy' : 'cheer', tried ? 'talk' : 'cheer'),
       r.mode === 'diagnostic'
@@ -577,6 +718,8 @@ const Result = (() => {
         : ballOut ? el('div.diagnostic-badge', { text: '🎉　たしかめ できたね' })
         : ballVisit ? el('div.ball-waiting', null, el('span.pokeball', { 'aria-hidden': 'true' }),
             el('span', { text: (r.ballName ? r.ballName + 'は ' : '') + 'ボールの なかで まってるよ' }))
+        : spotVisit ? el('div.diagnostic-badge', { text: r.spotFound
+            ? '🔍　まちがいを ' + r.spotFound + 'こ みつけたよ' : '🔍　さいごまで みて くれたね' })
         : tried ? el('div.tried', { text: 'さいごまで がんばったね' })
         : UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }));
@@ -591,6 +734,8 @@ const Result = (() => {
     const stickers = r.stickers || [];
     const coloured = r.confirmed || [];
     inner.classList.toggle('rewarded', stickers.length + coloured.length > 0);
+    // two Pokémon at once stand side by side, so neither is the one below the fold
+    rewardSlot.classList.toggle('pair', stickers.length > 0 && coloured.length > 0);
     let toDoor = null;
     if ((stickers.length || coloured.length) && !r.unlockedG1){
       const waitingGames = Games.list.filter(g => Progress.stageOf(g) === 'g1' && !stageOpen(g));
@@ -713,7 +858,7 @@ const Result = (() => {
         el('span.bi', { text: icon, 'aria-hidden': 'true' }), el('span.bl', { text: label }));
     };
     const home = () => { Sound.sfx.tap(); Home.render(); UI.show('home', { replace: true }); };
-    const again = r.stars === 0 && !lead;
+    const again = r.stars === 0 && !lead && !spotVisit;
     if (r.mode === 'focus'){
       actions.append(act('.btn-accent.primary', '🎯', 'もういちど', runFocus, 'もう一度特訓できるよ。'));
     } else if (lead){
@@ -747,6 +892,9 @@ const Result = (() => {
         () => { Sound.sfx.tap(); Session.startCheck(more[0]); }, '次のボールを開けにいけるよ。'));
       else if (ballOut) actions.append(act('', '🏡', 'しまに おく',
         () => { Sound.sfx.tap(); StickerWorld.open(r.confirmed[0].key); }));
+    } else if (spotVisit){
+      actions.append(act('', '🔍', 'もういちど',
+        () => { Sound.sfx.tap(); Session.startSpot(); }));
     } else if (r.mode === 'adventure'){
       actions.append(act('', '🧭', 'もういちど',
         () => { Sound.sfx.tap(); Session.startAdventure(r.adventureTarget); }, 'もう一度、小さな冒険ができるよ。'));
@@ -775,14 +923,32 @@ const Result = (() => {
     inner.append(actions);
     if (TextbookReview.unlocked()) actions.append(act('', '📖', 'ほんを うらがえす', () => TextbookReview.open()));
     if (Store.round() === 1 && Rounds.unlocked()) actions.append(act('', '🚀', '２しゅうめへ', () => Rounds.go(2)));
+    /* everything under the Pokémon waits its turn; what must be read now does not */
+    const held = inner.classList.contains('rewarded');
+    const stays = c => c === rewardSlot || c === actions || c.classList.contains('unlocked')
+      || c.classList.contains('enough') || c.classList.contains('result-treasure');
+    let after = false;
+    Array.from(inner.children).forEach(c => {
+      if (c === rewardSlot){ after = true; return; }
+      c.classList.toggle('result-more', held && after && !stays(c));
+    });
+    inner.classList.remove('more-in');
+    inner.classList.toggle('holding', held && !!$('.result-more', inner));
+    const mine = ++holdToken;
+    if (inner.classList.contains('holding')) setTimeout(() => {
+      if (mine === holdToken) Sound.afterSpeech(() => { if (mine === holdToken) showMore(); });
+    }, HOLD_MS);
     UI.show('result', { replace: true });
     /* A card with a name under it is a picture to a child who cannot read yet.
        The name is the reward: say it. */
     const nameOf = x => { const k = x.key || PokemonStickers.keyForName(x.emoji); return k ? stickerFor(k) : ''; };
     const gotNames = stickers.map(nameOf).filter(Boolean);
-    const named = gotNames.length ? gotNames.join('と、') + 'の、シールだよ！' : '';
+    /* one sentence for each: the recorded voice has a line per Pokémon, and a pair
+       joined with「と」would need a recording for every pair there could be */
+    const named = gotNames.map(n => n + 'の、シールだよ！').join('');
     const outNames = coloured.map(nameOf).filter(Boolean);
-    const news = named + (coloured.length ? (outNames.length ? outNames.join('と、') + 'が、' : '') + 'ボールから、出てきたね！' : '')
+    const news = named + (coloured.length ? (outNames.length
+          ? outNames.map(n => n + 'が、ボールから、出てきたね！').join('') : 'ボールから、出てきたね！') : '')
       + (stickers.some(x => x.pending) ? 'ボールに入ったよ。別の日にまたできたら、出てくるよ。' : '')
       + (treasureReady ? '金のシールが全部そろったね！宝箱を開けられるよ。' : '');
     const albumNews = r.milestone ? (r.milestone.label ? r.milestone.label + '。' : '')
@@ -793,7 +959,7 @@ const Result = (() => {
     Sound.say(lastSpoken, { delay: 700 });
     for (let i = 0; i < (ballVisit ? 0 : r.stars); i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
-  return { show, build };
+  return { show, build, showMore };
 })();
 
 /* ---------------------------------------------------------- STICKER BOOK */
