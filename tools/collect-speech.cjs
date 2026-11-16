@@ -192,6 +192,8 @@ window.collectSpeech = async function(samples, staticLines){
       record(numKana(a) + '、ひく、' + numKana(b) + 'のお話は、どれ？');
     }
   }
+  record('ポケモンを、ひとつずつタップして数えよう。');
+  record('ポケモンは、全部でいくつ？');
   for (const thing of THINGS) for (let n = 0; n <= 10; n++){
     record(thingCountKana(thing, n));
     record(thing.n + 'を' + koKana(n) + '、とって、かごに入れよう。');
@@ -223,6 +225,7 @@ window.collectSpeech = async function(samples, staticLines){
   for (const g of Games.list){
     record(g.name + '。');
     record('前にクリアした、' + g.name + 'を、確かめよう。');
+    record('ボールを開けにいこう。');
     record(g.name + 'を、4問だけやってみよう。');
     for (const lv of g.levels) record(g.name + 'の、' + lv.t + 'をクリアすると、もらえるよ。');
   }

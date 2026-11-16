@@ -2426,7 +2426,26 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .pip.check.now{ background: var(--accent); box-shadow: none; }
 /* a clear waiting for another day: the outline of the sticker, not yet its colour */
 .sticker.got.pending{ border-style: dashed; box-shadow: none; }
-.sticker.pending, .newsticker .e > .pending, .shelf .strip .pending{ filter: grayscale(1); opacity: .5; }
+/* A provisional clear used to be the Pokémon in grey at half strength, which reads
+   as「もらえなかった」. The rule is unchanged — it is confirmed on another day — but
+   it is drawn as something to look forward to: the Pokémon is in a ball, and comes
+   out when the check is passed. */
+.sticker.pending .pokemon-sticker, .newsticker .e > .pending .pokemon-sticker, .shelf .strip .pending .pokemon-sticker,
+.review-result.pending .pokemon-sticker, .review-collectible.pending .pokemon-sticker, .review-lesson-slot.pending .pokemon-sticker{ position: relative; }
+.sticker.pending .pokemon-image, .newsticker .e > .pending .pokemon-image, .shelf .strip .pending .pokemon-image,
+.review-result.pending .pokemon-image, .review-collectible.pending .pokemon-image, .review-lesson-slot.pending .pokemon-image{ filter: none; opacity: .3; }
+.sticker.pending .pokemon-sticker::before, .newsticker .e > .pending .pokemon-sticker::before, .shelf .strip .pending .pokemon-sticker::before,
+.review-result.pending .pokemon-sticker::before, .review-collectible.pending .pokemon-sticker::before, .review-lesson-slot.pending .pokemon-sticker::before{
+  content: ''; position: absolute; left: 50%; top: calc(var(--pokemon-size)*.4);
+  width: calc(var(--pokemon-size)*.5); height: calc(var(--pokemon-size)*.5);
+  transform: translate(-50%,-50%); box-sizing: border-box; border-radius: 50%;
+  border: calc(var(--pokemon-size)*.035) solid #2E2A3F;
+  background:
+    radial-gradient(circle, #fff 0 13%, #2E2A3F 14% 23%, transparent 24%),
+    linear-gradient(#E5483A 0 44%, #2E2A3F 44% 56%, #fff 56%);
+  box-shadow: 0 calc(var(--pokemon-size)*.03) 0 #0002;
+  z-index: 1; pointer-events: none;
+}
 .newsticker.confirmed{ border-color: var(--good); border-style: solid; }
 .todochip.pending{ border-style: dashed; }
 
@@ -2895,6 +2914,189 @@ polygon.slot-focus{ stroke:var(--ring); stroke-width:2.8; stroke-dasharray:none;
   .dailies > .daily .s{display:none;}
   .dailies > .daily .ico{font-size:24px;}
   .dailies > .daily .go{font-size:16px;}
+}
+
+/* ===========================================================
+   THE ROAD TO THE POKÉMON  (play screen, level mode)
+   =========================================================== */
+.trail{
+  position: relative; flex: 0 0 auto;
+  display: flex; align-items: center; gap: calc(var(--u)*.28);
+  padding: calc(var(--u)*.2) calc(var(--u)*.7);
+  margin-right: calc(var(--u)*.4);
+  border-radius: 99px; background: var(--paper-2);
+}
+.trail[hidden]{ display: none; }
+.trail .stone{
+  position: relative; flex: 0 0 auto;
+  width: calc(var(--u)*1.15); height: calc(var(--u)*.62);
+  border-radius: 50%; background: var(--card-edge);
+  transition: background .35s;
+}
+.trail .stone.start{ width: calc(var(--u)*1.7); background: transparent; }
+.trail .stone.walked{ background: var(--good); }
+.trail .stone.goal{ width: calc(var(--u)*2.9); height: calc(var(--u)*.7); }
+.trail-mon{
+  position: absolute; left: 62%; bottom: 10%;
+  width: calc(var(--u)*3.3); height: calc(var(--u)*3.3);
+  transform: translateX(-50%); object-fit: contain; pointer-events: none;
+  transition: filter .5s, opacity .5s;
+}
+.trail-mon.shadow{ filter: brightness(0); opacity: .38; }
+.trail-mon.gold:not(.shadow){ filter: drop-shadow(0 0 calc(var(--u)*.35) var(--star)); }
+.trail-mon:not(.shadow){ animation: pop .6s cubic-bezier(.2,.9,.3,1.6); }
+.trail-walker{
+  position: absolute; left: 0; bottom: 18%;
+  width: calc(var(--u)*2.3); height: calc(var(--u)*2.3);
+  margin-left: calc(var(--u)*-1.15);
+  transition: transform .55s cubic-bezier(.3,1.5,.5,1);
+  pointer-events: none; z-index: 1;
+}
+.trail-meet{
+  position: fixed; left: 50%; top: 44%; z-index: 96; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.4);
+  padding: calc(var(--u)*1.2) calc(var(--u)*2.2);
+  background: var(--card); border: calc(var(--u)*.3) solid var(--star);
+  border-radius: var(--wob-a); box-shadow: 0 calc(var(--u)*.6) calc(var(--u)*2.4) #0003;
+  animation: meetIn 2.3s cubic-bezier(.2,.9,.3,1.2) both;
+}
+.trail-meet img{ width: calc(var(--u)*15); height: calc(var(--u)*15); object-fit: contain; }
+.trail-meet b{ font-size: calc(var(--u)*2.4); font-weight: 800; white-space: nowrap; }
+@keyframes meetIn{
+  0%{ opacity: 0; transform: translate(-50%,-50%) scale(.3) rotate(-8deg) }
+  14%{ opacity: 1; transform: translate(-50%,-50%) scale(1.06) rotate(2deg) }
+  22%, 84%{ opacity: 1; transform: translate(-50%,-50%) scale(1) }
+  100%{ opacity: 0; transform: translate(-50%,-50%) scale(.9) }
+}
+@keyframes meetStill{ 0%, 100%{ opacity: 0 } 12%, 86%{ opacity: 1 } }
+@media (prefers-reduced-motion: reduce){
+  .trail-walker{ transition: none; }
+  .trail-mon:not(.shadow){ animation: none; }
+  .trail-meet{ transform: translate(-50%,-50%); animation: meetStill 2.3s linear both; }
+}
+/* a narrow screen has no room beside the title: the road takes a row of its own */
+@media (max-width: 600px){
+  #play .topbar{ flex-wrap: wrap; }
+  #play .topbar .trail{ order: 3; margin: calc(var(--u)*1.4) auto 0; }
+}
+
+/* ===========================================================
+   RESULT — the reward leads, and the way on never leaves the screen
+   =========================================================== */
+.result-reward{ display: contents; }
+/* On a landscape iPad the column is taller than the screen whenever there is
+   anything to celebrate, and the buttons were the last thing in it: the voice said
+   「オレンジのボタンで…」about a button below the fold. They stay in view now, and
+   the rest scrolls behind them. */
+#result .inner{ justify-content: flex-start; padding-bottom: 0; }
+#result .inner > :first-child{ margin-top: auto; }
+#result .result-actions{
+  position: sticky; bottom: 0; z-index: 1;
+  margin-top: auto; align-self: stretch;
+  padding: calc(var(--u)*.8) calc(var(--u)*.4) calc(var(--u)*.6);
+  background: linear-gradient(to bottom, transparent, var(--paper) calc(var(--u)*.9));
+}
+/* a run that won a Pokémon gives the room to the Pokémon */
+#result .inner.rewarded .mascot{ width: calc(var(--u)*6); height: calc(var(--u)*6); }
+#result .inner.rewarded .bigstars svg{ width: calc(var(--u)*6); height: calc(var(--u)*6); }
+#result .newsticker .e > *{ animation: starPop .7s cubic-bezier(.2,.9,.3,1.6) .5s both; }
+#result .newsticker .e > * + *{ animation-delay: .9s; }
+@media (prefers-reduced-motion: reduce){ #result .newsticker .e > *{ animation: none; } }
+
+/* ===========================================================
+   STICKER BOOK — the Pokémon first, and every slot answers a tap
+   =========================================================== */
+#book{ position: relative; }
+button.sticker{ font: inherit; cursor: pointer; margin: 0; min-width: 0; -webkit-appearance: none; appearance: none; }
+button.sticker:active{ transform: scale(.96); }
+.book > .aim, .book > .book-todo{ grid-column: 1 / -1; width: auto; min-width: 0; }
+.book-detail{
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(var(--u)*1); background: color-mix(in srgb, var(--ink) 38%, transparent);
+}
+.book-detail[hidden]{ display: none; }
+.book-detail-card{
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.9);
+  width: min(100%, calc(var(--u)*40)); max-height: 100%; overflow-y: auto;
+  padding: calc(var(--u)*1.4) calc(var(--u)*1.6);
+  background: var(--card); border: calc(var(--u)*.3) solid var(--star);
+  border-radius: var(--wob-a); box-shadow: var(--shadow-sm); text-align: center;
+  animation: pop .35s cubic-bezier(.2,.9,.3,1.5);
+}
+.book-detail-art .pokemon-sticker{ --pokemon-size: clamp(150px, calc(var(--u)*17), 300px); }
+.book-detail-art.pending .pokemon-sticker{ position: relative; }
+.book-detail-art.pending .pokemon-image{ opacity: .3; }
+.book-detail-art.pending .pokemon-sticker::before{
+  content: ''; position: absolute; left: 50%; top: calc(var(--pokemon-size)*.4);
+  width: calc(var(--pokemon-size)*.5); height: calc(var(--pokemon-size)*.5);
+  transform: translate(-50%,-50%); box-sizing: border-box; border-radius: 50%;
+  border: calc(var(--pokemon-size)*.035) solid #2E2A3F;
+  background:
+    radial-gradient(circle, #fff 0 13%, #2E2A3F 14% 23%, transparent 24%),
+    linear-gradient(#E5483A 0 44%, #2E2A3F 44% 56%, #fff 56%);
+}
+.book-detail-text{ font-size: calc(var(--u)*1.9); font-weight: 800; line-height: 1.5; }
+.book-detail-actions{ display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--u)*.7); }
+.book-detail-actions .btn{ min-height: var(--tap); font-size: calc(var(--u)*1.7); padding: calc(var(--u)*.7) calc(var(--u)*1.5); }
+.book-detail-actions .btn .bi{ margin-right: .35em; }
+@media (prefers-reduced-motion: reduce){ .book-detail-card{ animation: none; } }
+
+/* ===========================================================
+   じぶんの しま — stickers that move with a finger and are alive
+   =========================================================== */
+.world-sticker{ touch-action: none; -webkit-user-select: none; user-select: none; }
+.world-sticker > *{ animation: islandSway 3.6s ease-in-out infinite; }
+.world-sticker:nth-of-type(2n) > *{ animation-delay: -1.2s; }
+.world-sticker:nth-of-type(3n) > *{ animation-delay: -2.3s; animation-duration: 4.3s; }
+.world-sticker.hop > *{ animation: islandHop .6s cubic-bezier(.3,1.6,.5,1) 1, islandSway 3.6s ease-in-out .6s infinite; }
+.world-sticker.dragging{ z-index: 3; cursor: grabbing; filter: drop-shadow(0 calc(var(--u)*.7) calc(var(--u)*.5) color-mix(in srgb,var(--ink) 30%,transparent)); }
+.world-sticker.dragging > *{ animation: none; transform: scale(1.12) rotate(-4deg); }
+.world-sticker.held{ z-index: 2; }
+@keyframes islandSway{
+  0%, 100%{ transform: translateY(0) rotate(-1.5deg) }
+  50%{ transform: translateY(calc(var(--u)*-.35)) rotate(1.5deg) }
+}
+@keyframes islandHop{
+  0%{ transform: translateY(0) scale(1) }
+  35%{ transform: translateY(calc(var(--u)*-1.8)) scale(1.12, .94) }
+  70%{ transform: translateY(0) scale(.94, 1.08) }
+  100%{ transform: translateY(0) scale(1) }
+}
+@media (prefers-reduced-motion: reduce){
+  .world-sticker > *, .world-sticker.hop > *{ animation: none; }
+}
+
+/* ===========================================================
+   ONE QUESTION AT A TIME — the board is glad, and has a place
+   =========================================================== */
+/* `translate` is its own property, so the hop rides on top of whatever transform
+   placed the thing (.obj is centred with one) instead of replacing it */
+.playfield.cheer :is(.obj, .item, .actor, .qi){ animation: boardHop .55s cubic-bezier(.3,1.5,.5,1) 1; }
+.playfield.cheer :is(.obj, .item, .actor, .qi):nth-child(2n){ animation-delay: .07s; }
+.playfield.cheer :is(.obj, .item, .actor, .qi):nth-child(3n){ animation-delay: .14s; }
+@keyframes boardHop{
+  0%, 100%{ translate: 0 0 }
+  40%{ translate: 0 calc(var(--u)*-1.1) }
+  70%{ translate: 0 calc(var(--u)*.12) }
+}
+@media (prefers-reduced-motion: reduce){ .playfield.cheer :is(.obj, .item, .actor, .qi){ animation: none; } }
+
+.obj-mon{
+  /* an object near the right edge is shrink-to-fit against the board: a glyph
+     keeps its width there, an image has to be told to */
+  display: block; flex: 0 0 auto; width: 1.1em; min-width: 1.1em; max-width: none;
+  height: 1.1em; margin: -.05em;
+  object-fit: contain; pointer-events: none; -webkit-user-drag: none;
+}
+
+.worldmark{ flex: 0 0 auto; font-size: calc(var(--u)*2.2); line-height: 1; }
+.worldmark:empty{ display: none; }
+#play[data-world] .prompt{ border-color: color-mix(in srgb, var(--wc) 55%, var(--card-edge)); }
+#play[data-world] .objfield{ border-color: color-mix(in srgb, var(--wc) 40%, var(--card-edge)); }
+#play[data-world]{
+  background: linear-gradient(to bottom, transparent 50%, color-mix(in srgb, var(--wc) 13%, transparent));
+  border-radius: var(--wob-a);
 }
 </style>
 </head>
@@ -5474,7 +5676,10 @@ function stageOpen(g){ return Progress.stageOf(g) === 'pre' || Progress.g1GameOp
 function levelOpen(g, i){ return stageOpen(g) && Store.levelUnlocked(g.id, i); }
 
 const Session = (() => {
-  let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, showBtn, backBtn, moodEl, feedbackEl;
+  let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, showBtn, backBtn, moodEl, feedbackEl, worldEl;
+  /* Where this question lives. The four worlds were names on the home map only:
+     every question, wherever it came from, was asked on the same paper. */
+  const WORLD_MARK = { shima: '🏝️', umi: '🌊', yama: '⛰️', mori: '🌳', kyoshitsu: '🏫' };
   let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
@@ -5585,6 +5790,86 @@ const Session = (() => {
   let shaky = [];                 // facts missed this session, for the result screen
   let sessionOutcomes = [];       // [{ gameId, levelIndex, clean }] for diagnostic/recommendation
   let quitArmed = false, quitTimer = null;
+  /* ---------- the road to the Pokémon ----------
+     The sticker rule —「half of them right first time」— was invisible until the
+     result screen: nothing on the way said how close the Pokémon was, and a run
+     that fell short ended in a surprise「おしい！」. The road makes the rule something
+     a child can watch. One stone per graded question; the level's Pokémon waits on
+     the stone where the sticker becomes certain, the gold one on the last. かずぴょん
+     takes a step for every first-try answer and never steps back. It changes no
+     rule: it only draws `firstTryRight` against the thresholds `starsFor` already has. */
+  let trailEl, trail = null;
+  function setupTrail(){
+    trail = null;
+    if (!trailEl) return;
+    clear(trailEl); trailEl.hidden = true;
+    if (mode !== 'level' || !curGame) return;
+    const n = plan.filter(p => !p.intro && !p.check).length;
+    if (n < 2) return;
+    let need = n;
+    for (let k = 1; k <= n; k++) if (starsFor(k, n) >= 1){ need = k; break; }
+    const key = curGame.id + ':' + curLevelIdx;
+    const mon = (k, got, gold) => {
+      const r = PokemonStickers.reward(k);
+      return el('img.trail-mon' + (got ? '' : '.shadow') + (gold ? '.gold' : ''),
+        { src: r.image, alt: '', draggable: 'false', dataset: { name: r.name } });
+    };
+    trail = { n, need, key, at: 0, cells: [],
+      hadPlain: Store.hasConfirmed(key), hadGold: Store.hasSticker(key + ':g') };
+    const start = el('span.stone.start');
+    trail.cells.push(start); trailEl.append(start);
+    for (let i = 1; i <= n; i++){
+      const c = el('span.stone' + (i === need || i === n ? '.goal' : ''));
+      if (i === need) c.append(trail.plainMon = mon(key, trail.hadPlain, false));
+      else if (i === n) c.append(trail.goldMon = mon(key + ':g', trail.hadGold, true));
+      trail.cells.push(c); trailEl.append(c);
+    }
+    trail.walker = mascotSVG('happy', 'trail-walker');
+    trailEl.append(trail.walker);
+    trailEl.hidden = false;
+    placeWalker();
+  }
+  function trailLabel(){
+    if (!trail) return;
+    const left = trail.need - trail.at;
+    trailEl.setAttribute('aria-label', left > 0 ? 'ポケモンまで あと ' + left + 'ぽ'
+      : 'ポケモンに あえたよ。きんの ポケモンまで あと ' + (trail.n - trail.at) + 'ぽ');
+  }
+  function placeWalker(){
+    if (!trail) return;
+    const c = trail.cells[trail.at];
+    // on a Pokémon's stone, stand beside it rather than on top of it
+    const share = c.classList.contains('goal') ? 0.2 : 0.5;
+    trail.walker.style.transform = 'translateX(' + (c.offsetLeft + c.offsetWidth * share) + 'px)';
+    trail.cells.forEach((x, i) => x.classList.toggle('walked', i > 0 && i <= trail.at));
+    trailLabel();
+  }
+  /** One step forward. Returns the Pokémon reached on this step, if it is a new meeting. */
+  function stepTrail(){
+    if (!trail || trail.at >= trail.n) return null;
+    trail.at = Math.min(trail.n, firstTryRight);
+    placeWalker();
+    let met = null;
+    if (trail.at === trail.need && trail.plainMon.classList.contains('shadow')){
+      trail.plainMon.classList.remove('shadow'); met = trail.plainMon;
+    }
+    if (trail.at === trail.n && trail.goldMon && trail.goldMon.classList.contains('shadow')){
+      trail.goldMon.classList.remove('shadow'); met = trail.need === trail.n ? met : null;
+    }
+    return met;
+  }
+  /** The meeting itself: the Pokémon comes up large for a moment, by name. */
+  function meetPokemon(img){
+    const name = img.dataset.name || '';
+    const card = el('div.trail-meet', { 'aria-hidden': 'true' },
+      el('img', { src: img.src, alt: '', draggable: 'false' }),
+      el('b', { text: name + 'に あえたね！' }));
+    document.body.append(card);
+    setTimeout(() => card.remove(), 2300);
+    Sound.sfx.star(1);
+    const r = trailEl.getBoundingClientRect();
+    UI.confetti(34, r.left + r.width / 2, r.bottom + 40);
+  }
 
   /* ---------- timer lifecycle ----------
      Every delayed callback in a question is tied to an epoch. Leaving a question
@@ -5659,8 +5944,8 @@ const Session = (() => {
     }, '←');
     node = el('div#play', null,
       el('div.topbar', null,
-        backBtn,
-        titleEl, pipsEl),
+        backBtn, worldEl = el('span.worldmark', { 'aria-hidden': 'true' }),
+        titleEl, trailEl = el('div.trail', { hidden: true, role: 'img' }), pipsEl),
       el('div.prompt', null, moodEl,
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn, showBtn),
       fieldEl, choicesEl);
@@ -5959,7 +6244,9 @@ const Session = (() => {
     clear(pipsEl);
     checkTally = {}; announced = new Set();
     plan.forEach(p => pipsEl.append(el('div.pip' + (p.intro ? '.intro' : p.check ? '.check' : ''))));
+    setupTrail();
     UI.show('play');
+    placeWalker();                // offsets are only real once the screen is laid out
     nextQuestion();
   }
 
@@ -6249,6 +6536,10 @@ const Session = (() => {
     } else if (curGame) titleEl.textContent = curGame.name + '　' + curGame.levels[curLevelIdx].t;
     demo = step.intro || null;
     touched = false;
+    const world = WORLDS.find(w => w.id === step.game.world);
+    node.dataset.world = step.game.world || '';
+    node.style.setProperty('--wc', world ? world.color : 'var(--card-edge)');
+    worldEl.textContent = WORLD_MARK[step.game.world] || '';
     drawQuestion(step);
     // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
     // call buildChoices, so start their clock here
@@ -6260,8 +6551,8 @@ const Session = (() => {
       announced.add(step.check);
       later(() => {
         if (locked) return;
-        showFeedback('hint', 'まえに クリアした レベルを たしかめよう');
-        Sound.say('前にクリアした、' + step.game.name + 'を、確かめよう。' + lastSpeech, { delay: 200 });
+        showFeedback('hint', 'ボールを あけに いこう！ まえの レベルを たしかめるよ');
+        Sound.say('ボールを開けにいこう。前にクリアした、' + step.game.name + 'を、確かめよう。' + lastSpeech, { delay: 200 });
       }, 40);
     }
   }
@@ -6538,7 +6829,8 @@ const Session = (() => {
     });
     // a check question in a level session belongs to the other level, not this one's stars
     const graded = !scaffold && !(mode === 'level' && plan[idx].check);
-    if (clean && graded) firstTryRight++;
+    let met = null;
+    if (clean && graded){ firstTryRight++; met = stepTrail(); }
     if (plan[idx].check){
       const t = checkTally[plan[idx].check] || (checkTally[plan[idx].check] = { n: 0, right: 0 });
       t.n++;
@@ -6574,19 +6866,30 @@ const Session = (() => {
     setMood('happy');
     const pip = $$('.pip', pipsEl)[idx];
     if (pip){ pip.classList.remove('now'); pip.classList.add(scaffold ? 'introdone' : clean ? 'done' : 'miss'); }
+    /* the things on the board are glad too — after the answer, never while the
+       child is still thinking */
+    fieldEl.classList.add('cheer');
     if (!o.quiet && scaffold !== 'show'){
       UI.bigMark('◯');
       const praise = wrongThisQ === 0
         ? pick(['やったね！', '正解！', 'すごい！', '上手だね！', 'ばっちり！', 'その調子！'])
         : pick(['できたね！', 'よく頑張ったね！', 'その通り！']);
-      Sound.say(praise, { delay: 320 });
+      if (!met) Sound.say(praise, { delay: 320 });
     }
-    if ((idx + 1) % 4 === 0) UI.confetti(22);
+    /* the step that reaches the Pokémon is the peak of the run, and it happens
+       here, on the question that earned it — not eight questions later */
+    if (met){
+      /* said in the praise's place and held like it: the next question waits for
+         this line exactly as it waits for「やったね！」 */
+      Sound.say((met.dataset.name || '') + 'に、会えたね！', { delay: 320 });
+      later(() => meetPokemon(met), 420);
+    }
+    if ((idx + 1) % 4 === 0 && !met) UI.confetti(22);
     afterNarration(() => {
       idx++;
       if (idx >= plan.length) finish();
       else nextQuestion();
-    }, o.delay || 950);
+    }, Math.max(o.delay || 950, met ? 2500 : 0));
   }
 
   /** 3 = every question right first time, 0 = under half. Levels vary in length,
@@ -6721,7 +7024,8 @@ const Session = (() => {
       get introStep(){ return plan[idx] ? plan[idx].intro || null : null; },
       get planIntro(){ return plan.map(p => p.intro || null); },
       get planChecks(){ return plan.map(p => p.check || null); },
-      get helped(){ return helped; }
+      get helped(){ return helped; },
+      get trail(){ return trail ? { n: trail.n, need: trail.need, at: trail.at } : null; }
     }
   };
 })();
@@ -7069,12 +7373,31 @@ const MOVING_THINGS = THINGS.filter(thing => thing.moving);
 /* ============================================================
    1. かぞえよう — one-to-one correspondence & cardinality
    ============================================================ */
+/* The Pokémon a child has collected lived in the book and on the island, and
+   never in a question. In かぞえよう — where the thing on the board is only ever
+   something to point at and count — one of them sometimes stands in for the
+   apples: the same picture for every object, so there is still exactly one kind of
+   thing to count. It is called「ポケモン」whichever one it is, so the spoken lines
+   stay a single noun. A Pokémon still in its ball is not out to be counted. */
+const POKEMON_COUNT_CHANCE = 0.35;
+function pickCountThing(){
+  if (typeof Store === 'undefined' || !chance(POKEMON_COUNT_CHANCE)) return pick(THINGS);
+  const keys = Store.data.stickers.filter(k => typeof k === 'string'
+    && !k.startsWith('treasure:') && !Store.isPending(k));
+  if (!keys.length) return pick(THINGS);
+  const r = PokemonStickers.reward(pick(keys));
+  return r && r.image ? { n: 'ポケモン', counter: 'hiki', img: r.image, moving: true } : pick(THINGS);
+}
+function thingFace(thing){
+  return thing.img ? el('img.obj-mon', { src: thing.img, alt: '', draggable: 'false' }) : thing.e;
+}
+
 function makeCountField(api, count, thing, layout){
   const field = el('div.objfield');
   const pts = layout === 'line' ? lineup(count, .5) : scatter(count);
   const objs = [];
   pts.forEach((p, i) => {
-    const o = el('div.obj', { style: { left: (p[0] * 100) + '%', top: (p[1] * 100) + '%' } }, thing.e);
+    const o = el('div.obj', { style: { left: (p[0] * 100) + '%', top: (p[1] * 100) + '%' } }, thingFace(thing));
     o.dataset.i = i;
     objs.push(o);
     field.append(o);
@@ -7084,7 +7407,7 @@ function makeCountField(api, count, thing, layout){
 }
 
 function countQuestion(api, lo, hi, layout){
-  const thing = pick(THINGS);
+  const thing = pickCountThing();
   const count = ri(lo, hi);
   api.item('count' + (layout === 'line' ? 'L' : 'S') + ':' + count, count + 'こ を かぞえる');
   api.setPrompt(`${thing.n}を ひとつずつ タップして かぞえよう`, `${thing.n}を、ひとつずつタップして数えよう。`);
@@ -11008,7 +11331,7 @@ const StickerMissions = (() => {
     detailEl.append(
       el('b', { text: choice.game.name + '　《' + choice.level.t + '》' }),
       el('span', { text: 'クリアすると「' + stickerFor(choice.key) + '」の シールが もらえるよ' }),
-      el('small', { text: 'いろが つくのは、べつの ひに たしかめてから' }));
+      el('small', { text: '★3つなら すぐ なかま。ボールに はいったら、べつの ひに たしかめて でてくるよ' }));
     goBtn.onclick = () => {
       Sound.sfx.tap();
       if (choice.game.intro !== false && !Store.introduced(choice.game.id, choice.levelIndex))
@@ -11291,7 +11614,53 @@ const StickerWorld = (() => {
     { id: 'sea', label: 'うみ', icon: '🌊' },
     { id: 'sky', label: 'そら', icon: '☁️' }
   ];
-  let node, board, palette, hint, selected = null;
+  let node, board, palette, hint, selected = null, hopKey = null;
+  /* ---------- a finger moves a sticker ----------
+     Placing was「pick below, then tap the island」and nothing else: a five-year-old
+     puts a finger on the Pokémon and pulls, and nothing happened. A sticker on the
+     island follows the finger now and stays where it is let go. A plain tap still
+     selects it, and it answers — a hop and its name. */
+  const DRAG_START = 12;
+  let draggedAt = 0;
+  function bindSticker(btn, k){
+    let id = null, sx = 0, sy = 0, moved = false;
+    const pos = e => {
+      const r = board.getBoundingClientRect();
+      return { x: Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100)),
+               y: Math.max(0, Math.min(100, (e.clientY - r.top) / r.height * 100)) };
+    };
+    btn.addEventListener('pointerdown', e => {
+      if (id != null || (e.button != null && e.button > 0)) return;
+      id = e.pointerId; sx = e.clientX; sy = e.clientY; moved = false;
+      try{ btn.setPointerCapture(id); }catch(err){}
+    });
+    btn.addEventListener('pointermove', e => {
+      if (e.pointerId !== id) return;
+      if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) < DRAG_START) return;
+      if (!moved){ moved = true; btn.classList.add('dragging'); }
+      e.preventDefault();
+      const p = pos(e);
+      btn.style.left = p.x + '%'; btn.style.top = p.y + '%';
+    });
+    const end = e => {
+      if (e.pointerId !== id) return;
+      id = null;
+      if (!moved) return;
+      btn.classList.remove('dragging');
+      const p = pos(e);
+      if (e.type === 'pointerup' && Store.putWorldSticker(k, p.x, p.y)){ Sound.sfx.place(); selected = k; }
+      draggedAt = Date.now();             // the click that follows a drag is not a tap
+      render();
+    };
+    btn.addEventListener('pointerup', end);
+    btn.addEventListener('pointercancel', end);
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (Date.now() - draggedAt < 400) return;
+      selected = k; hopKey = k; render(); Sound.sfx.tap();
+      Sound.say(itemName(k) + '！', { delay: 40 });
+    });
+  }
 
   function owned(){
     return Store.ownedStickerKeys().filter(k => {
@@ -11314,7 +11683,7 @@ const StickerWorld = (() => {
     palette = el('div.sticker-world-palette');
     hint = el('div.sticker-world-hint');
     board.onclick = e => {
-      if (e.target.closest('.world-sticker')) return;
+      if (e.target.closest('.world-sticker') || Date.now() - draggedAt < 400) return;
       if (!selected){
         Sound.say('下から、置きたいシールや宝物をえらんでね。', { delay: 40 });
         return;
@@ -11357,11 +11726,14 @@ const StickerWorld = (() => {
       board.append(el('span.world-job.snack', { text: '🧺', title: 'つくった おやつ' }));
     Object.keys(world.items).filter(k => keys.indexOf(k) >= 0).forEach(k => {
       const p = world.items[k];
-      board.append(el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : ''), { type: 'button',
-        'aria-label': itemName(k) + 'を うごかす', title: itemName(k) + 'を うごかす', style: { left: p.x + '%', top: p.y + '%' },
-        onclick(e){ e.stopPropagation(); selected = k; render(); Sound.sfx.tap(); }
-      }, itemArt(k)));
+      const btn = el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : '')
+        + (hopKey === k ? '.hop' : '') + (selected === k ? '.held' : ''), { type: 'button',
+        'aria-label': itemName(k) + 'を うごかす', title: itemName(k) + 'を うごかす', style: { left: p.x + '%', top: p.y + '%' }
+      }, itemArt(k));
+      bindSticker(btn, k);
+      board.append(btn);
     });
+    hopKey = null;
     $$('.world-background', node).forEach(b => b.classList.toggle('selected', b.dataset.background === world.background));
     clear(palette);
     keys.forEach(k => palette.append(el('button.world-palette-sticker' + (isTreasure(k) ? '.world-palette-treasure' : '') + (selected === k ? '.selected' : ''), {
@@ -11369,7 +11741,7 @@ const StickerWorld = (() => {
       onclick(){ selected = k; Sound.sfx.tap(); render(); Sound.say('島の置きたい場所をタップしてね。', { delay: 60 }); }
     }, itemArt(k))));
     hint.textContent = keys.length
-      ? (selected ? '🌟　しまの おきたい ばしょを タップしてね' : '下の シールや たからものを えらんで、しまに おこう')
+      ? (selected ? '🌟　しまの おきたい ばしょを タップしてね。おいた シールは ゆびで うごかせるよ' : '下の シールや たからものを えらんで、しまに おこう')
       : 'さいしょの シールを もらったら、ここに おけるよ';
   }
   function open(item){
@@ -11793,7 +12165,7 @@ const TextbookReview = (() => {
   function collectible(k,title,fn){
     const has=Store.hasSticker(k), pending=Store.isPending(k);
     return el('button.review-collectible'+(pending?'.pending':''),{type:'button',onclick:()=>has&&!pending?StickerWorld.open(k):fn()},
-      PokemonStickers.artwork(k,{silhouette:!has}),el('span',{text:title+(pending?'・かりの シール':'')}));
+      PokemonStickers.artwork(k,{silhouette:!has}),el('span',{text:title+(pending?'・ボールの なか':'')}));
   }
   function parentSummary(){
     const rows=Object.entries(Store.data.reviewRecords||{});
@@ -11842,10 +12214,10 @@ const TextbookReview = (() => {
           return el('div.review-lesson-slot'+(pending?'.pending':''),null,
             el('button.review-lesson',{type:'button',disabled:!available,dataset:{lesson:l.id}},
               PokemonStickers.artwork(l.key,{silhouette:!has,rarity:false}),
-              el('strong',{text:l.title}),el('small',{text:!available?'まえの レッスンから':pending?'かりの シール':has?'また あそぶ':'８もん あそぶ'})),
+              el('strong',{text:l.title}),el('small',{text:!available?'まえの レッスンから':pending?'ボールの なか':has?'また あそぶ':'８もん あそぶ'})),
             due(l.key)?button('３もん たしかめる',()=>start(l.id,null,true),'btn-accent.review-due'):null);
         })),
-        el('div.review-chapter-footer',null,el('span',{text:'まとめ：４つの シールに いろが ついたら'}),
+        el('div.review-chapter-footer',null,el('span',{text:'まとめ：４ひきが ボールから でてきたら'}),
           el('button.btn.btn-accent.review-summary',{type:'button',disabled:!chapterReady(i),dataset:{chapter:i},text:'５もんの まとめ'+(Store.hasSticker(chapterKey(i))?' ✓':'')})))));
     $$('[data-lesson]',body).forEach(b=>b.addEventListener('click',()=>{Sound.sfx.tap();start(Number(b.dataset.lesson));}));
     $$('[data-chapter]',body).forEach(b=>b.addEventListener('click',()=>{Sound.sfx.tap();start(null,Number(b.dataset.chapter));}));
@@ -12063,9 +12435,9 @@ const TextbookReview = (() => {
     run=null;q=null;exitArmed=false;clear(body);heading.textContent='やりとげたね！';
     exitBtn.setAttribute('aria-label','もくじに もどる');
     const has=Store.hasSticker(done.key), pending=Store.isPending(done.key), record=Store.data.reviewRecords[done.key];
-    let note=confirmed?'シールに いろが ついたよ！':fresh?(pending?'かりの シールを ゲット！ べつのひに ３もん たしかめよう。':'あたらしい なかまを ゲット！'):
-      passed?(pending?'べつのひに ３もん たしかめると いろが つくよ。':'もういちど できたね！'):
-      'じぶんで さいしょから '+(done.kind==='chapter'?'４／５':done.kind==='check'?'２／３':'４／８')+'もん できたら '+(done.kind==='check'?'いろが つくよ。':'シールを もらえるよ。');
+    let note=confirmed?'ボールから でてきたよ！':fresh?(pending?'ボールに はいったよ！ べつのひに ３もん たしかめよう。':'あたらしい なかまを ゲット！'):
+      passed?(pending?'べつのひに ３もん たしかめると ボールから でてくるよ。':'もういちど できたね！'):
+      'じぶんで さいしょから '+(done.kind==='chapter'?'４／５':done.kind==='check'?'２／３':'４／８')+'もん できたら '+(done.kind==='check'?'ボールから でてくるよ。':'シールを もらえるよ。');
     const nextId=done.kind==='chapter'?(done.chapter+1)*4:done.id+1;
     body.append(el('div.review-result'+(pending?'.pending':''),null,has?PokemonStickers.artwork(done.key):illustration('animal'),
       el('h3',{text:note}),el('p',{text:'じぶんで '+record.independent+'もん・もういちど '+record.revised+'もん・ヒント '+record.supported+'もん'}),
@@ -12132,7 +12504,7 @@ const Rounds = (() => {
     return el('section.round-collection',{'aria-label':'２しゅうめの ひらきかた'},
       el('h3',{text:open?'🚀 ２しゅうめで ぜんぶ もういちど':'🔒 ほんまで ぜんぶ あつめて ２しゅうめへ'}),
       el('p',{text:open?'１しゅうめの きろくを のこして、すべての あそびを さいしょから。べつの ポケモンシール156まいが まっているよ。'
-        :'１しゅうめの シール '+p.got+'／'+p.total+'まい。ちず・たからばこ・ぼうけん・ほんの ふくしゅうまで あつめよう。かりの シールは、いろが ついてから かぞえるよ。'}),switcher());
+        :'１しゅうめの シール '+p.got+'／'+p.total+'まい。ちず・たからばこ・ぼうけん・ほんの ふくしゅうまで あつめよう。ボールの なかの ポケモンは、でてきてから かぞえるよ。'}),switcher());
   }
   function parentSummary(){
     return el('section.section.round-parent',null,el('h3',{text:'周回ごとの記録'}),
@@ -12997,8 +13369,15 @@ const Result = (() => {
       el('div.result-msg', { text: msg }));
     if (r.mode === 'diagnostic') inner.append(el('div.result-sub', { text: 'ぴったりの はじまりを みつけたよ' }));
     else if (r.stars >= 2 && r.mode !== 'adventure') inner.append(el('div.result-sub', { text: `${r.total}もんの うち ${r.right}もん いっかいめで せいかい` }));
+    /* The Pokémon is what the child came for. It used to arrive seventh on this
+       screen — under the album line and the list of facts to practise again — so
+       the reward's place is fixed here, straight under the headline, and filled in
+       below once the gauge that rides with it has been worked out. */
+    const rewardSlot = el('div.result-reward');
+    inner.append(rewardSlot);
     const stickers = r.stickers || [];
     const coloured = r.confirmed || [];
+    inner.classList.toggle('rewarded', stickers.length + coloured.length > 0);
     let toDoor = null;
     if ((stickers.length || coloured.length) && !r.unlockedG1){
       const waitingGames = Games.list.filter(g => Progress.stageOf(g) === 'g1' && !stageOpen(g));
@@ -13061,20 +13440,20 @@ const Result = (() => {
         : el('span', { text: x.emoji });
     };
     if (coloured.length){
-      inner.append(el('div.newsticker.confirmed', null,
+      rewardSlot.append(el('div.newsticker.confirmed', null,
         el('div.e', null, coloured.map(rewardArt)),
-        el('div.l', { text: 'シールに いろが ついた！' }),
+        el('div.l', { text: 'ボールから でてきた！' }),
         stickers.length ? null : toDoor));
     }
     if (stickers.length){
       const gold = stickers.some(x => x.gold), provisional = stickers.some(x => x.pending);
       const adventure = stickers.some(x => x.adventure);
       const chosen = r.rewardTarget && stickers.some(x => x.key === r.rewardTarget.key || x.emoji === stickerFor(r.rewardTarget.key));
-      inner.append(el('div.newsticker' + (gold ? '.gold' : '') + (provisional ? '.pending' : ''), null,
+      rewardSlot.append(el('div.newsticker' + (gold ? '.gold' : '') + (provisional ? '.pending' : ''), null,
         el('div.e', null, stickers.map(rewardArt)),
         el('div.l', { text: adventure ? 'ぼうけんシール を ゲット！'
                           : chosen ? 'えらんだ シールを ゲット！'
-                          : provisional ? 'かりの シール！ べつの ひに また できたら いろが つくよ'
+                          : provisional ? 'ボールに はいったよ！ べつの ひに また できたら でてくるよ'
                           : stickers.length > 1 ? 'シール と きんの シール を ゲット！'
                           : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' }),
         toDoor));
@@ -13170,12 +13549,17 @@ const Result = (() => {
     if (TextbookReview.unlocked()) actions.append(act('', '📖', 'ほんを うらがえす', () => TextbookReview.open()));
     if (Store.round() === 1 && Rounds.unlocked()) actions.append(act('', '🚀', '２しゅうめへ', () => Rounds.go(2)));
     UI.show('result', { replace: true });
-    const news = (coloured.length ? 'シールに、色がついたね！' : '')
-      + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '')
+    /* A card with a name under it is a picture to a child who cannot read yet.
+       The name is the reward: say it. */
+    const nameOf = x => { const k = x.key || PokemonStickers.keyForName(x.emoji); return k ? stickerFor(k) : ''; };
+    const gotNames = stickers.map(nameOf).filter(Boolean);
+    const named = gotNames.length ? gotNames.join('と、') + 'の、シールだよ！' : '';
+    const news = named + (coloured.length ? 'ボールから、出てきたね！' : '')
+      + (stickers.some(x => x.pending) ? 'ボールに入ったよ。別の日にまたできたら、出てくるよ。' : '')
       + (treasureReady ? '金のシールが全部そろったね！宝箱を開けられるよ。' : '');
     const albumNews = r.milestone ? (r.milestone.label ? r.milestone.label + '。' : '')
       + Store.milestoneText(r.milestone.kind) + '。' : '';
-    lastSpoken = called + spoken + albumNews + news + nextLine;
+    lastSpoken = called + spoken + news + albumNews + nextLine;
     Sound.say(lastSpoken, { delay: 700 });
     for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
@@ -13184,7 +13568,64 @@ const Result = (() => {
 
 /* ---------------------------------------------------------- STICKER BOOK */
 const Book = (() => {
-  let node, grid, count, missing, headEl;
+  let node, grid, count, missing, headEl, detailEl, detailSpeech = '';
+  /* ---------- one Pokémon, up close ----------
+     The slots were pictures to look at: a child who wanted リザードン had no way to
+     learn which game it lives in, and one who had it could do nothing with it here.
+     Every slot answers a tap now — who this is, and the one thing to do next. */
+  function closeDetail(){ if (detailEl){ detailEl.hidden = true; clear(detailEl); } }
+  function startOrShow(g, i){
+    if (Store.levelUnlocked(g.id, i)){
+      if (g.intro !== false && !Store.introduced(g.id, i)) FirstSteps.open(g, i);
+      else Session.startLevel(g, i);
+    } else {
+      Levels.render(g); UI.show('levels');
+      Sound.say('まず、前のレベルから遊ぼう。' + Levels.speech(), { delay: 120 });
+    }
+  }
+  function showDetail(key){
+    const name = stickerFor(key), has = Store.hasSticker(key), waiting = has && Store.isPending(key);
+    const m = /^([a-z0-9]+):(\d+)(:g)?$/i.exec(key);
+    const g = m && Games.byId[m[1]], i = m ? Number(m[2]) : -1, gold = !!(m && m[3]);
+    const lv = g && g.levels[i];
+    let text, say, act = null;
+    const where = lv ? '「' + g.name + '」の レベル' + (i + 1) : '';
+    const whereSay = lv ? g.name + 'の、レベル' + (i + 1) : '';
+    if (has && !waiting){
+      text = name + 'は なかまだよ！';
+      say = name + '。仲間だよ！島に置けるよ。';
+      act = ['🏡', 'しまに おく', () => StickerWorld.open(key)];
+    } else if (waiting){
+      text = name + 'は ボールの なか。べつの ひに ' + where + 'を たしかめると でてくるよ';
+      say = name + 'は、ボールの中だよ。別の日に、' + whereSay + 'を確かめると、出てくるよ。';
+      if (lv) act = ['▶', 'あそびに いく', () => startOrShow(g, i)];
+    } else if (lv){
+      text = name + 'は ' + where + 'で' + (gold ? ' ぜんぶ さいしょから せいかいすると' : '') + ' あえるよ';
+      say = name + 'は、' + whereSay + 'で、' + (gold ? '全部、最初から正解すると、' : '') + '会えるよ。';
+      act = !stageOpen(g) ? ['🎓', 'じゅんびを みる', () => G1Preparation.open(g)]
+          : Store.levelUnlocked(g.id, i) ? ['▶', 'あいに いく', () => startOrShow(g, i)]
+          : ['▶', 'まえの レベルから', () => startOrShow(g, i)];
+    } else {
+      text = name; say = name + '。';
+    }
+    detailSpeech = say;
+    clear(detailEl);
+    const card = el('div.book-detail-card', { role: 'dialog', 'aria-label': name },
+      el('div.book-detail-art' + (waiting ? '.pending' : ''), null,
+        PokemonStickers.artwork(key, { silhouette: !has })),
+      el('div.book-detail-text', { text }),
+      el('div.book-detail-actions', null,
+        act ? el('button.btn.btn-accent', { type: 'button',
+          onclick(){ Sound.sfx.tap(); closeDetail(); act[2](); } },
+          el('span.bi', { text: act[0], 'aria-hidden': 'true' }), el('span.bl', { text: act[1] })) : null,
+        el('button.btn', { type: 'button', onclick(){ Sound.sfx.tap(); Sound.say(detailSpeech, { delay: 40 }); } },
+          el('span.bi', { text: '🔊', 'aria-hidden': 'true' }), el('span.bl', { text: 'きく' })),
+        el('button.btn', { type: 'button', onclick(){ Sound.sfx.tap(); Sound.hush(); closeDetail(); } },
+          el('span.bi', { text: '✕', 'aria-hidden': 'true' }), el('span.bl', { text: 'とじる' }))));
+    detailEl.append(card);
+    detailEl.hidden = false;
+    Sound.say(say, { delay: 120 });
+  }
   function build(){
     if (node) return node;
     grid = el('div.book');
@@ -13198,15 +13639,18 @@ const Book = (() => {
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); UI.show('home', { replace: true }); } }, '←'),
         headEl = el('h2'), speakBtn(() => speech())),
-      count, missing, grid);
+      grid,
+      detailEl = el('div.book-detail', { hidden: true,
+        onclick(e){ if (e.target === detailEl){ Sound.hush(); closeDetail(); } } }));
     return UI.register('book', node);
   }
   /** Said on the way in: the count under the heading is a sentence a child cannot read yet. */
   function speech(){
-    return 'シールブックだよ。集めたシールが並んでいるよ。一年生の遊びは、それぞれの準備ができたら開くよ。準備を見るボタンから、必要な遊びを選べるよ。';
+    return 'シールブックだよ。集めたシールが並んでいるよ。ポケモンを押すと、どこで会えるか分かるよ。一年生の遊びは、それぞれの準備ができたら開くよ。準備を見るボタンから、必要な遊びを選べるよ。';
   }
   function open(){
     render();
+    closeDetail();
     UI.show('book');
     Sound.say(speech(), { delay: 200 });      // after the switch, which hushes
   }
@@ -13214,6 +13658,11 @@ const Book = (() => {
     build();
     headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
     clear(grid);
+    /* The book opens on the Pokémon. It used to open on two and a half screens of
+       rules, preparation buttons and collection notes, with the first sticker a
+       thousand pixels down a 380px window. Nothing has gone: the notes follow the
+       pictures now instead of standing in front of them. */
+    const notes = [];
     const preparation = el('div.book-preparation', { 'aria-label':'1ねんせいの あそびの じゅんび' });
     Games.list.filter(g => Progress.stageOf(g) === 'g1').forEach(g => {
       const path = Progress.pathProgress(g);
@@ -13221,20 +13670,19 @@ const Book = (() => {
         dataset:{ preparation:g.id }, onclick(){ Sound.sfx.tap(); G1Preparation.open(g); } },
         g.name + '　' + (stageOpen(g) ? '✓ あそべるよ' : path.got + '／' + path.total + '　じゅんびを みる')));
     });
-    grid.append(preparation);
-    grid.append(PokemonStickers.legend());
-    grid.append(Treasures.collection());
     const specialCollection = TransferAdventure.collection();
-    if (specialCollection) grid.append(specialCollection);
-    grid.append(TextbookReview.collection());
-    grid.append(Rounds.collection());
+    notes.push(Treasures.collection());
+    if (specialCollection) notes.push(specialCollection);
+    notes.push(TextbookReview.collection(), el('div.bookgroup', { text: '❓　あつめかた' }),
+      count, missing, preparation, PokemonStickers.legend(), Rounds.collection());
     let got = Store.data.treasures.length + Store.data.stickers.filter(k => TransferAdventure.missionFor(k) || TextbookReview.rewardKeys().includes(k)).length;
     const drawSlots = keys => keys.forEach(key => {
       const has = Store.hasSticker(key);
       if (has) got++;
-      grid.append(el('div.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : '')
+      grid.append(el('button.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : '')
           + (has && Store.isPending(key) ? '.pending' : ''),
-        { title: stickerFor(key) + (has ? '　ゲット！' : '　' + (key.endsWith(':g') ? 'ぜんもん さいしょから せいかいで ゲット' : 'クリアで ゲット')) },
+        { type: 'button', onclick(){ Sound.sfx.tap(); showDetail(key); },
+          title: stickerFor(key) + (has ? '　ゲット！' : '　' + (key.endsWith(':g') ? 'ぜんもん さいしょから せいかいで ゲット' : 'クリアで ゲット')) },
         PokemonStickers.artwork(key, { silhouette: !has })));
     });
     /* Keep the collection count separate from each classroom game's readiness. */
@@ -13243,7 +13691,8 @@ const Book = (() => {
     Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0 || k.indexOf('adventure:') === 0).forEach(k => {
       got++;
       const isAdventureMemento = k.indexOf('adventure:') === 0;
-      grid.append(el('div.sticker.got' + (isAdventureMemento ? '.adventure' : '.gold'), null, PokemonStickers.artwork(k)));
+      grid.append(el('button.sticker.got' + (isAdventureMemento ? '.adventure' : '.gold'),
+        { type: 'button', onclick(){ Sound.sfx.tap(); showDetail(k); } }, PokemonStickers.artwork(k)));
     });
     if (Progress.g1Open()){
       grid.append(el('div.bookgroup', { text: '🎓　1ねんせいの きょうしつ' }));
@@ -13291,10 +13740,11 @@ const Book = (() => {
         row);
     }
 
+    notes.forEach(n => grid.append(n));
     const left = Math.max(0, pre.total - pre.got);
     const waiting = Progress.pendingCount('pre');
     count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
-      + (waiting ? `<br>かりの シール ${waiting}まい（べつの ひに また できたら いろが つくよ）` : '')
+      + (waiting ? `<br>ボールの なか ${waiting}ひき（べつの ひに また できたら でてくるよ）` : '')
       + (left
         ? `<br>にゅうがくまえの シールは <b>${pre.got}／${pre.total}レベル</b>。1ねんせいは あそびごとに じゅんびが できると ひらくよ`
         : '<br><b>にゅうがくまえの シールを ぜんぶ あつめたね！</b>');

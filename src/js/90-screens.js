@@ -534,8 +534,15 @@ const Result = (() => {
       el('div.result-msg', { text: msg }));
     if (r.mode === 'diagnostic') inner.append(el('div.result-sub', { text: 'ぴったりの はじまりを みつけたよ' }));
     else if (r.stars >= 2 && r.mode !== 'adventure') inner.append(el('div.result-sub', { text: `${r.total}もんの うち ${r.right}もん いっかいめで せいかい` }));
+    /* The Pokémon is what the child came for. It used to arrive seventh on this
+       screen — under the album line and the list of facts to practise again — so
+       the reward's place is fixed here, straight under the headline, and filled in
+       below once the gauge that rides with it has been worked out. */
+    const rewardSlot = el('div.result-reward');
+    inner.append(rewardSlot);
     const stickers = r.stickers || [];
     const coloured = r.confirmed || [];
+    inner.classList.toggle('rewarded', stickers.length + coloured.length > 0);
     let toDoor = null;
     if ((stickers.length || coloured.length) && !r.unlockedG1){
       const waitingGames = Games.list.filter(g => Progress.stageOf(g) === 'g1' && !stageOpen(g));
@@ -598,20 +605,20 @@ const Result = (() => {
         : el('span', { text: x.emoji });
     };
     if (coloured.length){
-      inner.append(el('div.newsticker.confirmed', null,
+      rewardSlot.append(el('div.newsticker.confirmed', null,
         el('div.e', null, coloured.map(rewardArt)),
-        el('div.l', { text: 'シールに いろが ついた！' }),
+        el('div.l', { text: 'ボールから でてきた！' }),
         stickers.length ? null : toDoor));
     }
     if (stickers.length){
       const gold = stickers.some(x => x.gold), provisional = stickers.some(x => x.pending);
       const adventure = stickers.some(x => x.adventure);
       const chosen = r.rewardTarget && stickers.some(x => x.key === r.rewardTarget.key || x.emoji === stickerFor(r.rewardTarget.key));
-      inner.append(el('div.newsticker' + (gold ? '.gold' : '') + (provisional ? '.pending' : ''), null,
+      rewardSlot.append(el('div.newsticker' + (gold ? '.gold' : '') + (provisional ? '.pending' : ''), null,
         el('div.e', null, stickers.map(rewardArt)),
         el('div.l', { text: adventure ? 'ぼうけんシール を ゲット！'
                           : chosen ? 'えらんだ シールを ゲット！'
-                          : provisional ? 'かりの シール！ べつの ひに また できたら いろが つくよ'
+                          : provisional ? 'ボールに はいったよ！ べつの ひに また できたら でてくるよ'
                           : stickers.length > 1 ? 'シール と きんの シール を ゲット！'
                           : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' }),
         toDoor));
@@ -707,12 +714,17 @@ const Result = (() => {
     if (TextbookReview.unlocked()) actions.append(act('', '📖', 'ほんを うらがえす', () => TextbookReview.open()));
     if (Store.round() === 1 && Rounds.unlocked()) actions.append(act('', '🚀', '２しゅうめへ', () => Rounds.go(2)));
     UI.show('result', { replace: true });
-    const news = (coloured.length ? 'シールに、色がついたね！' : '')
-      + (stickers.some(x => x.pending) ? '別の日にまたできたら、シールに色がつくよ。' : '')
+    /* A card with a name under it is a picture to a child who cannot read yet.
+       The name is the reward: say it. */
+    const nameOf = x => { const k = x.key || PokemonStickers.keyForName(x.emoji); return k ? stickerFor(k) : ''; };
+    const gotNames = stickers.map(nameOf).filter(Boolean);
+    const named = gotNames.length ? gotNames.join('と、') + 'の、シールだよ！' : '';
+    const news = named + (coloured.length ? 'ボールから、出てきたね！' : '')
+      + (stickers.some(x => x.pending) ? 'ボールに入ったよ。別の日にまたできたら、出てくるよ。' : '')
       + (treasureReady ? '金のシールが全部そろったね！宝箱を開けられるよ。' : '');
     const albumNews = r.milestone ? (r.milestone.label ? r.milestone.label + '。' : '')
       + Store.milestoneText(r.milestone.kind) + '。' : '';
-    lastSpoken = called + spoken + albumNews + news + nextLine;
+    lastSpoken = called + spoken + news + albumNews + nextLine;
     Sound.say(lastSpoken, { delay: 700 });
     for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
@@ -721,7 +733,64 @@ const Result = (() => {
 
 /* ---------------------------------------------------------- STICKER BOOK */
 const Book = (() => {
-  let node, grid, count, missing, headEl;
+  let node, grid, count, missing, headEl, detailEl, detailSpeech = '';
+  /* ---------- one Pokémon, up close ----------
+     The slots were pictures to look at: a child who wanted リザードン had no way to
+     learn which game it lives in, and one who had it could do nothing with it here.
+     Every slot answers a tap now — who this is, and the one thing to do next. */
+  function closeDetail(){ if (detailEl){ detailEl.hidden = true; clear(detailEl); } }
+  function startOrShow(g, i){
+    if (Store.levelUnlocked(g.id, i)){
+      if (g.intro !== false && !Store.introduced(g.id, i)) FirstSteps.open(g, i);
+      else Session.startLevel(g, i);
+    } else {
+      Levels.render(g); UI.show('levels');
+      Sound.say('まず、前のレベルから遊ぼう。' + Levels.speech(), { delay: 120 });
+    }
+  }
+  function showDetail(key){
+    const name = stickerFor(key), has = Store.hasSticker(key), waiting = has && Store.isPending(key);
+    const m = /^([a-z0-9]+):(\d+)(:g)?$/i.exec(key);
+    const g = m && Games.byId[m[1]], i = m ? Number(m[2]) : -1, gold = !!(m && m[3]);
+    const lv = g && g.levels[i];
+    let text, say, act = null;
+    const where = lv ? '「' + g.name + '」の レベル' + (i + 1) : '';
+    const whereSay = lv ? g.name + 'の、レベル' + (i + 1) : '';
+    if (has && !waiting){
+      text = name + 'は なかまだよ！';
+      say = name + '。仲間だよ！島に置けるよ。';
+      act = ['🏡', 'しまに おく', () => StickerWorld.open(key)];
+    } else if (waiting){
+      text = name + 'は ボールの なか。べつの ひに ' + where + 'を たしかめると でてくるよ';
+      say = name + 'は、ボールの中だよ。別の日に、' + whereSay + 'を確かめると、出てくるよ。';
+      if (lv) act = ['▶', 'あそびに いく', () => startOrShow(g, i)];
+    } else if (lv){
+      text = name + 'は ' + where + 'で' + (gold ? ' ぜんぶ さいしょから せいかいすると' : '') + ' あえるよ';
+      say = name + 'は、' + whereSay + 'で、' + (gold ? '全部、最初から正解すると、' : '') + '会えるよ。';
+      act = !stageOpen(g) ? ['🎓', 'じゅんびを みる', () => G1Preparation.open(g)]
+          : Store.levelUnlocked(g.id, i) ? ['▶', 'あいに いく', () => startOrShow(g, i)]
+          : ['▶', 'まえの レベルから', () => startOrShow(g, i)];
+    } else {
+      text = name; say = name + '。';
+    }
+    detailSpeech = say;
+    clear(detailEl);
+    const card = el('div.book-detail-card', { role: 'dialog', 'aria-label': name },
+      el('div.book-detail-art' + (waiting ? '.pending' : ''), null,
+        PokemonStickers.artwork(key, { silhouette: !has })),
+      el('div.book-detail-text', { text }),
+      el('div.book-detail-actions', null,
+        act ? el('button.btn.btn-accent', { type: 'button',
+          onclick(){ Sound.sfx.tap(); closeDetail(); act[2](); } },
+          el('span.bi', { text: act[0], 'aria-hidden': 'true' }), el('span.bl', { text: act[1] })) : null,
+        el('button.btn', { type: 'button', onclick(){ Sound.sfx.tap(); Sound.say(detailSpeech, { delay: 40 }); } },
+          el('span.bi', { text: '🔊', 'aria-hidden': 'true' }), el('span.bl', { text: 'きく' })),
+        el('button.btn', { type: 'button', onclick(){ Sound.sfx.tap(); Sound.hush(); closeDetail(); } },
+          el('span.bi', { text: '✕', 'aria-hidden': 'true' }), el('span.bl', { text: 'とじる' }))));
+    detailEl.append(card);
+    detailEl.hidden = false;
+    Sound.say(say, { delay: 120 });
+  }
   function build(){
     if (node) return node;
     grid = el('div.book');
@@ -735,15 +804,18 @@ const Book = (() => {
         el('button.btn.btn-ghost.btn-round', { 'aria-label': 'もどる',
           onclick(){ Sound.sfx.tap(); UI.show('home', { replace: true }); } }, '←'),
         headEl = el('h2'), speakBtn(() => speech())),
-      count, missing, grid);
+      grid,
+      detailEl = el('div.book-detail', { hidden: true,
+        onclick(e){ if (e.target === detailEl){ Sound.hush(); closeDetail(); } } }));
     return UI.register('book', node);
   }
   /** Said on the way in: the count under the heading is a sentence a child cannot read yet. */
   function speech(){
-    return 'シールブックだよ。集めたシールが並んでいるよ。一年生の遊びは、それぞれの準備ができたら開くよ。準備を見るボタンから、必要な遊びを選べるよ。';
+    return 'シールブックだよ。集めたシールが並んでいるよ。ポケモンを押すと、どこで会えるか分かるよ。一年生の遊びは、それぞれの準備ができたら開くよ。準備を見るボタンから、必要な遊びを選べるよ。';
   }
   function open(){
     render();
+    closeDetail();
     UI.show('book');
     Sound.say(speech(), { delay: 200 });      // after the switch, which hushes
   }
@@ -751,6 +823,11 @@ const Book = (() => {
     build();
     headEl.textContent = '📖　' + (Store.name ? Store.name + 'の シールブック' : 'シールブック');
     clear(grid);
+    /* The book opens on the Pokémon. It used to open on two and a half screens of
+       rules, preparation buttons and collection notes, with the first sticker a
+       thousand pixels down a 380px window. Nothing has gone: the notes follow the
+       pictures now instead of standing in front of them. */
+    const notes = [];
     const preparation = el('div.book-preparation', { 'aria-label':'1ねんせいの あそびの じゅんび' });
     Games.list.filter(g => Progress.stageOf(g) === 'g1').forEach(g => {
       const path = Progress.pathProgress(g);
@@ -758,20 +835,19 @@ const Book = (() => {
         dataset:{ preparation:g.id }, onclick(){ Sound.sfx.tap(); G1Preparation.open(g); } },
         g.name + '　' + (stageOpen(g) ? '✓ あそべるよ' : path.got + '／' + path.total + '　じゅんびを みる')));
     });
-    grid.append(preparation);
-    grid.append(PokemonStickers.legend());
-    grid.append(Treasures.collection());
     const specialCollection = TransferAdventure.collection();
-    if (specialCollection) grid.append(specialCollection);
-    grid.append(TextbookReview.collection());
-    grid.append(Rounds.collection());
+    notes.push(Treasures.collection());
+    if (specialCollection) notes.push(specialCollection);
+    notes.push(TextbookReview.collection(), el('div.bookgroup', { text: '❓　あつめかた' }),
+      count, missing, preparation, PokemonStickers.legend(), Rounds.collection());
     let got = Store.data.treasures.length + Store.data.stickers.filter(k => TransferAdventure.missionFor(k) || TextbookReview.rewardKeys().includes(k)).length;
     const drawSlots = keys => keys.forEach(key => {
       const has = Store.hasSticker(key);
       if (has) got++;
-      grid.append(el('div.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : '')
+      grid.append(el('button.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : '')
           + (has && Store.isPending(key) ? '.pending' : ''),
-        { title: stickerFor(key) + (has ? '　ゲット！' : '　' + (key.endsWith(':g') ? 'ぜんもん さいしょから せいかいで ゲット' : 'クリアで ゲット')) },
+        { type: 'button', onclick(){ Sound.sfx.tap(); showDetail(key); },
+          title: stickerFor(key) + (has ? '　ゲット！' : '　' + (key.endsWith(':g') ? 'ぜんもん さいしょから せいかいで ゲット' : 'クリアで ゲット')) },
         PokemonStickers.artwork(key, { silhouette: !has })));
     });
     /* Keep the collection count separate from each classroom game's readiness. */
@@ -780,7 +856,8 @@ const Book = (() => {
     Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0 || k.indexOf('adventure:') === 0).forEach(k => {
       got++;
       const isAdventureMemento = k.indexOf('adventure:') === 0;
-      grid.append(el('div.sticker.got' + (isAdventureMemento ? '.adventure' : '.gold'), null, PokemonStickers.artwork(k)));
+      grid.append(el('button.sticker.got' + (isAdventureMemento ? '.adventure' : '.gold'),
+        { type: 'button', onclick(){ Sound.sfx.tap(); showDetail(k); } }, PokemonStickers.artwork(k)));
     });
     if (Progress.g1Open()){
       grid.append(el('div.bookgroup', { text: '🎓　1ねんせいの きょうしつ' }));
@@ -828,10 +905,11 @@ const Book = (() => {
         row);
     }
 
+    notes.forEach(n => grid.append(n));
     const left = Math.max(0, pre.total - pre.got);
     const waiting = Progress.pendingCount('pre');
     count.innerHTML = `<b>${got}まい</b> あつめたよ　･　レベルを クリアすると シールが 1まい。ぜんぶ せいかい で きんいろの シール`
-      + (waiting ? `<br>かりの シール ${waiting}まい（べつの ひに また できたら いろが つくよ）` : '')
+      + (waiting ? `<br>ボールの なか ${waiting}ひき（べつの ひに また できたら でてくるよ）` : '')
       + (left
         ? `<br>にゅうがくまえの シールは <b>${pre.got}／${pre.total}レベル</b>。1ねんせいは あそびごとに じゅんびが できると ひらくよ`
         : '<br><b>にゅうがくまえの シールを ぜんぶ あつめたね！</b>');

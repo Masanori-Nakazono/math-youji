@@ -1891,7 +1891,7 @@
       finishLevel();
       d.stars = K.Store.stars('bond', 0);
       d.provisional = K.Store.hasSticker('bond:0') && K.Store.isPending('bond:0') && K.Progress.preStickers().got === 0;
-      d.saysLater = /いろが つく/.test((q('#result .newsticker') || {}).textContent || '');
+      d.saysLater = /でてくる/.test((q('#result .newsticker') || {}).textContent || '');
       K.Session.startLevel(K.Games.byId.count, 0);
       d.notSameDay = S.planChecks.every(x => !x);
       leavePlay();
@@ -1901,7 +1901,7 @@
       d.checksFirst = S.planChecks.slice(0, 3).join() === 'bond:0,bond:0,bond:0' && S.planLength === 11;
       finishLevel();
       d.confirmed = !K.Store.isPending('bond:0') && K.Progress.preStickers().got === 2;
-      d.saysColour = /いろが ついた/.test(q('#result').textContent);
+      d.saysColour = /でてきた/.test(q('#result').textContent);
       d.levelGradedAlone = /8もんの うち 8もん/.test(q('#result').textContent);
 
       // a check that is failed: the sticker keeps waiting, and おすすめ goes back for it

@@ -2407,7 +2407,26 @@ polygon.coachpulse{ animation: polyPulse .9s ease-in-out 3; }
 .pip.check.now{ background: var(--accent); box-shadow: none; }
 /* a clear waiting for another day: the outline of the sticker, not yet its colour */
 .sticker.got.pending{ border-style: dashed; box-shadow: none; }
-.sticker.pending, .newsticker .e > .pending, .shelf .strip .pending{ filter: grayscale(1); opacity: .5; }
+/* A provisional clear used to be the Pokémon in grey at half strength, which reads
+   as「もらえなかった」. The rule is unchanged — it is confirmed on another day — but
+   it is drawn as something to look forward to: the Pokémon is in a ball, and comes
+   out when the check is passed. */
+.sticker.pending .pokemon-sticker, .newsticker .e > .pending .pokemon-sticker, .shelf .strip .pending .pokemon-sticker,
+.review-result.pending .pokemon-sticker, .review-collectible.pending .pokemon-sticker, .review-lesson-slot.pending .pokemon-sticker{ position: relative; }
+.sticker.pending .pokemon-image, .newsticker .e > .pending .pokemon-image, .shelf .strip .pending .pokemon-image,
+.review-result.pending .pokemon-image, .review-collectible.pending .pokemon-image, .review-lesson-slot.pending .pokemon-image{ filter: none; opacity: .3; }
+.sticker.pending .pokemon-sticker::before, .newsticker .e > .pending .pokemon-sticker::before, .shelf .strip .pending .pokemon-sticker::before,
+.review-result.pending .pokemon-sticker::before, .review-collectible.pending .pokemon-sticker::before, .review-lesson-slot.pending .pokemon-sticker::before{
+  content: ''; position: absolute; left: 50%; top: calc(var(--pokemon-size)*.4);
+  width: calc(var(--pokemon-size)*.5); height: calc(var(--pokemon-size)*.5);
+  transform: translate(-50%,-50%); box-sizing: border-box; border-radius: 50%;
+  border: calc(var(--pokemon-size)*.035) solid #2E2A3F;
+  background:
+    radial-gradient(circle, #fff 0 13%, #2E2A3F 14% 23%, transparent 24%),
+    linear-gradient(#E5483A 0 44%, #2E2A3F 44% 56%, #fff 56%);
+  box-shadow: 0 calc(var(--pokemon-size)*.03) 0 #0002;
+  z-index: 1; pointer-events: none;
+}
 .newsticker.confirmed{ border-color: var(--good); border-style: solid; }
 .todochip.pending{ border-style: dashed; }
 
@@ -2876,4 +2895,187 @@ polygon.slot-focus{ stroke:var(--ring); stroke-width:2.8; stroke-dasharray:none;
   .dailies > .daily .s{display:none;}
   .dailies > .daily .ico{font-size:24px;}
   .dailies > .daily .go{font-size:16px;}
+}
+
+/* ===========================================================
+   THE ROAD TO THE POKÉMON  (play screen, level mode)
+   =========================================================== */
+.trail{
+  position: relative; flex: 0 0 auto;
+  display: flex; align-items: center; gap: calc(var(--u)*.28);
+  padding: calc(var(--u)*.2) calc(var(--u)*.7);
+  margin-right: calc(var(--u)*.4);
+  border-radius: 99px; background: var(--paper-2);
+}
+.trail[hidden]{ display: none; }
+.trail .stone{
+  position: relative; flex: 0 0 auto;
+  width: calc(var(--u)*1.15); height: calc(var(--u)*.62);
+  border-radius: 50%; background: var(--card-edge);
+  transition: background .35s;
+}
+.trail .stone.start{ width: calc(var(--u)*1.7); background: transparent; }
+.trail .stone.walked{ background: var(--good); }
+.trail .stone.goal{ width: calc(var(--u)*2.9); height: calc(var(--u)*.7); }
+.trail-mon{
+  position: absolute; left: 62%; bottom: 10%;
+  width: calc(var(--u)*3.3); height: calc(var(--u)*3.3);
+  transform: translateX(-50%); object-fit: contain; pointer-events: none;
+  transition: filter .5s, opacity .5s;
+}
+.trail-mon.shadow{ filter: brightness(0); opacity: .38; }
+.trail-mon.gold:not(.shadow){ filter: drop-shadow(0 0 calc(var(--u)*.35) var(--star)); }
+.trail-mon:not(.shadow){ animation: pop .6s cubic-bezier(.2,.9,.3,1.6); }
+.trail-walker{
+  position: absolute; left: 0; bottom: 18%;
+  width: calc(var(--u)*2.3); height: calc(var(--u)*2.3);
+  margin-left: calc(var(--u)*-1.15);
+  transition: transform .55s cubic-bezier(.3,1.5,.5,1);
+  pointer-events: none; z-index: 1;
+}
+.trail-meet{
+  position: fixed; left: 50%; top: 44%; z-index: 96; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.4);
+  padding: calc(var(--u)*1.2) calc(var(--u)*2.2);
+  background: var(--card); border: calc(var(--u)*.3) solid var(--star);
+  border-radius: var(--wob-a); box-shadow: 0 calc(var(--u)*.6) calc(var(--u)*2.4) #0003;
+  animation: meetIn 2.3s cubic-bezier(.2,.9,.3,1.2) both;
+}
+.trail-meet img{ width: calc(var(--u)*15); height: calc(var(--u)*15); object-fit: contain; }
+.trail-meet b{ font-size: calc(var(--u)*2.4); font-weight: 800; white-space: nowrap; }
+@keyframes meetIn{
+  0%{ opacity: 0; transform: translate(-50%,-50%) scale(.3) rotate(-8deg) }
+  14%{ opacity: 1; transform: translate(-50%,-50%) scale(1.06) rotate(2deg) }
+  22%, 84%{ opacity: 1; transform: translate(-50%,-50%) scale(1) }
+  100%{ opacity: 0; transform: translate(-50%,-50%) scale(.9) }
+}
+@keyframes meetStill{ 0%, 100%{ opacity: 0 } 12%, 86%{ opacity: 1 } }
+@media (prefers-reduced-motion: reduce){
+  .trail-walker{ transition: none; }
+  .trail-mon:not(.shadow){ animation: none; }
+  .trail-meet{ transform: translate(-50%,-50%); animation: meetStill 2.3s linear both; }
+}
+/* a narrow screen has no room beside the title: the road takes a row of its own */
+@media (max-width: 600px){
+  #play .topbar{ flex-wrap: wrap; }
+  #play .topbar .trail{ order: 3; margin: calc(var(--u)*1.4) auto 0; }
+}
+
+/* ===========================================================
+   RESULT — the reward leads, and the way on never leaves the screen
+   =========================================================== */
+.result-reward{ display: contents; }
+/* On a landscape iPad the column is taller than the screen whenever there is
+   anything to celebrate, and the buttons were the last thing in it: the voice said
+   「オレンジのボタンで…」about a button below the fold. They stay in view now, and
+   the rest scrolls behind them. */
+#result .inner{ justify-content: flex-start; padding-bottom: 0; }
+#result .inner > :first-child{ margin-top: auto; }
+#result .result-actions{
+  position: sticky; bottom: 0; z-index: 1;
+  margin-top: auto; align-self: stretch;
+  padding: calc(var(--u)*.8) calc(var(--u)*.4) calc(var(--u)*.6);
+  background: linear-gradient(to bottom, transparent, var(--paper) calc(var(--u)*.9));
+}
+/* a run that won a Pokémon gives the room to the Pokémon */
+#result .inner.rewarded .mascot{ width: calc(var(--u)*6); height: calc(var(--u)*6); }
+#result .inner.rewarded .bigstars svg{ width: calc(var(--u)*6); height: calc(var(--u)*6); }
+#result .newsticker .e > *{ animation: starPop .7s cubic-bezier(.2,.9,.3,1.6) .5s both; }
+#result .newsticker .e > * + *{ animation-delay: .9s; }
+@media (prefers-reduced-motion: reduce){ #result .newsticker .e > *{ animation: none; } }
+
+/* ===========================================================
+   STICKER BOOK — the Pokémon first, and every slot answers a tap
+   =========================================================== */
+#book{ position: relative; }
+button.sticker{ font: inherit; cursor: pointer; margin: 0; min-width: 0; -webkit-appearance: none; appearance: none; }
+button.sticker:active{ transform: scale(.96); }
+.book > .aim, .book > .book-todo{ grid-column: 1 / -1; width: auto; min-width: 0; }
+.book-detail{
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(var(--u)*1); background: color-mix(in srgb, var(--ink) 38%, transparent);
+}
+.book-detail[hidden]{ display: none; }
+.book-detail-card{
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.9);
+  width: min(100%, calc(var(--u)*40)); max-height: 100%; overflow-y: auto;
+  padding: calc(var(--u)*1.4) calc(var(--u)*1.6);
+  background: var(--card); border: calc(var(--u)*.3) solid var(--star);
+  border-radius: var(--wob-a); box-shadow: var(--shadow-sm); text-align: center;
+  animation: pop .35s cubic-bezier(.2,.9,.3,1.5);
+}
+.book-detail-art .pokemon-sticker{ --pokemon-size: clamp(150px, calc(var(--u)*17), 300px); }
+.book-detail-art.pending .pokemon-sticker{ position: relative; }
+.book-detail-art.pending .pokemon-image{ opacity: .3; }
+.book-detail-art.pending .pokemon-sticker::before{
+  content: ''; position: absolute; left: 50%; top: calc(var(--pokemon-size)*.4);
+  width: calc(var(--pokemon-size)*.5); height: calc(var(--pokemon-size)*.5);
+  transform: translate(-50%,-50%); box-sizing: border-box; border-radius: 50%;
+  border: calc(var(--pokemon-size)*.035) solid #2E2A3F;
+  background:
+    radial-gradient(circle, #fff 0 13%, #2E2A3F 14% 23%, transparent 24%),
+    linear-gradient(#E5483A 0 44%, #2E2A3F 44% 56%, #fff 56%);
+}
+.book-detail-text{ font-size: calc(var(--u)*1.9); font-weight: 800; line-height: 1.5; }
+.book-detail-actions{ display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--u)*.7); }
+.book-detail-actions .btn{ min-height: var(--tap); font-size: calc(var(--u)*1.7); padding: calc(var(--u)*.7) calc(var(--u)*1.5); }
+.book-detail-actions .btn .bi{ margin-right: .35em; }
+@media (prefers-reduced-motion: reduce){ .book-detail-card{ animation: none; } }
+
+/* ===========================================================
+   じぶんの しま — stickers that move with a finger and are alive
+   =========================================================== */
+.world-sticker{ touch-action: none; -webkit-user-select: none; user-select: none; }
+.world-sticker > *{ animation: islandSway 3.6s ease-in-out infinite; }
+.world-sticker:nth-of-type(2n) > *{ animation-delay: -1.2s; }
+.world-sticker:nth-of-type(3n) > *{ animation-delay: -2.3s; animation-duration: 4.3s; }
+.world-sticker.hop > *{ animation: islandHop .6s cubic-bezier(.3,1.6,.5,1) 1, islandSway 3.6s ease-in-out .6s infinite; }
+.world-sticker.dragging{ z-index: 3; cursor: grabbing; filter: drop-shadow(0 calc(var(--u)*.7) calc(var(--u)*.5) color-mix(in srgb,var(--ink) 30%,transparent)); }
+.world-sticker.dragging > *{ animation: none; transform: scale(1.12) rotate(-4deg); }
+.world-sticker.held{ z-index: 2; }
+@keyframes islandSway{
+  0%, 100%{ transform: translateY(0) rotate(-1.5deg) }
+  50%{ transform: translateY(calc(var(--u)*-.35)) rotate(1.5deg) }
+}
+@keyframes islandHop{
+  0%{ transform: translateY(0) scale(1) }
+  35%{ transform: translateY(calc(var(--u)*-1.8)) scale(1.12, .94) }
+  70%{ transform: translateY(0) scale(.94, 1.08) }
+  100%{ transform: translateY(0) scale(1) }
+}
+@media (prefers-reduced-motion: reduce){
+  .world-sticker > *, .world-sticker.hop > *{ animation: none; }
+}
+
+/* ===========================================================
+   ONE QUESTION AT A TIME — the board is glad, and has a place
+   =========================================================== */
+/* `translate` is its own property, so the hop rides on top of whatever transform
+   placed the thing (.obj is centred with one) instead of replacing it */
+.playfield.cheer :is(.obj, .item, .actor, .qi){ animation: boardHop .55s cubic-bezier(.3,1.5,.5,1) 1; }
+.playfield.cheer :is(.obj, .item, .actor, .qi):nth-child(2n){ animation-delay: .07s; }
+.playfield.cheer :is(.obj, .item, .actor, .qi):nth-child(3n){ animation-delay: .14s; }
+@keyframes boardHop{
+  0%, 100%{ translate: 0 0 }
+  40%{ translate: 0 calc(var(--u)*-1.1) }
+  70%{ translate: 0 calc(var(--u)*.12) }
+}
+@media (prefers-reduced-motion: reduce){ .playfield.cheer :is(.obj, .item, .actor, .qi){ animation: none; } }
+
+.obj-mon{
+  /* an object near the right edge is shrink-to-fit against the board: a glyph
+     keeps its width there, an image has to be told to */
+  display: block; flex: 0 0 auto; width: 1.1em; min-width: 1.1em; max-width: none;
+  height: 1.1em; margin: -.05em;
+  object-fit: contain; pointer-events: none; -webkit-user-drag: none;
+}
+
+.worldmark{ flex: 0 0 auto; font-size: calc(var(--u)*2.2); line-height: 1; }
+.worldmark:empty{ display: none; }
+#play[data-world] .prompt{ border-color: color-mix(in srgb, var(--wc) 55%, var(--card-edge)); }
+#play[data-world] .objfield{ border-color: color-mix(in srgb, var(--wc) 40%, var(--card-edge)); }
+#play[data-world]{
+  background: linear-gradient(to bottom, transparent 50%, color-mix(in srgb, var(--wc) 13%, transparent));
+  border-radius: var(--wob-a);
 }

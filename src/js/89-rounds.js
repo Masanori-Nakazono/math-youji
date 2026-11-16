@@ -48,7 +48,7 @@ const Rounds = (() => {
     return el('section.round-collection',{'aria-label':'２しゅうめの ひらきかた'},
       el('h3',{text:open?'🚀 ２しゅうめで ぜんぶ もういちど':'🔒 ほんまで ぜんぶ あつめて ２しゅうめへ'}),
       el('p',{text:open?'１しゅうめの きろくを のこして、すべての あそびを さいしょから。べつの ポケモンシール156まいが まっているよ。'
-        :'１しゅうめの シール '+p.got+'／'+p.total+'まい。ちず・たからばこ・ぼうけん・ほんの ふくしゅうまで あつめよう。かりの シールは、いろが ついてから かぞえるよ。'}),switcher());
+        :'１しゅうめの シール '+p.got+'／'+p.total+'まい。ちず・たからばこ・ぼうけん・ほんの ふくしゅうまで あつめよう。ボールの なかの ポケモンは、でてきてから かぞえるよ。'}),switcher());
   }
   function parentSummary(){
     return el('section.section.round-parent',null,el('h3',{text:'周回ごとの記録'}),

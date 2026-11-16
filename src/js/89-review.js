@@ -92,7 +92,7 @@ const TextbookReview = (() => {
   function collectible(k,title,fn){
     const has=Store.hasSticker(k), pending=Store.isPending(k);
     return el('button.review-collectible'+(pending?'.pending':''),{type:'button',onclick:()=>has&&!pending?StickerWorld.open(k):fn()},
-      PokemonStickers.artwork(k,{silhouette:!has}),el('span',{text:title+(pending?'・かりの シール':'')}));
+      PokemonStickers.artwork(k,{silhouette:!has}),el('span',{text:title+(pending?'・ボールの なか':'')}));
   }
   function parentSummary(){
     const rows=Object.entries(Store.data.reviewRecords||{});
@@ -141,10 +141,10 @@ const TextbookReview = (() => {
           return el('div.review-lesson-slot'+(pending?'.pending':''),null,
             el('button.review-lesson',{type:'button',disabled:!available,dataset:{lesson:l.id}},
               PokemonStickers.artwork(l.key,{silhouette:!has,rarity:false}),
-              el('strong',{text:l.title}),el('small',{text:!available?'まえの レッスンから':pending?'かりの シール':has?'また あそぶ':'８もん あそぶ'})),
+              el('strong',{text:l.title}),el('small',{text:!available?'まえの レッスンから':pending?'ボールの なか':has?'また あそぶ':'８もん あそぶ'})),
             due(l.key)?button('３もん たしかめる',()=>start(l.id,null,true),'btn-accent.review-due'):null);
         })),
-        el('div.review-chapter-footer',null,el('span',{text:'まとめ：４つの シールに いろが ついたら'}),
+        el('div.review-chapter-footer',null,el('span',{text:'まとめ：４ひきが ボールから でてきたら'}),
           el('button.btn.btn-accent.review-summary',{type:'button',disabled:!chapterReady(i),dataset:{chapter:i},text:'５もんの まとめ'+(Store.hasSticker(chapterKey(i))?' ✓':'')})))));
     $$('[data-lesson]',body).forEach(b=>b.addEventListener('click',()=>{Sound.sfx.tap();start(Number(b.dataset.lesson));}));
     $$('[data-chapter]',body).forEach(b=>b.addEventListener('click',()=>{Sound.sfx.tap();start(null,Number(b.dataset.chapter));}));
@@ -362,9 +362,9 @@ const TextbookReview = (() => {
     run=null;q=null;exitArmed=false;clear(body);heading.textContent='やりとげたね！';
     exitBtn.setAttribute('aria-label','もくじに もどる');
     const has=Store.hasSticker(done.key), pending=Store.isPending(done.key), record=Store.data.reviewRecords[done.key];
-    let note=confirmed?'シールに いろが ついたよ！':fresh?(pending?'かりの シールを ゲット！ べつのひに ３もん たしかめよう。':'あたらしい なかまを ゲット！'):
-      passed?(pending?'べつのひに ３もん たしかめると いろが つくよ。':'もういちど できたね！'):
-      'じぶんで さいしょから '+(done.kind==='chapter'?'４／５':done.kind==='check'?'２／３':'４／８')+'もん できたら '+(done.kind==='check'?'いろが つくよ。':'シールを もらえるよ。');
+    let note=confirmed?'ボールから でてきたよ！':fresh?(pending?'ボールに はいったよ！ べつのひに ３もん たしかめよう。':'あたらしい なかまを ゲット！'):
+      passed?(pending?'べつのひに ３もん たしかめると ボールから でてくるよ。':'もういちど できたね！'):
+      'じぶんで さいしょから '+(done.kind==='chapter'?'４／５':done.kind==='check'?'２／３':'４／８')+'もん できたら '+(done.kind==='check'?'ボールから でてくるよ。':'シールを もらえるよ。');
     const nextId=done.kind==='chapter'?(done.chapter+1)*4:done.id+1;
     body.append(el('div.review-result'+(pending?'.pending':''),null,has?PokemonStickers.artwork(done.key):illustration('animal'),
       el('h3',{text:note}),el('p',{text:'じぶんで '+record.independent+'もん・もういちど '+record.revised+'もん・ヒント '+record.supported+'もん'}),

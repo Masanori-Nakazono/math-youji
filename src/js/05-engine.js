@@ -137,7 +137,10 @@ function stageOpen(g){ return Progress.stageOf(g) === 'pre' || Progress.g1GameOp
 function levelOpen(g, i){ return stageOpen(g) && Store.levelUnlocked(g.id, i); }
 
 const Session = (() => {
-  let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, showBtn, backBtn, moodEl, feedbackEl;
+  let node, titleEl, pipsEl, promptTxt, fieldEl, choicesEl, speakBtn, showBtn, backBtn, moodEl, feedbackEl, worldEl;
+  /* Where this question lives. The four worlds were names on the home map only:
+     every question, wherever it came from, was asked on the same paper. */
+  const WORLD_MARK = { shima: '🏝️', umi: '🌊', yama: '⛰️', mori: '🌳', kyoshitsu: '🏫' };
   let refit = () => {};
   let plan = [];          // [{game, level, levelIndex}]
   let idx = 0, mistakes = 0, firstTryRight = 0, wrongThisQ = 0;
@@ -248,6 +251,86 @@ const Session = (() => {
   let shaky = [];                 // facts missed this session, for the result screen
   let sessionOutcomes = [];       // [{ gameId, levelIndex, clean }] for diagnostic/recommendation
   let quitArmed = false, quitTimer = null;
+  /* ---------- the road to the Pokémon ----------
+     The sticker rule —「half of them right first time」— was invisible until the
+     result screen: nothing on the way said how close the Pokémon was, and a run
+     that fell short ended in a surprise「おしい！」. The road makes the rule something
+     a child can watch. One stone per graded question; the level's Pokémon waits on
+     the stone where the sticker becomes certain, the gold one on the last. かずぴょん
+     takes a step for every first-try answer and never steps back. It changes no
+     rule: it only draws `firstTryRight` against the thresholds `starsFor` already has. */
+  let trailEl, trail = null;
+  function setupTrail(){
+    trail = null;
+    if (!trailEl) return;
+    clear(trailEl); trailEl.hidden = true;
+    if (mode !== 'level' || !curGame) return;
+    const n = plan.filter(p => !p.intro && !p.check).length;
+    if (n < 2) return;
+    let need = n;
+    for (let k = 1; k <= n; k++) if (starsFor(k, n) >= 1){ need = k; break; }
+    const key = curGame.id + ':' + curLevelIdx;
+    const mon = (k, got, gold) => {
+      const r = PokemonStickers.reward(k);
+      return el('img.trail-mon' + (got ? '' : '.shadow') + (gold ? '.gold' : ''),
+        { src: r.image, alt: '', draggable: 'false', dataset: { name: r.name } });
+    };
+    trail = { n, need, key, at: 0, cells: [],
+      hadPlain: Store.hasConfirmed(key), hadGold: Store.hasSticker(key + ':g') };
+    const start = el('span.stone.start');
+    trail.cells.push(start); trailEl.append(start);
+    for (let i = 1; i <= n; i++){
+      const c = el('span.stone' + (i === need || i === n ? '.goal' : ''));
+      if (i === need) c.append(trail.plainMon = mon(key, trail.hadPlain, false));
+      else if (i === n) c.append(trail.goldMon = mon(key + ':g', trail.hadGold, true));
+      trail.cells.push(c); trailEl.append(c);
+    }
+    trail.walker = mascotSVG('happy', 'trail-walker');
+    trailEl.append(trail.walker);
+    trailEl.hidden = false;
+    placeWalker();
+  }
+  function trailLabel(){
+    if (!trail) return;
+    const left = trail.need - trail.at;
+    trailEl.setAttribute('aria-label', left > 0 ? 'ポケモンまで あと ' + left + 'ぽ'
+      : 'ポケモンに あえたよ。きんの ポケモンまで あと ' + (trail.n - trail.at) + 'ぽ');
+  }
+  function placeWalker(){
+    if (!trail) return;
+    const c = trail.cells[trail.at];
+    // on a Pokémon's stone, stand beside it rather than on top of it
+    const share = c.classList.contains('goal') ? 0.2 : 0.5;
+    trail.walker.style.transform = 'translateX(' + (c.offsetLeft + c.offsetWidth * share) + 'px)';
+    trail.cells.forEach((x, i) => x.classList.toggle('walked', i > 0 && i <= trail.at));
+    trailLabel();
+  }
+  /** One step forward. Returns the Pokémon reached on this step, if it is a new meeting. */
+  function stepTrail(){
+    if (!trail || trail.at >= trail.n) return null;
+    trail.at = Math.min(trail.n, firstTryRight);
+    placeWalker();
+    let met = null;
+    if (trail.at === trail.need && trail.plainMon.classList.contains('shadow')){
+      trail.plainMon.classList.remove('shadow'); met = trail.plainMon;
+    }
+    if (trail.at === trail.n && trail.goldMon && trail.goldMon.classList.contains('shadow')){
+      trail.goldMon.classList.remove('shadow'); met = trail.need === trail.n ? met : null;
+    }
+    return met;
+  }
+  /** The meeting itself: the Pokémon comes up large for a moment, by name. */
+  function meetPokemon(img){
+    const name = img.dataset.name || '';
+    const card = el('div.trail-meet', { 'aria-hidden': 'true' },
+      el('img', { src: img.src, alt: '', draggable: 'false' }),
+      el('b', { text: name + 'に あえたね！' }));
+    document.body.append(card);
+    setTimeout(() => card.remove(), 2300);
+    Sound.sfx.star(1);
+    const r = trailEl.getBoundingClientRect();
+    UI.confetti(34, r.left + r.width / 2, r.bottom + 40);
+  }
 
   /* ---------- timer lifecycle ----------
      Every delayed callback in a question is tied to an epoch. Leaving a question
@@ -322,8 +405,8 @@ const Session = (() => {
     }, '←');
     node = el('div#play', null,
       el('div.topbar', null,
-        backBtn,
-        titleEl, pipsEl),
+        backBtn, worldEl = el('span.worldmark', { 'aria-hidden': 'true' }),
+        titleEl, trailEl = el('div.trail', { hidden: true, role: 'img' }), pipsEl),
       el('div.prompt', null, moodEl,
         el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn, showBtn),
       fieldEl, choicesEl);
@@ -622,7 +705,9 @@ const Session = (() => {
     clear(pipsEl);
     checkTally = {}; announced = new Set();
     plan.forEach(p => pipsEl.append(el('div.pip' + (p.intro ? '.intro' : p.check ? '.check' : ''))));
+    setupTrail();
     UI.show('play');
+    placeWalker();                // offsets are only real once the screen is laid out
     nextQuestion();
   }
 
@@ -912,6 +997,10 @@ const Session = (() => {
     } else if (curGame) titleEl.textContent = curGame.name + '　' + curGame.levels[curLevelIdx].t;
     demo = step.intro || null;
     touched = false;
+    const world = WORLDS.find(w => w.id === step.game.world);
+    node.dataset.world = step.game.world || '';
+    node.style.setProperty('--wc', world ? world.color : 'var(--card-edge)');
+    worldEl.textContent = WORLD_MARK[step.game.world] || '';
     drawQuestion(step);
     // hand-built answer surfaces (plates, a queue of animals, the clock hand) never
     // call buildChoices, so start their clock here
@@ -923,8 +1012,8 @@ const Session = (() => {
       announced.add(step.check);
       later(() => {
         if (locked) return;
-        showFeedback('hint', 'まえに クリアした レベルを たしかめよう');
-        Sound.say('前にクリアした、' + step.game.name + 'を、確かめよう。' + lastSpeech, { delay: 200 });
+        showFeedback('hint', 'ボールを あけに いこう！ まえの レベルを たしかめるよ');
+        Sound.say('ボールを開けにいこう。前にクリアした、' + step.game.name + 'を、確かめよう。' + lastSpeech, { delay: 200 });
       }, 40);
     }
   }
@@ -1201,7 +1290,8 @@ const Session = (() => {
     });
     // a check question in a level session belongs to the other level, not this one's stars
     const graded = !scaffold && !(mode === 'level' && plan[idx].check);
-    if (clean && graded) firstTryRight++;
+    let met = null;
+    if (clean && graded){ firstTryRight++; met = stepTrail(); }
     if (plan[idx].check){
       const t = checkTally[plan[idx].check] || (checkTally[plan[idx].check] = { n: 0, right: 0 });
       t.n++;
@@ -1237,19 +1327,30 @@ const Session = (() => {
     setMood('happy');
     const pip = $$('.pip', pipsEl)[idx];
     if (pip){ pip.classList.remove('now'); pip.classList.add(scaffold ? 'introdone' : clean ? 'done' : 'miss'); }
+    /* the things on the board are glad too — after the answer, never while the
+       child is still thinking */
+    fieldEl.classList.add('cheer');
     if (!o.quiet && scaffold !== 'show'){
       UI.bigMark('◯');
       const praise = wrongThisQ === 0
         ? pick(['やったね！', '正解！', 'すごい！', '上手だね！', 'ばっちり！', 'その調子！'])
         : pick(['できたね！', 'よく頑張ったね！', 'その通り！']);
-      Sound.say(praise, { delay: 320 });
+      if (!met) Sound.say(praise, { delay: 320 });
     }
-    if ((idx + 1) % 4 === 0) UI.confetti(22);
+    /* the step that reaches the Pokémon is the peak of the run, and it happens
+       here, on the question that earned it — not eight questions later */
+    if (met){
+      /* said in the praise's place and held like it: the next question waits for
+         this line exactly as it waits for「やったね！」 */
+      Sound.say((met.dataset.name || '') + 'に、会えたね！', { delay: 320 });
+      later(() => meetPokemon(met), 420);
+    }
+    if ((idx + 1) % 4 === 0 && !met) UI.confetti(22);
     afterNarration(() => {
       idx++;
       if (idx >= plan.length) finish();
       else nextQuestion();
-    }, o.delay || 950);
+    }, Math.max(o.delay || 950, met ? 2500 : 0));
   }
 
   /** 3 = every question right first time, 0 = under half. Levels vary in length,
@@ -1384,7 +1485,8 @@ const Session = (() => {
       get introStep(){ return plan[idx] ? plan[idx].intro || null : null; },
       get planIntro(){ return plan.map(p => p.intro || null); },
       get planChecks(){ return plan.map(p => p.check || null); },
-      get helped(){ return helped; }
+      get helped(){ return helped; },
+      get trail(){ return trail ? { n: trail.n, need: trail.need, at: trail.at } : null; }
     }
   };
 })();

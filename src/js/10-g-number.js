@@ -30,12 +30,31 @@ const MOVING_THINGS = THINGS.filter(thing => thing.moving);
 /* ============================================================
    1. かぞえよう — one-to-one correspondence & cardinality
    ============================================================ */
+/* The Pokémon a child has collected lived in the book and on the island, and
+   never in a question. In かぞえよう — where the thing on the board is only ever
+   something to point at and count — one of them sometimes stands in for the
+   apples: the same picture for every object, so there is still exactly one kind of
+   thing to count. It is called「ポケモン」whichever one it is, so the spoken lines
+   stay a single noun. A Pokémon still in its ball is not out to be counted. */
+const POKEMON_COUNT_CHANCE = 0.35;
+function pickCountThing(){
+  if (typeof Store === 'undefined' || !chance(POKEMON_COUNT_CHANCE)) return pick(THINGS);
+  const keys = Store.data.stickers.filter(k => typeof k === 'string'
+    && !k.startsWith('treasure:') && !Store.isPending(k));
+  if (!keys.length) return pick(THINGS);
+  const r = PokemonStickers.reward(pick(keys));
+  return r && r.image ? { n: 'ポケモン', counter: 'hiki', img: r.image, moving: true } : pick(THINGS);
+}
+function thingFace(thing){
+  return thing.img ? el('img.obj-mon', { src: thing.img, alt: '', draggable: 'false' }) : thing.e;
+}
+
 function makeCountField(api, count, thing, layout){
   const field = el('div.objfield');
   const pts = layout === 'line' ? lineup(count, .5) : scatter(count);
   const objs = [];
   pts.forEach((p, i) => {
-    const o = el('div.obj', { style: { left: (p[0] * 100) + '%', top: (p[1] * 100) + '%' } }, thing.e);
+    const o = el('div.obj', { style: { left: (p[0] * 100) + '%', top: (p[1] * 100) + '%' } }, thingFace(thing));
     o.dataset.i = i;
     objs.push(o);
     field.append(o);
@@ -45,7 +64,7 @@ function makeCountField(api, count, thing, layout){
 }
 
 function countQuestion(api, lo, hi, layout){
-  const thing = pick(THINGS);
+  const thing = pickCountThing();
   const count = ri(lo, hi);
   api.item('count' + (layout === 'line' ? 'L' : 'S') + ':' + count, count + 'こ を かぞえる');
   api.setPrompt(`${thing.n}を ひとつずつ タップして かぞえよう`, `${thing.n}を、ひとつずつタップして数えよう。`);

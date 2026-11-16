@@ -76,7 +76,7 @@ const StickerMissions = (() => {
     detailEl.append(
       el('b', { text: choice.game.name + '　《' + choice.level.t + '》' }),
       el('span', { text: 'クリアすると「' + stickerFor(choice.key) + '」の シールが もらえるよ' }),
-      el('small', { text: 'いろが つくのは、べつの ひに たしかめてから' }));
+      el('small', { text: '★3つなら すぐ なかま。ボールに はいったら、べつの ひに たしかめて でてくるよ' }));
     goBtn.onclick = () => {
       Sound.sfx.tap();
       if (choice.game.intro !== false && !Store.introduced(choice.game.id, choice.levelIndex))
@@ -359,7 +359,53 @@ const StickerWorld = (() => {
     { id: 'sea', label: 'うみ', icon: '🌊' },
     { id: 'sky', label: 'そら', icon: '☁️' }
   ];
-  let node, board, palette, hint, selected = null;
+  let node, board, palette, hint, selected = null, hopKey = null;
+  /* ---------- a finger moves a sticker ----------
+     Placing was「pick below, then tap the island」and nothing else: a five-year-old
+     puts a finger on the Pokémon and pulls, and nothing happened. A sticker on the
+     island follows the finger now and stays where it is let go. A plain tap still
+     selects it, and it answers — a hop and its name. */
+  const DRAG_START = 12;
+  let draggedAt = 0;
+  function bindSticker(btn, k){
+    let id = null, sx = 0, sy = 0, moved = false;
+    const pos = e => {
+      const r = board.getBoundingClientRect();
+      return { x: Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100)),
+               y: Math.max(0, Math.min(100, (e.clientY - r.top) / r.height * 100)) };
+    };
+    btn.addEventListener('pointerdown', e => {
+      if (id != null || (e.button != null && e.button > 0)) return;
+      id = e.pointerId; sx = e.clientX; sy = e.clientY; moved = false;
+      try{ btn.setPointerCapture(id); }catch(err){}
+    });
+    btn.addEventListener('pointermove', e => {
+      if (e.pointerId !== id) return;
+      if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) < DRAG_START) return;
+      if (!moved){ moved = true; btn.classList.add('dragging'); }
+      e.preventDefault();
+      const p = pos(e);
+      btn.style.left = p.x + '%'; btn.style.top = p.y + '%';
+    });
+    const end = e => {
+      if (e.pointerId !== id) return;
+      id = null;
+      if (!moved) return;
+      btn.classList.remove('dragging');
+      const p = pos(e);
+      if (e.type === 'pointerup' && Store.putWorldSticker(k, p.x, p.y)){ Sound.sfx.place(); selected = k; }
+      draggedAt = Date.now();             // the click that follows a drag is not a tap
+      render();
+    };
+    btn.addEventListener('pointerup', end);
+    btn.addEventListener('pointercancel', end);
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (Date.now() - draggedAt < 400) return;
+      selected = k; hopKey = k; render(); Sound.sfx.tap();
+      Sound.say(itemName(k) + '！', { delay: 40 });
+    });
+  }
 
   function owned(){
     return Store.ownedStickerKeys().filter(k => {
@@ -382,7 +428,7 @@ const StickerWorld = (() => {
     palette = el('div.sticker-world-palette');
     hint = el('div.sticker-world-hint');
     board.onclick = e => {
-      if (e.target.closest('.world-sticker')) return;
+      if (e.target.closest('.world-sticker') || Date.now() - draggedAt < 400) return;
       if (!selected){
         Sound.say('下から、置きたいシールや宝物をえらんでね。', { delay: 40 });
         return;
@@ -425,11 +471,14 @@ const StickerWorld = (() => {
       board.append(el('span.world-job.snack', { text: '🧺', title: 'つくった おやつ' }));
     Object.keys(world.items).filter(k => keys.indexOf(k) >= 0).forEach(k => {
       const p = world.items[k];
-      board.append(el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : ''), { type: 'button',
-        'aria-label': itemName(k) + 'を うごかす', title: itemName(k) + 'を うごかす', style: { left: p.x + '%', top: p.y + '%' },
-        onclick(e){ e.stopPropagation(); selected = k; render(); Sound.sfx.tap(); }
-      }, itemArt(k)));
+      const btn = el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : '')
+        + (hopKey === k ? '.hop' : '') + (selected === k ? '.held' : ''), { type: 'button',
+        'aria-label': itemName(k) + 'を うごかす', title: itemName(k) + 'を うごかす', style: { left: p.x + '%', top: p.y + '%' }
+      }, itemArt(k));
+      bindSticker(btn, k);
+      board.append(btn);
     });
+    hopKey = null;
     $$('.world-background', node).forEach(b => b.classList.toggle('selected', b.dataset.background === world.background));
     clear(palette);
     keys.forEach(k => palette.append(el('button.world-palette-sticker' + (isTreasure(k) ? '.world-palette-treasure' : '') + (selected === k ? '.selected' : ''), {
@@ -437,7 +486,7 @@ const StickerWorld = (() => {
       onclick(){ selected = k; Sound.sfx.tap(); render(); Sound.say('島の置きたい場所をタップしてね。', { delay: 60 }); }
     }, itemArt(k))));
     hint.textContent = keys.length
-      ? (selected ? '🌟　しまの おきたい ばしょを タップしてね' : '下の シールや たからものを えらんで、しまに おこう')
+      ? (selected ? '🌟　しまの おきたい ばしょを タップしてね。おいた シールは ゆびで うごかせるよ' : '下の シールや たからものを えらんで、しまに おこう')
       : 'さいしょの シールを もらったら、ここに おけるよ';
   }
   function open(item){
