@@ -148,7 +148,18 @@ const G1Preparation = (() => {
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl, roundsEl;
-  let parentBtn;
+  let parentBtn, logoEl;
+  /* The companion waits beside the logo. Tapping it is not a way in to anything:
+     it hops and says its name, which is what a child does with it first. */
+  function renderBuddy(){
+    const old = $('.home-buddy', logoEl);
+    if (old) old.remove();
+    const b = Buddy.info();
+    if (!b) return;
+    const img = Buddy.node('home-buddy-img');
+    logoEl.append(el('button.home-buddy', { type: 'button', 'aria-label': 'あいぼうの ' + b.name,
+      onclick(){ Sound.sfx.tap(); Buddy.hop(img); Sound.say(b.name + '！', { delay: 40 }); } }, img));
+  }
 
   function updateVoiceWarning(){
     if (!voiceWarnEl) return;
@@ -172,7 +183,7 @@ const Home = (() => {
     });
     node = el('div#home', null,
       el('div.home-head', null,
-        el('h1.logo', null,
+        logoEl = el('h1.logo', null,
           el('span.k', { text: 'かず' }), el('span.n', { text: 'の' }), el('span.b', { text: 'ぼうけん' })),
         el('div.spacer'),
         el('div.starcount', null, starSVG(true), starEl),
@@ -213,7 +224,30 @@ const Home = (() => {
   function homeSpeech(){
     const names = [recommendEl, dailyEl, reviewEl, focusEl]
       .filter(b => b && !b.hidden).map(b => ($('.t', b) || {}).textContent).filter(Boolean);
-    return 'いまは'+Store.round()+'周目だよ。地図も本も、この周の記録で遊べるよ。上のボタンから選んでね。' + names.join('、') + '。下の地図から、好きな遊びも選べるよ。';
+    const balls = Session.dueChecks().length ? 'ボールが待っているよ。ボールを押して、開けにいこう。' : '';
+    return 'いまは'+Store.round()+'周目だよ。地図も本も、この周の記録で遊べるよ。' + balls + '上のボタンから選んでね。' + names.join('、') + '。下の地図から、好きな遊びも選べるよ。';
+  }
+
+  /* 「ボールを あけに いこう」: one button per ball that can be opened today. Each
+     starts that level's three check questions on their own (Session.startCheck). */
+  const BALLS_SHOWN = 4;
+  function ballCard(){
+    const due = Session.dueChecks();
+    if (!due.length) return null;
+    const row = el('div.ball-picks');
+    due.slice(0, BALLS_SHOWN).forEach(key => {
+      const name = stickerFor(key);
+      row.append(el('button.ball-pick', { type: 'button', dataset: { ball: key },
+        'aria-label': name + 'の ボールを あける',
+        onclick(){ Sound.sfx.tap(); Session.startCheck(key); } },
+        el('span.pokeball', { 'aria-hidden': 'true' }),
+        el('span.name', { text: name }),
+        el('span.go', { text: '▶', 'aria-hidden': 'true' })));
+    });
+    return el('section.home-quest.ball-quest', { 'aria-label': 'ボールを あけに いこう' },
+      el('div.quest-title', null, el('span.pokeball.mini', { 'aria-hidden': 'true' }),
+        el('span', { text: 'ボールを あけに いこう' }),
+        due.length > BALLS_SHOWN ? el('small', { text: 'あと ' + (due.length - BALLS_SHOWN) + 'こ' }) : null), row);
   }
 
   function gameCard(g){
@@ -269,6 +303,7 @@ const Home = (() => {
   function render(){
     build();
     clear(roundsEl); roundsEl.append(Rounds.switcher());
+    renderBuddy();
     starEl.textContent = String(Store.totalStars());
     /* A quiet mark for the adult, on the button only they press. The child sees a
        dot; the parent sees that the records have not been written out in a month.
@@ -350,6 +385,10 @@ const Home = (() => {
        child's choice of what to do next.  The short adventure sits alongside it
        because it answers a different moment — "I want to try, but this is hard." */
     clear(questsEl);
+    /* Balls waiting from an earlier day come first: they are the one thing on this
+       screen that was not here yesterday, and nothing used to say they were waiting. */
+    const balls = ballCard();
+    if (balls) questsEl.append(balls);
     const textbook = TextbookReview.homeCard();
     if (textbook) questsEl.append(textbook);
     const transfer = TransferAdventure.homeCard();
@@ -494,11 +533,14 @@ const Result = (() => {
        voice both say try again, and a bright「とっくん」there started a different
        ten questions under a child who had pressed the button they were told about.
        Either way the facts stay one tap away as the second button. */
-    const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus' && r.mode !== 'adventure';
+    const ballVisit = r.mode === 'check';
+    const ballOut = ballVisit && (r.confirmed || []).length > 0;
+    const drill = aimed.length > 0 && r.mode !== 'diagnostic' && r.mode !== 'focus' && r.mode !== 'adventure' && !ballVisit;
     const lead = drill && !(canNext && r.stars >= 2) && !(r.mode === 'level' && r.stars === 0);
     const supportedRetry = r.mode === 'level' && r.stars === 0 && r.game.intro !== false;
     const msg = r.mode === 'diagnostic' ? 'さいしょの ぼうけん クリア！'
               : r.mode === 'adventure' ? 'ぼうけん かんせい！'
+              : ballVisit ? (ballOut ? 'ボールが あいた！' : 'ボールは また あした')
               : r.stars === 3 ? 'パーフェクト！'
               : r.stars === 2 ? 'よく できました！'
               : r.stars === 1 ? 'クリア！'
@@ -510,6 +552,7 @@ const Result = (() => {
     const spoken = (r.unlockedG1 ? 'じゅんびが できたね！小学校一年生の新しい問題ができるよ！'
                  : r.mode === 'diagnostic' ? '最初の冒険、クリア！おすすめを見つけたよ。'
                  : r.mode === 'adventure' ? '小さな冒険、完成！ヒントを使って、最後までできたね。'
+                 : ballVisit ? (ballOut ? 'ボールが開いたよ！' : 'ボールは、まだ開かなかったね。また明日、開けにいこう。')
                  : r.swift ? 'パーフェクト！すぐ答えられたね！'
                  : r.stars === 3 ? 'パーフェクト！'
                  : r.stars === 2 ? 'よくできました！'
@@ -518,22 +561,27 @@ const Result = (() => {
                  : lead ? '惜しい！特訓してみよう。'
                  : '惜しい！もう一度やってみよう。');
     // 「やったね」 and 「やったね、みおちゃん」 are not the same sentence to a five-year-old
-    const called = Store.name && r.stars >= 2 && r.mode !== 'diagnostic'
+    const called = Store.name && r.stars >= 2 && r.mode !== 'diagnostic' && !ballVisit
       ? Store.name + '、' : '';
     /* A run that earned nothing is not shown three empty stars, a sad face and
        「8もん中 2もん」: that is a verdict. It is shown that the child got to the end.
        The count is for a run good enough to be proud of; the parent page has the rest. */
-    const tried = r.mode !== 'diagnostic' && r.stars === 0;
+    const tried = ballVisit ? !ballOut : r.mode !== 'diagnostic' && r.stars === 0;
     inner.append(
       mascotSVG(tried ? 'happy' : 'cheer', tried ? 'talk' : 'cheer'),
       r.mode === 'diagnostic'
         ? el('div.diagnostic-badge', { text: '10もん たんけん できたね' })
         : r.mode === 'adventure' ? el('div.diagnostic-badge', { text: '🧭　さいごまで できたね' })
+        /* a ball visit is not a graded level: no stars either way, and a ball that
+           stayed shut is shown still waiting, not as something lost */
+        : ballOut ? el('div.diagnostic-badge', { text: '🎉　たしかめ できたね' })
+        : ballVisit ? el('div.ball-waiting', null, el('span.pokeball', { 'aria-hidden': 'true' }),
+            el('span', { text: (r.ballName ? r.ballName + 'は ' : '') + 'ボールの なかで まってるよ' }))
         : tried ? el('div.tried', { text: 'さいごまで がんばったね' })
         : UI.stars(r.stars, true),
       el('div.result-msg', { text: msg }));
     if (r.mode === 'diagnostic') inner.append(el('div.result-sub', { text: 'ぴったりの はじまりを みつけたよ' }));
-    else if (r.stars >= 2 && r.mode !== 'adventure') inner.append(el('div.result-sub', { text: `${r.total}もんの うち ${r.right}もん いっかいめで せいかい` }));
+    else if (r.stars >= 2 && r.mode !== 'adventure' && !ballVisit) inner.append(el('div.result-sub', { text: `${r.total}もんの うち ${r.right}もん いっかいめで せいかい` }));
     /* The Pokémon is what the child came for. It used to arrive seventh on this
        screen — under the album line and the list of facts to practise again — so
        the reward's place is fixed here, straight under the headline, and filled in
@@ -623,6 +671,13 @@ const Result = (() => {
                           : gold ? 'きんの シール を ゲット！' : 'シール を ゲット！' }),
         toDoor));
     }
+    /* the berry this sitting earned: small, under the Pokémon, and a way to the island */
+    if (r.berry) inner.append(el('button.berry-news', { type: 'button',
+      'aria-label': 'きのみを 1こ もらったよ。しまへ いく',
+      onclick(){ Sound.sfx.tap(); StickerWorld.open(); } },
+      el('span', { text: '🍓', 'aria-hidden': 'true' }),
+      el('span', { text: 'きのみを 1こ もらったよ' }),
+      el('small', { text: 'しまで あげよう ▶' })));
     const treasureReady = r.mode === 'level' && r.game && stickers.some(x => x.gold)
       && Treasures.status(r.game.world).ready && !Store.hasTreasure(r.game.world);
     if (treasureReady) inner.append(el('div.result-treasure', null,
@@ -686,6 +741,12 @@ const Result = (() => {
     } else if (r.mode === 'daily'){
       actions.append(act(again ? '.btn-accent.primary' : '', '↻', 'もういちど',
         () => { Sound.sfx.tap(); Session.startDaily(10); }, 'もう一度できるよ。'));
+    } else if (ballVisit){
+      const more = Session.dueChecks();
+      if (more.length) actions.append(act('.btn-accent.primary', '▶', 'つぎの ボール',
+        () => { Sound.sfx.tap(); Session.startCheck(more[0]); }, '次のボールを開けにいけるよ。'));
+      else if (ballOut) actions.append(act('', '🏡', 'しまに おく',
+        () => { Sound.sfx.tap(); StickerWorld.open(r.confirmed[0].key); }));
     } else if (r.mode === 'adventure'){
       actions.append(act('', '🧭', 'もういちど',
         () => { Sound.sfx.tap(); Session.startAdventure(r.adventureTarget); }, 'もう一度、小さな冒険ができるよ。'));
@@ -693,7 +754,8 @@ const Result = (() => {
     if (r.unlockedG1){
       actions.append(act('.btn-accent.primary', '🎓', '1ねんせいの きょうしつへ', home, '一年生の教室に行けるよ。'));
     }
-    const homeBtn = act(r.mode === 'level' || r.mode === 'diagnostic' || r.mode === 'adventure' || lead || again || r.mode === 'focus' || r.unlockedG1 ? '' : '.btn-accent',
+    const homeBtn = act(r.mode === 'level' || r.mode === 'diagnostic' || r.mode === 'adventure' || lead || again || r.mode === 'focus' || r.unlockedG1
+      || (ballVisit && $('.btn-accent', actions)) ? '' : '.btn-accent',
       '🏠', 'あそびを えらぶ', home, '遊びを選べるよ。');
     actions.append(homeBtn);
     /* 1日10分 — one level and one れんしゅう — is the whole plan, and nothing on the
@@ -719,14 +781,17 @@ const Result = (() => {
     const nameOf = x => { const k = x.key || PokemonStickers.keyForName(x.emoji); return k ? stickerFor(k) : ''; };
     const gotNames = stickers.map(nameOf).filter(Boolean);
     const named = gotNames.length ? gotNames.join('と、') + 'の、シールだよ！' : '';
-    const news = named + (coloured.length ? 'ボールから、出てきたね！' : '')
+    const outNames = coloured.map(nameOf).filter(Boolean);
+    const news = named + (coloured.length ? (outNames.length ? outNames.join('と、') + 'が、' : '') + 'ボールから、出てきたね！' : '')
       + (stickers.some(x => x.pending) ? 'ボールに入ったよ。別の日にまたできたら、出てくるよ。' : '')
       + (treasureReady ? '金のシールが全部そろったね！宝箱を開けられるよ。' : '');
     const albumNews = r.milestone ? (r.milestone.label ? r.milestone.label + '。' : '')
       + Store.milestoneText(r.milestone.kind) + '。' : '';
-    lastSpoken = called + spoken + news + albumNews + nextLine;
+    // said once a day: after that the berry is a picture the child already knows
+    const berryNews = r.berryFirst ? 'きのみをもらったよ。島で、ポケモンにあげられるよ。' : '';
+    lastSpoken = called + spoken + news + albumNews + berryNews + nextLine;
     Sound.say(lastSpoken, { delay: 700 });
-    for (let i = 0; i < r.stars; i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
+    for (let i = 0; i < (ballVisit ? 0 : r.stars); i++) setTimeout(() => Sound.sfx.star(i), 400 + i * 260);
   }
   return { show, build };
 })();
@@ -753,13 +818,31 @@ const Book = (() => {
     const m = /^([a-z0-9]+):(\d+)(:g)?$/i.exec(key);
     const g = m && Games.byId[m[1]], i = m ? Number(m[2]) : -1, gold = !!(m && m[3]);
     const lv = g && g.levels[i];
-    let text, say, act = null;
+    let text, say, act = null, buddyBtn = null;
+    const full = Store.worldKey(key);
     const where = lv ? '「' + g.name + '」の レベル' + (i + 1) : '';
     const whereSay = lv ? g.name + 'の、レベル' + (i + 1) : '';
     if (has && !waiting){
       text = name + 'は なかまだよ！';
       say = name + '。仲間だよ！島に置けるよ。';
       act = ['🏡', 'しまに おく', () => StickerWorld.open(key)];
+      /* a Pokémon that is out of its ball can be brought along to the questions */
+      if (Store.canBeBuddy(full)){
+        const isBuddy = Store.buddy() === full;
+        if (isBuddy){
+          text = name + 'は あいぼうだよ！ いっしょに もんだいを やろう';
+          say = name + 'は、あいぼうだよ！一緒に、問題をやろう。';
+        } else say = name + '。仲間だよ！あいぼうにして、一緒に問題に行けるよ。島にも置けるよ。';
+        buddyBtn = el('button.btn.buddy-toggle' + (isBuddy ? '.on' : ''), { type: 'button',
+          'aria-pressed': String(isBuddy),
+          onclick(){
+            Sound.sfx.tap();
+            if (isBuddy) Store.clearBuddy(); else if (Store.setBuddy(full)) Sound.sfx.star(1);
+            render(); showDetail(key);
+          } },
+          el('span.bi', { text: isBuddy ? '💤' : '💛', 'aria-hidden': 'true' }),
+          el('span.bl', { text: isBuddy ? 'あいぼうを おやすみ' : 'あいぼうに する' }));
+      }
     } else if (waiting){
       text = name + 'は ボールの なか。べつの ひに ' + where + 'を たしかめると でてくるよ';
       say = name + 'は、ボールの中だよ。別の日に、' + whereSay + 'を確かめると、出てくるよ。';
@@ -783,6 +866,7 @@ const Book = (() => {
         act ? el('button.btn.btn-accent', { type: 'button',
           onclick(){ Sound.sfx.tap(); closeDetail(); act[2](); } },
           el('span.bi', { text: act[0], 'aria-hidden': 'true' }), el('span.bl', { text: act[1] })) : null,
+        buddyBtn,
         el('button.btn', { type: 'button', onclick(){ Sound.sfx.tap(); Sound.say(detailSpeech, { delay: 40 }); } },
           el('span.bi', { text: '🔊', 'aria-hidden': 'true' }), el('span.bl', { text: 'きく' })),
         el('button.btn', { type: 'button', onclick(){ Sound.sfx.tap(); Sound.hush(); closeDetail(); } },
@@ -845,7 +929,8 @@ const Book = (() => {
       const has = Store.hasSticker(key);
       if (has) got++;
       grid.append(el('button.sticker' + (has ? (key.endsWith(':g') ? '.got.gold' : '.got') : '')
-          + (has && Store.isPending(key) ? '.pending' : ''),
+          + (has && Store.isPending(key) ? '.pending' : '')
+          + (has && Store.buddy() === Store.worldKey(key) ? '.is-buddy' : ''),
         { type: 'button', onclick(){ Sound.sfx.tap(); showDetail(key); },
           title: stickerFor(key) + (has ? '　ゲット！' : '　' + (key.endsWith(':g') ? 'ぜんもん さいしょから せいかいで ゲット' : 'クリアで ゲット')) },
         PokemonStickers.artwork(key, { silhouette: !has })));
@@ -856,7 +941,8 @@ const Book = (() => {
     Store.data.stickers.filter(k => k.indexOf('daily:') === 0 || k.indexOf('focus:') === 0 || k.indexOf('adventure:') === 0).forEach(k => {
       got++;
       const isAdventureMemento = k.indexOf('adventure:') === 0;
-      grid.append(el('button.sticker.got' + (isAdventureMemento ? '.adventure' : '.gold'),
+      grid.append(el('button.sticker.got' + (isAdventureMemento ? '.adventure' : '.gold')
+          + (Store.buddy() === Store.worldKey(k) ? '.is-buddy' : ''),
         { type: 'button', onclick(){ Sound.sfx.tap(); showDetail(k); } }, PokemonStickers.artwork(k)));
     });
     if (Progress.g1Open()){

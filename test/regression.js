@@ -1939,6 +1939,170 @@
     K.Store.reset();
   })();
 
+  /* ---------- 91b. a waiting ball can be opened on a visit of its own ----------
+     The check's rule is unchanged (two of three right first time, once a day); the
+     visit is the same three questions without a level behind them. */
+  (function ballVisit(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = finishSpeech;
+    const d = {};
+    const card = () => { K.Home.render(); return qa('#home .ball-pick').map(b => b.dataset.ball).join(); };
+    try{
+      const today = K.Store.dayNumber();
+      K.Store.markIntroduced('bond', 0);
+      K.Store.addPending('bond:0');
+      d.notToday = card() === '' && K.Session.dueChecks().length === 0;
+      K.Store.data.pending['bond:0'][0] = today - 1;           // tomorrow
+      d.offered = card() === 'bond:0';
+      const before = K.Store.data.stickers.length;
+      q('#home .ball-pick').click();
+      d.threeChecks = S.mode === 'check' && S.planChecks.join() === 'bond:0,bond:0,bond:0';
+      d.ballUp = !!q('#play .checkball:not([hidden]) .pokeball');
+      S.forceCorrect(); S.flushTimers();
+      d.cracked = q('#play .checkball').classList.contains('crack1') && K.Store.isPending('bond:0');
+      S.forceCorrect(); S.flushTimers();
+      d.opened = onResult() && !K.Store.isPending('bond:0') && K.Store.hasSticker('bond:0');
+      d.says = /ボールが あいた/.test(q('#result').textContent) && /でてきた/.test(q('#result').textContent);
+      d.noExtraSticker = K.Store.data.stickers.length === before;
+      d.gone = card() === '';
+
+      // one right of three: the ball keeps waiting, and is not offered again today
+      K.Store.reset();
+      K.Store.markIntroduced('bond', 0);
+      K.Store.addPending('bond:0');
+      K.Store.data.pending['bond:0'][0] = today - 1;
+      K.Session.startCheck('bond:0');
+      for (let i = 0; i < 2; i++){
+        const dec = /^bond:dec:(\d+)-(\d+)$/.exec(S.item || '');
+        const com = /^bond:com:(\d+)\+(\d+)$/.exec(S.item || '');
+        const answer = dec ? Number(dec[1]) - Number(dec[2]) : com ? Number(com[1]) + Number(com[2]) : null;
+        const wrong = answer !== null && qa('#play .choices .choice').find(b => Number(b.textContent) !== answer);
+        if (!wrong) throw new Error('No wrong answer for ball fixture: ' + S.item);
+        wrong.click();
+        S.forceCorrect(); S.flushTimers();
+      }
+      S.forceCorrect(); S.flushTimers();
+      d.shut = onResult() && K.Store.isPending('bond:0') && K.Store.checkFailed('bond:0');
+      d.saysTomorrow = /また あした/.test(q('#result').textContent) && !q('#result .bigstars');
+      d.onceADay = card() === '';
+    } finally { K.Sound.say = say; }
+    leavePlay();
+    check('a ball waiting from another day opens on a three-question visit of its own, by the same two-of-three rule',
+      Object.keys(d).every(k => d[k]) && Object.keys(d).length === 12, JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 91c. a collected Pokémon can be brought along ----------
+     Chosen from the book, it stands beside the question, on the road and on the
+     home screen. One still in its ball cannot be chosen, and the choice is a
+     picture only: it survives a backup and touches no learning record. */
+  (function companion(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = finishSpeech;
+    const d = {};
+    const toggle = key => {
+      K.Book.open();
+      const slot = qa('#book .sticker').find(b => (b.title || '').indexOf(K.stickerFor(key) + '　') === 0);
+      slot.click();
+      return q('#book .buddy-toggle');
+    };
+    try{
+      K.Store.addSticker('count:0');
+      K.Store.addPending('bond:0');
+      K.Session.startLevel(K.Games.byId.count, 0);
+      d.noneByDefault = S.buddy === null && !q('#play .trail-buddy');
+      leavePlay();
+      d.ballCannot = !K.Store.setBuddy('bond:0') && !toggle('bond:0');
+      const btn = toggle('count:0');
+      d.offered = !!btn && btn.getAttribute('aria-pressed') === 'false';
+      btn.click();
+      const name = K.stickerFor('count:0');
+      d.chosen = K.Store.buddy() === 'count:0' && !!q('#book .sticker.is-buddy')
+        && q('#book .buddy-toggle').getAttribute('aria-pressed') === 'true';
+      K.Home.render();
+      d.onHome = !!q('#home .home-buddy img');
+      const before = JSON.stringify([K.Store.data.stars, K.Store.data.stickers, K.Store.data.facts]);
+      K.Session.startLevel(K.Games.byId.count, 0);
+      d.besideQuestion = S.buddy === name && !!q('#play .trail-buddy')
+        && !q('#play .playfield .buddy') && !q('#play .playfield .trail-buddy');
+      d.noRecord = JSON.stringify([K.Store.data.stars, K.Store.data.stickers, K.Store.data.facts]) === before;
+      leavePlay();
+      const saved = K.Store.exportText();
+      K.Store.reset();
+      K.Store.importText(saved, 'replace');
+      d.roundTrip = K.Store.buddy() === 'count:0';
+      toggle('count:0').click();
+      K.Home.render();
+      d.rested = K.Store.buddy() === '' && !q('#home .home-buddy');
+    } finally { K.Sound.say = say; }
+    leavePlay();
+    check('a collected Pokémon can be brought along to the questions, one in a ball cannot, and the choice is only a picture',
+      Object.keys(d).every(k => d[k]) && Object.keys(d).length === 9, JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 91d. the island is a place: where, berries, and scenery that grows ----------
+     All of it is play: a berry comes from finishing a sitting whatever the score,
+     a few a day, and nothing here reads or writes a learning record. */
+  (function livingIsland(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = finishSpeech;
+    const d = {};
+    const finishLevel = () => { let guard = 0; while (!onResult() && guard++ < 40){ S.forceCorrect(); S.flushTimers(); } };
+    try{
+      const P = K.StickerWorld.placeAt;
+      d.places = P('meadow', 50, 10) === 'sky' && P('meadow', 72, 80) === 'water' && P('meadow', 10, 50) === 'forest'
+        && P('meadow', 52, 50) === 'mountain' && P('meadow', 40, 92) === 'grass'
+        && P('sea', 50, 70) === 'water' && P('sky', 50, 70) === 'sky';
+      K.Store.addSticker('count:0');
+      K.Store.putWorldSticker('count:0', 72, 80);
+      K.StickerWorld.open();
+      d.swims = !!q('#sticker-world .world-sticker.at-water') && !!q('#sticker-world .world-place.pond');
+      d.noBerryYet = K.Store.berries() === 0 && !!q('#sticker-world .berry-tray.empty');
+      q('#sticker-world .berry-tray').click();
+      d.emptyGivesNothing = !q('#sticker-world .world-sticker.fed') && K.Store.berries() === 0;
+
+      // a finished sitting earns one — three a day at most, whatever the score
+      const before = JSON.stringify([K.Store.data.stars, K.Store.data.facts]);
+      for (let i = 0; i < 4; i++){
+        K.Session.startLevel(K.Games.byId.count, 0);
+        finishLevel();
+        if (i === 0) d.resultSays = !!q('#result .berry-news');
+        if (i === 3) d.fourthSaysNothing = !q('#result .berry-news');
+      }
+      d.threeADay = K.Store.berries() === 3 && K.Store.berriesToday() === 3;
+      const saved = K.Store.exportText();
+      K.Store.importText(saved, 'merge'); K.Store.importText(saved, 'merge');
+      d.noInflation = K.Store.berries() === 3;
+
+      K.StickerWorld.open();
+      q('#sticker-world .berry-tray').click();
+      d.feedMode = q('#sticker-world .berry-tray').classList.contains('feeding');
+      q('#sticker-world .world-sticker').click();
+      d.fed = K.Store.berries() === 2 && !!q('#sticker-world .world-sticker.fed');
+
+      // scenery arrives with the number of Pokémon out of their balls, once
+      const records = JSON.stringify([K.Store.data.stars, K.Store.data.facts]);
+      K.Store.addPending('bond:0');
+      K.Store.addSticker('flash:0'); K.Store.addSticker('flash:1');
+      const friends = K.Store.islandFriends();
+      K.StickerWorld.open();
+      d.grew = friends >= 3 && !!q('#sticker-world .world-scenery.new[data-scenery="3"]')
+        && !q('#sticker-world .world-scenery[data-scenery="10"]');
+      K.StickerWorld.open();
+      d.arrivesOnce = !!q('#sticker-world .world-scenery[data-scenery="3"]') && !q('#sticker-world .world-scenery.new');
+      d.ballDoesNotCount = K.Store.islandFriends() === K.Store.data.stickers.length - 1;
+      d.recordsUntouched = JSON.stringify([K.Store.data.stars, K.Store.data.facts]) === records && before !== records;
+    } finally { K.Sound.say = say; }
+    K.Home.render(); K.UI.show('home');
+    check('the island has places, a finished sitting earns a berry to give (three a day), and scenery grows with the Pokémon out of their balls',
+      Object.keys(d).every(k => d[k]) && Object.keys(d).length === 14, JSON.stringify(d));
+    K.Store.reset();
+  })();
+
   /* ---------- 92. ungraded questions still count towards「きょうは ここまで」----------
      A first-time level that also carries a check is 3 + 2 + 8 questions. Only the 8
      reached today's total, so the day's stopping point arrived five questions late. */

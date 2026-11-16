@@ -66,7 +66,7 @@ window.KazuApp = {
   StickerWorld, Treasures, TransferAdventure, TextbookReview, Rounds, Progress, Coach, stageOpen, levelOpen,
   classifyMiss, missChild,
   el, svg, clear, $, $$,
-  STICKER_POOL, stickerFor, PokemonStickers,
+  STICKER_POOL, stickerFor, PokemonStickers, Buddy,
   numKana, koKana, tsuKana, thingCountText, thingCountTag, thingCountKana,
   banmeKana, jiKana, distractors
 };

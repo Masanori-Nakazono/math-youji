@@ -3079,3 +3079,235 @@ button.sticker:active{ transform: scale(.96); }
   background: linear-gradient(to bottom, transparent 50%, color-mix(in srgb, var(--wc) 13%, transparent));
   border-radius: var(--wob-a);
 }
+
+/* ===========================================================
+   OPENING A BALL — 「ボールを あけに いこう」
+   =========================================================== */
+/* one ball, drawn the same wherever it appears; --ball sets its size */
+.pokeball{
+  --ball: calc(var(--u)*3);
+  position: relative; display: inline-block; flex: 0 0 auto; box-sizing: border-box;
+  width: var(--ball); height: var(--ball); border-radius: 50%;
+  border: calc(var(--ball)*.07) solid #2E2A3F;
+  background:
+    radial-gradient(circle, #fff 0 13%, #2E2A3F 14% 23%, transparent 24%),
+    linear-gradient(#E5483A 0 44%, #2E2A3F 44% 56%, #fff 56%);
+  box-shadow: 0 calc(var(--ball)*.06) 0 #0002;
+}
+.pokeball.mini{ --ball: calc(var(--u)*1.5); }
+
+/* home: the balls that can be opened today */
+.ball-quest{ grid-column: 1 / -1; padding: calc(var(--u)*.45) calc(var(--u)*.75);
+  border-color: color-mix(in srgb, var(--c-red) 45%, var(--card-edge)); }
+.ball-quest .quest-title small{ margin-left: auto; font-size: calc(var(--u)*1.05); color: var(--ink-soft); }
+.ball-picks{ display: flex; gap: calc(var(--u)*.45); margin-top: calc(var(--u)*.35); }
+.ball-pick{
+  flex: 1 1 0; min-width: 0; display: grid; grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center; gap: calc(var(--u)*.45); min-height: var(--tap);
+  padding: calc(var(--u)*.3) calc(var(--u)*.6); border: calc(var(--u)*.15) solid var(--card-edge);
+  border-radius: calc(var(--u)*.7); background: var(--paper-2); color: var(--ink); font: inherit; cursor: pointer;
+}
+.ball-pick:active{ transform: translateY(calc(var(--u)*.12)); }
+.ball-pick .pokeball{ --ball: calc(var(--u)*3.2); animation: ballWait 2.6s ease-in-out infinite; }
+.ball-pick:nth-child(2n) .pokeball{ animation-delay: -.9s; }
+.ball-pick:nth-child(3n) .pokeball{ animation-delay: -1.7s; }
+.ball-pick .name{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: calc(var(--u)*1.25); font-weight: 800; text-align: left; }
+.ball-pick .go{ font-size: calc(var(--u)*1.2); }
+@keyframes ballWait{
+  0%, 78%, 100%{ transform: rotate(0) }
+  84%{ transform: rotate(-14deg) } 90%{ transform: rotate(12deg) } 95%{ transform: rotate(-6deg) }
+}
+@media (max-width: 600px){
+  .ball-picks{ flex-wrap: wrap; }
+  .ball-pick{ flex: 1 1 40%; }
+}
+
+/* play: the ball rides beside the question and answers each right answer */
+.checkball{
+  position: relative; flex: 0 0 auto;
+  width: calc(var(--u)*5.4); height: calc(var(--u)*5.4);
+  display: grid; place-items: center;
+}
+.checkball[hidden]{ display: none; }
+.checkball .pokeball{ --ball: calc(var(--u)*4.4); }
+.checkball-mon{
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+  opacity: 0; transform: scale(.3); pointer-events: none; -webkit-user-drag: none;
+}
+.checkball.hit .pokeball{ animation: ballHit .7s cubic-bezier(.3,1.5,.5,1) 1; }
+/* a crack across the red half once one answer is in */
+.checkball.crack1 .pokeball::after, .checkball.crack2 .pokeball::after{
+  content: ''; position: absolute; left: 18%; top: 2%; width: 64%; height: 40%;
+  background: #2E2A3F;
+  clip-path: polygon(48% 0, 58% 0, 44% 34%, 62% 52%, 40% 100%, 30% 100%, 50% 56%, 32% 36%);
+}
+.checkball.open .pokeball{ animation: ballBurst .55s ease-in .15s both; }
+.checkball.open .checkball-mon{ animation: ballMon .7s cubic-bezier(.2,.9,.3,1.6) .45s both; }
+@keyframes ballHit{
+  0%, 100%{ transform: none }
+  20%{ transform: translateY(calc(var(--u)*-.9)) rotate(-16deg) }
+  45%{ transform: rotate(14deg) } 70%{ transform: rotate(-8deg) }
+}
+@keyframes ballBurst{
+  0%{ transform: scale(1); opacity: 1 } 40%{ transform: scale(1.35) rotate(10deg); opacity: 1 }
+  100%{ transform: scale(1.9); opacity: 0 }
+}
+@keyframes ballMon{ from{ opacity: 0; transform: scale(.3) } to{ opacity: 1; transform: scale(1) } }
+.trail-meet.ball-open{ border-color: var(--good); }
+@media (prefers-reduced-motion: reduce){
+  .ball-pick .pokeball, .checkball.hit .pokeball{ animation: none; }
+  .checkball.open .pokeball{ animation: none; opacity: 0; }
+  .checkball.open .checkball-mon{ animation: none; opacity: 1; transform: none; }
+}
+
+/* result: a ball that stayed shut is still waiting, not lost */
+.ball-waiting{
+  display: flex; align-items: center; justify-content: center; gap: calc(var(--u)*.8);
+  font-size: calc(var(--u)*1.6); font-weight: 800; color: var(--ink-soft);
+}
+.ball-waiting .pokeball{ --ball: calc(var(--u)*5); animation: ballWait 2.6s ease-in-out infinite; }
+
+/* ===========================================================
+   THE COMPANION — a collected Pokémon brought along
+   =========================================================== */
+/* beside かずぴょん on the question, the same size as it */
+.prompt .buddy{
+  flex: 0 0 auto; width: calc(var(--u)*4.6); height: calc(var(--u)*4.6);
+  margin-left: calc(var(--u)*-.5); object-fit: contain;
+  pointer-events: none; -webkit-user-drag: none;
+}
+.prompt .buddy[hidden]{ display: none; }
+.buddy.hop, .trail-buddy.hop, .home-buddy-img.hop{ animation: buddyHop .6s cubic-bezier(.3,1.6,.5,1) 1; }
+@keyframes buddyHop{
+  0%, 100%{ translate: 0 0 }
+  40%{ translate: 0 calc(var(--u)*-.9) }
+  70%{ translate: 0 calc(var(--u)*.1) }
+}
+/* on the road, a step behind the walker (same transform, shifted left) */
+.trail-buddy{
+  position: absolute; left: 0; bottom: 14%;
+  width: calc(var(--u)*2.3); height: calc(var(--u)*2.3);
+  margin-left: calc(var(--u)*-3.1);
+  object-fit: contain; pointer-events: none; z-index: 1;
+  transition: transform .55s cubic-bezier(.3,1.5,.5,1) .12s;
+}
+.trail:has(.trail-buddy){ padding-left: calc(var(--u)*2.6); }
+/* home: waiting beside the logo */
+.home-buddy{
+  align-self: center; flex: 0 0 auto; padding: 0; border: 0; background: transparent; cursor: pointer;
+  width: calc(var(--u)*4.8); height: calc(var(--u)*4.8); margin: calc(var(--u)*-.9) 0 calc(var(--u)*-.9) calc(var(--u)*.2);
+  line-height: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-buddy-img{ width: 100%; height: 100%; object-fit: contain; pointer-events: none;
+  animation: islandSway 3.6s ease-in-out infinite; }
+.home-buddy-img.hop{ animation: buddyHop .6s cubic-bezier(.3,1.6,.5,1) 1; }
+/* book: the companion's slot wears a heart, and its card says how to change it */
+.sticker.is-buddy{ position: relative; }
+.sticker.is-buddy::after{
+  content: '💛'; position: absolute; right: calc(var(--u)*.2); top: calc(var(--u)*.1);
+  font-size: calc(var(--u)*1.6); line-height: 1; pointer-events: none;
+}
+.buddy-toggle.on{ background: var(--paper-2); }
+@media (max-width: 600px){
+  .prompt .buddy{ width: calc(var(--u)*3.4); height: calc(var(--u)*3.4); }
+}
+@media (prefers-reduced-motion: reduce){
+  .buddy.hop, .trail-buddy.hop, .home-buddy-img, .home-buddy-img.hop{ animation: none; }
+  .trail-buddy{ transition: none; }
+}
+
+/* ===========================================================
+   THE ISLAND, ALIVE — places, berries, scenery that grows
+   =========================================================== */
+/* places: behind everything a finger can move, and never in its way */
+.world-place, .world-scenery{ position: absolute; z-index: 0; pointer-events: none; line-height: 1; }
+.world-place.cloud{ font-size: calc(var(--u)*4.4); opacity: .9; animation: cloudDrift 14s ease-in-out infinite alternate; }
+.world-place.cloud.c1{ left: 12%; top: 7%; }
+.world-place.cloud.c2{ left: 56%; top: 20%; font-size: calc(var(--u)*3.2); animation-duration: 19s; }
+.world-place.mountain{ left: 53%; top: 56%; transform: translate(-50%, -100%); font-size: calc(var(--u)*15); }
+.world-place.forest{ left: 3%; top: 60%; transform: translateY(-100%); font-size: calc(var(--u)*6.4); letter-spacing: -.12em; white-space: nowrap; }
+.world-place.pond{
+  left: 72%; top: 80%; width: 34%; height: 26%; transform: translate(-50%, -50%);
+  border-radius: 50%; background: radial-gradient(ellipse at 40% 35%, #c9efff, #6fc9ea 70%);
+  box-shadow: inset 0 calc(var(--u)*.3) 0 #ffffff88, 0 0 0 calc(var(--u)*.35) #7cc46a;
+}
+@keyframes cloudDrift{ from{ translate: calc(var(--u)*-2) 0 } to{ translate: calc(var(--u)*3) 0 } }
+
+/* what a Pokémon does depends on where it was put */
+.world-sticker.at-sky > *{ animation: placeFloat 3.2s ease-in-out infinite; }
+.world-sticker.at-water > *{ animation: placeSwim 2.4s ease-in-out infinite; }
+.world-sticker.at-forest > *{ animation: placeRustle 2.8s ease-in-out infinite; }
+.world-sticker.at-mountain > *{ animation: placeClimb 2.2s cubic-bezier(.3,1.4,.5,1) infinite; }
+.world-sticker.at-water{ filter: drop-shadow(0 calc(var(--u)*.5) 0 #ffffff99); }
+.world-sticker.at-sky{ filter: drop-shadow(0 calc(var(--u)*1.2) calc(var(--u)*.5) #0000001f); }
+.world-sticker.hop > *{ animation: islandHop .6s cubic-bezier(.3,1.6,.5,1) 1; }
+.world-sticker.dragging > *{ animation: none; }
+@keyframes placeFloat{
+  0%, 100%{ transform: translateY(calc(var(--u)*-.2)) rotate(-3deg) }
+  50%{ transform: translateY(calc(var(--u)*-1.5)) rotate(3deg) }
+}
+@keyframes placeSwim{
+  0%, 100%{ transform: translate(calc(var(--u)*-.7), 0) rotate(-5deg) }
+  50%{ transform: translate(calc(var(--u)*.7), calc(var(--u)*.35)) rotate(5deg) }
+}
+@keyframes placeRustle{
+  0%, 70%, 100%{ transform: rotate(0) }
+  76%{ transform: rotate(-9deg) } 84%{ transform: rotate(8deg) } 92%{ transform: rotate(-4deg) }
+}
+@keyframes placeClimb{
+  0%, 55%, 100%{ transform: translateY(0) }
+  75%{ transform: translateY(calc(var(--u)*-1.3)) }
+}
+
+/* scenery the island has gained */
+.world-scenery{ transform: translate(-50%, -50%); font-size: calc(var(--u)*5.2); }
+.world-scenery.big{ font-size: calc(var(--u)*11); }
+.world-scenery.new{ animation: sceneryIn 1.1s cubic-bezier(.2,.9,.3,1.5) both; }
+@keyframes sceneryIn{
+  0%{ opacity: 0; transform: translate(-50%, -50%) scale(.2) rotate(-12deg) }
+  60%{ opacity: 1; transform: translate(-50%, -50%) scale(1.25) }
+  100%{ transform: translate(-50%, -50%) scale(1) }
+}
+
+/* berries */
+.berry-tray{
+  position: absolute; left: calc(var(--u)*.8); top: calc(var(--u)*.8); z-index: 4;
+  display: flex; align-items: center; gap: calc(var(--u)*.3);
+  min-width: var(--tap); min-height: var(--tap); padding: calc(var(--u)*.3) calc(var(--u)*.9);
+  border: calc(var(--u)*.2) solid var(--card-edge); border-radius: 999px;
+  background: var(--card); color: var(--ink); font: inherit; font-weight: 800;
+  font-size: calc(var(--u)*1.6); cursor: pointer; box-shadow: var(--shadow-sm);
+}
+.berry-tray .berry{ font-size: calc(var(--u)*2.4); line-height: 1; }
+.berry-tray.empty{ opacity: .6; }
+.berry-tray.empty .berry{ filter: grayscale(1); }
+.berry-tray.feeding{ border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, var(--card)); }
+.berry-tray.feeding .berry{ animation: wiggle .7s ease-in-out infinite; }
+.world-sticker.fed > *{ animation: islandHop .6s cubic-bezier(.3,1.6,.5,1) 2; }
+.world-sticker.fed::after{
+  content: '🍓💗'; position: absolute; left: 50%; top: 0; z-index: 2; white-space: nowrap;
+  font-size: calc(var(--u)*2.4); pointer-events: none;
+  animation: fedUp 1.5s ease-out both;
+}
+@keyframes fedUp{
+  0%{ opacity: 0; transform: translate(-50%, 20%) scale(.5) }
+  25%{ opacity: 1; transform: translate(-50%, -60%) scale(1.15) }
+  80%{ opacity: 1; transform: translate(-50%, -110%) scale(1) }
+  100%{ opacity: 0; transform: translate(-50%, -150%) scale(.9) }
+}
+/* result: the berry this sitting earned */
+.berry-news{
+  display: inline-flex; align-items: center; gap: calc(var(--u)*.5); align-self: center;
+  min-height: var(--tap); padding: calc(var(--u)*.3) calc(var(--u)*1.2);
+  border: calc(var(--u)*.18) solid color-mix(in srgb, var(--c-red) 40%, var(--card-edge));
+  border-radius: 999px; background: var(--card); color: var(--ink);
+  font: inherit; font-size: calc(var(--u)*1.35); font-weight: 800; cursor: pointer;
+}
+.berry-news small{ font-size: .82em; color: var(--ink-soft); }
+@media (prefers-reduced-motion: reduce){
+  .world-place.cloud, .world-sticker[class*="at-"] > *, .world-scenery.new,
+  .berry-tray.feeding .berry, .world-sticker.fed > *{ animation: none; }
+  .world-sticker.fed::after{ animation: none; transform: translate(-50%, -110%); }
+}

@@ -58,3 +58,31 @@ const PokemonStickers = (() => {
   }
   return { reward, label, artwork, keyForName, isSecondRound, legend, manifest: POKEMON_MANIFEST };
 })();
+
+/* ---------- the companion ----------
+   The Pokémon a child collects lived in the book and on the island; the eight
+   questions — where nearly all the time goes — only ever had かずぴょん. One
+   collected Pokémon can be brought along: it stands beside the question, walks the
+   road, hops at a right answer, and waits on the home screen. かずぴょん stays and
+   still does the talking. It is a picture and nothing more: no record reads it. */
+const Buddy = (() => {
+  function info(){
+    const key = Store.buddy();
+    if (!key) return null;
+    const r = PokemonStickers.reward(key);
+    return r && r.image ? { key, name: r.name, image: r.image } : null;
+  }
+  /** an <img> of the companion, or null when none is chosen */
+  function node(cls){
+    const b = info();
+    return b ? el('img.' + cls, { src: b.image, alt: '', draggable: 'false', dataset: { name: b.name } }) : null;
+  }
+  /** restart a one-shot hop on a node that may still be mid-hop */
+  function hop(n){
+    if (!n) return;
+    n.classList.remove('hop');
+    void n.offsetWidth;
+    n.classList.add('hop');
+  }
+  return { info, node, hop };
+})();

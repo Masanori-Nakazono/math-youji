@@ -202,18 +202,26 @@ const Session = (() => {
      level being played. See `pending` in 02-store.js. */
   const CHECK_N = 3, CHECK_PASS = 2;
   let checkTally = {}, announced = new Set();
+  /** the level a waiting sticker belongs to, if it can be asked about today */
+  function checkTarget(key){
+    const cut = key.lastIndexOf(':');
+    const g = Games.byId[key.slice(0, cut)], li = Number(key.slice(cut + 1));
+    if (!g || !g.levels[li] || !levelOpen(g, li) || !Store.introduced(g.id, li)) return null;
+    return { game: g, level: g.levels[li], levelIndex: li, check: key };
+  }
   function checkSteps(exceptKey, maxLevels){
     const out = [];
     for (const key of Store.pendingDue()){
       if (out.length >= maxLevels * CHECK_N) break;
       if (key === exceptKey) continue;               // replaying it is the check
-      const cut = key.lastIndexOf(':');
-      const g = Games.byId[key.slice(0, cut)], li = Number(key.slice(cut + 1));
-      if (!g || !g.levels[li] || !levelOpen(g, li) || !Store.introduced(g.id, li)) continue;
-      for (let i = 0; i < CHECK_N; i++) out.push({ game: g, level: g.levels[li], levelIndex: li, check: key });
+      const t = checkTarget(key);
+      if (!t) continue;
+      for (let i = 0; i < CHECK_N; i++) out.push(Object.assign({}, t));
     }
     return out;
   }
+  /** the balls that can be opened today, oldest first */
+  function dueChecks(){ return Store.pendingDue().filter(k => !!checkTarget(k)); }
   /* What this question is *about*. Every generator names its item, so the app can
      avoid asking the same fact twice in one sitting, steer toward the facts this
      child keeps missing, and tell the parent which ones they are. */
@@ -260,6 +268,60 @@ const Session = (() => {
      takes a step for every first-try answer and never steps back. It changes no
      rule: it only draws `firstTryRight` against the thresholds `starsFor` already has. */
   let trailEl, trail = null;
+  /* ---------- opening a ball ----------
+     Most clears are below ★★★, so most Pokémon arrive in a ball — and the ball
+     used to open as one still line on the result screen of some other level, eleven
+     questions into the next day. 「ボールを あけに いこう」 is those same three check
+     questions as a visit of their own: the ball sits beside the question, cracks at
+     each answer right first time, and opens on the second — the rule the check
+     always had (two of three), shown on the question that earned it. */
+  let ballEl, ballOpened = false;
+  /* The companion, beside かずぴょん in every kind of session. Outside the board:
+     the things on the board are things to count, and it must never be one of them. */
+  let buddyEl;
+  function setupBuddy(){
+    if (!buddyEl) return;
+    const b = Buddy.info();
+    buddyEl.hidden = !b;
+    buddyEl.classList.remove('hop');
+    if (b){ buddyEl.src = b.image; buddyEl.dataset.name = b.name; }
+    else buddyEl.removeAttribute('src');
+  }
+  function setupBall(){
+    ballOpened = false;
+    if (!ballEl) return;
+    clear(ballEl); ballEl.hidden = true; ballEl.className = 'checkball';
+    if (mode !== 'check' || !plan.length) return;
+    const r = PokemonStickers.reward(plan[0].check);
+    ballEl.append(
+      el('img.checkball-mon', { src: r.image, alt: '', draggable: 'false' }),
+      el('span.pokeball', { 'aria-hidden': 'true' }));
+    ballEl.dataset.name = r.name;
+    ballEl.setAttribute('aria-label', r.name + 'の ボール');
+    ballEl.hidden = false;
+  }
+  /** one answer right first time: a crack, or — on the one that settles it — out it comes */
+  function hitBall(right){
+    if (!ballEl || ballEl.hidden) return false;
+    ballEl.classList.remove('hit');
+    void ballEl.offsetWidth;
+    ballEl.classList.add('hit', 'crack' + Math.min(right, CHECK_PASS));
+    if (right < CHECK_PASS || ballOpened) return false;
+    ballOpened = true;
+    ballEl.classList.add('open');
+    return true;
+  }
+  function openBall(){
+    const name = ballEl.dataset.name || '';
+    const img = $('.checkball-mon', ballEl);
+    const card = el('div.trail-meet.ball-open', { 'aria-hidden': 'true' },
+      el('img', { src: img ? img.src : '', alt: '', draggable: 'false' }),
+      el('b', { text: name + 'が でてきた！' }));
+    document.body.append(card);
+    setTimeout(() => card.remove(), 2300);
+    Sound.sfx.finish();
+    UI.confetti(48);
+  }
   function setupTrail(){
     trail = null;
     if (!trailEl) return;
@@ -286,6 +348,9 @@ const Session = (() => {
       trail.cells.push(c); trailEl.append(c);
     }
     trail.walker = mascotSVG('happy', 'trail-walker');
+    // the companion walks the road too, a step behind かずぴょん
+    trail.buddy = Buddy.node('trail-buddy');
+    if (trail.buddy) trailEl.append(trail.buddy);
     trailEl.append(trail.walker);
     trailEl.hidden = false;
     placeWalker();
@@ -302,6 +367,7 @@ const Session = (() => {
     // on a Pokémon's stone, stand beside it rather than on top of it
     const share = c.classList.contains('goal') ? 0.2 : 0.5;
     trail.walker.style.transform = 'translateX(' + (c.offsetLeft + c.offsetWidth * share) + 'px)';
+    if (trail.buddy) trail.buddy.style.transform = trail.walker.style.transform;
     trail.cells.forEach((x, i) => x.classList.toggle('walked', i > 0 && i <= trail.at));
     trailLabel();
   }
@@ -408,7 +474,9 @@ const Session = (() => {
         backBtn, worldEl = el('span.worldmark', { 'aria-hidden': 'true' }),
         titleEl, trailEl = el('div.trail', { hidden: true, role: 'img' }), pipsEl),
       el('div.prompt', null, moodEl,
-        el('div.txtwrap', null, promptTxt, feedbackEl), speakBtn, showBtn),
+        buddyEl = el('img.buddy', { hidden: true, alt: '', draggable: 'false', 'aria-hidden': 'true' }),
+        el('div.txtwrap', null, promptTxt, feedbackEl),
+        ballEl = el('div.checkball', { hidden: true, role: 'img' }), speakBtn, showBtn),
       fieldEl, choicesEl);
     UI.register('play', node);
     // has a finger been on this question yet — the together-tool must not wipe the child's own work
@@ -538,6 +606,24 @@ const Session = (() => {
     plan = (checks.length ? shuffle(checks.concat(drawDailyPlan(pool, Math.max(4, n - checks.length))))
                           : drawDailyPlan(pool, n)).map(p => Object.assign({}, p));
     titleEl.textContent = 'きょうの れんしゅう';
+    begin();
+  }
+
+  /** 「ボールを あけに いこう」: the three check questions for one waiting sticker,
+      on their own. The rule is the check's own — two of three right first time,
+      once a day — and a level started today still carries the check as before. */
+  function startCheck(key){
+    const due = dueChecks();
+    const k = due.indexOf(key) >= 0 ? key : due[0];
+    const t = k && checkTarget(k);
+    if (!t){ Home.render(); UI.show('home', { replace: true }); return; }
+    build();
+    killTimers();
+    mode = 'check'; curGame = null; rewardTarget = null; adventureTarget = null;
+    firstTarget = null; firstPhase = null;
+    plan = [];
+    for (let i = 0; i < CHECK_N; i++) plan.push(Object.assign({}, t));
+    titleEl.textContent = 'ボールを あけよう　' + t.game.name;
     begin();
   }
 
@@ -706,6 +792,8 @@ const Session = (() => {
     checkTally = {}; announced = new Set();
     plan.forEach(p => pipsEl.append(el('div.pip' + (p.intro ? '.intro' : p.check ? '.check' : ''))));
     setupTrail();
+    setupBall();
+    setupBuddy();
     UI.show('play');
     placeWalker();                // offsets are only real once the screen is laid out
     nextQuestion();
@@ -987,7 +1075,8 @@ const Session = (() => {
     $$('.pip', pipsEl).forEach((p, i) => p.classList.toggle('now', i === idx));
     setMood('idle');
     const step = plan[idx];
-    if (step.check) titleEl.textContent = 'たしかめ　' + step.game.name + '　' + step.level.t;
+    if (mode === 'check') titleEl.textContent = 'ボールを あけよう　' + step.game.name;
+    else if (step.check) titleEl.textContent = 'たしかめ　' + step.game.name + '　' + step.level.t;
     else if (mode !== 'level'){
       const modeName = mode === 'daily' ? 'きょうの れんしゅう'
                      : mode === 'focus' ? 'とっくん'
@@ -1292,10 +1381,11 @@ const Session = (() => {
     const graded = !scaffold && !(mode === 'level' && plan[idx].check);
     let met = null;
     if (clean && graded){ firstTryRight++; met = stepTrail(); }
+    let opened = false;
     if (plan[idx].check){
       const t = checkTally[plan[idx].check] || (checkTally[plan[idx].check] = { n: 0, right: 0 });
       t.n++;
-      if (clean) t.right++;
+      if (clean){ t.right++; opened = mode === 'check' && hitBall(t.right); }
     }
     const g = plan[idx].game;
     const timed = g.fluent && clean ? respondedMs : null;
@@ -1330,12 +1420,14 @@ const Session = (() => {
     /* the things on the board are glad too — after the answer, never while the
        child is still thinking */
     fieldEl.classList.add('cheer');
+    if (buddyEl && !buddyEl.hidden) Buddy.hop(buddyEl);
+    if (trail && trail.buddy && clean && graded) Buddy.hop(trail.buddy);
     if (!o.quiet && scaffold !== 'show'){
       UI.bigMark('◯');
       const praise = wrongThisQ === 0
         ? pick(['やったね！', '正解！', 'すごい！', '上手だね！', 'ばっちり！', 'その調子！'])
         : pick(['できたね！', 'よく頑張ったね！', 'その通り！']);
-      if (!met) Sound.say(praise, { delay: 320 });
+      if (!met && !opened) Sound.say(praise, { delay: 320 });
     }
     /* the step that reaches the Pokémon is the peak of the run, and it happens
        here, on the question that earned it — not eight questions later */
@@ -1345,12 +1437,19 @@ const Session = (() => {
       Sound.say((met.dataset.name || '') + 'に、会えたね！', { delay: 320 });
       later(() => meetPokemon(met), 420);
     }
-    if ((idx + 1) % 4 === 0 && !met) UI.confetti(22);
+    /* the ball opens here, on the answer that settled it: two right is the check
+       passed, so the third question has nothing left to decide and is not asked */
+    if (opened){
+      Sound.say((ballEl.dataset.name || '') + 'が、ボールから出てきたよ！', { delay: 320 });
+      later(openBall, 420);
+      plan = plan.slice(0, idx + 1);
+    }
+    if ((idx + 1) % 4 === 0 && !met && !opened) UI.confetti(22);
     afterNarration(() => {
       idx++;
       if (idx >= plan.length) finish();
       else nextQuestion();
-    }, Math.max(o.delay || 950, met ? 2500 : 0));
+    }, Math.max(o.delay || 950, met || opened ? 2500 : 0));
   }
 
   /** 3 = every question right first time, 0 = under half. Levels vary in length,
@@ -1379,10 +1478,11 @@ const Session = (() => {
        the thing these levels are actually for, and the thing three stars could not
        distinguish from nine seconds of counting. Only on the games where speed is
        the stated goal, and never on きょうの れんしゅう, which mixes them all. */
-    const swift = stars === 3 && total > 0 && mode !== 'daily'
+    const swift = stars === 3 && total > 0 && mode !== 'daily' && mode !== 'check'
                   && plan.every(p => p.game.fluent) && swiftCount / total >= 0.75;
     // a session that did not pass should not get a party; it gets an invitation
-    if (stars >= 1){ Sound.sfx.finish(); UI.confetti(60); }
+    if (mode === 'check'){ if (!ballOpened) Sound.sfx.place(); }
+    else if (stars >= 1){ Sound.sfx.finish(); UI.confetti(60); }
     else Sound.sfx.place();
     /* A first clear with every answer right first time earns both stickers — the
        clear and the gold — exactly as the book promises. Handing out only the
@@ -1396,7 +1496,8 @@ const Session = (() => {
     const confirmed = [];
     Object.keys(checkTally).forEach(k => {
       const t = checkTally[k];
-      if (t.n < CHECK_N) return;
+      /* a ball visit stops at the second right answer: two of three is already met */
+      if (t.n < CHECK_N && !(mode === 'check' && t.right >= CHECK_PASS)) return;
       if (t.right >= CHECK_PASS){ if (Store.confirmSticker(k)) confirmed.push(k); }
       else Store.failCheck(k);
     });
@@ -1427,6 +1528,8 @@ const Session = (() => {
     } else if (mode === 'diagnostic'){
       const recommended = Diagnostic.recommendFrom(sessionOutcomes);
       Store.recordDiagnostic(sessionOutcomes, recommended);
+    } else if (mode === 'check'){
+      /* the Pokémon that came out is the reward; a visit earns no sticker of its own */
     } else {
       if (mode === 'daily'){
         Store.recordPractice(firstTryRight, total);
@@ -1440,6 +1543,9 @@ const Session = (() => {
        they were answered: leaving them out of today's count let a first-time level with
        a check run to 13 questions while「きょうは ここまで」still counted 8. */
     if (mode !== 'diagnostic') Store.countToday(plan.length - total);
+    /* A berry for the island for every sitting that reached its end — whatever the
+       score, a few a day. It is for having done the questions, not for the result. */
+    const berry = mode !== 'diagnostic' && Store.earnBerry();
     const justOpenedG1 = !wasOpen && Progress.g1Open();
     if (justOpenedG1){
       Sound.sfx.unlockSfx();
@@ -1454,11 +1560,13 @@ const Session = (() => {
                   shaky: mode === 'diagnostic' ? [] : shaky.slice(0, 3),
                   focusKeys: focusKeys.slice(), swift, unlockedG1: justOpenedG1,
                   recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
-                  lastGameId: primaryGameId, rewardTarget, adventureTarget, milestone: visitMilestone });
+                  lastGameId: primaryGameId, rewardTarget, adventureTarget, milestone: visitMilestone,
+                  berry, berryFirst: berry && Store.berriesToday() === 1,
+                  ballName: mode === 'check' && ballEl ? ballEl.dataset.name || '' : '' });
   }
 
   return {
-    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, build,
+    startLevel, startDaily, startFocus, startAdventure, startFirst, startDiagnostic, startCheck, dueChecks, build,
     _test: {
       flushTimers,
       get idx(){ return idx; },
@@ -1486,7 +1594,8 @@ const Session = (() => {
       get planIntro(){ return plan.map(p => p.intro || null); },
       get planChecks(){ return plan.map(p => p.check || null); },
       get helped(){ return helped; },
-      get trail(){ return trail ? { n: trail.n, need: trail.need, at: trail.at } : null; }
+      get trail(){ return trail ? { n: trail.n, need: trail.need, at: trail.at } : null; },
+      get buddy(){ return buddyEl && !buddyEl.hidden ? buddyEl.dataset.name || '' : null; }
     }
   };
 })();

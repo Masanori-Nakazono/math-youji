@@ -62,6 +62,16 @@ const Store = (() => {
        change a learning record or an unlock.  Coordinates are percentages so the
        picture survives an iPad rotation and a different-sized iPad. */
     stickerWorld: { background: 'meadow', items: {} },
+    /* The Pokémon the child chose to bring along (a sticker key, 'lap2:' for the
+       second lap), or ''. Presentation only, like the island: it walks beside the
+       questions and changes no record. It belongs to the child across both laps. */
+    buddy: '',
+    /* Berries to give the Pokémon on the island: one for each finished sitting, a
+       few a day, a small basket at most — a reason to visit the island after the
+       questions rather than instead of them. [day, earned that day] keeps the
+       daily limit. Like the island itself, no learning record reads them. */
+    berries: 0,
+    berryDay: [0, 0],
     islandJobs: {}, // boat/snack -> current hands-on work and a lasting completed scene
     transferReached: false,
     transferRecords: {}, // mission index -> last actual run, separate from mastery/stars
@@ -237,6 +247,7 @@ const Store = (() => {
 
   const isRecord = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const isCount = v => Number.isFinite(v) && v >= 0;
+  const BERRY_MAX = 9, BERRY_PER_DAY = 3;
   const safeKey = k => k !== '__proto__' && k !== 'prototype' && k !== 'constructor';
   /** {missKind: count} — a small tally, and every key has to be one we know */
   const isMissMap = (v, startup) => isRecord(v) && Object.keys(v).every(
@@ -359,6 +370,24 @@ const Store = (() => {
         items[k] = { x: p.x, y: p.y };
       }
       out.stickerWorld = { background: w.background.slice(0, 24), items };
+      // how many Pokémon the island had last time it was looked at (for「ふえたよ」)
+      if (w.seen !== undefined){
+        if (!isCount(w.seen)) return null;
+        out.stickerWorld.seen = Math.floor(w.seen);
+      }
+    }
+    if (data.berries !== undefined){
+      if (!Number.isInteger(data.berries) || data.berries < 0) return null;
+      out.berries = Math.min(BERRY_MAX, data.berries);
+    }
+    if (data.berryDay !== undefined){
+      const b = data.berryDay;
+      if (!Array.isArray(b) || b.length !== 2 || !isCount(b[0]) || !isCount(b[1])) return null;
+      out.berryDay = [Math.floor(b[0]), Math.floor(b[1])];
+    }
+    if (data.buddy !== undefined){
+      if (typeof data.buddy !== 'string' || !safeKey(data.buddy) || data.buddy.length > 64) return null;
+      out.buddy = data.buddy;
     }
     if (data.islandJobs !== undefined){
       if (!isRecord(data.islandJobs)) return null;
@@ -587,6 +616,13 @@ const Store = (() => {
       background: bw.background || aw.background || 'meadow',
       items: Object.assign({}, aw.items || {}, bw.items || {})
     };
+    if (bw.seen || aw.seen) out.stickerWorld.seen = maxNum(bw.seen, aw.seen);
+    // max, never sum: the same backup read twice must not fill the basket
+    out.berries = maxNum(base.berries, add.berries);
+    const bDay = base.berryDay || [0, 0], aDay = add.berryDay || [0, 0];
+    out.berryDay = bDay[0] > aDay[0] ? bDay.slice() : aDay[0] > bDay[0] ? aDay.slice() : [bDay[0], Math.max(bDay[1], aDay[1])];
+    // this device's choice of companion stands; a copy only fills an empty one
+    out.buddy = base.buddy || add.buddy || '';
     out.islandJobs = Object.assign({}, add.islandJobs || {}, base.islandJobs || {});
     for (const scene of ['boat', 'snack']){
       const a = add.islandJobs && add.islandJobs[scene], b = base.islandJobs && base.islandJobs[scene];
@@ -703,6 +739,14 @@ const Store = (() => {
       ? item.source.treasures.includes(item.base.slice(9))
       : item.source.stickers.includes(item.base);
   }
+  /** Can this sticker be brought along? Owned, out of its ball, and a Pokémon
+      rather than a chest's keepsake. */
+  function canBeBuddy(fullKey){
+    const item = worldSource(fullKey);
+    if (!item || item.base.startsWith('treasure:')) return false;
+    return item.source.stickers.includes(item.base)
+      && !(item.source.pending && item.source.pending[item.base]);
+  }
   function ownedStickerKeys(){
     const keys = data => data.stickers.filter(k => typeof k === 'string' && !k.startsWith('lap2:'))
       .concat(data.treasures.map(id => 'treasure:' + id));
@@ -721,6 +765,38 @@ const Store = (() => {
     worldKey: base => typeof base === 'string' && !base.startsWith('lap2:') && round() === 2
       ? 'lap2:' + base : base,
     ownedStickerKeys, hasOwnedSticker,
+    /** the chosen companion's sticker key, or '' — also '' once it is no longer owned */
+    buddy: () => record.buddy && canBeBuddy(record.buddy) ? record.buddy : '',
+    canBeBuddy,
+    setBuddy(fullKey){
+      if (!canBeBuddy(fullKey)) return false;
+      record.buddy = fullKey; save(); return true;
+    },
+    clearBuddy(){ if (!record.buddy) return false; record.buddy = ''; save(); return true; },
+    /* ---- berries for the island ---- */
+    berries: () => record.berries || 0,
+    berriesToday(){ const b = record.berryDay || [0, 0]; return b[0] === dayNo() ? b[1] : 0; },
+    /** one for a finished sitting; false once today's few are given or the basket is full */
+    earnBerry(){
+      const t = dayNo(), b = record.berryDay && record.berryDay[0] === t ? record.berryDay : [t, 0];
+      if (b[1] >= BERRY_PER_DAY || (record.berries || 0) >= BERRY_MAX) return false;
+      record.berryDay = [t, b[1] + 1];
+      record.berries = (record.berries || 0) + 1;
+      save();
+      return true;
+    },
+    useBerry(){
+      if (!(record.berries > 0)) return false;
+      record.berries--; save(); return true;
+    },
+    /** Pokémon out of their balls, across both laps: what the island grows with */
+    islandFriends: () => ownedStickerKeys().filter(canBeBuddy).length,
+    islandSeen(){ const w = record.stickerWorld; return w && w.seen || 0; },
+    setIslandSeen(n){
+      const w = record.stickerWorld || (record.stickerWorld = { background: 'meadow', items: {} });
+      if (w.seen === n) return;
+      w.seen = n; save();
+    },
     ownedStickerPending(fullKey){
       const item = worldSource(fullKey);
       return !!(item && item.source.pending[item.base]);

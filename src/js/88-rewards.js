@@ -360,6 +360,69 @@ const StickerWorld = (() => {
     { id: 'sky', label: 'そら', icon: '☁️' }
   ];
   let node, board, palette, hint, selected = null, hopKey = null;
+  /* ---------- a place that is alive ----------
+     The island was two bands of colour with a sun and a house: a Pokémon put down
+     anywhere did the same thing, and nothing on it ever changed. Three additions,
+     none of which is scored or can be lost:
+       places  — where a Pokémon is put decides what it does (it floats in the sky,
+                 bobs in the pond, rustles in the forest, hops on the mountain);
+       berries — a finished sitting earns one, and a Pokémon given one is glad;
+       scenery — the island gains something as the number of Pokémon out of their
+                 balls grows, so half a year of play can be seen from here. */
+  const PLACES = {
+    sky:      { say: 'お空を、飛んでるよ。' },
+    water:    { say: '水で、泳いでるよ。' },
+    forest:   { say: '森で、遊んでるよ。' },
+    mountain: { say: '山に、登ってるよ。' },
+    grass:    { say: '' }
+  };
+  /** which place a point of the board belongs to; a pure function of the picture */
+  function placeAt(background, x, y){
+    if (background === 'sky') return 'sky';
+    if (background === 'sea') return y < 35 ? 'sky' : 'water';
+    if (y < 38) return 'sky';
+    if (Math.pow((x - 72) / 17, 2) + Math.pow((y - 80) / 13, 2) <= 1) return 'water';
+    if (x < 30 && y < 78) return 'forest';
+    if (x >= 40 && x <= 66 && y < 60) return 'mountain';
+    return 'grass';
+  }
+  /* What the island gains, by how many Pokémon are out of their balls. Ground
+     things belong to the meadow; things in the sky show over any background. */
+  const SCENERY = [
+    { at: 3,   e: '🌷', name: 'おはな',     x: 36, y: 90 },
+    { at: 6,   e: '🌻', name: 'ひまわり',   x: 90, y: 62 },
+    { at: 10,  e: '🌈', name: 'にじ',       x: 30, y: 16, sky: true, big: true },
+    { at: 15,  e: '⛲', name: 'ふんすい',   x: 50, y: 70 },
+    { at: 25,  e: '🎪', name: 'テント',     x: 86, y: 44 },
+    { at: 40,  e: '🎡', name: 'かんらんしゃ', x: 14, y: 44, big: true },
+    { at: 60,  e: '🏰', name: 'おしろ',     x: 53, y: 40, big: true },
+    { at: 100, e: '🎆', name: 'はなび',     x: 62, y: 12, sky: true, big: true }
+  ];
+  let feeding = false, fedKey = null, grewNow = [];
+  const onIsland = k => !!(k && Store.stickerWorld().items[k]);
+  function feed(k){
+    if (!onIsland(k) || !Store.useBerry()) return false;
+    feeding = false; fedKey = k; selected = k;
+    render();
+    Sound.sfx.correct();
+    Sound.say(itemName(k) + '、喜んでるよ！', { delay: 60 });
+    return true;
+  }
+  function berryTap(){
+    Sound.sfx.tap();
+    if (!Store.berries()){
+      Sound.say('問題をやると、きのみがもらえるよ。', { delay: 40 });
+      return;
+    }
+    if (!Object.keys(Store.stickerWorld().items).length){
+      Sound.say('まず、ポケモンを島に置いてね。', { delay: 40 });
+      return;
+    }
+    if (onIsland(selected)){ feed(selected); return; }   // a Pokémon is already chosen: it gets it
+    feeding = !feeding;
+    render();
+    if (feeding) Sound.say('きのみをあげたいポケモンを、タップしてね。', { delay: 40 });
+  }
   /* ---------- a finger moves a sticker ----------
      Placing was「pick below, then tap the island」and nothing else: a five-year-old
      puts a finger on the Pokémon and pulls, and nothing happened. A sticker on the
@@ -393,7 +456,12 @@ const StickerWorld = (() => {
       if (!moved) return;
       btn.classList.remove('dragging');
       const p = pos(e);
-      if (e.type === 'pointerup' && Store.putWorldSticker(k, p.x, p.y)){ Sound.sfx.place(); selected = k; }
+      const before = (Store.stickerWorld().items[k] || null);
+      const was = before ? placeAt(Store.stickerWorld().background, before.x, before.y) : null;
+      if (e.type === 'pointerup' && Store.putWorldSticker(k, p.x, p.y)){
+        Sound.sfx.place(); selected = k;
+        arrive(k, was);
+      }
       draggedAt = Date.now();             // the click that follows a drag is not a tap
       render();
     };
@@ -402,9 +470,17 @@ const StickerWorld = (() => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       if (Date.now() - draggedAt < 400) return;
+      if (feeding && feed(k)) return;
       selected = k; hopKey = k; render(); Sound.sfx.tap();
       Sound.say(itemName(k) + '！', { delay: 40 });
     });
+  }
+  /** a Pokémon has just been put somewhere: say what it does there, when that is new */
+  function arrive(k, was){
+    const p = Store.stickerWorld().items[k];
+    if (!p || isTreasure(k)) return;
+    const now = placeAt(Store.stickerWorld().background, p.x, p.y);
+    if (now !== was && PLACES[now].say) Sound.say(itemName(k) + '、' + PLACES[now].say, { delay: 80 });
   }
 
   function owned(){
@@ -435,10 +511,14 @@ const StickerWorld = (() => {
       }
       const r = board.getBoundingClientRect();
       const x = (e.clientX - r.left) / r.width * 100, y = (e.clientY - r.top) / r.height * 100;
+      const before = Store.stickerWorld().items[selected] || null;
+      const was = before ? placeAt(Store.stickerWorld().background, before.x, before.y) : null;
       if (Store.putWorldSticker(selected, x, y)){
         Sound.sfx.place();
         render();
-        Sound.say('おけたね。ほかのばしょにも、うごかせるよ。', { delay: 80 });
+        const now = placeAt(Store.stickerWorld().background, Math.max(0, Math.min(100, x)), Math.max(0, Math.min(100, y)));
+        if (!isTreasure(selected) && now !== was && PLACES[now].say) arrive(selected, was);
+        else Sound.say('おけたね。ほかのばしょにも、うごかせるよ。', { delay: 80 });
       }
     };
     node = el('div#sticker-world', null,
@@ -465,36 +545,68 @@ const StickerWorld = (() => {
     clear(board);
     board.append(el('span.world-starter.sun', { text: '☀️', 'aria-hidden': 'true' }),
       el('span.world-starter.home', { text: '🏡', 'aria-hidden': 'true' }));
+    /* the places, drawn behind everything a finger can move */
+    board.append(el('span.world-place.cloud.c1', { text: '☁️', 'aria-hidden': 'true' }),
+      el('span.world-place.cloud.c2', { text: '☁️', 'aria-hidden': 'true' }));
+    if (world.background === 'meadow') board.append(
+      el('span.world-place.mountain', { text: '⛰️', 'aria-hidden': 'true' }),
+      el('span.world-place.forest', { text: '🌲🌳🌲', 'aria-hidden': 'true' }),
+      el('span.world-place.pond', { 'aria-hidden': 'true' }));
+    const friends = Store.islandFriends();
+    SCENERY.forEach(s => {
+      if (friends < s.at || (!s.sky && world.background !== 'meadow')) return;
+      board.append(el('span.world-scenery' + (s.big ? '.big' : '') + (grewNow.indexOf(s) >= 0 ? '.new' : ''), {
+        text: s.e, title: s.name, 'aria-hidden': 'true', dataset: { scenery: String(s.at) },
+        style: { left: s.x + '%', top: s.y + '%' } }));
+    });
+    const berries = Store.berries();
+    board.append(el('button.berry-tray' + (feeding ? '.feeding' : '') + (berries ? '' : '.empty'), {
+      type: 'button', 'aria-label': 'きのみ ' + berries + 'こ', 'aria-pressed': String(feeding),
+      onclick(e){ e.stopPropagation(); berryTap(); } },
+      el('span.berry', { text: '🍓', 'aria-hidden': 'true' }),
+      el('b', { text: '×' + berries })));
     if (Store.islandJob('boat') && Store.islandJob('boat').completed)
       board.append(el('span.world-job.boat', { text: '⛵️', title: 'つくった ふね' }));
     if (Store.islandJob('snack') && Store.islandJob('snack').completed)
       board.append(el('span.world-job.snack', { text: '🧺', title: 'つくった おやつ' }));
     Object.keys(world.items).filter(k => keys.indexOf(k) >= 0).forEach(k => {
       const p = world.items[k];
-      const btn = el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : '')
-        + (hopKey === k ? '.hop' : '') + (selected === k ? '.held' : ''), { type: 'button',
+      const btn = el('button.world-sticker' + (isTreasure(k) ? '.world-treasure' : '.at-' + placeAt(world.background, p.x, p.y))
+        + (hopKey === k ? '.hop' : '') + (selected === k ? '.held' : '') + (fedKey === k ? '.fed' : ''), { type: 'button',
+        dataset: { place: isTreasure(k) ? '' : placeAt(world.background, p.x, p.y) },
         'aria-label': itemName(k) + 'を うごかす', title: itemName(k) + 'を うごかす', style: { left: p.x + '%', top: p.y + '%' }
       }, itemArt(k));
       bindSticker(btn, k);
       board.append(btn);
     });
-    hopKey = null;
+    hopKey = null; fedKey = null;
     $$('.world-background', node).forEach(b => b.classList.toggle('selected', b.dataset.background === world.background));
     clear(palette);
     keys.forEach(k => palette.append(el('button.world-palette-sticker' + (isTreasure(k) ? '.world-palette-treasure' : '') + (selected === k ? '.selected' : ''), {
       type: 'button', title: itemName(k) + 'を おく', 'aria-label': itemName(k) + 'を おく', 'aria-pressed': String(selected === k),
       onclick(){ selected = k; Sound.sfx.tap(); render(); Sound.say('島の置きたい場所をタップしてね。', { delay: 60 }); }
     }, itemArt(k))));
-    hint.textContent = keys.length
+    const next = SCENERY.find(s => friends < s.at);
+    hint.textContent = feeding ? '🍓　きのみを あげたい ポケモンを タップしてね'
+      : keys.length
       ? (selected ? '🌟　しまの おきたい ばしょを タップしてね。おいた シールは ゆびで うごかせるよ' : '下の シールや たからものを えらんで、しまに おこう')
+        + (next ? '　･　ポケモンが あと ' + (next.at - friends) + 'ひきで ' + next.e + ' が ふえるよ' : '')
       : 'さいしょの シールを もらったら、ここに おけるよ';
   }
   function open(item){
     if (item) item = Store.worldKey(item);
     if (item && owned().includes(item)) selected = item;
+    feeding = false;
+    /* what the island gained since it was last looked at — shown arriving, once */
+    const friends = Store.islandFriends(), seen = Store.islandSeen();
+    grewNow = SCENERY.filter(s => s.at > seen && s.at <= friends);
+    Store.setIslandSeen(Math.max(seen, friends));
     render(); UI.show('sticker-world');
-    Sound.say(item && selected === item ? itemName(item) + 'を、島の好きな場所に置いてね。'
-      : '自分の島だよ。集めたシールや宝物を、好きな場所に置けるよ。', { delay: 150 });
+    const grew = grewNow.length ? '島に、' + grewNow.map(s => s.name).join('と、') + 'が増えたよ！' : '';
+    if (grewNow.length) Sound.sfx.star(1);
+    Sound.say(grew + (item && selected === item ? itemName(item) + 'を、島の好きな場所に置いてね。'
+      : grew ? '' : '自分の島だよ。集めたシールや宝物を、好きな場所に置けるよ。'), { delay: 150 });
+    grewNow = [];
   }
-  return { build, render, open };
+  return { build, render, open, placeAt, _test: { scenery: SCENERY } };
 })();
