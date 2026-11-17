@@ -403,9 +403,13 @@ const StickerWorld = (() => {
   function feed(k){
     if (!onIsland(k) || !Store.useBerry()) return false;
     feeding = false; fedKey = k; selected = k;
+    /* a berry is a few questions' worth of なかよし with the Pokémon that ate it —
+       whichever one it is, so the island is a way to grow close to any of them */
+    const b = Buddy.addBond(k, Buddy.BERRY_BOND);
     render();
     Sound.sfx.correct();
-    Sound.say(itemName(k) + '、喜んでるよ！', { delay: 60 });
+    Sound.say(b.grew ? Buddy.grewLine(itemName(k), b.hearts)[1] : itemName(k) + '！喜んでるよ！', { delay: 60 });
+    if (b.grew) setTimeout(() => Sound.sfx.star(1), 260);
     return true;
   }
   function berryTap(){
@@ -576,6 +580,9 @@ const StickerWorld = (() => {
         dataset: { place: isTreasure(k) ? '' : placeAt(world.background, p.x, p.y) },
         'aria-label': itemName(k) + 'を うごかす', title: itemName(k) + 'を うごかす', style: { left: p.x + '%', top: p.y + '%' }
       }, itemArt(k));
+      // the one just fed, or picked up, shows how close it is
+      if (!isTreasure(k) && (fedKey === k || (selected === k && Store.bond(k) > 0)))
+        btn.append(Buddy.meter(k, 'on-island' + (fedKey === k ? '.grew' : '')));
       bindSticker(btn, k);
       board.append(btn);
     });

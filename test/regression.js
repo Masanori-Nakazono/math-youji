@@ -2133,6 +2133,185 @@
     K.Store.reset();
   })();
 
+  /* ---------- 91c1. なかよし: questions done together add up ----------
+     One question beside the companion is one step, however it went; five hearts
+     fill at fixed counts. It is kept per Pokémon, a berry on the island adds a few,
+     and none of it reaches the learning record or can be lost. */
+  (function closeness(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    K.Sound.say = finishSpeech;
+    const d = {};
+    const finishLevel = () => { let g = 0; while (!onResult() && g++ < 60){ S.forceCorrect(); S.flushTimers(); } };
+    try{
+      K.Store.addSticker('count:0');
+      K.Store.addSticker('count:1');
+      K.Store.addPending('bond:0');
+      K.Session.startLevel(K.Games.byId.count, 0);
+      S.forceCorrect(); S.flushTimers();
+      d.nothingAlone = Object.keys(K.Store.data.bond).length === 0 && !!q('#play .buddywrap[hidden]');
+      leavePlay();
+      d.ballCannot = K.Store.addBond('bond:0', 5) === 0 && K.Store.bond('bond:0') === 0;
+      K.Store.setBuddy('count:0');
+      K.Session.startLevel(K.Games.byId.count, 0);
+      d.startsEmpty = S.bond.key === 'count:0' && S.bond.hearts === 0
+        && qa('#play .bondmeter.in-play .bh').length === 5 && !q('#play .buddywrap[hidden]');
+      S.forceCorrect(); S.flushTimers();
+      d.oneStep = K.Store.bond('count:0') === 1 && S.bond.grew === 0;
+      // a wrong answer takes nothing away, and the question still counts once finished
+      const wrongBtn = candidates().find(n => n.classList.contains('obj'));
+      if (wrongBtn) wrongBtn.click();
+      d.slipKeeps = K.Store.bond('count:0') === 1;
+      leavePlay();
+      K.Store.addBond('count:0', K.Buddy.HEARTS[0] - 2);
+      K.Session.startLevel(K.Games.byId.count, 0);
+      S.forceCorrect();
+      d.heartFills = S.bond.grew === 1 && S.bond.hearts === 1
+        && q('#play .buddywrap').dataset.hearts === '1' && qa('#play .bondmeter.in-play .bh.on').length === 1;
+      S.flushTimers();
+      finishLevel();
+      const news = q('#result .bond-news');
+      d.toldAtTheEnd = !!news && news.classList.contains('grew') && news.querySelectorAll('.bh.on').length === 1;
+      K.Home.render(); K.UI.show('home');
+      d.onHome = q('#home .home-buddy').dataset.hearts === '1' && !!q('#home .home-buddy .bondmeter');
+      // per Pokémon: another companion starts from nothing and the first keeps its own
+      const had = K.Store.bond('count:0');
+      K.Store.setBuddy('count:1');
+      K.Session.startLevel(K.Games.byId.count, 0);
+      d.perPokemon = S.bond.key === 'count:1' && S.bond.hearts === 0 && K.Store.bond('count:0') === had;
+      leavePlay();
+      // a berry on the island is worth a few questions with whoever eats it
+      K.Store.putWorldSticker('count:1', 50, 90);
+      K.Store.earnBerry();
+      const basket = K.Store.berries();
+      K.StickerWorld.open();
+      q('#sticker-world .berry-tray').click();
+      const mon = qa('#sticker-world .world-sticker')[0];
+      if (mon) mon.click();
+      d.berry = K.Store.bond('count:1') === K.Buddy.BERRY_BOND && basket > 0 && K.Store.berries() === basket - 1
+        && !!q('#sticker-world .world-sticker .bondmeter');
+      // the same backup read twice must not double it; a replace keeps it exactly
+      const saved = K.Store.exportText();
+      K.Store.importText(saved, 'merge'); K.Store.importText(saved, 'merge');
+      d.mergeIsMax = K.Store.bond('count:0') === had && K.Store.bond('count:1') === K.Buddy.BERRY_BOND;
+      K.Store.reset();
+      d.resetClears = K.Store.bond('count:0') === 0;
+      K.Store.importText(saved, 'replace');
+      d.roundTrip = K.Store.bond('count:0') === had;
+      const bad = JSON.parse(saved); (bad.data || bad).bond = { 'count:0': -3 };
+      d.rejectsBad = !K.Store.importText(JSON.stringify(bad), 'replace').ok;
+      d.maxHearts = (() => { K.Store.addBond('count:0', 500); const b = K.Buddy.bond('count:0'); return b.full && b.hearts === 5 && b.left === 0; })();
+      const marks = () => JSON.stringify([K.Store.data.stars, K.Store.data.stickers, K.Store.data.pending, K.Store.data.facts]);
+      const before = marks();
+      K.Store.addBond('count:1', 40);
+      d.noRecordTouched = marks() === before;
+    } finally { K.Sound.say = say; }
+    K.UI.show('home');
+    check('questions done beside the companion fill its hearts, per Pokémon; a slip takes none away and no learning record reads them',
+      Object.keys(d).every(k => d[k]) && Object.keys(d).length === 16, JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 91c1b. the stories are sometimes about the child's own Pokémon ----------
+     たしざん・ひきざん・しきに かこう and the plates of どっちが おおい draw one of the
+     Pokémon that are out of their balls in place of the emoji. The numbers and the
+     question are untouched, the spoken line says「ポケモン」, and one still in its
+     ball never appears. */
+  (function ownPokemonInStories(){
+    K.Store.reset();
+    const say = K.Sound.say;
+    let said = [];
+    K.Sound.say = (t, o) => { said.push(String(t)); finishSpeech(t, o); };
+    const d = {};
+    const G = K.Games.byId;
+    const mons = () => qa('#play .playfield img.obj-mon');
+    const until = (g, li, sel, max) => {
+      for (let n = 0; n < max; n++){ said = []; K.Session.startLevel(g, li); if (q(sel)) return true; }
+      return false;
+    };
+    try{
+      d.neverWithoutOne = !until(G.add, 0, '#play img.obj-mon, #play .prompt-mon', 40);
+      K.Store.addSticker('count:0');
+      K.Store.addPending('bond:0');
+      const own = K.PokemonStickers.reward('count:0').image, balled = K.PokemonStickers.reward('bond:0').image;
+      d.inAddStory = until(G.add, 0, '#play .prompt .prompt-mon', 80);
+      const m = /^sum:(\d+)\+(\d+)$/.exec(String(S.item).replace(/^add:/, ''));
+      d.sameNumbers = !!m && mons().length === Number(m[1]) + Number(m[2])
+        && qa('#play .playfield .actor').length === mons().length;
+      d.onePicture = mons().every(i => i.src === own) && q('#play .prompt .prompt-mon').src === own;
+      d.saysPokemon = said.some(t => /^ポケモンが/.test(t)) && !said.some(t => t.indexOf(K.stickerFor('count:0')) >= 0);
+      d.inSubStory = until(G.sub, 0, '#play .prompt .prompt-mon', 80) && mons().length > 0;
+      d.inShiki = until(G.g1shiki, 0, '#play .prompt .prompt-mon', 80) && mons().length > 0;
+      d.onPlates = until(G.compare, 0, '#play .plate img.obj-mon', 80)
+        && qa('#play .plate').every(p => p.querySelectorAll('.item').length === p.querySelectorAll('img.obj-mon').length);
+      let ballSeen = false;
+      for (let n = 0; n < 60 && !ballSeen; n++){
+        K.Session.startLevel(G.add, 0);
+        ballSeen = qa('#play img').some(i => i.src === balled && !i.closest('.trail'));
+      }
+      d.notFromABall = !ballSeen;
+      // still answerable to the end with a Pokémon on the board
+      until(G.add, 0, '#play .prompt .prompt-mon', 80);
+      let guard = 0;
+      while (!onResult() && guard++ < 80){ answerOnce(); S.flushTimers(); }
+      d.playable = onResult();
+    } finally { K.Sound.say = say; }
+    K.UI.show('home');
+    check('story questions and plates sometimes show the child\'s own Pokémon: same numbers, one picture, never one from a ball',
+      Object.keys(d).every(k => d[k]) && Object.keys(d).length === 10, JSON.stringify(d));
+    K.Store.reset();
+  })();
+
+  /* ---------- 91c1c. a run of right-first-time answers climbs ----------
+     From the second in a row a number comes up under the ◯, and at three かずぴょん
+     says so in the praise's place. A slip starts the count again without showing
+     anything, and the run changes no star, sticker or record. */
+  (function runs(){
+    K.Store.reset();
+    const say = K.Sound.say, correct = K.Sound.sfx.correct;
+    let said = [], notes = [];
+    K.Sound.say = (t, o) => { said.push(String(t)); finishSpeech(t, o); };
+    K.Sound.sfx.correct = n => { notes.push(n); };
+    const d = {};
+    const choices = () => qa('#play .choices .choice').filter(b => !b.disabled);
+    const ready = () => {
+      if (S.locked) S.flushTimers();                       // the answered question gives way to the next
+      for (let n = 0; n < 12 && (!choices().length || S.locked) && !onResult(); n++) S.flushTimers();
+    };
+    const right = () => choices().find(b => b.textContent.trim() === String(S.answer));
+    const wrong = () => choices().find(b => b.textContent.trim() !== String(S.answer));
+    const marks = () => qa('body > .streakmark');
+    const clearMarks = () => marks().forEach(m => m.remove());
+    try{
+      K.Session.startLevel(K.Games.byId.add, 0);
+      ready(); clearMarks();
+      right().click();
+      d.firstIsPlain = S.streak === 1 && !marks().length && notes[notes.length - 1] === 1;
+      ready(); right().click();
+      d.secondShows = S.streak === 2 && marks().length === 1 && marks()[0].querySelector('b').textContent === '2';
+      clearMarks(); said = [];
+      ready(); right().click();
+      d.thirdIsSaid = S.streak === 3 && said.indexOf('3回、続けて正解！') >= 0
+        && marks().length === 1 && notes[notes.length - 1] === 3;
+      clearMarks();
+      ready(); wrong().click(); right().click();
+      d.slipIsSilent = S.streak === 0 && !marks().length && notes[notes.length - 1] === 0;
+      ready(); right().click();
+      d.startsAgain = S.streak === 1 && !marks().length;
+      let guard = 0;
+      while (!onResult() && guard++ < 40){ ready(); const b = right(); if (b) b.click(); }
+      // 8 questions, one answered at the second try: ★★ exactly as before
+      d.starsUnchanged = onResult() && K.Store.data.stars['add:0'] === 2;
+      K.Session.startLevel(K.Games.byId.add, 0);
+      d.newSittingFromZero = S.streak === 0;
+      leavePlay();
+    } finally { K.Sound.say = say; K.Sound.sfx.correct = correct; clearMarks(); }
+    K.UI.show('home');
+    check('a run of right-first-time answers shows its number and is said at three; a slip resets it silently and no star changes',
+      Object.keys(d).every(k => d[k]) && Object.keys(d).length === 7, JSON.stringify(d));
+    K.Store.reset();
+  })();
+
   /* ---------- 91c2. かずぴょん answers, and the child judges ----------
      Five of the levels' own questions with the roles turned round: three slips and
      two right answers. Catching a slip hands the question's own buttons back so the

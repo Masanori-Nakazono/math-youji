@@ -84,6 +84,15 @@ const UI = (() => {
     setTimeout(() => n.remove(), 760);
   }
 
+  /** under the ◯: how many in a row that was. It comes and goes with the mark, so
+      there is never a number left on the screen to lose. */
+  function streakMark(n){
+    const m = el('div.streakmark' + (n >= 5 ? '.hot' : ''), { 'aria-hidden': 'true' },
+      el('span.sm-star', { text: n >= 5 ? '🌟' : '⭐' }), el('b', { text: String(n) }), el('span', { text: 'れんぞく！' }));
+    document.body.append(m);
+    setTimeout(() => m.remove(), 1150);
+  }
+
   function stars(count, big){
     const wrap = el(big ? 'div.bigstars' : 'div.st');
     for (let i = 0; i < 3; i++){
@@ -322,6 +331,6 @@ const UI = (() => {
     return { bindItem, bindTarget, clearSel, select, get selected(){ return selected; } };
   }
 
-  return { init, register, show, currentName, confetti, bigMark, stars, makeDragDrop, screens,
+  return { init, register, show, currentName, confetti, bigMark, streakMark, stars, makeDragDrop, screens,
            fitPlayfield, watchFit };
 })();

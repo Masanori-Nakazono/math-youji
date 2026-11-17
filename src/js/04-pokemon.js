@@ -84,5 +84,71 @@ const Buddy = (() => {
     void n.offsetWidth;
     n.classList.add('hop');
   }
-  return { info, node, hop };
+  /* ---------- なかよし ----------
+     The companion stood beside the questions and hopped, and that was all it would
+     ever do: the hundredth question together was the same as the first. Now each
+     question done together counts — right or wrong, helped or not, because it is
+     time spent together and not a mark — and five hearts fill over about a week.
+     Each heart is something the Pokémon starts doing (see the .bond-N rules), so
+     the child can see what the hearts are. It is kept per Pokémon: a new companion
+     starts from the beginning, and an old one keeps what it had. */
+  const HEARTS = [8, 24, 48, 80, 120];        // questions together for ♥1 … ♥5
+  const BERRY_BOND = 3;                       // a berry is worth a few questions
+  function bondOf(key){
+    const n = key ? Store.bond(key) : 0;
+    let h = 0;
+    while (h < HEARTS.length && n >= HEARTS[h]) h++;
+    const lo = h ? HEARTS[h - 1] : 0, hi = h < HEARTS.length ? HEARTS[h] : null;
+    return { n, hearts: h, max: HEARTS.length, full: hi == null,
+             left: hi == null ? 0 : hi - n, part: hi == null ? 1 : (n - lo) / (hi - lo) };
+  }
+  /** Add to one Pokémon's count. Returns the state after, with `grew` true when a
+      heart was filled by this. */
+  function addBond(key, n){
+    const before = bondOf(key);
+    if (!key || !Store.addBond(key, n)) return Object.assign(before, { grew: false });
+    const after = bondOf(key);
+    after.grew = after.hearts > before.hearts;
+    return after;
+  }
+  /** five hearts for one Pokémon; the one being filled shows how far it has got */
+  function meter(key, cls){
+    const row = el('span.bondmeter' + (cls ? '.' + cls : ''), { role: 'img' });
+    paintMeter(row, key);
+    return row;
+  }
+  function paintMeter(row, key){
+    if (!row) return;
+    const b = bondOf(key);
+    clear(row);
+    row.dataset.hearts = String(b.hearts);
+    row.classList.toggle('full', b.full);
+    row.setAttribute('aria-label', 'なかよし ハート ' + b.hearts + 'こ'
+      + (b.full ? '。だいの なかよし' : '。つぎの ハートまで あと ' + b.left + 'もん'));
+    for (let i = 0; i < b.max; i++){
+      const part = i < b.hearts ? 1 : i === b.hearts ? b.part : 0;
+      row.append(el('span.bh' + (part >= 1 ? '.on' : part > 0 ? '.part' : ''),
+        { style: { '--fill': Math.round(part * 100) + '%' }, 'aria-hidden': 'true' }, '♥'));
+    }
+  }
+  /** a small heart leaves the Pokémon and floats up: the count went up by one */
+  function floatHeart(from){
+    if (!from || !from.getBoundingClientRect) return;
+    const r = from.getBoundingClientRect();
+    if (!r.width) return;
+    const h = el('span.bond-float', { 'aria-hidden': 'true',
+      style: { left: (r.left + r.width / 2) + 'px', top: (r.top + r.height * .2) + 'px' } }, '♥');
+    document.body.append(h);
+    setTimeout(() => h.remove(), 1100);
+  }
+  /** what a heart is worth saying, by the number just reached */
+  function grewLine(name, hearts){
+    /* spoken as the name and then the news: each half has a recording, where one
+       sentence per Pokémon would need six hundred more */
+    return hearts >= HEARTS.length
+      ? [name + 'と だいの なかよしに なったよ！', name + '！大の仲良しに、なったよ！']
+      : [name + 'と もっと なかよく なったよ！', name + '！もっと、仲良くなったよ！'];
+  }
+  return { info, node, hop, bond: bondOf, addBond, meter, paintMeter, floatHeart, grewLine,
+           HEARTS, BERRY_BOND };
 })();

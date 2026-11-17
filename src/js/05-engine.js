@@ -287,13 +287,52 @@ const Session = (() => {
   /* The companion, beside かずぴょん in every kind of session. Outside the board:
      the things on the board are things to count, and it must never be one of them. */
   let buddyEl;
+  /* なかよし: the hearts under the companion. `bondKey` is the Pokémon this sitting
+     is spent with; `bondGrew` the number of hearts reached during it, for the
+     result screen. One question done together is one step, however it went. */
+  let buddyWrap, bondEl, bondKey = '', bondGrew = 0;
+  /* Right first time, several in a row. Every right answer used to be met by the
+     same ◯ and the same four notes, the eighth exactly like the first; a run now
+     climbs — the notes rise, a number comes up under the ◯, and かずぴょん says so at
+     three, five, eight and ten. A slip only starts the count again, silently: the
+     number is on screen for a second with the ◯ and is never shown going away. */
+  let streak = 0;
+  const STREAK_LINES = { 3: '3回、続けて正解！', 5: '5回、続けて正解！すごいね！',
+                         8: '8回、続けて正解！かんぺき！', 10: '10回、続けて正解！びっくり！' };
   function setupBuddy(){
     if (!buddyEl) return;
     const b = Buddy.info();
     buddyEl.hidden = !b;
-    buddyEl.classList.remove('hop');
+    if (buddyWrap) buddyWrap.hidden = !b;
+    buddyEl.classList.remove('hop', 'bond-up');
+    bondKey = b ? b.key : ''; bondGrew = 0;
     if (b){ buddyEl.src = b.image; buddyEl.dataset.name = b.name; }
     else buddyEl.removeAttribute('src');
+    paintBond();
+  }
+  /** for the result screen: who came along, and whether a heart filled this sitting */
+  function bondNews(){
+    if (!bondKey || !buddyEl || buddyEl.hidden) return null;
+    return { key: bondKey, name: buddyEl.dataset.name || '', grew: bondGrew };
+  }
+  function paintBond(){
+    if (!bondEl) return;
+    Buddy.paintMeter(bondEl, bondKey);
+    if (buddyWrap) buddyWrap.dataset.hearts = bondEl.dataset.hearts;
+  }
+  /** the question just finished was done together; true when it filled a heart */
+  function stepBond(){
+    if (!bondKey || !buddyEl || buddyEl.hidden) return false;
+    const b = Buddy.addBond(bondKey, 1);
+    paintBond();
+    Buddy.floatHeart(buddyEl);
+    if (!b.grew) return false;
+    bondGrew = b.hearts;
+    buddyEl.classList.remove('bond-up');
+    void buddyEl.offsetWidth;
+    buddyEl.classList.add('bond-up');
+    if (bondEl){ bondEl.classList.remove('grew'); void bondEl.offsetWidth; bondEl.classList.add('grew'); }
+    return true;
   }
   function setupBall(){
     ballOpened = false; ballKey = null; ballsOpen = new Set(); confirmedNow = [];
@@ -644,7 +683,9 @@ const Session = (() => {
         backBtn, worldEl = el('span.worldmark', { 'aria-hidden': 'true' }),
         titleEl, trailEl = el('div.trail', { hidden: true, role: 'img' }), pipsEl),
       el('div.prompt', null, moodEl,
-        buddyEl = el('img.buddy', { hidden: true, alt: '', draggable: 'false', 'aria-hidden': 'true' }),
+        buddyWrap = el('span.buddywrap', { hidden: true },
+          buddyEl = el('img.buddy', { hidden: true, alt: '', draggable: 'false', 'aria-hidden': 'true' }),
+          bondEl = Buddy.meter('', 'in-play')),
         el('div.txtwrap', null, promptTxt, feedbackEl),
         ballEl = el('div.checkball', { hidden: true, role: 'img' }), speakBtn, showBtn),
       fieldEl, choicesEl);
@@ -988,7 +1029,7 @@ const Session = (() => {
 
   function begin(){
     disarmQuit();
-    idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0;
+    idx = 0; mistakes = 0; firstTryRight = 0; swiftCount = 0; streak = 0;
     if (mode !== 'focus') focusKeys = [];
     usedItems = new Set(); shaky = []; sessionOutcomes = []; visitMilestone = null;
     clear(pipsEl);
@@ -1564,6 +1605,10 @@ const Session = (() => {
     }
     Sound.sfx.wrong();
     setMood('soft');
+    // a companion that knows the child leans in at a slip (see .care; ♥2 and up)
+    if (buddyEl && !buddyEl.hidden){
+      buddyEl.classList.remove('care', 'hop'); void buddyEl.offsetWidth; buddyEl.classList.add('care');
+    }
     if (target && target.classList){
       target.classList.add('wrong');
       later(() => target.classList.remove('wrong'), 460);
@@ -1646,7 +1691,8 @@ const Session = (() => {
         }
       }
     }
-    Sound.sfx.correct();
+    streak = clean ? streak + 1 : 0;
+    Sound.sfx.correct(streak);
     setMood('happy');
     const pip = $$('.pip', pipsEl)[idx];
     if (pip){ pip.classList.remove('now'); pip.classList.add(scaffold ? 'introdone' : clean ? 'done' : 'miss'); }
@@ -1655,15 +1701,27 @@ const Session = (() => {
     fieldEl.classList.add('cheer');
     if (buddyEl && !buddyEl.hidden) Buddy.hop(buddyEl);
     if (trail && trail.buddy && clean && graded) Buddy.hop(trail.buddy);
+    /* a question finished beside the companion is a step closer to it — any
+       question, however it went: the hearts are time together, not a second mark */
+    const closer = scaffold !== 'show' && stepBond();
     if (!o.quiet && scaffold !== 'show'){
       UI.bigMark('◯');
+      if (streak >= 2) UI.streakMark(streak);
       const praise = wrongThisQ === 0
-        ? pick(['やったね！', '正解！', 'すごい！', '上手だね！', 'ばっちり！', 'その調子！'])
+        ? pick(['やったね！', '正解！', 'すごい！', '上手だね！', 'ばっちり！', 'その調子！',
+                'いいね！', 'さすが！', 'お見事！', 'ぴったり！'])
         : pick(['できたね！', 'よく頑張ったね！', 'その通り！']);
       /* in かずぴょん's own words when the child put it right, or agreed with reason */
       const thanks = visit && spot && spot.line;
       if (thanks){ showFeedback('thanks', thanks[0]); Sound.say(thanks[1], { delay: 320 }); }
-      else if (!met && !opened) Sound.say(praise, { delay: 320 });
+      else if (closer && !met && !opened){
+        /* a heart filled: said in the praise's place, and held like it */
+        const line = Buddy.grewLine(buddyEl.dataset.name || '', bondGrew);
+        showFeedback('thanks', line[0]);
+        Sound.say(line[1], { delay: 320 });
+        later(() => Sound.sfx.star(1), 200);
+      }
+      else if (!met && !opened) Sound.say(STREAK_LINES[streak] || praise, { delay: 320 });
     }
     /* the step that reaches the Pokémon is the peak of the run, and it happens
        here, on the question that earned it — not eight questions later */
@@ -1694,12 +1752,13 @@ const Session = (() => {
         }
       }
     }
-    if ((idx + 1) % 4 === 0 && !met && !opened) UI.confetti(22);
+    const burst = o.quiet || scaffold === 'show' ? 0 : streak >= 8 ? 60 : streak >= 5 ? 36 : streak >= 3 ? 18 : 0;
+    if (!met && !opened && (burst || (idx + 1) % 4 === 0)) UI.confetti(Math.max(burst, (idx + 1) % 4 === 0 ? 22 : 0));
     afterNarration(() => {
       idx++;
       if (idx >= plan.length) finish();
       else nextQuestion();
-    }, Math.max(o.delay || 950, met || opened ? 2500 : 0));
+    }, Math.max(o.delay || 950, met || opened ? 2500 : closer ? 1500 : 0));
   }
 
   /** 3 = every question right first time, 0 = under half. Levels vary in length,
@@ -1725,7 +1784,8 @@ const Session = (() => {
       Sound.sfx.finish(); UI.confetti(60);
       Result.show({ stars: 0, right: 0, total: plan.length, mode, game: null, levelIndex: 0,
                     stickers: [], confirmed: [], shaky: [], focusKeys: [],
-                    spotFound, spotSlips, berry: got, berryFirst: got && Store.berriesToday() === 1 });
+                    spotFound, spotSlips, berry: got, berryFirst: got && Store.berriesToday() === 1,
+                    bond: bondNews() });
       return;
     }
     // the lesson questions are not graded, and neither are another level's checks
@@ -1824,7 +1884,8 @@ const Session = (() => {
                   recommended: mode === 'diagnostic' ? Diagnostic.recommendFrom(sessionOutcomes) : null,
                   lastGameId: primaryGameId, rewardTarget, adventureTarget, milestone: visitMilestone,
                   berry, berryFirst: berry && Store.berriesToday() === 1,
-                  ballName: mode === 'check' && ballEl ? ballEl.dataset.name || '' : '' });
+                  ballName: mode === 'check' && ballEl ? ballEl.dataset.name || '' : '',
+                  bond: bondNews() });
   }
 
   return {
@@ -1864,7 +1925,9 @@ const Session = (() => {
       get helped(){ return helped; },
       get trail(){ return trail ? { n: trail.n, need: trail.need, at: trail.at } : null; },
       get ball(){ return ballKey; },
-      get buddy(){ return buddyEl && !buddyEl.hidden ? buddyEl.dataset.name || '' : null; }
+      get buddy(){ return buddyEl && !buddyEl.hidden ? buddyEl.dataset.name || '' : null; },
+      get streak(){ return streak; },
+      get bond(){ return { key: bondKey, grew: bondGrew, hearts: bondEl ? Number(bondEl.dataset.hearts || 0) : 0 }; }
     }
   };
 })();

@@ -72,6 +72,11 @@ const Store = (() => {
        daily limit. Like the island itself, no learning record reads them. */
     berries: 0,
     berryDay: [0, 0],
+    /* How well the child and each Pokémon know each other: sticker key ('lap2:' for
+       the second lap) -> questions done together, plus a little for each berry.
+       It only ever grows, a wrong answer never takes any away, and — like the
+       companion and the island — no learning record reads it. */
+    bond: {},
     islandJobs: {}, // boat/snack -> current hands-on work and a lasting completed scene
     transferReached: false,
     transferRecords: {}, // mission index -> last actual run, separate from mastery/stars
@@ -248,6 +253,7 @@ const Store = (() => {
   const isRecord = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const isCount = v => Number.isFinite(v) && v >= 0;
   const BERRY_MAX = 9, BERRY_PER_DAY = 3;
+  const BOND_MAX = 9999;
   const safeKey = k => k !== '__proto__' && k !== 'prototype' && k !== 'constructor';
   /** {missKind: count} — a small tally, and every key has to be one we know */
   const isMissMap = (v, startup) => isRecord(v) && Object.keys(v).every(
@@ -384,6 +390,14 @@ const Store = (() => {
       const b = data.berryDay;
       if (!Array.isArray(b) || b.length !== 2 || !isCount(b[0]) || !isCount(b[1])) return null;
       out.berryDay = [Math.floor(b[0]), Math.floor(b[1])];
+    }
+    if (data.bond !== undefined){
+      if (!isRecord(data.bond)) return null;
+      out.bond = {};
+      for (const k of Object.keys(data.bond).slice(0, 800)){
+        if (!safeKey(k) || k.length > 64 || !isCount(data.bond[k])) return null;
+        out.bond[k] = Math.min(BOND_MAX, Math.floor(data.bond[k]));
+      }
     }
     if (data.buddy !== undefined){
       if (typeof data.buddy !== 'string' || !safeKey(data.buddy) || data.buddy.length > 64) return null;
@@ -623,6 +637,10 @@ const Store = (() => {
     out.berryDay = bDay[0] > aDay[0] ? bDay.slice() : aDay[0] > bDay[0] ? aDay.slice() : [bDay[0], Math.max(bDay[1], aDay[1])];
     // this device's choice of companion stands; a copy only fills an empty one
     out.buddy = base.buddy || add.buddy || '';
+    // max per Pokémon, never sum: reading the same backup twice must not double a friendship
+    out.bond = {};
+    for (const src of [add.bond || {}, base.bond || {}])
+      for (const k of Object.keys(src)) if (safeKey(k)) out.bond[k] = maxNum(out.bond[k], src[k]);
     out.islandJobs = Object.assign({}, add.islandJobs || {}, base.islandJobs || {});
     for (const scene of ['boat', 'snack']){
       const a = add.islandJobs && add.islandJobs[scene], b = base.islandJobs && base.islandJobs[scene];
@@ -773,6 +791,17 @@ const Store = (() => {
       record.buddy = fullKey; save(); return true;
     },
     clearBuddy(){ if (!record.buddy) return false; record.buddy = ''; save(); return true; },
+    /* ---- なかよし: what doing questions together adds up to ---- */
+    bond(fullKey){ const b = record.bond; return b && Object.hasOwn(b, fullKey) && b[fullKey] > 0 ? b[fullKey] : 0; },
+    /** add to one Pokémon's count; only for a Pokémon that is out of its ball */
+    addBond(fullKey, n){
+      if (!(n > 0) || !canBeBuddy(fullKey)) return 0;
+      if (!record.bond || typeof record.bond !== 'object' || Array.isArray(record.bond)) record.bond = {};
+      const was = Object.hasOwn(record.bond, fullKey) ? record.bond[fullKey] || 0 : 0;
+      record.bond[fullKey] = Math.min(BOND_MAX, was + Math.floor(n));
+      save();
+      return record.bond[fullKey];
+    },
     /* ---- berries for the island ---- */
     berries: () => record.berries || 0,
     berriesToday(){ const b = record.berryDay || [0, 0]; return b[0] === dayNo() ? b[1] : 0; },

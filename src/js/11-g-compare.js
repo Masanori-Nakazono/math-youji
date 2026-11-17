@@ -8,7 +8,9 @@
    ============================================================ */
 function platesCompare(api, opts){
   const o = opts || {};
-  const thing = pick(THINGS);
+  // sometimes the child's own Pokémon are what is on the plates: nothing is said
+  // about what they are, so only the picture changes
+  const thing = pickCountThing();
   const want = o.least ? 'least' : 'most';
   const counts = o.counts;
   const answer = want === 'most' ? Math.max.apply(null, counts) : Math.min.apply(null, counts);
@@ -35,7 +37,7 @@ function platesCompare(api, opts){
       style: { minWidth: 'calc(var(--u)*' + (counts.length > 2 ? 11 : 15) + ')' } });
     const g = el('div.row', { style: { maxWidth: 'calc(var(--u)*' + (counts.length > 2 ? 10 : 14) + ')' } });
     for (let k = 0; k < c; k++){
-      g.append(el('span.item', { text: thing.e, style: { fontSize: 'calc(var(--u)*' + (size || 2.8) + ')' } }));
+      g.append(el('span.item', { style: { fontSize: 'calc(var(--u)*' + (size || 2.8) + ')' } }, thingFace(thing)));
     }
     plate.append(g);
     tappable(plate, () => {

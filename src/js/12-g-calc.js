@@ -463,7 +463,7 @@ function storyScene(api, a, b, op, thing, onReady){
   api.field.append(scene);
   const actors = [];
   const place = (spots, cls, hidden) => spots.forEach(p => {
-    const n = el('div.actor.' + cls, { text: thing.e, style: { left: p[0] + '%', top: p[1] + '%' } });
+    const n = el('div.actor.' + cls, { style: { left: p[0] + '%', top: p[1] + '%' } }, thingFace(thing));
     n.dataset.homeLeft = p[0] + '%';
     /* translate(160%) is relative to the emoji, not the scene. Place newcomers
        outside the scene itself until their arrival starts. */
@@ -510,9 +510,9 @@ function addStory(api, max){
   const aim = w && w[0] >= 1 && w[1] >= 1 && w[0] + w[1] <= max;
   const a = aim ? w[0] : ri(1, max - 1);
   const b = aim ? w[1] : ri(1, max - a), ans = a + b;
-  const thing = pick(MOVING_THINGS);
+  const thing = pickStoryThing();
   api.item('sum:' + a + '+' + b, a + ' ＋ ' + b);
-  api.setPrompt(`${thing.e} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} やってきたよ`,
+  api.setPrompt(`${thingMark(thing)} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} やってきたよ`,
                 `${thing.n}が${thingCountKana(thing, a)}いるよ。${thingCountKana(thing, b)}、やってきたよ。`);
   storyScene(api, a, b, '+', thing, () => {
     api.setPrompt('ぜんぶで いくつ？', '全部でいくつ？');
@@ -537,9 +537,9 @@ function subStory(api, max){
   const aim = w && w[0] >= 2 && w[0] <= max && w[1] >= 1 && w[1] < w[0];
   const a = aim ? w[0] : ri(2, max);
   const b = aim ? w[1] : ri(1, a - 1), ans = a - b;
-  const thing = pick(MOVING_THINGS);
+  const thing = pickStoryThing();
   api.item('rest:' + a + '-' + b, a + ' − ' + b);
-  api.setPrompt(`${thing.e} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} いなくなるよ`,
+  api.setPrompt(`${thingMark(thing)} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} いなくなるよ`,
                 `${thing.n}が${thingCountKana(thing, a)}いるよ。${thingCountKana(thing, b)}、いなくなるよ。`);
   storyScene(api, a, b, '-', thing, () => {
     api.setPrompt('のこりは いくつ？', '残りは、いくつ？');

@@ -77,7 +77,13 @@ const Sound = (() => {
     tap()      { seq([720], 'sine', .05, .35); },
     place()    { seq([420, 620], 'sine', .05, .4); },
     count(i)   { seq([PENT[Math.min(i, PENT.length - 1)]], 'triangle', .07, .42); },
-    correct()  { seq([659.25, 830.61, 987.77, 1318.5], 'triangle', .075, .45); },
+    /* `run` is how many in a row this makes: the same four notes, a tone higher
+       each time (an octave at most), with a sparkle on top from the third */
+    correct(run){
+      const n = Math.max(0, Math.min(6, (run || 1) - 1)), k = Math.pow(2, n * 2 / 12);
+      seq([659.25, 830.61, 987.77, 1318.5].map(f => f * k), 'triangle', .075, .45);
+      if ((run || 0) >= 3) setTimeout(() => seq([2093 * k / 2, 2637 * k / 2], 'sine', .06, .22), 300);
+    },
     wrong()    { seq([311.13, 261.63], 'sine', .13, .32); },
     star(i)    { seq([1046.5 + i * 180, 1568 + i * 200, 2093 + i * 240], 'triangle', .07, .3); noiseBurst(.25, .12); },
     finish()   { seq([523.25, 659.25, 783.99, 1046.5, 1318.5, 1046.5, 1318.5], 'triangle', .1, .42); },

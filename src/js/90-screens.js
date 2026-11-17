@@ -148,7 +148,7 @@ const G1Preparation = (() => {
 /* ---------------------------------------------------------- HOME */
 const Home = (() => {
   let node, worldsEl, starEl, dailyEl, focusEl, recommendEl, reviewEl, voiceWarnEl, shelfEl, dailiesEl, questsEl, roundsEl;
-  let parentBtn, logoEl, islandBtn, kazuBtn, kazuLine;
+  let parentBtn, logoEl, islandBtn, kazuBtn, kazuLine, bookBtn;
   /* ---------- かずぴょん at the door ----------
      The home screen is a wall of written cards to a child who does not read yet,
      and it never spoke unless 🔊 was pressed. かずぴょん stands in the heading now:
@@ -200,6 +200,11 @@ const Home = (() => {
       text: 'とっくんで つよく なろう！', say: '特訓で、強くなろう！' });
     if (Store.berries() > 0) picks.push({ key: 'berry', target: islandBtn,
       text: 'きのみが あるよ。しまで ポケモンに あげよう', say: '木の実があるよ。おうちのボタンで島に行って、ポケモンにあげよう。' });
+    /* a Pokémon is out of its ball and none has been brought along yet: the
+       companion is chosen in the book, and nothing on this screen said so */
+    if (!Store.buddy() && Store.islandFriends() > 0) picks.push({ key: 'buddy', target: bookBtn,
+      text: 'シールブックで あいぼうを えらぼう。いっしょに もんだいに いけるよ',
+      say: 'シールブックで、あいぼうを選ぼう。一緒に、問題に行けるよ。' });
     if (!picks.length) return { key: 'map', target: $('.gamecard:not(.locked)', worldsEl),
       text: 'すきな あそびを えらんでね', say: '好きな遊びを、選んでね。' };
     /* a different one tomorrow, and the next one along after each sitting today */
@@ -251,8 +256,11 @@ const Home = (() => {
     const b = Buddy.info();
     if (!b) return;
     const img = Buddy.node('home-buddy-img');
-    logoEl.append(el('button.home-buddy', { type: 'button', 'aria-label': 'あいぼうの ' + b.name,
-      onclick(){ Sound.sfx.tap(); Buddy.hop(img); Sound.say(b.name + '！', { delay: 40 }); } }, img));
+    const hearts = Buddy.bond(b.key).hearts;
+    logoEl.append(el('button.home-buddy', { type: 'button', dataset: { hearts: String(hearts) },
+      'aria-label': 'あいぼうの ' + b.name + '。なかよし ハート ' + hearts + 'こ',
+      onclick(){ Sound.sfx.tap(); Buddy.hop(img); Buddy.floatHeart(img); Sound.say(b.name + '！', { delay: 40 }); } },
+      img, Buddy.meter(b.key, 'at-home')));
   }
 
   function updateVoiceWarning(){
@@ -285,7 +293,7 @@ const Home = (() => {
         el('div.spacer'),
         el('div.starcount', null, starSVG(true), starEl),
         speakBtn(homeSpeech),
-        el('button.btn.btn-round', { 'aria-label': 'シールブック', title: 'シールブック',
+        bookBtn = el('button.btn.btn-round', { 'aria-label': 'シールブック', title: 'シールブック',
           onclick(){ Sound.sfx.tap(); Book.open(); } }, '📖'),
         el('button.btn.btn-round', { 'aria-label': 'できたアルバム', title: 'できたアルバム',
           onclick(){ Sound.sfx.tap(); ProgressAlbum.open(); } }, '📒'),
@@ -823,6 +831,20 @@ const Result = (() => {
       el('span', { text: '🍓', 'aria-hidden': 'true' }),
       el('span', { text: 'きのみを 1こ もらったよ' }),
       el('small', { text: 'しまで あげよう ▶' })));
+    /* who came along, and how close they are now: the companion stands beside
+       かずぴょん with its hearts, and says what is left to the next one. Beside the
+       heading rather than in the list below it, which is already longer than the
+       screen on a day with a Pokémon to show. */
+    $$('.bond-news', node).forEach(old => old.parentNode.removeChild(old));
+    if (r.bond && r.bond.key){
+      const b = Buddy.bond(r.bond.key), info = PokemonStickers.reward(r.bond.key);
+      node.append(el('div.bond-news' + (r.bond.grew ? '.grew' : ''), null,
+        el('img', { src: info.image, alt: '', draggable: 'false' }),
+        Buddy.meter(r.bond.key),
+        el('span.bond-text', { text: r.bond.grew ? Buddy.grewLine(r.bond.name, r.bond.grew)[0]
+          : b.full ? r.bond.name + 'と だいの なかよし！'
+          : 'あと ' + b.left + 'もんで ハートが ふえるよ' })));
+    }
     const treasureReady = r.mode === 'level' && r.game && stickers.some(x => x.gold)
       && Treasures.status(r.game.world).ready && !Store.hasTreasure(r.game.world);
     if (treasureReady) inner.append(el('div.result-treasure', null,
@@ -996,8 +1018,8 @@ const Book = (() => {
       if (Store.canBeBuddy(full)){
         const isBuddy = Store.buddy() === full;
         if (isBuddy){
-          text = name + 'は あいぼうだよ！ いっしょに もんだいを やろう';
-          say = name + 'は、あいぼうだよ！一緒に、問題をやろう。';
+          text = name + 'は あいぼうだよ！ いっしょに もんだいを やると ハートが ふえるよ';
+          say = name + 'は、あいぼうだよ！一緒に問題をやると、仲良しのハートが、増えるよ。';
         } else say = name + '。仲間だよ！あいぼうにして、一緒に問題に行けるよ。島にも置けるよ。';
         buddyBtn = el('button.btn.buddy-toggle' + (isBuddy ? '.on' : ''), { type: 'button',
           'aria-pressed': String(isBuddy),
@@ -1028,6 +1050,10 @@ const Book = (() => {
       el('div.book-detail-art' + (waiting ? '.pending' : ''), null,
         PokemonStickers.artwork(key, { silhouette: !has })),
       el('div.book-detail-text', { text }),
+      /* how close this one is — shown once there is anything to show, or for the
+         companion from the start, so the hearts have somewhere to be explained */
+      has && !waiting && Store.canBeBuddy(full) && (Store.bond(full) > 0 || Store.buddy() === full)
+        ? el('div.book-detail-bond', null, el('span', { text: 'なかよし' }), Buddy.meter(full)) : null,
       el('div.book-detail-actions', null,
         act ? el('button.btn.btn-accent', { type: 'button',
           onclick(){ Sound.sfx.tap(); closeDetail(); act[2](); } },

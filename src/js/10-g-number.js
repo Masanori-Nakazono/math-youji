@@ -37,13 +37,36 @@ const MOVING_THINGS = THINGS.filter(thing => thing.moving);
    thing to count. It is called「ポケモン」whichever one it is, so the spoken lines
    stay a single noun. A Pokémon still in its ball is not out to be counted. */
 const POKEMON_COUNT_CHANCE = 0.35;
+/** One of the child's own Pokémon as the thing on the board — the companion more
+    often than not, since it is the one they chose. null when there is none out of
+    its ball. Every copy on the board is the same picture, and it is called
+    「ポケモン」whichever it is, so the spoken line stays one recorded sentence. */
+function ownPokemonThing(){
+  if (typeof Store === 'undefined') return null;
+  const buddy = typeof Buddy !== 'undefined' ? Buddy.info() : null;
+  let r = buddy && chance(.6) ? buddy : null;
+  if (!r){
+    const keys = Store.data.stickers.filter(k => typeof k === 'string'
+      && !k.startsWith('treasure:') && !Store.isPending(k));
+    if (!keys.length) return null;
+    r = PokemonStickers.reward(pick(keys));
+  }
+  return r && r.image ? { n: 'ポケモン', counter: 'hiki', img: r.image, moving: true, mon: r.name } : null;
+}
 function pickCountThing(){
-  if (typeof Store === 'undefined' || !chance(POKEMON_COUNT_CHANCE)) return pick(THINGS);
-  const keys = Store.data.stickers.filter(k => typeof k === 'string'
-    && !k.startsWith('treasure:') && !Store.isPending(k));
-  if (!keys.length) return pick(THINGS);
-  const r = PokemonStickers.reward(pick(keys));
-  return r && r.image ? { n: 'ポケモン', counter: 'hiki', img: r.image, moving: true } : pick(THINGS);
+  return (typeof Store !== 'undefined' && chance(POKEMON_COUNT_CHANCE) && ownPokemonThing()) || pick(THINGS);
+}
+/* The stories — 「3びき いるよ。2ひき やってきたよ」 — were about a cat or a ladybird
+   nobody had met. About half the time now they are about the child's own Pokémon:
+   the numbers, the picture's layout and the question are exactly what they were,
+   and only who the story is about changes. */
+const POKEMON_STORY_CHANCE = 0.5;
+function pickStoryThing(){
+  return (typeof Store !== 'undefined' && chance(POKEMON_STORY_CHANCE) && ownPokemonThing()) || pick(MOVING_THINGS);
+}
+/** the thing as it appears inside a written question: its emoji, or its picture */
+function thingMark(thing){
+  return thing.img ? '<img class="prompt-mon" src="' + thing.img + '" alt="ポケモン" draggable="false">' : thing.e;
 }
 function thingFace(thing){
   return thing.img ? el('img.obj-mon', { src: thing.img, alt: '', draggable: 'false' }) : thing.e;

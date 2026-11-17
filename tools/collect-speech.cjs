@@ -198,6 +198,12 @@ window.collectSpeech = async function(samples, staticLines, pokemonNames){
   }
   record('ポケモンを、ひとつずつタップして数えよう。');
   record('ポケモンは、全部でいくつ？');
+  // the stories that are about the child's own Pokémon: one noun, whichever it is
+  for (let n = 0; n <= 10; n++) record('ポケモンが' + thingCountKana({ counter: 'hiki' }, n) + 'いるよ。');
+  // なかよし: said after the Pokémon's name, which has its own recording
+  record('もっと、仲良くなったよ！');
+  record('大の仲良しに、なったよ！');
+  record('喜んでるよ！');
   for (const thing of THINGS) for (let n = 0; n <= 10; n++){
     record(thingCountKana(thing, n));
     record(thing.n + 'を' + koKana(n) + '、とって、かごに入れよう。');

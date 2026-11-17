@@ -3071,6 +3071,14 @@ button.sticker:active{ transform: scale(.96); }
   object-fit: contain; pointer-events: none; -webkit-user-drag: none;
 }
 
+/* the child's own Pokémon inside a written question, where an emoji would be */
+.prompt-mon{
+  display: inline-block; width: 1.5em; height: 1.5em; margin: -.3em .05em -.35em;
+  object-fit: contain; vertical-align: middle; pointer-events: none; -webkit-user-drag: none;
+}
+.actor .obj-mon{ width: 1.08em; min-width: 1.08em; height: 1.08em; }
+.plate .item .obj-mon{ display: inline-block; vertical-align: middle; }
+
 .worldmark{ flex: 0 0 auto; font-size: calc(var(--u)*2.2); line-height: 1; }
 .worldmark:empty{ display: none; }
 #play[data-world] .prompt{ border-color: color-mix(in srgb, var(--wc) 55%, var(--card-edge)); }
@@ -3216,6 +3224,147 @@ button.sticker:active{ transform: scale(.96); }
 @media (prefers-reduced-motion: reduce){
   .buddy.hop, .trail-buddy.hop, .home-buddy-img, .home-buddy-img.hop{ animation: none; }
   .trail-buddy{ transition: none; }
+}
+
+/* ===========================================================
+   A RUN — right first time, several in a row
+   =========================================================== */
+.streakmark{
+  position: fixed; left: 50%; top: calc(46% + var(--u)*9.5); z-index: 96; pointer-events: none;
+  display: inline-flex; align-items: baseline; gap: calc(var(--u)*.3);
+  padding: calc(var(--u)*.3) calc(var(--u)*1.4); border-radius: 999px;
+  background: var(--card); border: calc(var(--u)*.25) solid var(--c-orange);
+  box-shadow: var(--shadow-sm);
+  font-size: calc(var(--u)*2); font-weight: 800; color: var(--ink); white-space: nowrap;
+  animation: streakIn 1.1s cubic-bezier(.2,.9,.3,1.4) both;
+}
+.streakmark b{ font-family: var(--fs-num); font-size: 1.5em; color: var(--c-orange); line-height: 1; }
+.streakmark.hot{ border-color: var(--c-red); font-size: calc(var(--u)*2.4); }
+.streakmark.hot b{ color: var(--c-red); }
+@keyframes streakIn{
+  0%{ opacity: 0; transform: translate(-50%, 40%) scale(.5) }
+  25%{ opacity: 1; transform: translate(-50%, 0) scale(1.12) }
+  40%{ transform: translate(-50%, 0) scale(1) }
+  80%{ opacity: 1; transform: translate(-50%, 0) scale(1) }
+  100%{ opacity: 0; transform: translate(-50%, -30%) scale(1) }
+}
+@media (prefers-reduced-motion: reduce){
+  .streakmark{ animation: markStill 1.1s linear both; transform: translate(-50%, 0); }
+}
+
+/* ===========================================================
+   なかよし — hearts that fill as questions are done together
+   =========================================================== */
+.buddywrap{
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: center;
+  margin-left: calc(var(--u)*-.5); position: relative;
+}
+.buddywrap[hidden]{ display: none; }
+.buddywrap .buddy{ margin-left: 0; }
+.bondmeter{
+  display: inline-flex; gap: calc(var(--u)*.08); line-height: 1; white-space: nowrap;
+  font-size: calc(var(--u)*1.5); font-family: system-ui, sans-serif;
+}
+.bondmeter .bh{
+  --fill: 0%;
+  color: transparent;
+  background: linear-gradient(to top, #ef5d7b var(--fill), color-mix(in srgb, var(--ink) 20%, transparent) var(--fill));
+  -webkit-background-clip: text; background-clip: text;
+}
+.bondmeter .bh.on{ --fill: 100%; }
+.bondmeter.full .bh{ background: linear-gradient(to top, #f0a020, #ffd24a); -webkit-background-clip: text; background-clip: text; }
+.bondmeter.grew .bh.on{ animation: bondPop .7s cubic-bezier(.3,1.6,.5,1) 1; }
+@keyframes bondPop{ 0%{ scale: 1 } 40%{ scale: 1.7 } 100%{ scale: 1 } }
+.bondmeter.in-play{ font-size: calc(var(--u)*1.3); margin-top: calc(var(--u)*-.55); }
+/* the heart that leaves the Pokémon when a question is done together */
+.bond-float{
+  position: fixed; z-index: 60; pointer-events: none; translate: -50% 0;
+  font-size: calc(var(--u)*2); line-height: 1; color: #ef5d7b; font-family: system-ui, sans-serif;
+  text-shadow: 0 1px 0 #fff;
+  animation: bondFloat 1s ease-out 1 forwards;
+}
+@keyframes bondFloat{
+  0%{ transform: translateY(0) scale(.4); opacity: 0 }
+  25%{ transform: translateY(calc(var(--u)*-1.2)) scale(1.1); opacity: 1 }
+  100%{ transform: translateY(calc(var(--u)*-4)) scale(.9); opacity: 0 }
+}
+/* what the hearts are: each one is something the companion starts to do */
+.buddywrap[data-hearts="2"] .buddy, .buddywrap[data-hearts="3"] .buddy,
+.buddywrap[data-hearts="4"] .buddy, .buddywrap[data-hearts="5"] .buddy{
+  animation: islandSway 3.6s ease-in-out infinite;          /* ♥2: it is never quite still */
+}
+.buddywrap .buddy.care{ animation: buddyCare .8s ease-in-out 1; }       /* a slip: it leans in */
+.buddywrap[data-hearts="0"] .buddy.care, .buddywrap[data-hearts="1"] .buddy.care{ animation: none; }
+@keyframes buddyCare{
+  0%, 100%{ rotate: 0deg; translate: 0 0 }
+  35%{ rotate: 9deg; translate: calc(var(--u)*.5) 0 }
+  70%{ rotate: 5deg; translate: calc(var(--u)*.3) 0 }
+}
+.buddywrap .buddy.hop{ animation: buddyHop .6s cubic-bezier(.3,1.6,.5,1) 1; }
+.buddywrap[data-hearts="3"] .buddy.hop, .buddywrap[data-hearts="4"] .buddy.hop,
+.buddywrap[data-hearts="5"] .buddy.hop{ animation: buddySpin .8s cubic-bezier(.3,1.4,.5,1) 1; }   /* ♥3: a spin */
+@keyframes buddySpin{
+  0%{ translate: 0 0; rotate: 0deg }
+  45%{ translate: 0 calc(var(--u)*-1.5); rotate: 200deg }
+  80%{ translate: 0 calc(var(--u)*.1); rotate: 360deg }
+  100%{ translate: 0 0; rotate: 360deg }
+}
+/* ♥4: sparkles when it jumps */
+.buddywrap[data-hearts="4"]:has(.buddy.hop)::before, .buddywrap[data-hearts="5"]:has(.buddy.hop)::before{
+  content: '✨'; position: absolute; left: 62%; top: -18%; font-size: calc(var(--u)*1.7); line-height: 1;
+  pointer-events: none; animation: bondFloat .9s ease-out 1 forwards;
+}
+/* ♥5: だいの なかよし — it glows, here and on the home screen */
+.buddywrap[data-hearts="5"] .buddy, .home-buddy[data-hearts="5"] .home-buddy-img{
+  filter: drop-shadow(0 0 calc(var(--u)*.5) #ffd24a) drop-shadow(0 0 calc(var(--u)*.2) #fff3c2);
+}
+.buddywrap .buddy.bond-up{ animation: buddySpin .9s cubic-bezier(.3,1.4,.5,1) 2; }
+/* home: the hearts sit under the companion */
+.home-buddy{ position: relative; }
+.bondmeter.at-home{
+  position: absolute; left: 50%; bottom: calc(var(--u)*-.35); translate: -50% 0;
+  font-size: calc(var(--u)*.92); pointer-events: none;
+  background: color-mix(in srgb, var(--card) 86%, transparent); border-radius: 999px; padding: 0 calc(var(--u)*.3);
+}
+/* result: who came along — beside かずぴょん, out of the list's way */
+.bond-news{
+  position: absolute; z-index: 1; left: calc(50% + var(--u)*7.5); top: calc(var(--u)*3.2);
+  width: calc(var(--u)*15);
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*.15);
+  font-size: calc(var(--u)*1.15); font-weight: 800; color: var(--ink-soft); text-align: center;
+  pointer-events: none;
+}
+.bond-news img{ width: calc(var(--u)*6.4); height: calc(var(--u)*6.4); object-fit: contain; }
+.bond-news .bondmeter{ font-size: calc(var(--u)*1.9); }
+.bond-news .bond-text{ line-height: 1.25; text-wrap: balance; }
+.bond-news.grew{ color: var(--ink); font-size: calc(var(--u)*1.3); }
+.bond-news.grew img{ animation: buddyHop .6s cubic-bezier(.3,1.6,.5,1) 3; }
+.bond-news.grew .bondmeter .bh.on{ animation: bondPop .7s cubic-bezier(.3,1.6,.5,1) .5s 2; }
+@media (max-width: 700px){
+  .bond-news{ left: auto; right: calc(var(--u)*.4); top: calc(var(--u)*5.2); width: calc(var(--u)*9); font-size: calc(var(--u)*.95); }
+  .bond-news img{ width: calc(var(--u)*4.4); height: calc(var(--u)*4.4); }
+  .bond-news .bondmeter{ font-size: calc(var(--u)*1.3); }
+}
+/* book: one Pokémon's hearts on its card */
+.book-detail-bond{
+  display: flex; align-items: center; justify-content: center; gap: calc(var(--u)*.6);
+  font-size: calc(var(--u)*1.3); font-weight: 800; color: var(--ink-soft);
+}
+.book-detail-bond .bondmeter{ font-size: calc(var(--u)*2.1); }
+/* island: over the one just fed or picked up */
+.world-sticker > .bondmeter.on-island{
+  position: absolute; left: 50%; top: calc(var(--u)*-1.5); translate: -50% 0;
+  font-size: calc(var(--u)*1.15); pointer-events: none; animation: none;
+  background: color-mix(in srgb, #fff 82%, transparent); border-radius: 999px; padding: calc(var(--u)*.1) calc(var(--u)*.4);
+}
+@media (max-width: 600px){
+  .bondmeter.in-play{ font-size: calc(var(--u)*.8); }
+}
+@media (prefers-reduced-motion: reduce){
+  .buddywrap .buddy, .buddywrap .buddy.hop, .buddywrap .buddy.care, .buddywrap .buddy.bond-up,
+  .bondmeter .bh, .bond-news.grew img{ animation: none !important; }
+  .bond-float{ animation-duration: .01s; }
+  .buddywrap::before{ display: none; }
 }
 
 /* ===========================================================

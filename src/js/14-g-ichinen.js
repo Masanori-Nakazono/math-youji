@@ -669,13 +669,13 @@ Games.add({
    ＋ and − stop being buttons and start being meanings (合併・増加 / 求残・求差). */
 function pickEquation(api){
   const plus = chance(.5);
-  const a = ri(2, 7), b = ri(1, Math.min(4, a - 1)), thing = pick(MOVING_THINGS);
+  const a = ri(2, 7), b = ri(1, Math.min(4, a - 1)), thing = pickStoryThing();
   const ans = (plus ? a + '＋' + b : a + '−' + b);
   api.item((plus ? 'shiki+:' : 'shiki-:') + a + '_' + b,
     a + (plus ? ' ＋ ' : ' − ') + b + ' の しき');
   api.setPrompt(
-    plus ? `${thing.e} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} やってきたよ`
-         : `${thing.e} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} いなくなるよ`,
+    plus ? `${thingMark(thing)} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} やってきたよ`
+         : `${thingMark(thing)} が ${thingCountTag(thing, a)} いるよ。${thingCountTag(thing, b)} いなくなるよ`,
     plus ? `${thing.n}が${thingCountKana(thing, a)}いるよ。${thingCountKana(thing, b)}、やってきたよ。`
          : `${thing.n}が${thingCountKana(thing, a)}いるよ。${thingCountKana(thing, b)}、いなくなるよ。`);
   storyScene(api, a, b, plus ? '+' : '-', thing, () => {
